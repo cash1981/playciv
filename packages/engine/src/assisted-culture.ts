@@ -24,6 +24,7 @@ import type {
 } from './assisted-core.js'
 import { reshuffleItems } from './actions/draw.js'
 import { GREAT_PERSON_CARD_TYPES } from './blockade.js'
+import { activeGreatPerson } from './great-person-effects.js'
 import {
   AREA_LABEL_HEIGHT,
   CULTURE_VICTORY_STEP,
@@ -115,6 +116,15 @@ export function livePendingRewards(player: Playerhand): readonly PendingReward[]
  */
 export interface AdvanceOptions {
   readonly free?: boolean
+  /** William Shakespeare: pass every consecutive space another player's marker sits on. */
+  readonly skipOccupied?: boolean
+}
+
+/** Whether another player's leader marker stands on this culture space. */
+function occupiedByAnother(state: GameState, playerId: string, step: number): boolean {
+  return state.players.some(
+    (candidate) => candidate.playerId !== playerId && cultureMarkerOf(state, candidate)?.step === step,
+  )
 }
 
 interface AdvancePlan {
@@ -143,9 +153,29 @@ function planAdvance(
   if (marker === undefined) {
     return err(blocked('unavailable', 'Your leader marker is not on the culture track.'))
   }
-  const to = cultureSpaceAt(marker.step + 1)
+  const start = marker.step + 1
+  let target = start
+  // Shakespeare may pass any run of spaces another player's marker sits on and
+  // only pays and draws for the space landed on. The action is offered only when
+  // at least one space would be skipped.
+  if (options.skipOccupied === true) {
+    while (cultureSpaceAt(target) !== undefined && occupiedByAnother(state, player.playerId, target)) {
+      target += 1
+    }
+    if (target === start) {
+      return err(blocked('unavailable', 'The next culture space has no other player on it, so there is nothing to skip.'))
+    }
+  }
+  const to = cultureSpaceAt(target)
   if (to === undefined) {
-    return err(blocked('unavailable', 'Your marker is already on the Culture Victory space.'))
+    return err(
+      blocked(
+        'unavailable',
+        start === target
+          ? 'Your marker is already on the Culture Victory space.'
+          : 'Every space after your marker is occupied, so there is nowhere to land.',
+      ),
+    )
   }
 
   const cost = options.free === true ? { culture: 0, trade: 0 } : cultureAdvanceCost(state, player, to.step)
@@ -892,6 +922,46 @@ export const cultureAdvance: AssistedActionDefinition = {
 
   apply(state, player, context) {
     return performAdvance(state, player, { requestId: context.requestId, at: context.at })
+  },
+
+  reverse(state, player, record, at) {
+    const effect = record.effect
+    if (effect.kind !== 'cultureAdvance') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    return reverseAdvanceEffect(state, player, record, effect, at)
+  },
+}
+
+/** William Shakespeare's advance: the same move, past every occupied space. */
+export const cultureAdvanceSkip: AssistedActionDefinition = {
+  kind: 'cultureAdvanceSkip',
+  techName: null,
+  label: 'Skip occupied culture spaces',
+  button: true,
+  usageKey: null,
+  phase: 'CM',
+  group: 'Culture track',
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    const card = player.items.find((item) => item.kind === 'greatperson' && item.name === 'William Shakespeare')
+    if (card === undefined) return blocked('not-owned', 'You do not hold William Shakespeare.')
+    if (card.hidden) return blocked('unavailable', 'Reveal William Shakespeare before using his ability.')
+    if (!activeGreatPerson(state, player, 'William Shakespeare')) {
+      return blocked('unavailable', 'Every Artist or Thinker figure of yours is blockaded, so Shakespeare cannot be used.')
+    }
+    const plan = planAdvance(state, player, { skipOccupied: true })
+    if (!plan.ok) return plan.error
+    const warning = plan.value.to.kind === 'event' ? cultureHandWarning(state, player, 1) : undefined
+    return {
+      status: 'ready',
+      reason: `Skip to ${describeSpace(plan.value.to)}: ${describeCost(plan.value.cost)}.`,
+      ...(warning === undefined ? {} : { warning }),
+    }
+  },
+
+  apply(state, player, context) {
+    return performAdvance(state, player, { requestId: context.requestId, at: context.at }, { skipOccupied: true })
   },
 
   reverse(state, player, record, at) {

@@ -116,6 +116,9 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
       techGrants: [],
       techRevealTurns: {},
       researchTurns: {},
+      archimedesCulture: {},
+      wonderDiscount: 0,
+      curieSubstitute: null,
     }
     next = state
   }

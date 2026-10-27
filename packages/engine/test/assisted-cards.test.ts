@@ -79,6 +79,7 @@ describe('the registry and the tech map', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
       'cultureAdvance',
+      'cultureAdvanceSkip',
       'currency',
       'democracy',
       'democracyTrade',

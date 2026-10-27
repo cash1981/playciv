@@ -189,6 +189,10 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Sir Isaac Newton', none],
   ['Thomas Edison', one('Whose learned tech do you research?')],
   ['Mother Teresa', one('Who receives the coin token?')],
+  ['Valmiki', none],
+  ['Adam Smith', none],
+  ['Susan B. Anthony', none],
+  ['Louis Pasteur', none],
 ])
 
 /**
@@ -200,6 +204,22 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['St. Francis of Assisi', 'gains 3 culture for every army you have not built'],
   ['Orville Wright', 'draws an aircraft unit card into your hand'],
   ['Khalid ibn al-Walid', 'moves the start player marker to your area, so the next turn passes clockwise from you'],
+  ['Michelangelo', 'takes 5 production off your next wonder'],
+  ['Thomas Edison', 'grants a free research of a tech another player has revealed'],
+  ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
+  ['Marie Curie', 'arms a substitution for your next Uranium spend'],
+])
+
+/**
+ * Passive Great Persons the engine applies while the card is faceup. They have no
+ * timing on the sheet; the Use button is their activation, and the text is what
+ * the player is told before confirming.
+ */
+export const PASSIVE_GREAT_PERSONS: ReadonlyMap<string, string> = new Map([
+  ['Valmiki', 'your culture hand size is increased by 2 while Valmiki is faceup'],
+  ['Adam Smith', 'you have 1 extra coin while Adam Smith is faceup'],
+  ['Susan B. Anthony', 'all of your cities produce 2 more hammers while Susan B. Anthony is faceup'],
+  ['Louis Pasteur', 'your stacking limit is increased by 1 while Louis Pasteur is faceup'],
 ])
 
 const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')
@@ -218,7 +238,7 @@ export const discardsWhenUsed = (description: string | null | undefined): boolea
   description !== null && description !== undefined && /discard this card/i.test(description)
 
 /** Why a card cannot be played now, or that it can. */
-export type PlayableCardStatus = 'ready' | 'wrong-phase' | 'unavailable'
+export type PlayableCardStatus = 'ready' | 'wrong-phase' | 'unavailable' | 'used'
 
 /**
  * One card of the viewer's hand that can be played at some time, with whether it
@@ -236,8 +256,14 @@ export interface PlayableCard {
   readonly resources: readonly string[]
   /** What the game does for the card when it is played, or null when it only logs it. */
   readonly automatic: string | null
+  /** A passive effect that is active while the card stays faceup; Use only reveals it. */
+  readonly passive: boolean
   /** Playing it discards the card; otherwise a Great Person turns faceup and stays. */
   readonly discards: boolean
+  /** Coin tokens the card can move (Mother Teresa), empty for every other card. */
+  readonly coinSources: readonly { readonly key: string; readonly label: string; readonly coins: number }[]
+  /** Resources the card can substitute for Uranium (Marie Curie), empty for every other card. */
+  readonly substituteResources: readonly string[]
   readonly status: PlayableCardStatus
   /** A readable sentence, also when the card is ready. */
   readonly reason: string

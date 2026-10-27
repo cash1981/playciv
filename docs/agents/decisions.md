@@ -328,13 +328,13 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   out of the hand (discard pile, or faceup in place for a Great Person without
   "discard this card"), and writes who played what and who it names. The effect
   is never applied: other players can cancel it and most effects need a choice on
-  the map (the human), with four Great Persons that need no choice as the
-  exception (2026-10-23, the human): Khalid ibn al-Walid moves the start player
-  marker to the player's area (the next turn then passes clockwise from them, and the
-  board undo refuses that move alone), Marco Polo gains 27 trade up to the ceiling
-  of 27, St. Francis of Assisi gains 3 culture per unbuilt army, and Orville Wright
-  draws an aircraft unit card; each is undone with the same vote. A Great Person
-  whose figures are all blockaded cannot be
+  the map (the human), with the Great Persons of "Great Person automation" below as
+  the exception. The first four (2026-10-23, the human): Khalid ibn al-Walid moves
+  the start player marker to the player's area (the next turn then passes clockwise
+  from them, and the board undo refuses that move alone), Marco Polo gains 27 trade
+  up to the ceiling of 27, St. Francis of Assisi gains 3 culture per unbuilt army,
+  and Orville Wright draws an aircraft unit card; each is undone with the same vote.
+  A Great Person whose figures are all blockaded cannot be
   played. The same cards can be played in their own phase (City Management,
   Movement, Research) by the same flow; that was not asked for and costs nothing.
 - **Start of Turn gate.** Everything here needs Start of Turn to be the player's
@@ -433,6 +433,50 @@ Great Person abilities that need a map marker, killing markers, map tile 16a, th
 played card on other players, growing a metropolis, Movement, Trade and Research actions
 beyond their tabs, and a guard for the owner's board Undo against the board changes a vote
 undo made itself (it can bring back a token that the vote removed; the record stays undone).
+
+### Great Person automation (2026-10-27)
+
+The next low-hanging Great Persons after the four card exceptions. Automated
+passive cards (Valmiki, Adam Smith, Susan B. Anthony, Louis Pasteur) get a Use
+button in the phase tabs and the hand, which reveals the card; their effect is
+active while it stays faceup. Unimplemented passive cards get no such button.
+
+- **Archimedes:** pays out once, after every player has finished the Research
+  phase (`startMissingTurns`). For each tech the holder researched that turn
+  (`researchTurns`), it adds 3 culture unless another player has that tech
+  revealed. Hidden research is ignored on purpose, so the public culture total
+  cannot reveal it. The gain is recorded per tech and taken back by `removeTech`
+  and by undoing the tech's reveal. A hidden or fully blockaded Archimedes gives
+  nothing.
+- **William Shakespeare:** a second City Management action, `cultureAdvanceSkip`,
+  passes every consecutive space another player's marker stands on. The landing
+  space is paid and rewarded normally. Revealed and unblockaded Shakespeare is
+  required; the undo is the normal culture-advance vote.
+- **Louis Pasteur:** a revealed, unblockaded Pasteur raises the stacking limit by
+  1 for Build's figure checks. The manual `stacking` status value stays
+  bookkeeping and is not rewritten.
+- **Michelangelo:** playing the card discards it and arms a one-shot 5-production
+  discount on the next wonder. Build shows the lower cost and consumes the
+  discount; undo of the build arms it again. Wonder costs are still shown, not
+  paid or enforced.
+- **Thomas Edison:** playing the card discards it and grants a free tech
+  restricted to the revealed techs of the player it names. The normal tech panel
+  reveals and spends the grant.
+- **Mother Teresa:** playing the card discards it, moves one chosen coin token
+  from the investable sources to the named player's sheet and makes one free
+  culture advance, once per turn. The coin move and the advance undo together.
+- **Marie Curie:** playing the card discards it and arms a chosen resource as the
+  next Uranium spend. `spendResource` uses it and clears the arm; returning the
+  token restores the arm. No current sheet action spends Uranium, so the card is
+  ready for such an action but has no visible trigger today.
+- **Deferred:** Captain James Cook and Henry Ford change travel speed, which is
+  still a manual `mvmt` text field and is not used in a calculation. They wait
+  until movement is enforced.
+
+Source: `packages/engine/src/great-person-effects.ts`,
+`actions/player.ts` (`chooseTech`, `removeTech`, `revealTech`),
+`assisted-cards.ts`, `assisted-culture.ts`, `assisted-resources.ts`,
+`build-options.ts`, `assisted.ts` and `great-person-automation.test.ts`.
 
 ### Turn warning in Your actions (2026-10-24)
 

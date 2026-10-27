@@ -31,7 +31,10 @@ const card = (overrides: Partial<PlayableCard> = {}): PlayableCard => ({
   prompt: 'Which player discards a coin token?',
   resources: [],
   automatic: null,
+  passive: false,
   discards: true,
+  coinSources: [],
+  substituteResources: [],
   status: 'ready',
   reason: 'Can be played in start of turn, which you are in.',
   ...overrides,
@@ -119,6 +122,24 @@ describe('the Play button', () => {
   })
 })
 
+describe('passive Great Persons', () => {
+  it('says the passive effect is active while the card stays faceup', () => {
+    const valmiki = card({
+      name: 'Valmiki',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'none' },
+      prompt: '',
+      discards: false,
+      passive: true,
+      automatic: 'your culture hand size is increased by 2 while Valmiki is faceup',
+    })
+    renderControl(viewWith([valmiki]), valmiki)
+    fireEvent.click(playButton('Valmiki', 'Use'))
+    expect(screen.getByText(/The passive effect is active while it stays faceup/)).toBeTruthy()
+  })
+})
+
 describe('choosing who the card names', () => {
   it('asks the card’s own question and cannot be confirmed before a player is chosen', () => {
     renderControl(viewWith([card()]), card())
@@ -195,6 +216,52 @@ describe('choosing who the card names', () => {
     ])
     fireEvent.change(select, { target: { value: 'Iron' } })
     expect(confirmButton().disabled).toBe(false)
+  })
+
+  it('asks which coin token Mother Teresa gives, and sends its source', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const teresa = card({
+      name: 'Mother Teresa',
+      timings: ['SOT'],
+      targets: { kind: 'players', min: 1, max: 1 },
+      prompt: 'Who receives the coin token?',
+      coinSources: [
+        { key: 'sheet', label: 'Sheet', coins: 2 },
+        { key: 'pottery', label: 'Pottery (I)', coins: 1 },
+      ],
+    })
+    renderControl(viewWith([teresa]), teresa)
+    fireEvent.click(playButton('Mother Teresa'))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob' }))
+    expect(confirmButton().disabled).toBe(true)
+    const select = screen.getByRole('combobox') as HTMLSelectElement
+    expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Choose a coin token',
+      'Sheet (2)',
+      'Pottery (I) (1)',
+    ])
+    fireEvent.change(select, { target: { value: 'pottery' } })
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: ['bob'], coinSource: 'pottery' })
+  })
+
+  it('asks which resource Marie Curie substitutes for Uranium, and sends it', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const curie = card({
+      name: 'Marie Curie',
+      timings: ['ANY'],
+      targets: { kind: 'none' },
+      prompt: '',
+      substituteResources: ['Iron', 'Wheat'],
+    })
+    renderControl(viewWith([curie]), curie)
+    fireEvent.click(playButton('Marie Curie'))
+    expect(confirmButton().disabled).toBe(true)
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Wheat' } })
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], substitute: 'Wheat' })
   })
 
   it('closes the form on Cancel without sending anything', () => {

@@ -10,10 +10,10 @@
 
 Automate the Great Person abilities that fit the current engine without new
 map-picking flows: Archimedes, William Shakespeare, Louis Pasteur, Michelangelo,
-Thomas Edison, Mother Teresa and Marie Curie. Passive cards keep using Reveal as
-their activation; timed or discard cards get a Play/Use button through the
-existing card flow. Movement effects (Captain James Cook, Henry Ford) wait until
-movement is enforced.
+Thomas Edison, Mother Teresa and Marie Curie. Automated passive cards get a Use
+button that reveals them; timed or discard cards use Play through the existing
+card flow. Movement effects (Captain James Cook, Henry Ford) wait until movement
+is enforced.
 
 ## Why
 
@@ -25,10 +25,10 @@ which Great Persons are automated.
 
 **In:**
 
-- **Archimedes:** when a revealed, unblockaded Archimedes is held, choosing a tech
-  during Research adds 3 culture unless another player already has that tech
-  (`techsChosen`) or chose it that turn (`researchTurns`). Removing the tech takes
-  the culture back.
+- **Archimedes:** after every player has finished Research, each tech the holder
+  researched that turn adds 3 culture unless another player has it revealed.
+  Hidden research is ignored so the public culture total cannot leak it. Removing
+  the tech takes the culture back.
 - **William Shakespeare:** a second culture-advance action skips every consecutive
   space occupied by another player's marker, paying and drawing for the landing
   space. Requires revealed, unblockaded Shakespeare.
@@ -67,8 +67,10 @@ which Great Persons are automated.
 
 - A small pure `great-person-effects.ts` helper answers whether a named Great
   Person is active (revealed and its type not fully blockaded).
-- Archimedes hooks into `chooseTech`/`removeTech`; the gained culture is recorded per
-  tech so a correction takes exactly that back.
+- Archimedes pays out in `startMissingTurns` after the last Research phase;
+  `removeTech`/undo refund the culture recorded per tech.
+- Automated passive cards (Valmiki, Adam Smith, Susan B. Anthony, Pasteur) are
+  listed as Use cards; the effect is derived while the card is faceup.
 - Shakespeare is a new `cultureAdvanceSkip` assisted action sharing
   `planAdvance`/`performAdvance`.
 - Pasteur is used by `build-options.ts` only; the status field stays bookkeeping.
@@ -95,23 +97,33 @@ which Great Persons are automated.
 
 ## Acceptance criteria
 
-- [ ] Archimedes adds 3 culture only for a qualifying first research, not when
-  another player knows or is researching the tech, and removing the tech takes it back.
-- [ ] Shakespeare can skip any run of spaces occupied by other players, pays and
+- [x] Archimedes pays after Research for each qualifying tech, ignores hidden research and refunds on removal.
+- [x] Shakespeare can skip any run of spaces occupied by other players, pays and
   draws only for the landing space, and undo returns the marker/cards.
-- [ ] Pasteur adds 1 to Build's stacking limit only while revealed and unblockaded.
-- [ ] Michelangelo shows and consumes a 5-production wonder discount; undo restores it.
-- [ ] Edison grants a free tech only for techs another player revealed.
-- [ ] Mother Teresa moves one chosen coin, advances one space free and undoes both.
-- [ ] Marie Curie arms a Uranium substitution and consumes it on the next eligible
+- [x] Pasteur adds 1 to Build's stacking limit only while revealed and unblockaded.
+- [x] Michelangelo shows and consumes a 5-production wonder discount; undo restores it.
+- [x] Edison grants a free tech only for techs the named player revealed.
+- [x] Mother Teresa moves one chosen coin, advances one space free and undoes both.
+- [x] Marie Curie arms a Uranium substitution and consumes it on the next eligible
   resource ability; no current sheet action triggers it (test with a fixture).
-- [ ] Passive Great Persons keep Reveal as activation; one-shot cards use Play and
+- [x] Automated passive Great Persons get Use (reveal); one-shot cards use Play and
   log the automated effect.
-- [ ] Hidden information: opponents never see hand fields, pending effects or
+- [x] Hidden information: opponents never see hand fields, pending effects or
   candidate tech names that were not public; projection tests cover each.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [x] Package typechecks and builds pass; engine and web tests pass. Server tests
+  passed alone; the parallel root run hit two existing revision-compaction 5 s
+  timeouts under load.
 - [ ] Verified in the browser: card buttons, Build cost, culture skip, free tech.
 
 ## Open questions
 
 Movement effects are deliberately deferred by the human's answer on 2026-10-27.
+
+## Handover
+
+Implemented the engine, server payload and web card form changes. Engine tests:
+2096 pass. Web tests: 1137 pass. Server tests: 847 pass when run alone; the root
+parallel run timed out in two revision-compaction tests (known load-sensitive
+tests, unrelated files). Typechecks for all packages and the builds pass.
+Browser verification is pending.
+

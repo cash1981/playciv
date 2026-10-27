@@ -203,6 +203,22 @@ export interface Playerhand {
    * removed tech is taken back out.
    */
   readonly researchTurns: Readonly<Record<string, number>>
+  /**
+   * Culture Archimedes gave for each tech, by tech name, so removing that tech
+   * takes exactly that back. Own bookkeeping; never shown to opponents.
+   */
+  readonly archimedesCulture: Readonly<Record<string, number>>
+  /**
+   * Production off the next wonder build from Michelangelo, 0 when not armed.
+   * Own view only: the card is public when played, but the armed state is hand
+   * bookkeeping until the build shows the discount.
+   */
+  readonly wonderDiscount: number
+  /**
+   * The resource Marie Curie lets the next Uranium spend use instead, or `null`.
+   * Own view only, like the rest of the hand.
+   */
+  readonly curieSubstitute: string | null
 }
 
 /** A free tech to learn, with the level it must have (`null` for any level). */
@@ -214,6 +230,8 @@ export interface TechGrant {
   readonly level: 1 | 2 | 3 | 4 | 5 | null
   /** The turn it was granted; it can only be used in that turn's Start of Turn. */
   readonly turnNumber: number
+  /** When set, only these tech names can be learned with the grant (Thomas Edison). */
+  readonly allowedTechNames?: readonly string[]
   /**
    * The tech that was learned with it, once one was. The grant stays on the player so that removing that
    * tech (or taking its reveal back by vote) gives the free tech back, and so the action that granted
@@ -388,6 +406,7 @@ export type AssistedActionKind =
   | 'startBuildingProgram'
   | 'upgradeBuildings'
   | 'playCard'
+  | 'cultureAdvanceSkip'
   | 'expansionism'
   | 'pacifism'
   | 'patronage'
@@ -426,8 +445,8 @@ export type AssistedStatus =
  * was removed, with its position.
  */
 export type SpentResource =
-  | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string }
-  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece }
+  | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
+  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string }
 
 /**
  * The Great Person marker a culture advance put in the player's area: which piece, where it
@@ -619,6 +638,16 @@ export type AssistedEffect =
       readonly drew?: { readonly itemId: string; readonly sheetName: SheetName }
       /** The start player marker the game moved for the card: who held it, and the board entry of the move. */
       readonly starter?: { readonly from: string; readonly historyId: string }
+      /** A free tech the card granted (Thomas Edison). */
+      readonly grantId?: string
+      /** The production discount the card armed (Michelangelo), so an undo can take it back. */
+      readonly wonderDiscount?: number
+      /** A coin the card moved to another player (Mother Teresa). */
+      readonly coin?: { readonly source: string; readonly targetId: string }
+      /** The free culture advance the card gave (Mother Teresa). */
+      readonly advance?: CultureAdvanceEffect
+      /** The Uranium substitution the card armed (Marie Curie), or `null` when it was not armed. */
+      readonly curieSubstitute?: string
     }
   | {
       readonly kind: 'coinPurchase'
@@ -671,6 +700,8 @@ export type AssistedEffect =
       readonly trade: number
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+      /** Production taken off by Michelangelo, so an undo arms it again. */
+      readonly wonderDiscount?: number
     }
   | {
       readonly kind: 'build'

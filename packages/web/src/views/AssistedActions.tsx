@@ -147,6 +147,7 @@ const isBlockedHere = (status: Status): boolean => status === 'needs-resource' |
 /** Actions whose button does not read "Use <label>". */
 const BUTTON_TEXT: Readonly<Partial<Record<AssistedActionKind, string>>> = {
   cultureAdvance: 'Advance culture',
+  cultureAdvanceSkip: 'Skip occupied culture spaces',
 }
 
 /**

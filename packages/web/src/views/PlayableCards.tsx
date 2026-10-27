@@ -61,6 +61,8 @@ export function PlayCardControl({
   const [open, setOpen] = useState(false)
   const [chosen, setChosen] = useState<readonly string[]>([])
   const [resource, setResource] = useState('')
+  const [coinSource, setCoinSource] = useState('')
+  const [substitute, setSubstitute] = useState('')
   const formId = useId()
   if (view.you === null) return null
 
@@ -68,6 +70,8 @@ export function PlayCardControl({
   const others = view.opponents
   const { min, max } = targetLimit(card)
   const needsResource = card.resources.length > 0
+  const needsCoin = card.coinSources.length > 0
+  const needsSubstitute = card.substituteResources.length > 0
   // A card that must name exactly one player, in a game with one other player, has no choice to make
   const effective =
     card.targets.kind === 'players' && min >= 1 && others.length === 1 && chosen.length === 0
@@ -76,7 +80,9 @@ export function PlayCardControl({
   const valid =
     effective.length >= min &&
     effective.length <= max &&
-    (!needsResource || resource !== '')
+    (!needsResource || resource !== '') &&
+    (!needsCoin || coinSource !== '') &&
+    (!needsSubstitute || substitute !== '')
   const disabled = busy || readOnly
 
   const toggle = (playerId: string): void =>
@@ -91,7 +97,7 @@ export function PlayCardControl({
   const confirm = (): void => {
     if (!valid || view.you === null) return
     const playerId = view.you.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}`
     void pressOnce(
       key,
       run,
@@ -100,6 +106,8 @@ export function PlayCardControl({
           itemId: card.itemId,
           targets: card.targets.kind === 'players' ? effective : [],
           ...(needsResource ? { resource } : {}),
+          ...(needsCoin ? { coinSource } : {}),
+          ...(needsSubstitute ? { substitute } : {}),
         }),
       view,
     ).then((succeeded) => {
@@ -179,11 +187,47 @@ export function PlayCardControl({
               </select>
             </label>
           )}
+          {needsCoin && (
+            <label className="play-card-resource">
+              Give from{' '}
+              <select
+                value={coinSource}
+                disabled={disabled}
+                onChange={(event) => setCoinSource(event.target.value)}
+              >
+                <option value="">Choose a coin token</option>
+                {card.coinSources.map((source) => (
+                  <option key={source.key} value={source.key}>
+                    {source.label} ({source.coins})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {needsSubstitute && (
+            <label className="play-card-resource">
+              Spend instead of Uranium{' '}
+              <select
+                value={substitute}
+                disabled={disabled}
+                onChange={(event) => setSubstitute(event.target.value)}
+              >
+                <option value="">Choose a resource</option>
+                {card.substituteResources.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <p className="muted play-card-note">
             The game logs this and {card.discards ? 'discards the card' : 'turns the card faceup'}.{' '}
-            {card.automatic === null
-              ? 'It does not apply the effect: do that yourself unless another player cancels the card.'
-              : `It also ${card.automatic}. Undo it with a vote if another player cancels the card.`}
+            {card.passive
+              ? `The passive effect is active while it stays faceup: ${card.automatic}.`
+              : card.automatic === null
+                ? 'It does not apply the effect: do that yourself unless another player cancels the card.'
+                : `It also ${card.automatic}. Undo it with a vote if another player cancels the card.`}
           </p>
           <div className="play-card-buttons">
             <button type="submit" className="small" disabled={disabled || !valid}>

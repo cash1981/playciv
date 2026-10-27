@@ -35,8 +35,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource'])
-  if (extra.length > 0) return `playCard takes only itemId, targets and resource, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource and substitute, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -46,10 +46,20 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   if (resource !== undefined && (typeof resource !== 'string' || resource.length === 0 || resource.length > 20)) {
     return 'resource must be a short text'
   }
+  const coinSource = args['coinSource']
+  if (coinSource !== undefined && (typeof coinSource !== 'string' || coinSource.length === 0 || coinSource.length > 30)) {
+    return 'coinSource must be a short text'
+  }
+  const substitute = args['substitute']
+  if (substitute !== undefined && (typeof substitute !== 'string' || substitute.length === 0 || substitute.length > 20)) {
+    return 'substitute must be a short text'
+  }
   return {
     itemId: args['itemId'],
     targets,
     ...(resource === undefined ? {} : { resource }),
+    ...(coinSource === undefined ? {} : { coinSource }),
+    ...(substitute === undefined ? {} : { substitute }),
   }
 }
 

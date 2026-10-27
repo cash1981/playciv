@@ -12,6 +12,8 @@ import { coinSourcesOf, totalCoins } from '../coins.js'
 import { tradeCeilingOf } from '../limits.js'
 import { appendLog } from '../log.js'
 import { collectTradeForTurn } from '../trade-collection.js'
+import { activeGreatPerson } from '../great-person-effects.js'
+import { withPlayer } from '../state.js'
 import type { GameState, Playerhand } from '../state.js'
 import type { PlayerTurn } from '../turn.js'
 import { bySeat, publicTurn, publicTurnKey, sameTurn, seatAfter, startPlayerOf, turnStatus } from '../turn.js'
@@ -108,6 +110,45 @@ function withCollectedTurn(
   }
 }
 
+/**
+ * Archimedes pays out once, after every player has finished the Research phase
+ * of `endingTurn`. Only revealed techs of other players count as known, so a
+ * hidden research choice cannot leak through the public culture total. The
+ * holder's own researched techs come from `researchTurns` and need no reveal.
+ */
+function payArchimedes(state: GameState, endingTurn: number, at: string | undefined): GameState {
+  let next = state
+  for (const player of state.players) {
+    if (!activeGreatPerson(state, player, 'Archimedes')) continue
+    const researched = Object.entries(player.researchTurns)
+      .filter(([, turnNumber]) => turnNumber === endingTurn)
+      .map(([techName]) => techName)
+    for (const techName of researched) {
+      const known = state.players.some(
+        (other) =>
+          other.playerId !== player.playerId &&
+          other.techsChosen.some((tech) => tech.name === techName && !tech.hidden),
+      )
+      if (known) continue
+      const holder = next.players.find((candidate) => candidate.playerId === player.playerId)
+      if (holder === undefined) continue
+      next = withPlayer(next, {
+        ...holder,
+        stats: { ...holder.stats, culture: holder.stats.culture + 3 },
+        archimedesCulture: { ...holder.archimedesCulture, [techName]: 3 },
+      })
+      next = appendLog(next, {
+        username: holder.username,
+        playerId: holder.playerId,
+        publicLog: `${holder.username} gained 3 culture from Archimedes`,
+        privateLog: '',
+        createdAt: at ?? null,
+      })
+    }
+  }
+  return next
+}
+
 function startTurn(
   state: GameState,
   turnNumber: number,
@@ -122,8 +163,11 @@ function startTurn(
     current === undefined ? undefined : seatAfter(bySeat(reset.players), current.playernumber)
   if (starter === undefined) return reset
 
+  // Archimedes waits for the whole table to finish Research, so a hidden choice
+  // made by another player cannot be inferred from a missing +3.
+  const paid = payArchimedes(reset, turnNumber - 1, at)
   // Log first, so the board history entry counts the line as known at the time
-  const logged = appendLog(reset, {
+  const logged = appendLog(paid, {
     username: 'System',
     publicLog: `Turn ${turnNumber}: ${starter.username} starts with the Start of turn phase`,
   })
