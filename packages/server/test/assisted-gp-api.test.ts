@@ -451,6 +451,26 @@ describe('the manual paths over HTTP', () => {
     expect(after.assistedActions).toEqual([])
   })
 
+  it('the Draw button discards an exhausted type faceup and draws the next valid card', async () => {
+    const table = await gpTable('Draw filter', {
+      top: [SCIENTIST, GENERAL],
+      exhausted: ['great people/scientist'],
+    })
+    const before = await stored(table)
+    const [rejected, valid] = before.items.filter((item) => item.sheetName === 'GREAT_PERSON')
+    const response = await post(table.starter, `/api/games/${table.gameId}/draw/GREAT_PERSON`, {
+      confirmedOutOfTurn: true,
+    })
+    expect(response.status).toBe(200)
+    const after = await stored(table)
+    const holder = after.players.find((player) => player.playerId === table.starterId)
+    expect(holder?.items.map((item) => item.id)).toEqual([valid?.id])
+    expect(after.discardedItems.map((item) => item.id)).toContain(rejected?.id)
+    expect(after.board.pieces).toEqual(before.board.pieces)
+    expect(after.assistedActions).toEqual([])
+    expect(after.log.at(-2)?.publicLog).toContain('no scientist marker is left, so it was discarded faceup')
+  })
+
   it('after the assisted flow the marker can be moved and removed, the culture marker dragged and counters edited', async () => {
     const table = await gpTable('Manual', { top: [SCIENTIST] })
     const pressed = await (await advance(table, 'req-1', (await view(table.gameId, table.starter)).rev)).json<View>()

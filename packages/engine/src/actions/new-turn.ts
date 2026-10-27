@@ -12,6 +12,7 @@ import { coinSourcesOf, totalCoins } from '../coins.js'
 import { tradeCeilingOf } from '../limits.js'
 import { appendLog } from '../log.js'
 import { collectTradeForTurn } from '../trade-collection.js'
+import { payArchimedesAfterResearch } from '../archimedes.js'
 import type { GameState, Playerhand } from '../state.js'
 import type { PlayerTurn } from '../turn.js'
 import { bySeat, publicTurn, publicTurnKey, sameTurn, seatAfter, startPlayerOf, turnStatus } from '../turn.js'
@@ -122,8 +123,11 @@ function startTurn(
     current === undefined ? undefined : seatAfter(bySeat(reset.players), current.playernumber)
   if (starter === undefined) return reset
 
+  // Archimedes waits for the whole table to finish Research, so a hidden choice
+  // made by another player cannot be inferred from a missing +3.
+  const paid = payArchimedesAfterResearch(reset, turnNumber - 1, at)
   // Log first, so the board history entry counts the line as known at the time
-  const logged = appendLog(reset, {
+  const logged = appendLog(paid, {
     username: 'System',
     publicLog: `Turn ${turnNumber}: ${starter.username} starts with the Start of turn phase`,
   })

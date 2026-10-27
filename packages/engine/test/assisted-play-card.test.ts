@@ -92,9 +92,18 @@ describe('which cards can be played, and when', () => {
     expect(card.reason).toBe('Played during a battle.')
   })
 
-  it('does not list a passive Great Person, and lists one that can be used any time', () => {
+  it('lists an automated passive Great Person as a Use button, and an unautomated one not at all', () => {
     const passive = withCardInHand(startOfTurn(), 'Valmiki').state
-    expect(playableCardsOf(passive, player(passive)).some((card) => card.name === 'Valmiki')).toBe(false)
+    const valmiki = cardOf(passive, 'Valmiki')
+    expect(valmiki.kind).toBe('greatPerson')
+    expect(valmiki.passive).toBe(true)
+    expect(valmiki.timings).toEqual(['ANY'])
+    expect(valmiki.status).toBe('ready')
+    expect(valmiki.discards).toBe(false)
+
+    const unimplemented = withCardInHand(startOfTurn(), 'Henry Ford').state
+    expect(playableCardsOf(unimplemented, player(unimplemented)).some((card) => card.name === 'Henry Ford')).toBe(false)
+
     const anyTime = withCardInHand(startOfTurn(), 'Marco Polo').state
     const card = cardOf(anyTime, 'Marco Polo')
     expect(card.kind).toBe('greatPerson')

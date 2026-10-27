@@ -523,7 +523,10 @@ function putTechBack(
   if (chosen) {
     // As in `removeTech`: a revealed coin tech starts its counter at 1, so the
     // counter goes with the card instead of staying behind in the Coins tab.
+    // Archimedes' culture for the tech goes with it too.
     const source = techCoinSource(tech.name)
+    const archimedes = player.archimedesCulture[tech.name] ?? 0
+    const { [tech.name]: _archimedes, ...archimedesCulture } = player.archimedesCulture
     const next = withPlayer(state, {
       ...player,
       techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
@@ -531,10 +534,14 @@ function putTechBack(
       researchTurns: Object.fromEntries(
         Object.entries(player.researchTurns).filter(([name]) => name !== tech.name),
       ),
-      stats:
-        source === undefined
-          ? player.stats
-          : { ...player.stats, coinSources: withCoinSource(player.stats.coinSources, source, 0) },
+      archimedesCulture,
+      stats: {
+        ...player.stats,
+        culture: Math.max(0, player.stats.culture - archimedes),
+        ...(source === undefined
+          ? {}
+          : { coinSources: withCoinSource(player.stats.coinSources, source, 0) }),
+      },
     })
     return ok(
       logUndo(next, player, tech, logType, (name) => `has removed ${name} from ${player.username}`),

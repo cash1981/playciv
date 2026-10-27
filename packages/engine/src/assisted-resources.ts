@@ -30,11 +30,21 @@ export function findResourceToken(
   const player = playerOf(state, playerId)
   if (player === undefined) return undefined
 
-  const wanted = normalize(resource)
+  // Marie Curie: a Uranium spend may use the resource she armed instead.
+  const curieSubstitute = resource === 'Uranium' ? player.curieSubstitute ?? undefined : undefined
+  const paid = curieSubstitute ?? resource
+  const wanted = normalize(paid)
   const hut = player.items.find(
     (item) => item.kind === 'hut' && !item.used && normalize(item.name) === wanted,
   )
-  if (hut !== undefined) return { kind: 'hut', resource, itemId: hut.id }
+  if (hut !== undefined) {
+    return {
+      kind: 'hut',
+      resource: paid,
+      itemId: hut.id,
+      ...(curieSubstitute === undefined ? {} : { curieSubstitute }),
+    }
+  }
 
   const areas = playerAreas(state.board, state.players)
   const piece = state.board.pieces.find(
@@ -44,7 +54,9 @@ export function findResourceToken(
       areaAt(areas, candidate.x + candidate.width / 2, candidate.y + candidate.height / 2)
         ?.playerId === playerId,
   )
-  return piece === undefined ? undefined : { kind: 'piece', resource, piece }
+  return piece === undefined
+    ? undefined
+    : { kind: 'piece', resource: paid, piece, ...(curieSubstitute === undefined ? {} : { curieSubstitute }) }
 }
 
 export interface SpendOutcome {
@@ -76,6 +88,7 @@ export function spendResource(
       ...withPlayerHand(state, {
         ...player,
         items: player.items.filter((item) => item.id !== hut.id),
+        ...(token.curieSubstitute === undefined ? {} : { curieSubstitute: null }),
       }),
       discardedItems: [...state.discardedItems, { ...hut, hidden: true }],
     }
@@ -88,7 +101,14 @@ export function spendResource(
     ...(at === undefined ? {} : { at }),
   })
   if (!removed.ok) return err('NO_RESOURCE')
-  return ok({ state: removed.value, spent: token })
+  const after = playerOf(removed.value, playerId)
+  return ok({
+    state:
+      token.curieSubstitute === undefined || after === undefined
+        ? removed.value
+        : withPlayerHand(removed.value, { ...after, curieSubstitute: null }),
+    spent: token,
+  })
 }
 
 /** Puts a spent token back: the hut into the hand, or the piece onto the board where it was. */
@@ -98,16 +118,18 @@ export function returnResource(
   spent: SpentResource,
   at: string | null,
 ): Result<GameState, EngineError> {
+  const restoredPlayer =
+    spent.curieSubstitute === undefined ? player : { ...player, curieSubstitute: spent.curieSubstitute }
   if (spent.kind === 'hut') {
     const inDiscard = state.discardedItems.find((item) => item.id === spent.itemId)
     const inDeck = state.items.find((item) => item.id === spent.itemId)
     const item = inDiscard ?? inDeck
     if (item === undefined) return err({ kind: 'ITEM_NOT_FOUND', sheetName: 'HUTS' })
     return ok({
-      ...withPlayerHand(state, { ...player, items: [...player.items, { ...item, hidden: true }] }),
+      ...withPlayerHand(state, { ...restoredPlayer, items: [...player.items, { ...item, hidden: true }] }),
       discardedItems: state.discardedItems.filter((candidate) => candidate.id !== item.id),
       items: state.items.filter((candidate) => candidate.id !== item.id),
     })
   }
-  return ok(placeBack(state, player, spent.piece, at))
+  return ok(placeBack(withPlayerHand(state, restoredPlayer), restoredPlayer, spent.piece, at))
 }

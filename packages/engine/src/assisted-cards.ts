@@ -14,17 +14,22 @@
  */
 
 import { tradeCeilingOf } from './limits.js'
+import { investableCoinsOf } from './sot.js'
+import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
+import { createPlayerTurn } from './turn.js'
 import { placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
-import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
+import { drawCandidates, performAdvance, reverseAdvanceEffect, shuffleSheetTwice } from './assisted-culture.js'
 import { unitSheetOf } from './build-options.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
-import { READY, blocked, lastLogId, playerOf, rejected, withPlayerHand } from './assisted-core.js'
+import { revealedTechNamesOfOthers } from './great-person-effects.js'
+import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
   AUTOMATIC_EFFECTS,
   CARDS_WITH_OWN_BUTTON,
   CARD_TIMING_TEXT,
+  PASSIVE_GREAT_PERSONS,
   cardPlayRuleOf,
   discardsWhenUsed,
   timingsOf,
@@ -36,6 +41,9 @@ import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
 import type { AssistedEffect, GameState, Playerhand } from './state.js'
+import { withPlayer } from './state.js'
+import type { PlayCardPayload } from './assisted-core.js'
+import type { TechGrant } from './state.js'
 import { startPlayerOf, turnStatus } from './turn.js'
 import type { TurnPhase } from './turn.js'
 
@@ -84,9 +92,10 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
   return player.items.flatMap((item): readonly PlayableCard[] => {
     const kind = KIND_OF[item.kind]
     if (kind === undefined || item.description === null || item.description === undefined) return []
-    const timings = timingsOf(item.description)
-    if (timings.length === 0) return []
     const name = itemName(item)
+    const passiveText = kind === 'greatPerson' ? PASSIVE_GREAT_PERSONS.get(name) : undefined
+    const timings = timingsOf(item.description)
+    if (timings.length === 0 && passiveText === undefined) return []
     if (item.kind === 'greatperson' && CARDS_WITH_OWN_BUTTON.has(name)) return []
     const rule = cardPlayRuleOf(name)
     const base = {
@@ -94,12 +103,29 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       name,
       kind,
       description: item.description,
-      timings,
+      timings: passiveText === undefined ? timings : (['ANY'] as const),
       targets: rule.targets,
       prompt: rule.prompt,
       resources: rule.resources,
-      automatic: kind === 'greatPerson' ? (AUTOMATIC_EFFECTS.get(name) ?? null) : null,
+      automatic:
+        passiveText === undefined
+          ? kind === 'greatPerson'
+            ? (AUTOMATIC_EFFECTS.get(name) ?? null)
+            : null
+          : passiveText,
+      passive: passiveText !== undefined,
       discards: kind === 'culture' || discardsWhenUsed(item.description),
+      coinSources:
+        name === 'Mother Teresa'
+          ? investableCoinsOf(state, player).map((source) => ({
+              ...source,
+              label: findCoinSource(source.key)?.label ?? source.key,
+            }))
+          : [],
+      substituteResources:
+        name === 'Marie Curie'
+          ? ['Iron', 'Wheat', 'Spy', 'Silk', 'Incense']
+          : [],
     }
     if (waiting.has(item.id)) {
       return [
@@ -119,7 +145,37 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
         },
       ]
     }
-    return [{ ...base, ...playableIn(timings, now) }]
+    const usedThisTurn = player.playerTurns
+      .find((turn) => turn.turnNumber === turnStatus(state).currentTurn)
+      ?.usedActions.includes('card:Mother Teresa')
+    if (name === 'Mother Teresa' && usedThisTurn === true) {
+      return [
+        {
+          ...base,
+          status: 'used',
+          reason: 'Mother Teresa can give only one coin each turn.',
+        },
+      ]
+    }
+    if (name === 'Mother Teresa' && base.coinSources.length === 0) {
+      return [
+        {
+          ...base,
+          status: 'unavailable',
+          reason: 'You have no coin token to give. Put a coin on your sheet or a tech card first.',
+        },
+      ]
+    }
+    if (name === 'Thomas Edison' && revealedTechNamesOfOthers(state, player.playerId).length === 0) {
+      return [
+        {
+          ...base,
+          status: 'unavailable',
+          reason: 'No other player has revealed a tech for Edison to research.',
+        },
+      ]
+    }
+    return [{ ...base, ...playableIn(base.timings, now) }]
   })
 }
 
@@ -130,9 +186,18 @@ type PlayCardEffect = Extract<AssistedEffect, { readonly kind: 'playCard' }>
 
 interface Automated {
   readonly state: GameState
-  readonly extra: Pick<PlayCardEffect, 'gain' | 'drew' | 'starter'>
+  readonly extra: Pick<
+    PlayCardEffect,
+    'gain' | 'drew' | 'starter' | 'grantId' | 'wonderDiscount' | 'coin' | 'advance' | 'curieSubstitute'
+  >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
+}
+
+/** The current turn's record, or a fresh one when the player has not written anything yet. */
+function turnFor(state: GameState, player: Playerhand) {
+  const turnNumber = turnStatus(state).currentTurn
+  return player.playerTurns.find((turn) => turn.turnNumber === turnNumber) ?? createPlayerTurn(player.username, turnNumber)
 }
 
 /**
@@ -141,7 +206,15 @@ interface Automated {
  * is only logged and discarded, and the player does the rest by hand. `Err` is a
  * sentence for the player, and then the card stays in the hand.
  */
-function automate(state: GameState, player: Playerhand, name: string, at: string | undefined): Result<Automated | null, string> {
+function automate(
+  state: GameState,
+  player: Playerhand,
+  name: string,
+  at: string | undefined,
+  payload: PlayCardPayload | undefined,
+  targets: readonly Playerhand[],
+  requestId: string,
+): Result<Automated | null, string> {
   const gained = (trade: number, culture: number, said: string): Result<Automated, string> =>
     ok({
       state: withPlayerHand(state, {
@@ -185,6 +258,92 @@ function automate(state: GameState, player: Playerhand, name: string, at: string
         state: { ...moved, startPlayerId: player.playerId },
         extra: { starter: { from: current.playerId, historyId: entry.id } },
         said: `, becoming the start player (next turn passes clockwise from ${player.username})`,
+      })
+    }
+    case 'Michelangelo': {
+      if (player.wonderDiscount > 0) return err('Michelangelo\'s discount is already armed for your next wonder.')
+      return ok({
+        state: withPlayerHand(state, { ...player, wonderDiscount: 5 }),
+        extra: { wonderDiscount: 5 },
+        said: ', taking 5 production off their next wonder',
+      })
+    }
+    case 'Thomas Edison': {
+      const target = targets[0]
+      const allowedTechNames =
+        target?.techsChosen.filter((tech) => !tech.hidden).map((tech) => tech.name).sort((a, b) => a.localeCompare(b)) ?? []
+      if (allowedTechNames.length === 0) {
+        return err(`${target?.username ?? 'That player'} has not revealed a tech to research.`)
+      }
+      const grant: TechGrant = {
+        id: requestId,
+        source: 'Thomas Edison',
+        level: null,
+        turnNumber: turnStatus(state).currentTurn,
+        allowedTechNames,
+      }
+      return ok({
+        state: withPlayerHand(state, { ...player, techGrants: [...player.techGrants, grant] }),
+        extra: { grantId: grant.id },
+        said: `, and may research one tech another player knows (${allowedTechNames.join(', ')}) for free`,
+      })
+    }
+    case 'Mother Teresa': {
+      const target = targets[0]
+      const source = payload?.coinSource
+      if (target === undefined || source === undefined) return err('Choose the player and the coin token to give.')
+      const known = findCoinSource(source)
+      const coins = coinSourcesOf(state, player)
+      const held = known === undefined ? 0 : coins[source as keyof typeof coins]
+      if (known === undefined || typeof held !== 'number' || held < 1) {
+        return err(`You have no ${known?.label ?? source} coin to give.`)
+      }
+      const usedKey = 'card:Mother Teresa'
+      const turn = turnFor(state, player)
+      if (turn.usedActions.includes(usedKey)) return err('Mother Teresa can give only one coin each turn.')
+
+      const payer = withPlayerHand(state, {
+        ...player,
+        stats: { ...player.stats, coinSources: withCoinSource(player.stats.coinSources, source as never, held - 1) },
+      })
+      const recipient = playerOf(payer, target.playerId) ?? target
+      const paid = withPlayer(payer, {
+        ...recipient,
+        stats: {
+          ...recipient.stats,
+          coinSources: withCoinSource(
+            recipient.stats.coinSources,
+            'sheet',
+            recipient.stats.coinSources.sheet + 1,
+          ),
+        },
+      })
+      const advanced = performAdvance(
+        paid,
+        playerOf(paid, player.playerId) ?? player,
+        { requestId, at },
+        { free: true, tagLog: false },
+      )
+      if (!advanced.ok) return err('The free culture advance could not be made.')
+      const holder = playerOf(advanced.value.state, player.playerId) ?? player
+      const marked = useTurnAction(advanced.value.state, holder, turn, usedKey, holder.stats)
+      return ok({
+        state: marked,
+        extra: {
+          coin: { source: known.key, targetId: target.playerId },
+          advance: advanced.value.effect,
+        },
+        said: `, gave their ${known.label} coin to ${target.username} and advanced one space for free`,
+      })
+    }
+    case 'Marie Curie': {
+      const substitute = payload?.substitute
+      if (substitute === undefined) return err('Choose the resource to spend instead of Uranium.')
+      if (player.curieSubstitute !== null) return err('Marie Curie is already armed for the next Uranium spend.')
+      return ok({
+        state: withPlayerHand(state, { ...player, curieSubstitute: substitute }),
+        extra: { curieSubstitute: substitute },
+        said: ', so their next Uranium spend may use the resource they chose instead',
       })
     }
     default:
@@ -242,6 +401,16 @@ export const playCard: AssistedActionDefinition = {
       return err(rejected('playCard', blocked('unavailable', `${card.name} names ${wanted} other player${max === 1 ? '' : 's'}.`)))
     }
 
+    if (card.name === 'Mother Teresa' && !card.coinSources.some((source) => source.key === payload.coinSource)) {
+      return err(rejected('playCard', blocked('unavailable', 'Choose one of your coin tokens to give.')))
+    }
+    if (
+      card.name === 'Marie Curie' &&
+      (payload.substitute === undefined || !card.substituteResources.includes(payload.substitute))
+    ) {
+      return err(rejected('playCard', blocked('unavailable', `Choose a resource to spend instead of Uranium: ${card.substituteResources.join(', ')}.`)))
+    }
+
     // The resource a card is played as
     const resource = payload.resource ?? null
     if (card.resources.length > 0) {
@@ -272,7 +441,7 @@ export const playCard: AssistedActionDefinition = {
 
     const automated =
       card.kind === 'greatPerson'
-        ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name, context.at)
+        ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name, context.at, payload, targets, context.requestId)
         : ok<Automated | null>(null)
     if (!automated.ok) return err(rejected('playCard', blocked('unavailable', automated.error)))
     const after = automated.value?.state ?? moved
@@ -332,6 +501,27 @@ export const playCard: AssistedActionDefinition = {
     if (effect.starter !== undefined && startPlayerOf(state)?.playerId !== player.playerId) {
       return blockedBy(`${player.username} is no longer the start player, so ${effect.name} cannot be undone.`)
     }
+    const grant =
+      effect.grantId === undefined
+        ? undefined
+        : player.techGrants.find((candidate) => candidate.id === effect.grantId)
+    if (effect.grantId !== undefined && grant === undefined) {
+      return blockedBy(`The free tech ${effect.name} gave is no longer pending.`)
+    }
+    if (grant?.usedFor !== undefined) {
+      return blockedBy(`The free tech from ${effect.name} was already used for ${grant.usedFor}. Remove that tech first.`)
+    }
+    if (effect.wonderDiscount !== undefined && player.wonderDiscount < effect.wonderDiscount) {
+      return blockedBy(`The ${effect.wonderDiscount}-production discount from ${effect.name} has already been used.`)
+    }
+    if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
+      return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
+    }
+    const coinTarget =
+      effect.coin === undefined ? undefined : playerOf(state, effect.coin.targetId)
+    if (effect.coin !== undefined && (coinTarget === undefined || coinTarget.stats.coinSources.sheet < 1)) {
+      return blockedBy(`${coinTarget?.username ?? 'The other player'} no longer has the coin ${effect.name} gave them.`)
+    }
 
     let current: GameState = state
     let hand: Playerhand = player
@@ -339,6 +529,12 @@ export const playCard: AssistedActionDefinition = {
       const previous = state.players.find((candidate) => candidate.playerId === effect.starter?.from)
       if (previous === undefined) return blockedBy('The previous start player has left the game.')
       current = { ...placeStartMarker(current, previous, player.playerId, at ?? undefined), startPlayerId: previous.playerId }
+    }
+    if (effect.advance !== undefined) {
+      const reversed = reverseAdvanceEffect(current, player, record, effect.advance, at)
+      if (!reversed.ok) return reversed
+      current = reversed.value.state
+      hand = playerOf(current, player.playerId) ?? hand
     }
     if (effect.gain !== undefined) {
       hand = {
@@ -358,20 +554,54 @@ export const playCard: AssistedActionDefinition = {
       current = shuffleSheetTwice(current, effect.drew.sheetName)
       hand = playerOf(current, player.playerId) ?? hand
     }
+    if (effect.grantId !== undefined) {
+      hand = { ...hand, techGrants: hand.techGrants.filter((candidate) => candidate.id !== effect.grantId) }
+    }
+    if (effect.wonderDiscount !== undefined) {
+      hand = { ...hand, wonderDiscount: Math.max(0, hand.wonderDiscount - effect.wonderDiscount) }
+    }
+    if (effect.curieSubstitute !== undefined) {
+      hand = { ...hand, curieSubstitute: null }
+    }
+    if (effect.coin !== undefined && coinTarget !== undefined) {
+      const recipient = playerOf(current, effect.coin.targetId) ?? coinTarget
+      current = withPlayer(current, {
+        ...recipient,
+        stats: {
+          ...recipient.stats,
+          coinSources: withCoinSource(recipient.stats.coinSources, 'sheet', recipient.stats.coinSources.sheet - 1),
+        },
+      })
+      const source = effect.coin.source as keyof typeof hand.stats.coinSources
+      hand = {
+        ...hand,
+        stats: {
+          ...hand.stats,
+          coinSources: withCoinSource(hand.stats.coinSources, source, hand.stats.coinSources[source] + 1),
+        },
+      }
+    }
 
+    const freeMotherTeresa = (state: GameState): GameState => {
+      if (effect.coin === undefined) return state
+      const holder = playerOf(state, player.playerId) ?? hand
+      return freeTurnAction(state, holder, record.turnNumber, 'card:Mother Teresa')
+    }
     if (effect.discarded) {
-      const back: GameState = {
+      const back: GameState = freeMotherTeresa({
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
-      }
+      })
       return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand` })
     }
-    const back = withPlayerHand(current, {
-      ...hand,
-      items: hand.items.map((candidate) =>
-        candidate.id === effect.item.id ? { ...candidate, hidden: effect.item.hidden } : candidate,
-      ),
-    })
+    const back = freeMotherTeresa(
+      withPlayerHand(current, {
+        ...hand,
+        items: hand.items.map((candidate) =>
+          candidate.id === effect.item.id ? { ...candidate, hidden: effect.item.hidden } : candidate,
+        ),
+      }),
+    )
     return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: the card is facedown again` })
   },
 }

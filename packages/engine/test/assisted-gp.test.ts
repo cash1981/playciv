@@ -700,20 +700,31 @@ describe('the board Undo', () => {
 })
 
 describe('the manual paths stay', () => {
-  it('the Draw button for a Great Person draws a card and takes no marker, filtering nothing', () => {
-    // The scientist supply is used up, and the Draw button still takes a scientist card, as it always did
-    const state = exhaust(withTop(advanceTurn(), [SCIENTIST]), 'great people/scientist')
-    const [card] = gpDeck(state)
+  it('the Draw button discards an exhausted type faceup and draws the next valid card, taking no marker', () => {
+    const state = exhaust(withTop(advanceTurn(), [SCIENTIST, GENERAL]), 'great people/scientist')
+    const [rejected, valid] = gpDeck(state)
     const drawn = unwrap(draw(state, { playerId: CASH1981, sheetName: 'GREAT_PERSON', confirmedOutOfTurn: true }))
 
-    expect(handItem(drawn, card?.id ?? '')).toMatchObject({ hidden: true })
+    expect(handItem(drawn, rejected?.id ?? '')).toBeUndefined()
+    expect(handItem(drawn, valid?.id ?? '')).toMatchObject({ hidden: true })
+    expect(drawn.discardedItems.map((item) => item.id)).toContain(rejected?.id)
     expect(drawn.board.pieces).toEqual(state.board.pieces)
     expect(drawn.board.history).toEqual(state.board.history)
     expect(drawn.assistedActions).toEqual([])
-    expect(drawn.discardedItems).toEqual(state.discardedItems)
-    const added = drawn.log.slice(state.log.length)
-    expect(added).toHaveLength(1)
-    expect(added[0]).toMatchObject({ logType: 'ITEM', item: { id: card?.id } })
+    const added = publicLines(drawn).slice(publicLines(state).length)
+    expect(added).toEqual([
+      `cash1981 drew the Great Person card ${itemName(rejected as Item)}, but no scientist marker is left, so it was discarded faceup`,
+      `cash1981 drew  - ${typeOf(valid as Item) ?? ''}. Item number #${(valid as Item).itemNumber}`,
+    ])
+  })
+
+  it('the Draw button draws nothing when no marker of any type is left', () => {
+    let state = advanceTurn()
+    for (const assetId of ALL_MARKERS) state = exhaust(state, assetId)
+    const before = gpDeck(state)
+    const refused = unwrapErr(draw(state, { playerId: CASH1981, sheetName: 'GREAT_PERSON', confirmedOutOfTurn: true }))
+    expect(refused).toEqual({ kind: 'NO_MORE_ITEMS', what: 'Great Person cards with a marker left' })
+    expect(before.length).toBeGreaterThan(0)
   })
 
   it('after the assisted flow a player can still draw a Great Person by hand, and places a marker by hand', () => {

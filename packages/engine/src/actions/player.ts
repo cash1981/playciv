@@ -29,6 +29,7 @@ import {
 } from '../coins.js'
 import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
 import { applyCoinPurchase } from '../assisted.js'
+import { payArchimedesOnReveal } from '../archimedes.js'
 import { tradeCeilingOf } from '../limits.js'
 import { grantsAfterTechRemoved, openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
 import type { PlayerTurn } from '../turn.js'
@@ -177,15 +178,21 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
   // a tech is a correction path — FFG rules never take one away — so a mistyped
   // choice cannot strand a hidden value.
   const source = techCoinSource(tech.name)
+  const archimedes = player.archimedesCulture[tech.name] ?? 0
+  const { [tech.name]: _archimedes, ...archimedesCulture } = player.archimedesCulture
   const next = withPlayer(state, {
     ...player,
     techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
     techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
     researchTurns: withoutResearchTurn(player.researchTurns, tech.name),
-    stats:
-      source === undefined
-        ? player.stats
-        : { ...player.stats, coinSources: withCoinSource(player.stats.coinSources, source, 0) },
+    archimedesCulture,
+    stats: {
+      ...player.stats,
+      culture: Math.max(0, player.stats.culture - archimedes),
+      ...(source === undefined
+        ? {}
+        : { coinSources: withCoinSource(player.stats.coinSources, source, 0) }),
+    },
   })
 
   return ok(appendItemLog(next, 'REMOVED_TECH', player.username, player.playerId, tech))
@@ -221,7 +228,8 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
           (candidate) =>
             candidate.usedFor === undefined &&
             candidate.turnNumber === turnNumber &&
-            (candidate.level === null || candidate.level === tech.level),
+            (candidate.level === null || candidate.level === tech.level) &&
+            (candidate.allowedTechNames === undefined || candidate.allowedTechNames.includes(tech.name)),
         )
       : undefined
   const next = withPlayer(state, {
@@ -248,9 +256,14 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
   })
 
   const logged = appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed)
-  if (grant === undefined) return ok(logged)
+  const researchedTurn = player.researchTurns[tech.name]
+  const archimedes =
+    researchedTurn !== undefined && turnStatus(logged).currentTurn > researchedTurn
+      ? payArchimedesOnReveal(logged, player.playerId, tech.name, researchedTurn)
+      : logged
+  if (grant === undefined) return ok(archimedes)
   return ok(
-    appendLog(logged, {
+    appendLog(archimedes, {
       username: player.username,
       playerId: player.playerId,
       publicLog: `${player.username} learned ${tech.name} with ${grant.source}`,

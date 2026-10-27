@@ -53,6 +53,7 @@ import {
   chooseReward,
   countLinesIn,
   cultureAdvance,
+  cultureAdvanceSkip,
   drawCandidates,
   ownAreaOf,
   shuffleSheetTwice,
@@ -893,8 +894,12 @@ const build: AssistedActionDefinition = {
     }
 
     const paying = playerOf(board, player.playerId) ?? player
+    // Michelangelo's discount is one-shot and is used up by this wonder build.
+    const wonderDiscount =
+      payload.item.kind === 'wonder' ? paying.wonderDiscount : 0
     const paid = withPlayerHand(board, {
       ...paying,
+      wonderDiscount: paying.wonderDiscount - wonderDiscount,
       stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
     })
     const where =
@@ -1013,6 +1018,7 @@ const build: AssistedActionDefinition = {
             : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
         trade: choice.tradeToPay,
         marker: removal,
+        ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
       },
       logId,
     })
@@ -1144,8 +1150,16 @@ const build: AssistedActionDefinition = {
       // What the wonder replaced stands again, exactly as it was, and then the Building Program marker
       const withOld = putReplacedBack(returned, refunded, effect, at)
       const withMarker = effect.marker === null ? withOld : placeBack(withOld, refunded, effect.marker.piece, at)
+      const restoredPlayer = playerOf(withMarker, record.playerId) ?? refunded
+      const restored =
+        effect.wonderDiscount === undefined
+          ? withMarker
+          : withPlayerHand(withMarker, {
+              ...restoredPlayer,
+              wonderDiscount: restoredPlayer.wonderDiscount + effect.wonderDiscount,
+            })
       return ok({
-        state: withMarker,
+        state: restored,
         text:
           `${player.username}'s ${label.replace(/^The /, '')} on ${effect.square.label} was undone: the wonder was put back in the market` +
           (drawn === undefined ? '' : ` and ${itemName(drawn.item)} went back in the deck`) +
@@ -1162,7 +1176,15 @@ const build: AssistedActionDefinition = {
     })
     if (!removed.ok) return err(refused(`The ${label} could not be taken off the board.`))
     const withOld = putReplacedBack(removed.value, refunded, effect, at)
-    const restored = effect.marker === null ? withOld : placeBack(withOld, refunded, effect.marker.piece, at)
+    const raw = effect.marker === null ? withOld : placeBack(withOld, refunded, effect.marker.piece, at)
+    const restoredPlayer = playerOf(raw, record.playerId) ?? refunded
+    const restored =
+      effect.wonderDiscount === undefined
+        ? raw
+        : withPlayerHand(raw, {
+            ...restoredPlayer,
+            wonderDiscount: restoredPlayer.wonderDiscount + effect.wonderDiscount,
+          })
 
     return ok({
       state: restored,
@@ -1689,6 +1711,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   coinPurchase('democracy'),
   coinPurchase('printingPress'),
   cultureAdvance,
+  cultureAdvanceSkip,
   chooseReward,
   build,
   startBuildingProgram,

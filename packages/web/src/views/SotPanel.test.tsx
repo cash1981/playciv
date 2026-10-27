@@ -106,6 +106,18 @@ describe('free techs', () => {
     expect(within(section).getByText('You may learn a tech of your choice for free (Public Education).')).toBeTruthy()
     expect(within(section).getByRole('button', { name: 'Go to the tech tree' })).toBeTruthy()
   })
+
+  it('lists the techs Edison allows instead of promising an unrestricted choice', () => {
+    const sot = sotWith({
+      techGrants: [
+        { id: 'edison', source: 'Thomas Edison', level: null, allowedTechNames: ['Code of Laws', 'Pottery'] },
+      ],
+    })
+    renderChoices(viewOf(sot))
+    const section = screen.getByRole('region', { name: 'Free techs' })
+    expect(within(section).getByText('You may learn one of Code of Laws or Pottery for free (Thomas Edison).')).toBeTruthy()
+    expect(within(section).queryByText(/a tech of your choice/)).toBeNull()
+  })
 })
 
 describe('changing government', () => {

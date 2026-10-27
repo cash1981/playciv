@@ -128,6 +128,9 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     techGrants: [],
     techRevealTurns: {},
     researchTurns: {},
+    archimedesCulture: {},
+    wonderDiscount: 0,
+    curieSubstitute: null,
   }
 }
 

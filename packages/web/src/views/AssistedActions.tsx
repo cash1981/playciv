@@ -230,15 +230,32 @@ export function AssistedActionButton({
 
   const ready = state.status === 'ready'
   const used = state.status === 'used'
+  // Shakespeare's skip is a choice during the normal advance, not a second button.
+  // It can be the only legal move when the normal landing is blocked.
+  const skip =
+    action === 'cultureAdvance'
+      ? view.you.availableActions?.find(
+          (candidate) => candidate.action === 'cultureAdvanceSkip' && candidate.status === 'ready',
+        )
+      : undefined
   // A used action is pressable only when its rule allows the player to confirm
   // another use; a strict-once policy or wonder stays disabled. A projection
   // without the flag predates it and keeps the old repeat behaviour.
-  const pressable = ready || (used && state.repeatable !== false)
+  const pressable = ready || skip !== undefined || (used && state.repeatable !== false)
+  const shownReason = !ready && skip !== undefined ? skip.reason : state.reason
+  const shownStatus = !ready && skip !== undefined ? 'ready' : state.status
+  const warning = ready ? state.warning : skip?.warning
   const rev = view.rev
   const playerId = view.you.playerId
 
   const press = (): void => {
-    const key = `${gameId}:${playerId}:${action}`
+    let chosen = action
+    if (skip !== undefined && !used) {
+      const question = `William Shakespeare can skip the occupied culture space(s). ${skip.reason} Skip them?`
+      if (window.confirm(question)) chosen = 'cultureAdvanceSkip'
+      else if (!ready) return
+    }
+    const key = `${gameId}:${playerId}:${chosen}`
     if (used) {
       // A press already on its way is the same press: do not ask a second time.
       if (inFlight.has(key)) return
@@ -250,8 +267,8 @@ export function AssistedActionButton({
       run,
       (requestId) =>
         used
-          ? api.performAction(gameId, action, requestId, rev, true)
-          : api.performAction(gameId, action, requestId, rev),
+          ? api.performAction(gameId, chosen, requestId, rev, true)
+          : api.performAction(gameId, chosen, requestId, rev),
       view,
     ).then((done) => {
       if (done) onDone?.()
@@ -264,20 +281,20 @@ export function AssistedActionButton({
         type="button"
         className={className}
         disabled={busy || readOnly || !pressable}
-        title={state.reason}
+        title={shownReason}
         onClick={press}
       >
         {children ?? state.buttonText ?? BUTTON_TEXT[action] ?? `Use ${state.label}`}
       </button>
-      {detail === 'full' && <span className="tag">{STATUS_TEXT[state.status]}</span>}
+      {detail === 'full' && <span className="tag">{STATUS_TEXT[shownStatus]}</span>}
       {reasonPlacement === 'inline' ? (
-        <span className="muted assisted-reason">{state.reason}</span>
+        <span className="muted assisted-reason">{shownReason}</span>
       ) : (
-        <HelpHint label={state.label}>{state.reason}</HelpHint>
+        <HelpHint label={state.label}>{shownReason}</HelpHint>
       )}
-      {ready && state.warning !== undefined && (
+      {warning !== undefined && (
         <span role="status" className="assisted-warning">
-          {state.warning}
+          {warning}
         </span>
       )}
     </span>
@@ -330,6 +347,7 @@ export function AssistedActionGroups({
 }): React.JSX.Element | null {
   const actions = (view.you?.availableActions ?? []).filter(
     (candidate) =>
+      candidate.action !== 'cultureAdvanceSkip' &&
       (candidate.status === 'ready' ||
         candidate.status === 'used' ||
         // The culture advance stays on the list when it is blocked, so the player sees

@@ -12,6 +12,22 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### great-person-automation
+
+- **Owner:** opencode (orchestrator/coder)
+- **Branch:** `feat/great-person-automation`
+- **Brief:** `docs/agents/tasks/great-person-automation.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/great-person-effects.ts` (new), `actions/player.ts`, `build-options.ts`, `assisted-cards.ts`, `assisted-culture.ts`, `assisted-abilities.ts`, `card-timing.ts`, `state.ts`, `migrate.ts`, `index.ts`
+  - `packages/engine/test/great-person-*.test.ts`, `assisted-*.test.ts`, `build-options*.test.ts`, `player-action.test.ts`, `culture-advance*.test.ts`
+  - `packages/server/src/routes/play.ts`, `routes/assisted-args.ts`
+  - `packages/web/src/views/PlayableCards.tsx`, `AssistedActions.tsx`, `PhaseTabs.tsx`, `SotPanel.tsx`, `BuildPicker.tsx`, `TechPanel.tsx`, `GameView.tsx` and their tests
+  - `packages/web/src/lib/api.ts`
+  - `docs/agents/tasks/great-person-automation.md`, `decisions.md`, `state.md`, `task-board.md`
+- **Notes:** based on `origin/main` at 530fb718. Review approved round 2; browser checked with a seeded local game. Movement effects (Cook, Ford) are deferred. The older live claims listed above are stale after their merges; check for new commits before editing shared files.
+
+
 ### trade-collection-timing
 
 - **Owner:** opencode (orchestrator/coder)

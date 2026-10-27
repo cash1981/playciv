@@ -9,15 +9,19 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { discardBarbarians, draw, drawBarbarians } from '../src/actions/draw.js'
+import { discardBarbarians, draw, drawBarbarians, reshuffleItems } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
+import { performAssistedAction } from '../src/assisted.js'
+import { spendResource } from '../src/assisted-resources.js'
 import { chooseTech, discardItem, revealItem, revealTech } from '../src/actions/player.js'
 import { itemName } from '../src/item.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
-import { CASH1981, firstCivGame } from './fixture.js'
+import { chivalryTurn, withCardInHand, withHutInHand } from './assisted-fixture.js'
+import { advanceTurn, AT } from './culture-advance-fixture.js'
+import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 
 function handItem(state: GameState, sheetName: string) {
   const item = findPlayer(state, CASH1981)?.items.find((it) => it.sheetName === sheetName)
@@ -113,13 +117,11 @@ describe('revealedFeed', () => {
     expect(revealedFeed(state).some((entry) => entry.item.kind === 'tech')).toBe(false)
   })
 
-  it('does not resurrect a card that has left the public set', () => {
-    // The property that protects hidden information: the log walk never adds a
-    // row, it only enriches one already seeded from the public set. Reveal and
-    // discard a card, then take it out of the discard pile (as a reshuffle
-    // returns it to the deck). Its REVEAL/DISCARD log entries survive, but the
-    // card is no longer public, so it must vanish from the feed rather than be
-    // resurrected — otherwise a later hidden redraw would leak.
+  it('keeps a historical discard after a reshuffle or hidden redraw', () => {
+    // The discard was public. Keeping it in the feed is history, not a claim
+    // about where the card is now, so a later reshuffle and hidden draw must not
+    // erase it. Revealed cards that leave the public set without a discard still
+    // vanish, which the next test covers.
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
     const card = handItem(state, 'CULTURE_1')
@@ -138,18 +140,134 @@ describe('revealedFeed', () => {
         name: itemName(card),
       }),
     )
-    expect(revealedFeed(state).some((entry) => entry.item.itemNumber === card.itemNumber)).toBe(true)
+    const before = revealedFeed(state).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(before?.discarded).toBe(true)
 
     const reshuffled: GameState = {
       ...state,
       discardedItems: state.discardedItems.filter((item) => item.itemNumber !== card.itemNumber),
     }
-    expect(state.log.some((entry) => entry.logType === 'REVEAL' && entry.item?.itemNumber === card.itemNumber)).toBe(
-      true,
+    const after = revealedFeed(reshuffled).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(after?.discarded).toBe(true)
+    expect(after?.revealed).toBe(true)
+  })
+
+  it('does not resurrect a revealed card that left the public set without a discard', () => {
+    let state = firstCivGame()
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
+    const card = handItem(state, 'CULTURE_1')
+    state = unwrap(
+      revealItem(state, {
+        playerId: CASH1981,
+        sheetName: 'CULTURE_1',
+        itemNumber: card.itemNumber,
+      }),
     )
+    expect(revealedFeed(state).some((entry) => entry.item.itemNumber === card.itemNumber)).toBe(true)
+
+    const hiddenAgain: GameState = {
+      ...state,
+      players: state.players.map((player) =>
+        player.playerId === CASH1981
+          ? {
+              ...player,
+              items: player.items.map((item) =>
+                item.itemNumber === card.itemNumber ? { ...item, hidden: true } : item,
+              ),
+            }
+          : player,
+      ),
+    }
     expect(
-      revealedFeed(reshuffled).some((entry) => entry.item.itemNumber === card.itemNumber),
+      revealedFeed(hiddenAgain).some((entry) => entry.item.itemNumber === card.itemNumber),
     ).toBe(false)
+  })
+
+  it('keeps an assisted card-play discard after a Great Person reshuffle', () => {
+    const { state, itemId } = withCardInHand(chivalryTurn(), 'St. Francis of Assisi')
+    const played = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'playCard',
+        requestId: 'req-francis',
+        at: '2026-10-27T20:11:21.179Z',
+        payload: { itemId, targets: [] },
+      }),
+    )
+    const card = played.discardedItems.find((item) => itemName(item) === 'St. Francis of Assisi')
+    if (card === undefined) throw new Error('Francis was not discarded')
+    const found = revealedFeed(played).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(found?.discarded).toBe(true)
+
+    const reshuffled = unwrap(reshuffleItems(played, 'GREAT_PERSON'))
+    expect(reshuffled.discardedItems.some((item) => item.itemNumber === card.itemNumber)).toBe(false)
+    const after = revealedFeed(reshuffled).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(after?.discarded).toBe(true)
+    expect(after === undefined ? undefined : itemName(after.item)).toBe('St. Francis of Assisi')
+  })
+
+  it('keeps a culture card discarded by a reward choice after a culture reshuffle', () => {
+    const state = advanceTurn({ techs: ['Mysticism'] })
+    const advanced = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'cultureAdvance',
+        requestId: 'adv-culture',
+        at: AT,
+      }),
+    )
+    const pending = findPlayer(advanced, CASH1981)?.pendingRewards[0]
+    if (pending === undefined) throw new Error('no card choice')
+    const [keptId, discardedId] = pending.candidateIds
+    if (keptId === undefined || discardedId === undefined) throw new Error('not enough candidates')
+    const chosen = unwrap(
+      performAssistedAction(advanced, {
+        playerId: CASH1981,
+        action: 'chooseReward',
+        requestId: 'choose-culture',
+        at: AT,
+        payload: { rewardId: pending.id, itemId: keptId },
+      }),
+    )
+    const discarded = chosen.discardedItems.find((item) => item.id === discardedId)
+    if (discarded === undefined) throw new Error('the other card was not discarded')
+    expect(
+      revealedFeed(chosen).some(
+        (entry) => entry.item.itemNumber === discarded.itemNumber && entry.discarded,
+      ),
+    ).toBe(true)
+
+    const reshuffled = unwrap(reshuffleItems(chosen, 'CULTURE_1'))
+    expect(reshuffled.discardedItems.some((item) => item.id === discardedId)).toBe(false)
+    const stillDiscarded = revealedFeed(reshuffled).find(
+      (entry) => entry.item.itemNumber === discarded.itemNumber && entry.discarded,
+    )
+    expect(stillDiscarded).toBeDefined()
+
+    // Draw it hidden into the other player's hand. The public history keeps the
+    // card face and discarder, but not the new holder or its hidden state.
+    const card = reshuffled.items.find((item) => item.id === discardedId)
+    if (card === undefined) throw new Error('discarded card missing from the reshuffled deck')
+    const hidden = {
+      ...reshuffled,
+      items: reshuffled.items.filter((item) => item.id !== discardedId),
+      players: reshuffled.players.map((player) =>
+        player.playerId === KARANDRAS1
+          ? { ...player, items: [...player.items, { ...card, hidden: true, ownerId: KARANDRAS1 }] }
+          : player,
+      ),
+    }
+    const row = revealedFeed(hidden).find((entry) => entry.item.itemNumber === discarded.itemNumber)
+    expect(row?.discarded).toBe(true)
+    expect(row?.item.ownerId).not.toBe(KARANDRAS1)
+    expect(JSON.stringify(row)).not.toContain(KARANDRAS1)
+  })
+
+  it('shows a resource hut spent by an assisted ability in the discard feed', () => {
+    const { state, hutId } = withHutInHand(firstCivGame(), 'Wheat')
+    const spent = unwrap(spendResource(state, CASH1981, 'Wheat'))
+    const row = revealedFeed(spent.state).find((entry) => entry.item.id === hutId)
+    expect(row?.discarded).toBe(true)
   })
 
   it('orders the feed newest first by log timestamp', () => {

@@ -45,6 +45,7 @@ describe('the registry', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
       'cultureAdvance',
+      'cultureAdvanceSkip',
       'currency',
       'democracy',
       'democracyTrade',

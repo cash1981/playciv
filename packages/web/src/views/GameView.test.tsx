@@ -1047,7 +1047,10 @@ describe('HandItem: playing the card from the hand', () => {
     targets: { kind: 'none' },
     prompt: '',
     resources: [],
+    passive: false,
     discards: true,
+    coinSources: [],
+    substituteResources: [],
     status: 'ready',
     reason: 'Can be played in start of turn, which you are in.',
   } as unknown as NonNullable<NonNullable<PlayerView['you']>['playableCards']>[number]

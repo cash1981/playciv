@@ -208,6 +208,10 @@ export interface PlayCardPayload {
   readonly itemId: string
   readonly targets: readonly string[]
   readonly resource?: string
+  /** Mother Teresa: the coin counter to give from. */
+  readonly coinSource?: string
+  /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
+  readonly substitute?: string
 }
 
 /**

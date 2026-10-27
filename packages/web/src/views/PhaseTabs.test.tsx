@@ -234,7 +234,10 @@ describe('the phase tabs', () => {
       targets: { kind: 'players', min: 1, max: 1 },
       prompt: 'Which player discards a coin token?',
       resources: [],
+      passive: false,
       discards: true,
+      coinSources: [],
+      substituteResources: [],
       status: 'ready',
       reason: 'Can be played in start of turn, which you are in.',
     }
@@ -441,7 +444,10 @@ describe('the Tech panel in Research', () => {
       targets: { kind: 'none' },
       prompt: '',
       resources: [],
+      passive: false,
       discards: true,
+      coinSources: [],
+      substituteResources: [],
       status: 'ready',
       reason: 'Can be played in Research.',
     }

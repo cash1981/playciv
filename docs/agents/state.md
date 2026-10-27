@@ -50,6 +50,14 @@ old test counts and past deployment reports do not establish present health.
   the tech panel, and Invest is hidden without a coin. See "Action panel focus" in
   decisions.
 
+- Great Person automation (2026-10-27): Archimedes (paid after Research), Shakespeare (culture skip),
+  Pasteur (Build stacking), Michelangelo (wonder discount), Edison (free tech),
+  Mother Teresa (coin and free advance) and Marie Curie (armed Uranium
+  substitution) apply through the engine. Automated passive cards get a Use
+  button that reveals them. The manual Draw button now also skips Great Person
+  cards whose marker type is exhausted. Cook and Ford wait for movement
+  enforcement. See "Great Person automation" in decisions.
+
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override, shown on each city card.
   Brief `tasks/city-production.md`; see "City production" in decisions.

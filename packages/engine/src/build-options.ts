@@ -52,6 +52,7 @@ import type { GameState, Playerhand } from './state.js'
 import { BUILDING_TERRAIN, CATEGORY_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
+import { stackingLimitOf } from './great-person-effects.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
@@ -410,13 +411,18 @@ interface FigureRules {
 
 const RUSSIANS = 'Russians'
 
-function figureRulesOf(player: Playerhand, kind: 'army' | 'scout', techs: TechView): FigureRules | undefined {
+function figureRulesOf(
+  state: GameState,
+  player: Playerhand,
+  kind: 'army' | 'scout',
+  techs: TechView,
+): FigureRules | undefined {
   if (player.color === null) return undefined
   return {
     kind,
     colour: player.color.toLowerCase(),
     russian: player.civilization?.name === RUSSIANS,
-    stacking: player.stats.stacking,
+    stacking: stackingLimitOf(state, player),
     water: WATER_TECHS.some((tech) => techs.revealed.has(tech)),
   }
 }
@@ -575,7 +581,7 @@ export function buildSquareRefusal(
     const problem = problems.get(keyOf(cell))
     return problem === undefined ? undefined : describeProblem(cell, problem)
   }
-  const rules = figureRulesOf(player, item.kind, techViewOf(player))
+  const rules = figureRulesOf(state, player, item.kind, techViewOf(player))
   if (rules === undefined) return undefined
   const problem = figureSquareProblem(scene, footprint, rules, cell)
   return problem === undefined ? undefined : describeProblem(cell, problem)
@@ -934,14 +940,21 @@ function optionsForCity(
 
     // The cost is only told, not checked against the city's production or paid with trade:
     // cards, Great Persons and other effects add hammers, and how to count them is not settled.
-    const cost = wonderCostFor(data, techs.revealed)
+    const baseCost = wonderCostFor(data, techs.revealed)
     const discount = data.discount
-    const costNote =
+    const discountNote =
       discount === undefined
         ? undefined
-        : cost === discount.cost
+        : baseCost === discount.cost
           ? `${data.cost} without ${discount.tech}`
           : `${discount.cost} with ${discount.tech}`
+    const michelangeloOff = Math.min(player.wonderDiscount, baseCost)
+    const cost = baseCost - michelangeloOff
+    const notes = [
+      ...(discountNote === undefined ? [] : [discountNote]),
+      ...(michelangeloOff > 0 ? [`${michelangeloOff} less with Michelangelo`] : []),
+    ]
+    const costNote = notes.length === 0 ? undefined : notes.join('; ')
     choices.push({
       assetId: piece.assetId,
       item,
@@ -958,7 +971,7 @@ function optionsForCity(
   for (const kind of ['army', 'scout'] as const) {
     const item: BuildItem = { kind }
     const label = kind === 'army' ? 'Army figure' : 'Scout figure'
-    const rules = figureRulesOf(player, kind, techs)
+    const rules = figureRulesOf(state, player, kind, techs)
     if (rules === undefined) continue
     const assetId = figureAssetIdOf(rules.colour, kind)
     const skip = (reason: string): void => {
