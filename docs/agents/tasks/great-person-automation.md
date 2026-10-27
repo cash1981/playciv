@@ -3,7 +3,7 @@
 - **Slug:** `great-person-automation`
 - **Branch:** `feat/great-person-automation`
 - **Owner:** opencode (orchestrator/coder)
-- **Status:** in progress
+- **Status:** in review
 - **Issue:** [#301](https://github.com/cash1981/playciv/issues/301)
 
 ## Goal
@@ -113,7 +113,7 @@ which Great Persons are automated.
 - [x] Package typechecks and builds pass; engine and web tests pass. Server tests
   passed alone; the parallel root run hit two existing revision-compaction 5 s
   timeouts under load.
-- [ ] Verified in the browser: card buttons, Build cost, culture skip, free tech.
+- [x] Verified in the browser: Pasteur Use/passive note, Shakespeare skip, Michelangelo Play + Build discount note, Edison Play + public log (seeded local game, 1400 px headless Chrome).
 
 ## Open questions
 
@@ -125,4 +125,9 @@ Implemented the engine, server payload and web card form changes. Engine tests:
 2096 pass. Web tests: 1137 pass. Server tests: 847 pass when run alone; the root
 parallel run timed out in two revision-compaction tests (known load-sensitive
 tests, unrelated files). Typechecks for all packages and the builds pass.
-Browser verification is pending.
+Independent review approved round 2 with no findings above a nit (the accepted
+nit is that an already-revealed passive card still offers Use and logs again).
+Browser verification used a seeded local game: Pasteur's Use and passive note,
+Shakespeare's skip action/log, Michelangelo's Build discount note, and Edison's
+Play/log were observed in headless Chrome.
+
