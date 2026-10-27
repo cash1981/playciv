@@ -350,6 +350,11 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   Rationalism spends 6 or 11 trade for a level I or II tech and records a
   `TechGrant` that the tech panel spends when the tech is revealed in Start of Turn.
   Learning is not researching: no coins keep trade.
+- **Culture and Great Person card choice (issue #304).** When a draw gives several
+  cards and the player keeps one, the public line names the cards not kept ("kept a
+  card and discarded X", or the marker line with the same ending); they are already in
+  the public discard pile. The card kept stays secret. Undo puts all drawn cards (kept
+  and discarded) back in the deck and reshuffles; the earlier public line stays.
 - **Government.** One change per Start of Turn. A government whose tech was revealed
   last turn or this Start of Turn (`techRevealTurns`) can be taken directly; any other
   change goes through Anarchy, and from Anarchy any known government is direct. The
