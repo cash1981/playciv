@@ -136,4 +136,3 @@ Browser verification used a seeded local game: Pasteur's Use and passive note,
 Shakespeare's Advance-culture prompt/log, Michelangelo's Build discount note, and
 Edison's Play/log were observed in headless Chrome. The manual Great Person Draw
 marker filter is covered by engine and HTTP tests, not a browser check.
-
