@@ -299,7 +299,7 @@ describe('Greeks: a private choice over HTTP', () => {
 
     const log = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
     expect(log.body).toContain('took a general great person marker into reserve')
-    expect(log.body).not.toContain('kept a card')
+    expect(log.body).toContain(`and discarded ${itemName(scientist as Item)}`)
   })
 
   it('another player, a spectator and an anonymous viewer get no candidate, no card name and no effect; the marker type only after the choice', async () => {

@@ -403,7 +403,7 @@ describe('Greeks and Organized Religion', () => {
     expect(markersInOwnArea(done)).toEqual([])
   })
 
-  it('keeping one takes its marker; the others are discarded; the public line names the marker only', () => {
+  it('keeping one takes its marker; the others are discarded; the public line names the marker and the discarded card', () => {
     const pending = advance(greeks([SCIENTIST, GENERAL]), 'req-1')
     const [scientist, general] = me(pending).pendingRewards[0]?.candidateIds ?? []
     const chosen = unwrap(choose(pending, 'req-2', 'req-1', general ?? ''))
@@ -413,7 +413,10 @@ describe('Greeks and Organized Religion', () => {
     expect(handItem(chosen, scientist ?? '')).toBeUndefined()
     expect(chosen.discardedItems.map((item) => item.id)).toContain(scientist)
     expect(me(chosen).pendingRewards).toEqual([])
-    expect(publicLines(chosen).at(-1)).toBe('cash1981 took a general great person marker into reserve')
+    const discarded = chosen.discardedItems.find((item) => item.id === scientist) as Item
+    expect(publicLines(chosen).at(-1)).toBe(
+      `cash1981 took a general great person marker into reserve and discarded ${itemName(discarded)}`,
+    )
     expect(publicLines(chosen).join('\n')).not.toContain('kept a card')
     const effect = effectOf(chosen, 'req-1')
     expect(effect.kept).toBe(general)
@@ -486,7 +489,7 @@ describe('Greeks and Organized Religion', () => {
     const [keep] = me(old).pendingRewards[0]?.candidateIds ?? []
     const chosen = unwrap(choose(old, 'req-2', 'req-1', keep ?? ''))
     expect(chosen.board.pieces.filter((piece) => piece.category === 'greatperson')).toEqual([])
-    expect(publicLines(chosen).at(-1)).toBe('cash1981 kept a card')
+    expect(publicLines(chosen).at(-1)).toMatch(/^cash1981 kept a card and discarded /)
     // Its undo is the old one: no marker to remove
     const undone = undoByVote(chosen, 'req-1')
     expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(2)
@@ -833,10 +836,11 @@ describe('what the others can see', () => {
     const chosen = unwrap(choose(pending, 'req-2', 'req-1', ids[0] ?? ''))
     const undone = undoByVote(chosen, 'req-1')
     const added = JSON.stringify(undone.log.slice(chosen.log.length).map(toPublicLog))
-    for (const secret of [...ids, ...names]) expect(added).not.toContain(secret)
+    // The discarded card was named publicly when it was discarded (issue #304); the card kept stays secret
+    for (const secret of [...ids, names[0] ?? '']) expect(added).not.toContain(secret)
     for (const viewerId of viewers) {
       const json = JSON.stringify(toPlayerView(undone, viewerId))
-      for (const secret of [...ids, ...names]) expect(json).not.toContain(secret)
+      for (const secret of [...ids, names[0] ?? '']) expect(json).not.toContain(secret)
     }
   })
 })

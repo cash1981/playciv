@@ -412,7 +412,7 @@ describe('what other clients receive', () => {
     expect((await revisions.json<{ view: View }>()).view.you?.pendingRewards).toEqual([])
   })
 
-  it('after the choice the public line says only that a card was kept', async () => {
+  it('after the choice the public line names the discarded card but not the kept one', async () => {
     const table = await cultureTable('Kept', { mysticism: true })
     const pressed = await (await advance(table, 'req-1', (await view(table.gameId, table.starter)).rev)).json<View>()
     const candidates = await storedCandidates(table)
@@ -421,11 +421,15 @@ describe('what other clients receive', () => {
 
     const publicLog = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
     expect(publicLog.body).toContain('kept a card')
-    for (const item of candidates) expect(publicLog.body).not.toContain(itemName(item))
+    const keptId = candidates[0]?.id
+    for (const item of candidates) {
+      if (item.id === keptId) expect(publicLog.body).not.toContain(itemName(item))
+      else expect(publicLog.body).toContain(`and discarded ${itemName(item)}`)
+    }
     const privateLog = await inject(app, { url: `/api/games/${table.gameId}/log/private`, headers: bearer(table.starter) })
     expect(privateLog.body).toContain(`kept ${itemName(candidates[0] as Item)}`)
     const revisions = await inject(app, { url: `/api/games/${table.gameId}/revisions`, headers: bearer(table.other) })
-    for (const item of candidates) expect(revisions.body).not.toContain(itemName(item))
+    expect(revisions.body).not.toContain(itemName(candidates[0] as Item))
   })
 
   /**

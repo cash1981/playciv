@@ -348,15 +348,16 @@ describe('a choice of reward', () => {
     expect(toPlayerView(chosen, KARANDRAS1).assistedActions.map((entry) => entry.id)).toEqual(['req-1'])
   })
 
-  it('writes a public line that says only that a card was kept, and a private one that names the cards', () => {
+  it('writes a public line that names only the discarded card, and a private one that names both', () => {
     const pending = advance(choiceTurn(), 'req-1')
     const [first, second] = drawnBy(pending, 'req-1').map((id) => handItem(pending, id) as Item)
     const chosen = unwrap(choose(pending, 'req-2', 'req-1', first?.id ?? ''))
     const added = chosen.log.slice(pending.log.length)
 
     expect(added.filter((entry) => entry.publicLog !== '').map((entry) => entry.publicLog)).toEqual([
-      'cash1981 kept a card',
+      `cash1981 kept a card and discarded ${itemName(second as Item)}`,
     ])
+    expect(added.map((entry) => entry.publicLog).join('\n')).not.toContain(itemName(first as Item))
     const privateLine = added.find((entry) => entry.privateLog !== '')
     expect(privateLine?.playerId).toBe(CASH1981)
     expect(privateLine?.privateLog).toContain(itemName(first as Item))
@@ -566,7 +567,7 @@ describe('what the others can see', () => {
     const chosen = unwrap(choose(pending, 'req-2', 'req-1', keep ?? ''))
     expect(toPlayerView(chosen, CASH1981).you?.pendingRewards).toEqual([])
     const publicLines = chosen.log.map(toPublicLog).map((entry) => entry.publicLog)
-    expect(publicLines.filter((line) => line.includes('kept'))).toEqual(['cash1981 kept a card'])
+    expect(publicLines.filter((line) => line.includes('kept'))).toEqual([expect.stringMatching(/^cash1981 kept a card and discarded /)])
   })
 })
 

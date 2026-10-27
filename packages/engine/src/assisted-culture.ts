@@ -1034,9 +1034,10 @@ export const chooseReward: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        marker === null
+        (marker === null
           ? `${player.username} kept a card`
-          : `${player.username} took a ${markerLabelOf(marker.assetId)} great person marker into reserve`,
+          : `${player.username} took a ${markerLabelOf(marker.assetId)} great person marker into reserve`) +
+        (others.length === 0 ? '' : ` and discarded ${others.map(itemName).join(', ')}`),
       privateLog: '',
       createdAt: context.at ?? null,
     })
