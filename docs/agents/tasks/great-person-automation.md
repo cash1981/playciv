@@ -128,7 +128,7 @@ Movement effects are deliberately deferred by the human's answer on 2026-10-27.
 
 Implemented the engine, server payload and web card form changes, plus the
 revealed-feed discard history and the manual Great Person draw marker rule.
-Engine tests: 2100 pass. Web tests: 1140 pass. Server tests: 848 pass when run
+Engine tests: 2102 pass. Web tests: 1140 pass. Server tests: 848 pass when run
 alone; the root parallel run timed out in two revision-compaction tests (known
 load-sensitive tests, unrelated files). Typechecks for all packages and the
 builds pass.
