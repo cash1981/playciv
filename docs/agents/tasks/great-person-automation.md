@@ -126,10 +126,12 @@ Movement effects are deliberately deferred by the human's answer on 2026-10-27.
 
 ## Handover
 
-Implemented the engine, server payload and web card form changes. Engine tests:
-2096 pass. Web tests: 1137 pass. Server tests: 847 pass when run alone; the root
-parallel run timed out in two revision-compaction tests (known load-sensitive
-tests, unrelated files). Typechecks for all packages and the builds pass.
+Implemented the engine, server payload and web card form changes, plus the
+revealed-feed discard history and the manual Great Person draw marker rule.
+Engine tests: 2100 pass. Web tests: 1140 pass. Server tests: 848 pass when run
+alone; the root parallel run timed out in two revision-compaction tests (known
+load-sensitive tests, unrelated files). Typechecks for all packages and the
+builds pass.
 Independent review approved round 2 with no findings above a nit (the accepted
 nit is that an already-revealed passive card still offers Use and logs again).
 Browser verification used a seeded local game: Pasteur's Use and passive note,
