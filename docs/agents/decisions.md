@@ -34,6 +34,21 @@ current hand: duplicate names and later redraws can reveal private cards.
 Source: `state.ts`, `log.ts`, `coins.ts`, `combat-bonus.ts`, `culture-hand.ts`
 under `packages/engine/src/`; privacy and projection tests under `test/`.
 
+## Revealed and Discarded history
+
+The Revealed and Discarded Items feed starts from the current public set (the
+discard pile and non-hidden hand items) and keeps a row for every public
+`DISCARD` entry, even after a reshuffle returns that card to the deck or someone
+draws it hidden again. The discard was public, so its history does not reveal
+where the card is now. An assisted card play that discards without a `DISCARD`
+item line (Great Person/culture play) is kept the same way from its applied
+assisted record. A revealed card that leaves the public set without a discard
+still vanishes, and technologies/social policies are never added from the log.
+Test: `revealed-feed.test.ts` ("keeps a historical discard …", "keeps an assisted
+card-play discard …" and "does not resurrect a revealed card …").
+
+Source: `packages/engine/src/actions/game.ts` (`revealedFeed`).
+
 ## Saves, migrations and revision chains
 
 - Saves use compare-and-swap revisions. Private notes are omitted from replay

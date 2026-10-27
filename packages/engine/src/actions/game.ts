@@ -301,12 +301,12 @@ export interface RevealedEntry {
 /**
  * The chronological feed behind the Revealed and Discarded Items panel.
  *
- * The public set is exactly what `allRevealedItems` shows — discarded items and
- * non-hidden hand items — so hidden hands and hidden techs never appear. The log
- * only enriches an already-public row: it supplies the chronology, the revealing
- * player, and the fact that a discarded item was revealed first. It never adds a
- * row, so an item revealed and then returned to the deck or re-hidden does not
- * leak here.
+ * The public set starts with what `allRevealedItems` shows — discarded items and
+ * non-hidden hand items — so hidden hands and hidden techs never appear. A public
+ * `DISCARD` log row is also kept even after a reshuffle returns the card to the
+ * deck or someone draws it hidden again: the discard itself was public, and a
+ * history of it does not reveal where the card is now. Revealed cards that later
+ * leave the public set without a discard still vanish, as before.
  *
  * Rows are keyed by `itemNumber`, so an item revealed and later discarded is one
  * row carrying both `revealed` and `discarded`. Newest first; rows with no known
@@ -372,19 +372,61 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     }
   }
 
+  // Assisted card play discards without a DISCARD item log: the play line is
+  // the public record. Keep that discard in the history even after a reshuffle
+  // or hidden redraw, like a DISCARD entry.
+  for (const record of state.assistedActions) {
+    const effect = record.effect
+    if (record.status !== 'applied' || effect.kind !== 'playCard' || !effect.discarded) continue
+    const existing = rows.get(effect.item.itemNumber)
+    if (existing !== undefined) {
+      existing.discarded = true
+      continue
+    }
+    const logIndex = state.log.findIndex((entry) => entry.id === record.logId)
+    rows.set(effect.item.itemNumber, {
+      item: effect.item,
+      playerId: record.playerId,
+      revealed: !effect.item.hidden,
+      discarded: true,
+      createdAt: record.at,
+      logOrder: logIndex,
+    })
+  }
+
   // Enrich already-public rows from the log: chronology, revealing player, and
-  // whether a discarded item was revealed first. Never adds a row.
+  // whether a discarded item was revealed first. A public DISCARD entry also
+  // keeps its row after a reshuffle or hidden redraw; the discard was public,
+  // so the history does not reveal where the card is now.
   const newer = (a: string | null, b: string | null): string | null => {
     if (a === null) return b
     if (b === null) return a
     return a.localeCompare(b) >= 0 ? a : b
   }
+  const revealedNumbers = new Set(
+    state.log.flatMap((entry) =>
+      entry.logType === 'REVEAL' && entry.item !== null ? [entry.item.itemNumber] : [],
+    ),
+  )
 
   state.log.forEach((entry, logIndex) => {
     if (entry.item === null) return
     if (entry.logType !== 'REVEAL' && entry.logType !== 'DISCARD') return
-    const row = rows.get(entry.item.itemNumber)
-    if (row === undefined) return
+    let row = rows.get(entry.item.itemNumber)
+    if (row === undefined) {
+      if (entry.logType !== 'DISCARD' || entry.item.kind === 'tech' || entry.item.kind === 'socialpolicy') {
+        return
+      }
+      row = {
+        item: entry.item,
+        playerId: entry.playerId,
+        revealed: revealedNumbers.has(entry.item.itemNumber),
+        discarded: true,
+        createdAt: null,
+        logOrder: -1,
+      }
+      rows.set(entry.item.itemNumber, row)
+    }
     if (entry.logType === 'REVEAL') row.revealed = true
     if (entry.logType === 'DISCARD') row.discarded = true
     row.createdAt = newer(row.createdAt, entry.createdAt)

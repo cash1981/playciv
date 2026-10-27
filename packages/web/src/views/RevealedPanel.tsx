@@ -15,8 +15,9 @@
  * entry on screen. See the `atCap` comment below for the server's 100-item
  * cap and the known limitation it leaves (recorded in `decisions.md`).
  *
- * Everything here is already public — the server only ever returns discarded
- * items and non-hidden hand items — so the full card face is shown.
+ * Everything here is already public — the server returns current discarded and
+ * non-hidden hand items plus the public discard history — so the full card face is
+ * shown.
  *
  * Issue #190 briefly grouped this feed by item kind (see `itemBuckets.ts`);
  * the human asked for that to be reverted here — a flat, newest-first list is

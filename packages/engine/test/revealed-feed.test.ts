@@ -9,14 +9,16 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { discardBarbarians, draw, drawBarbarians } from '../src/actions/draw.js'
+import { discardBarbarians, draw, drawBarbarians, reshuffleItems } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
+import { performAssistedAction } from '../src/assisted.js'
 import { chooseTech, discardItem, revealItem, revealTech } from '../src/actions/player.js'
 import { itemName } from '../src/item.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
+import { chivalryTurn, withCardInHand } from './assisted-fixture.js'
 import { CASH1981, firstCivGame } from './fixture.js'
 
 function handItem(state: GameState, sheetName: string) {
@@ -113,13 +115,11 @@ describe('revealedFeed', () => {
     expect(revealedFeed(state).some((entry) => entry.item.kind === 'tech')).toBe(false)
   })
 
-  it('does not resurrect a card that has left the public set', () => {
-    // The property that protects hidden information: the log walk never adds a
-    // row, it only enriches one already seeded from the public set. Reveal and
-    // discard a card, then take it out of the discard pile (as a reshuffle
-    // returns it to the deck). Its REVEAL/DISCARD log entries survive, but the
-    // card is no longer public, so it must vanish from the feed rather than be
-    // resurrected — otherwise a later hidden redraw would leak.
+  it('keeps a historical discard after a reshuffle or hidden redraw', () => {
+    // The discard was public. Keeping it in the feed is history, not a claim
+    // about where the card is now, so a later reshuffle and hidden draw must not
+    // erase it. Revealed cards that leave the public set without a discard still
+    // vanish, which the next test covers.
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
     const card = handItem(state, 'CULTURE_1')
@@ -138,18 +138,70 @@ describe('revealedFeed', () => {
         name: itemName(card),
       }),
     )
-    expect(revealedFeed(state).some((entry) => entry.item.itemNumber === card.itemNumber)).toBe(true)
+    const before = revealedFeed(state).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(before?.discarded).toBe(true)
 
     const reshuffled: GameState = {
       ...state,
       discardedItems: state.discardedItems.filter((item) => item.itemNumber !== card.itemNumber),
     }
-    expect(state.log.some((entry) => entry.logType === 'REVEAL' && entry.item?.itemNumber === card.itemNumber)).toBe(
-      true,
+    const after = revealedFeed(reshuffled).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(after?.discarded).toBe(true)
+    expect(after?.revealed).toBe(true)
+  })
+
+  it('does not resurrect a revealed card that left the public set without a discard', () => {
+    let state = firstCivGame()
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
+    const card = handItem(state, 'CULTURE_1')
+    state = unwrap(
+      revealItem(state, {
+        playerId: CASH1981,
+        sheetName: 'CULTURE_1',
+        itemNumber: card.itemNumber,
+      }),
     )
+    expect(revealedFeed(state).some((entry) => entry.item.itemNumber === card.itemNumber)).toBe(true)
+
+    const hiddenAgain: GameState = {
+      ...state,
+      players: state.players.map((player) =>
+        player.playerId === CASH1981
+          ? {
+              ...player,
+              items: player.items.map((item) =>
+                item.itemNumber === card.itemNumber ? { ...item, hidden: true } : item,
+              ),
+            }
+          : player,
+      ),
+    }
     expect(
-      revealedFeed(reshuffled).some((entry) => entry.item.itemNumber === card.itemNumber),
+      revealedFeed(hiddenAgain).some((entry) => entry.item.itemNumber === card.itemNumber),
     ).toBe(false)
+  })
+
+  it('keeps an assisted card-play discard after a Great Person reshuffle', () => {
+    const { state, itemId } = withCardInHand(chivalryTurn(), 'St. Francis of Assisi')
+    const played = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'playCard',
+        requestId: 'req-francis',
+        at: '2026-10-27T20:11:21.179Z',
+        payload: { itemId, targets: [] },
+      }),
+    )
+    const card = played.discardedItems.find((item) => itemName(item) === 'St. Francis of Assisi')
+    if (card === undefined) throw new Error('Francis was not discarded')
+    const found = revealedFeed(played).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(found?.discarded).toBe(true)
+
+    const reshuffled = unwrap(reshuffleItems(played, 'GREAT_PERSON'))
+    expect(reshuffled.discardedItems.some((item) => item.itemNumber === card.itemNumber)).toBe(false)
+    const after = revealedFeed(reshuffled).find((entry) => entry.item.itemNumber === card.itemNumber)
+    expect(after?.discarded).toBe(true)
+    expect(after === undefined ? undefined : itemName(after.item)).toBe('St. Francis of Assisi')
   })
 
   it('orders the feed newest first by log timestamp', () => {
