@@ -12,13 +12,15 @@ import { describe, expect, it } from 'vitest'
 import { discardBarbarians, draw, drawBarbarians, reshuffleItems } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
 import { performAssistedAction } from '../src/assisted.js'
+import { spendResource } from '../src/assisted-resources.js'
 import { chooseTech, discardItem, revealItem, revealTech } from '../src/actions/player.js'
 import { itemName } from '../src/item.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
-import { chivalryTurn, withCardInHand } from './assisted-fixture.js'
+import { chivalryTurn, withCardInHand, withHutInHand } from './assisted-fixture.js'
+import { advanceTurn, AT } from './culture-advance-fixture.js'
 import { CASH1981, firstCivGame } from './fixture.js'
 
 function handItem(state: GameState, sheetName: string) {
@@ -202,6 +204,53 @@ describe('revealedFeed', () => {
     const after = revealedFeed(reshuffled).find((entry) => entry.item.itemNumber === card.itemNumber)
     expect(after?.discarded).toBe(true)
     expect(after === undefined ? undefined : itemName(after.item)).toBe('St. Francis of Assisi')
+  })
+
+  it('keeps a culture card discarded by a reward choice after a culture reshuffle', () => {
+    const state = advanceTurn({ techs: ['Mysticism'] })
+    const advanced = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'cultureAdvance',
+        requestId: 'adv-culture',
+        at: AT,
+      }),
+    )
+    const pending = findPlayer(advanced, CASH1981)?.pendingRewards[0]
+    if (pending === undefined) throw new Error('no card choice')
+    const [keptId, discardedId] = pending.candidateIds
+    if (keptId === undefined || discardedId === undefined) throw new Error('not enough candidates')
+    const chosen = unwrap(
+      performAssistedAction(advanced, {
+        playerId: CASH1981,
+        action: 'chooseReward',
+        requestId: 'choose-culture',
+        at: AT,
+        payload: { rewardId: pending.id, itemId: keptId },
+      }),
+    )
+    const discarded = chosen.discardedItems.find((item) => item.id === discardedId)
+    if (discarded === undefined) throw new Error('the other card was not discarded')
+    expect(
+      revealedFeed(chosen).some(
+        (entry) => entry.item.itemNumber === discarded.itemNumber && entry.discarded,
+      ),
+    ).toBe(true)
+
+    const reshuffled = unwrap(reshuffleItems(chosen, 'CULTURE_1'))
+    expect(reshuffled.discardedItems.some((item) => item.id === discardedId)).toBe(false)
+    expect(
+      revealedFeed(reshuffled).some(
+        (entry) => entry.item.itemNumber === discarded.itemNumber && entry.discarded,
+      ),
+    ).toBe(true)
+  })
+
+  it('shows a resource hut spent by an assisted ability in the discard feed', () => {
+    const { state, hutId } = withHutInHand(firstCivGame(), 'Wheat')
+    const spent = unwrap(spendResource(state, CASH1981, 'Wheat'))
+    const row = revealedFeed(spent.state).find((entry) => entry.item.id === hutId)
+    expect(row?.discarded).toBe(true)
   })
 
   it('orders the feed newest first by log timestamp', () => {

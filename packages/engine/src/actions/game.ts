@@ -375,23 +375,56 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
   // Assisted card play discards without a DISCARD item log: the play line is
   // the public record. Keep that discard in the history even after a reshuffle
   // or hidden redraw, like a DISCARD entry.
-  for (const record of state.assistedActions) {
-    const effect = record.effect
-    if (record.status !== 'applied' || effect.kind !== 'playCard' || !effect.discarded) continue
-    const existing = rows.get(effect.item.itemNumber)
+  const itemById = (id: string): Item | undefined =>
+    state.items.find((item) => item.id === id) ??
+    state.discardedItems.find((item) => item.id === id) ??
+    state.players.flatMap((player) => player.items).find((item) => item.id === id)
+
+  const advanceOf = (record: (typeof state.assistedActions)[number]): { readonly drawn: readonly string[] } | undefined => {
+    if (record.effect.kind === 'cultureAdvance') return record.effect
+    if ('advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
+      return record.effect.advance
+    }
+    return undefined
+  }
+
+  const rememberDiscard = (item: Item, record: (typeof state.assistedActions)[number]): void => {
+    const existing = rows.get(item.itemNumber)
     if (existing !== undefined) {
       existing.discarded = true
-      continue
+      return
     }
-    const logIndex = state.log.findIndex((entry) => entry.id === record.logId)
-    rows.set(effect.item.itemNumber, {
-      item: effect.item,
+    rows.set(item.itemNumber, {
+      item,
       playerId: record.playerId,
-      revealed: !effect.item.hidden,
+      revealed: !item.hidden,
       discarded: true,
       createdAt: record.at,
-      logOrder: logIndex,
+      logOrder: state.log.findIndex((entry) => entry.id === record.logId),
     })
+  }
+
+  for (const record of state.assistedActions) {
+    if (record.status !== 'applied') continue
+    const effect = record.effect
+    if (effect.kind === 'playCard' && effect.discarded) {
+      rememberDiscard(effect.item, record)
+      continue
+    }
+    if (effect.kind !== 'chooseReward' || effect.itemId === null) continue
+    // The advance's public line names the cards not kept. The kept card is the
+    // one record.effect.itemId; every other candidate was discarded.
+    const origin = state.assistedActions.find(
+      (candidate) => candidate.id === effect.rewardId || effect.rewardId.startsWith(`${candidate.id}:`),
+    )
+    if (origin === undefined || origin.status === 'undone') continue
+    const advance = advanceOf(origin)
+    if (advance === undefined) continue
+    for (const id of advance.drawn) {
+      if (id === effect.itemId) continue
+      const item = itemById(id)
+      if (item !== undefined) rememberDiscard(item, record)
+    }
   }
 
   // Enrich already-public rows from the log: chronology, revealing player, and
