@@ -1073,15 +1073,17 @@ export function BoardView({
                 const y = dragging ? (dragPosition as { y: number }).y : piece.y
 
                 const blockaded = blockadedPieceIds.includes(piece.id)
+                const disabledWonder = piece.disabled === true
+                const crossed = blockaded || disabledWonder
 
                 return (
                   <Fragment key={piece.id}>
                     <img
                       data-piece-id={piece.id}
-                      className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${blockaded ? ' board-piece-blockaded' : ''}${piece.id === selectedId ? ' selected' : ''}`}
+                      className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${crossed ? ' board-piece-blockaded' : ''}${piece.id === selectedId ? ' selected' : ''}`}
                       src={assetUrl(piece.path)}
-                      alt={blockaded ? `${piece.label}, blockaded` : piece.label}
-                      title={`${piece.label} · ${locationOf(board, areas, piece)}${blockaded ? ' · Blockaded by an enemy figure' : ''}`}
+                      alt={blockaded ? `${piece.label}, blockaded` : disabledWonder ? `${piece.label}, disabled` : piece.label}
+                      title={`${piece.label} · ${locationOf(board, areas, piece)}${blockaded ? ' · Blockaded by an enemy figure' : disabledWonder ? ' · Disabled' : ''}`}
                       draggable={false}
                       style={{
                         left: x * zoom,
@@ -1104,7 +1106,7 @@ export function BoardView({
                       onPointerCancel={onPiecePointerCancel}
                       onLostPointerCapture={onPiecePointerCancel}
                     />
-                    {blockaded && (
+                    {crossed && (
                       // The strike-through is a picture of the same fact the alt text and title state.
                       <span
                         aria-hidden="true"

@@ -312,6 +312,8 @@ export interface BoardPiece {
   readonly placedBy: string | null
   /** Explicit owner of a wonder; legacy pieces and unowned wonders omit it. */
   readonly ownerId?: string | null
+  /** A wonder switched off by hand (issue #306): drawn crossed out; its culture token stays active. Assigning an owner clears it. */
+  readonly disabled?: boolean
   /** Coin tokens physically on the Panama Canal wonder; absent on other pieces. */
   readonly coinTokens?: number
   /**
@@ -373,7 +375,14 @@ export type BoardChange =
       readonly from: Rotation
       readonly to: Rotation
     }
-  | { readonly kind: 'owner'; readonly pieceId: string; readonly from: string | null; readonly to: string | null }
+  | {
+      readonly kind: 'owner'
+      readonly pieceId: string
+      readonly from: string | null
+      readonly to: string | null
+      /** Present when the change also flips the wonder's disabled flag. */
+      readonly disabled?: { readonly from: boolean; readonly to: boolean }
+    }
   | { readonly kind: 'wonderCoins'; readonly pieceId: string; readonly from: number; readonly to: number }
   /** `null` is "no override"; applying or reverting it removes the field rather than storing `null`. */
   | {
@@ -1271,7 +1280,7 @@ export function applyChange(
         piece.id === change.pieceId ? { ...piece, rotation: change.to } : piece,
       )
     case 'owner':
-      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.to } : piece)
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.to, ...(change.disabled === undefined ? {} : { disabled: change.disabled.to }) } : piece)
     case 'wonderCoins':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.to } : piece)
     case 'productionOverride':
@@ -1319,7 +1328,7 @@ export function revertChange(
         piece.id === change.pieceId ? { ...piece, rotation: change.from } : piece,
       )
     case 'owner':
-      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.from } : piece)
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.from, ...(change.disabled === undefined ? {} : { disabled: change.disabled.from }) } : piece)
     case 'wonderCoins':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.from } : piece)
     case 'productionOverride':

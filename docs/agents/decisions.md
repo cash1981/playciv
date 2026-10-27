@@ -136,7 +136,9 @@ Source: `packages/engine/src/board.ts`, `packages/engine/src/actions/board.ts`,
 
 Wonder ownership/bonuses do not depend on the piece staying in the shared
 Wonders area. Disabling a wonder clears its ownership while leaving its board
-piece. Panama's coins belong to the physical wonder and count for its active,
+piece, and marks it `disabled` (#306): the board draws it greyed with the same
+cross as a blockaded piece, the log says "disabled <wonder>", and assigning an owner
+switches it back on. Its culture token is unaffected. Panama's coins belong to the physical wonder and count for its active,
 unblockaded owner. Bank/Great Person/Adam Smith effects derive from board
 ownership and revealed cards; `placedBy` is not city ownership. Metropolis
 outskirts include ten squares around two centers, excluding both centers.
@@ -823,6 +825,8 @@ private card, nothing placed).
   its card is in the deck. The vote undo is refused when the drawn wonder is no longer in the
   Wonders area or has an owner; the take-back then becomes a plain removal, so removing the wonder
   after another player took the one drawn after it is an ordinary removal, with no refund. The log reads "built the Colossus in City B2 on square C2". Not built: the wonder abilities.
+- Manual owner assignment or reassignment is public ("Wonder X is assigned to Y"), as is disabling
+  ("X wonder is disabled"). A disabled wonder has no owner and grants no owner benefits.
 
 **Replacing, Great People and City Walls (the human, after trying Build).**
 

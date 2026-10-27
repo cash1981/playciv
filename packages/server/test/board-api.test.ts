@@ -161,29 +161,58 @@ describe('history over HTTP', () => {
       payload: { ownerId },
     })
     expect(response.status).toBe(200)
-    const view = await response.json() as { board: { pieces: { id: string; ownerId?: string }[]; history: { change: { kind: string } }[] } }
+    const view = await response.json() as {
+      board: { pieces: { id: string; ownerId?: string }[]; history: { change: { kind: string } }[] }
+      log: { publicLog: string }[]
+    }
     expect(view.board.pieces.find((candidate) => candidate.id === piece.id)?.ownerId).toBe(ownerId)
     expect(view.board.history.at(-1)?.change.kind).toBe('owner')
+    expect(view.log.at(-1)?.publicLog).toBe(`Wonder The Internet is assigned to ${firstPlayer.username}`)
+
+    const secondPlayer = state.players.find((player) => player.playerId !== ownerId)
+    expect(secondPlayer).toBeDefined()
+    if (secondPlayer === undefined) throw new Error('The game should have another player')
+    const reassigned = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/owner`,
+      headers: bearer(starter),
+      payload: { ownerId: secondPlayer.playerId },
+    })
+    expect(reassigned.status).toBe(200)
+    const reassignedView = await reassigned.json() as {
+      board: { pieces: { id: string; ownerId?: string }[] }
+      log: { publicLog: string }[]
+    }
+    expect(reassignedView.board.pieces.find((candidate) => candidate.id === piece.id)?.ownerId).toBe(secondPlayer.playerId)
+    expect(reassignedView.log.at(-1)?.publicLog).toBe(`Wonder The Internet is assigned to ${secondPlayer.username}`)
 
     const disabled = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces/${piece.id}/owner`,
       headers: bearer(starter),
-      payload: { ownerId: null },
+      payload: { ownerId: null, disable: true },
     })
     expect(disabled.status).toBe(200)
     const disabledView = await disabled.json() as {
-      board: { pieces: { id: string; ownerId?: string | null }[]; history: { change: { kind: string } }[] }
+      board: {
+        pieces: { id: string; ownerId?: string | null; disabled?: boolean }[]
+        history: { change: { kind: string; to?: string | null } }[]
+      }
+      log: { publicLog: string }[]
     }
     expect(disabledView.board.pieces).toHaveLength(1)
     expect(disabledView.board.pieces[0]?.id).toBe(piece.id)
     expect(disabledView.board.pieces[0]?.ownerId).toBeNull()
+    expect(disabledView.board.pieces[0]?.disabled).toBe(true)
     expect(disabledView.board.history.at(-1)?.change.kind).toBe('owner')
+    expect(disabledView.board.history.at(-1)?.change.to).toBeNull()
+    expect(disabledView.log.at(-1)?.publicLog).toBe('The Internet wonder is disabled')
 
     const persisted = await repo.findGame(gameId)
     expect(persisted?.board.pieces).toHaveLength(1)
     expect(persisted?.board.pieces[0]?.id).toBe(piece.id)
     expect(persisted?.board.pieces[0]?.ownerId).toBeNull()
+    expect(persisted?.board.pieces[0]?.disabled).toBe(true)
   })
 
   it('records every change with a description and a timestamp', async () => {

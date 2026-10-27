@@ -41,7 +41,7 @@ export function WondersPanel({
             return (
               <li key={piece.id} className="card">
                 <img src={`/board/${piece.path}`} alt="" style={{ width: 56, height: 56, objectFit: 'contain' }} />
-                <strong>{piece.label}</strong>
+                <strong>{piece.label}{piece.disabled === true ? ' (disabled)' : ''}</strong>
                 {description !== undefined && <span className="card-text">{description}</span>}
                 <label>
                   Owner
@@ -64,7 +64,7 @@ export function WondersPanel({
                     className="small"
                     aria-label={`Disable ${piece.label}`}
                     disabled={busy || readOnly}
-                    onClick={() => void run(() => api.setWonderOwner(gameId, piece.id, null))}
+                    onClick={() => void run(() => api.setWonderOwner(gameId, piece.id, null, true))}
                   >
                     Disable
                   </button>

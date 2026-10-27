@@ -125,6 +125,19 @@ describe('wonder ownership', () => {
     })
     const undone = unwrap(undoLastBoardChange(assigned, CASH1981))
     expect(undone.board.pieces.find((piece) => piece.id === wonder.id)?.ownerId).toBeNull()
+    const disabled = unwrap(setWonderOwner(assigned, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: KARANDRAS1, disable: true,
+    }))
+    expect(disabled.board.pieces.find((piece) => piece.id === wonder.id)).toMatchObject({
+      ownerId: null, disabled: true,
+    })
+    expect(disabled.board.history.at(-1)?.change).toMatchObject({
+      kind: 'owner', pieceId: wonder.id, from: KARANDRAS1, to: null,
+    })
+    const reenabled = unwrap(undoLastBoardChange(disabled, CASH1981))
+    expect(reenabled.board.pieces.find((piece) => piece.id === wonder.id)).toMatchObject({
+      ownerId: KARANDRAS1, disabled: false,
+    })
     const cleared = unwrap(setWonderOwner(assigned, {
       playerId: CASH1981, pieceId: wonder.id, ownerId: null,
     }))
