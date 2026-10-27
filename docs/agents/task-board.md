@@ -12,6 +12,20 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-298-adam-smith-merchant-coin
+
+- **Owner:** Copilot (orchestrator/coder)
+- **Branch:** `fix/issue-298`
+- **Brief:** `docs/agents/tasks/issue-298-adam-smith-merchant-coin.md`
+- **Status:** claimed
+- **Claimed paths:**
+  - `packages/engine/src/coins.ts`
+  - `packages/engine/test/coin-sources.test.ts`
+  - `docs/agents/tasks/issue-298-adam-smith-merchant-coin.md`
+  - `docs/agents/task-board.md`
+- **Notes:** derive the Merchant icon coin for revealed, usable Adam Smith in
+  addition to Adam Smith's distinct ability coin.
+
 ### trade-collection-timing
 
 - **Owner:** opencode (orchestrator/coder)
