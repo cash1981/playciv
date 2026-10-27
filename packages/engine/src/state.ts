@@ -1387,6 +1387,7 @@ export interface StartOfTurnView {
     readonly id: string
     readonly source: string
     readonly level: 1 | 2 | 3 | 4 | 5 | null
+    readonly allowedTechNames?: readonly string[]
   }[]
 }
 

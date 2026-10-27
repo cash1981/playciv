@@ -23,7 +23,7 @@ import type { GameState, Playerhand } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 import { unwrap } from '../src/result.js'
 
-import { startOfTurn, withCardInHand, withHutInHand } from './assisted-fixture.js'
+import { startOfTurn, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { withCivilization, withMarkerAt, withStats } from './culture-advance-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -102,9 +102,10 @@ describe('Archimedes', () => {
     const card = withCardInHand(firstCivGame(), 'Archimedes')
     const state = researching(revealed(card.state, card.itemId))
     const chosen = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Code of Laws' }))
-    expect(me(chosen).stats.culture).toBe(0)
+    const revealedTech = unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Code of Laws' }))
+    expect(me(revealedTech).stats.culture).toBe(0)
 
-    const done = finishResearch(chosen)
+    const done = finishResearch(revealedTech)
     expect(me(done).stats.culture).toBe(3)
     expect(done.log.at(-2)?.publicLog).toBe('cash1981 gained 3 culture from Archimedes')
 
@@ -127,12 +128,36 @@ describe('Archimedes', () => {
     expect(me(finishResearch(after)).stats.culture).toBe(0)
   })
 
-  it('ignores another player\'s hidden research, so the public total cannot leak it', () => {
-    const hiddenResearch = unwrap(chooseTech(firstCivGame(), { playerId: KARANDRAS1, techName: 'Code of Laws' }))
-    const card = withCardInHand(hiddenResearch, 'Archimedes')
-    const state = researching(revealed(card.state, card.itemId))
-    const after = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Code of Laws' }))
-    expect(me(finishResearch(after)).stats.culture).toBe(3)
+  it('defers culture for hidden research until reveal, without exposing the choice to opponents or spectators', () => {
+    const knownTech = unwrap(chooseTech(firstCivGame(), { playerId: KARANDRAS1, techName: 'Code of Laws' }))
+    const knownTechRevealed = unwrap(revealTech(knownTech, { playerId: KARANDRAS1, techName: 'Code of Laws' }))
+    const research = (techName: string): GameState => {
+      const card = withCardInHand(knownTechRevealed, 'Archimedes')
+      const state = researching(revealed(card.state, card.itemId))
+      const chosen = unwrap(chooseTech(state, { playerId: CASH1981, techName }))
+      return finishResearch(chosen)
+    }
+    const matching = research('Code of Laws')
+    const different = research('Pottery')
+    expect(me(matching).stats.culture).toBe(0)
+    expect(me(different).stats.culture).toBe(0)
+    for (const viewerId of [KARANDRAS1, 'spectator']) {
+      const evidence = (state: GameState) => {
+        const view = toPlayerView(state, viewerId)
+        const holder = view.opponents.find((opponent) => opponent.playerId === CASH1981)
+        return {
+          culture: holder?.stats.culture,
+          archimedesLogs: view.log.filter((entry) => entry.publicLog.includes('gained 3 culture from Archimedes')),
+        }
+      }
+      expect(evidence(matching)).toEqual(evidence(different))
+      expect(evidence(matching)).toMatchObject({ culture: 0, archimedesLogs: [] })
+    }
+
+    expect(me(unwrap(revealTech(matching, { playerId: CASH1981, techName: 'Code of Laws' }))).stats.culture).toBe(0)
+    const revealedPottery = unwrap(revealTech(different, { playerId: CASH1981, techName: 'Pottery' }))
+    expect(me(revealedPottery).stats.culture).toBe(3)
+    expect(revealedPottery.log.at(-1)?.publicLog).toBe('cash1981 gained 3 culture from Archimedes')
   })
 })
 
@@ -303,6 +328,9 @@ describe('Thomas Edison', () => {
     const grant = me(played).techGrants.find((candidate) => candidate.source === 'Thomas Edison')
     expect(grant?.allowedTechNames).toEqual(['Code of Laws'])
     expect(played.log.at(-1)?.publicLog).toContain('another player knows (Code of Laws)')
+    expect(toPlayerView(played, CASH1981).you?.startOfTurn?.techGrants).toEqual([
+      { id: 'edison-1', source: 'Thomas Edison', level: null, allowedTechNames: ['Code of Laws'] },
+    ])
 
     const wrong = unwrap(chooseTech(played, { playerId: CASH1981, techName: 'Pottery' }))
     const wrongReveal = unwrap(revealTech(wrong, { playerId: CASH1981, techName: 'Pottery' }))
@@ -384,6 +412,17 @@ describe('Marie Curie', () => {
 
     const returned = unwrap(returnResource(spent.state, me(spent.state), spent.spent, null))
     expect(me(returned).curieSubstitute).toBe('Wheat')
+  })
+
+  it('restores the substitution when returning a board resource token', () => {
+    const card = withCardInHand(startOfTurn(), 'Marie Curie')
+    const armed = unwrap(play(card.state, 'curie-board', card.itemId, { substitute: 'Wheat' }))
+    const wheat = withPieceInArea(armed, 'resources/wheat')
+    const spent = unwrap(spendResource(wheat.state, CASH1981, 'Uranium'))
+    const returned = unwrap(returnResource(spent.state, me(spent.state), spent.spent, null))
+
+    expect(me(returned).curieSubstitute).toBe('Wheat')
+    expect(returned.board.pieces.some((piece) => piece.id === wheat.piece.id)).toBe(true)
   })
 })
 

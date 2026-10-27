@@ -1107,6 +1107,11 @@ export function startOfTurnViewOf(state: GameState, player: Playerhand): StartOf
     scouts: scoutViewsOf(state, player),
     techGrants: player.techGrants
       .filter((grant) => grant.turnNumber === turn && grant.usedFor === undefined)
-      .map((grant) => ({ id: grant.id, source: grant.source, level: grant.level })),
+      .map((grant) => ({
+        id: grant.id,
+        source: grant.source,
+        level: grant.level,
+        ...(grant.allowedTechNames === undefined ? {} : { allowedTechNames: grant.allowedTechNames }),
+      })),
   }
 }

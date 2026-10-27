@@ -32,8 +32,13 @@ interface Props {
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'] as const
 
-/** "a level I tech", "a tech of your choice". */
-const techWords = (level: number | null): string => (level === null ? 'a tech of your choice' : `a level ${ROMAN[level] ?? level} tech`)
+/** "a level I tech", "a tech of your choice", or one of Edison's eligible techs. */
+const techWords = (level: number | null, allowedTechNames?: readonly string[]): string =>
+  allowedTechNames === undefined
+    ? level === null
+      ? 'a tech of your choice'
+      : `a level ${ROMAN[level] ?? level} tech`
+    : `one of ${allowedTechNames.join(' or ')}`
 
 /**
  * The choices of the Start of Turn, in the order the rules list them: free techs
@@ -72,7 +77,7 @@ function TechGrants({ grants }: { readonly grants: StartOfTurn['techGrants'] }):
       <ul className="sot-grant-list">
         {grants.map((grant) => (
           <li key={grant.id}>
-            You may learn {techWords(grant.level)} for free ({grant.source}).
+            You may learn {techWords(grant.level, grant.allowedTechNames)} for free ({grant.source}).
           </li>
         ))}
       </ul>

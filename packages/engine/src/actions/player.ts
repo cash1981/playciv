@@ -29,6 +29,7 @@ import {
 } from '../coins.js'
 import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
 import { applyCoinPurchase } from '../assisted.js'
+import { payArchimedesOnReveal } from '../archimedes.js'
 import { tradeCeilingOf } from '../limits.js'
 import { grantsAfterTechRemoved, openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
 import type { PlayerTurn } from '../turn.js'
@@ -255,9 +256,14 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
   })
 
   const logged = appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed)
-  if (grant === undefined) return ok(logged)
+  const researchedTurn = player.researchTurns[tech.name]
+  const archimedes =
+    researchedTurn !== undefined && turnStatus(logged).currentTurn > researchedTurn
+      ? payArchimedesOnReveal(logged, player.playerId, tech.name, researchedTurn)
+      : logged
+  if (grant === undefined) return ok(archimedes)
   return ok(
-    appendLog(logged, {
+    appendLog(archimedes, {
       username: player.username,
       playerId: player.playerId,
       publicLog: `${player.username} learned ${tech.name} with ${grant.source}`,

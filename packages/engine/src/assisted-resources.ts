@@ -131,5 +131,5 @@ export function returnResource(
       items: state.items.filter((candidate) => candidate.id !== item.id),
     })
   }
-  return ok(placeBack(state, restoredPlayer, spent.piece, at))
+  return ok(placeBack(withPlayerHand(state, restoredPlayer), restoredPlayer, spent.piece, at))
 }
