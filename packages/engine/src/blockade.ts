@@ -95,12 +95,28 @@ function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFoot
   if (anchor === null) return undefined
   const isMetropolis = piece.assetId.includes('metropolis')
   const isVertical = piece.rotation === 90 || piece.rotation === 270
-  const centers: readonly Cell[] = isMetropolis
-    ? [anchor, {
-        column: anchor.column - (isVertical ? 0 : 1),
-        row: anchor.row - (isVertical ? 1 : 0),
-      }]
-    : [anchor]
+  let centers: readonly Cell[] = [anchor]
+  if (isMetropolis) {
+    const centerOnLongAxis = isVertical
+      ? piece.y + piece.height / 2 - mapTop(board)
+      : piece.x + piece.width / 2
+    const anchorOnLongAxis = isVertical ? anchor.row : anchor.column
+    const nearestBoundary = Math.round(centerOnLongAxis / board.squareSize)
+    const isNearBoundary =
+      Math.abs(centerOnLongAxis - nearestBoundary * board.squareSize) <= board.squareSize / 8
+    // Rotation and sprite rounding can leave the center just before a grid
+    // boundary. Snap only near a boundary; a metropolis centered in a square
+    // keeps the original anchor-minus-one footprint.
+    const otherAxis = isNearBoundary && nearestBoundary > anchorOnLongAxis
+      ? nearestBoundary
+      : anchorOnLongAxis - 1
+    // Keep the square containing the pixel center first for callers that use
+    // it as the metropolis anchor.
+    const otherCenter = isVertical
+      ? { column: anchor.column, row: otherAxis }
+      : { column: otherAxis, row: anchor.row }
+    centers = [anchor, otherCenter]
+  }
   const cells = new Map<string, Cell>()
   for (const center of centers) {
     for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
