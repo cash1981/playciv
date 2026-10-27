@@ -10,6 +10,7 @@
 
 import {
   BOARD_ASSETS,
+  appendLog,
   bringToFront,
   movePiece,
   placePiece,
@@ -105,9 +106,37 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     const body = asRecord(await c.req.json().catch(() => ({})))
     const ownerId = body['ownerId'] === null ? null : requireString(body, 'ownerId')
     if (ownerId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'ownerId is required')
-    return applyToGame(context, c, gameId, (state) =>
-      setWonderOwner(state, { playerId: currentPlayer(c).id, pieceId, ownerId, ...(body['disable'] === true ? { disable: true } : {}), at: now() }),
-    )
+    const actor = currentPlayer(c)
+    return applyToGame(context, c, gameId, (state) => {
+      const changed = setWonderOwner(state, {
+        playerId: actor.id,
+        pieceId,
+        ownerId,
+        ...(body['disable'] === true ? { disable: true } : {}),
+        at: now(),
+      })
+      if (!changed.ok) return changed
+
+      const wonder = state.board.pieces.find((piece) => piece.id === pieceId)
+      if (wonder?.category !== 'wonder') return changed
+
+      const publicLog = body['disable'] === true
+        ? `Wonder ${wonder.label} is disabled`
+        : ownerId === null
+          ? undefined
+          : `Wonder ${wonder.label} is assigned to ${state.players.find((player) => player.playerId === ownerId)?.username ?? ownerId}`
+      return publicLog === undefined
+        ? changed
+        : {
+            ok: true,
+            value: appendLog(changed.value, {
+              username: actor.username,
+              playerId: actor.id,
+              publicLog,
+              createdAt: now(),
+            }),
+          }
+    })
   })
 
   /**

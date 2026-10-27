@@ -623,8 +623,9 @@ export function setWonderOwner(
   const wasDisabled = piece.disabled === true
   // Disabling clears the owner and marks the wonder; assigning an owner switches it back on.
   const nowDisabled = input.disable === true ? true : input.ownerId !== null ? false : wasDisabled
+  const to = nowDisabled ? null : input.ownerId
   const pieces = state.board.pieces.map((other) =>
-    other.id === piece.id ? { ...other, ownerId: input.ownerId, ...(nowDisabled || wasDisabled ? { disabled: nowDisabled } : {}) } : other,
+    other.id === piece.id ? { ...other, ownerId: to, ...(nowDisabled || wasDisabled ? { disabled: nowDisabled } : {}) } : other,
   )
   return ok(record(input, {
     state,
@@ -633,7 +634,7 @@ export function setWonderOwner(
       kind: 'owner',
       pieceId: piece.id,
       from,
-      to: input.ownerId,
+      to,
       ...(wasDisabled === nowDisabled ? {} : { disabled: { from: wasDisabled, to: nowDisabled } }),
     },
     description: input.disable === true

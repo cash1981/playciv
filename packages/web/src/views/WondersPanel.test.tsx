@@ -106,7 +106,7 @@ describe('WondersPanel', () => {
     } as unknown as PlayerView
     const disabledView = {
       ...ownedView,
-      board: { ...ownedView.board, pieces: [{ ...ownedPiece, ownerId: null }, redArmyPiece] },
+      board: { ...ownedView.board, pieces: [{ ...ownedPiece, ownerId: null, disabled: true }, redArmyPiece] },
     } as unknown as PlayerView
     const setOwner = vi.spyOn(api, 'setWonderOwner').mockResolvedValue(disabledView)
     const removePiece = vi.spyOn(api, 'removePiece').mockResolvedValue(view)
@@ -115,13 +115,13 @@ describe('WondersPanel', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Wonders in play (1)' }))
     fireEvent.click(screen.getByRole('button', { name: 'Disable The Internet' }))
-    await waitFor(() => expect(setOwner).toHaveBeenCalledWith('g', 'internet', null))
+    await waitFor(() => expect(setOwner).toHaveBeenCalledWith('g', 'internet', null, true))
     expect(removePiece).not.toHaveBeenCalled()
 
     rerender(
       <WondersPanel gameId="g" view={disabledView} busy={false} readOnly={false} run={run} />,
     )
-    expect(screen.getByText('The Internet')).toBeTruthy()
+    expect(screen.getByText('The Internet (disabled)')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Disable The Internet' })).toBeNull()
   })
 
