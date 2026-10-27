@@ -206,7 +206,7 @@ describe('history over HTTP', () => {
     expect(disabledView.board.pieces[0]?.disabled).toBe(true)
     expect(disabledView.board.history.at(-1)?.change.kind).toBe('owner')
     expect(disabledView.board.history.at(-1)?.change.to).toBeNull()
-    expect(disabledView.log.at(-1)?.publicLog).toBe('Wonder The Internet is disabled')
+    expect(disabledView.log.at(-1)?.publicLog).toBe('The Internet wonder is disabled')
 
     const persisted = await repo.findGame(gameId)
     expect(persisted?.board.pieces).toHaveLength(1)

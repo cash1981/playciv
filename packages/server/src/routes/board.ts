@@ -121,7 +121,7 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
       if (wonder?.category !== 'wonder') return changed
 
       const publicLog = body['disable'] === true
-        ? `Wonder ${wonder.label} is disabled`
+        ? `${wonder.label} wonder is disabled`
         : ownerId === null
           ? undefined
           : `Wonder ${wonder.label} is assigned to ${state.players.find((player) => player.playerId === ownerId)?.username ?? ownerId}`
