@@ -121,6 +121,20 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - related tests, `docs/agents/decisions.md`
 - **Notes:** adds an Aircraft-unlocked checkbox to Player status
 
+### issue-302-figure-movement
+
+- **Owner:** opencode (orchestrator/coder)
+- **Branch:** `feat/issue-302-figure-movement`
+- **Brief:** `docs/agents/tasks/issue-302-figure-movement.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/movement.ts` (new), `board.ts`, `actions/board.ts`, `errors.ts`, `index.ts`, `state.ts`, `assisted-cards.ts`, `card-timing.ts`
+  - `packages/engine/test/movement.test.ts` (new), `board-history.test.ts`, `assisted-cards.test.ts`, `assisted-play-card.test.ts`
+  - `packages/server/src/routes/board.ts`, `errors.ts`, `packages/server/test/board-api.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/BoardView.tsx`, `BoardView.test.tsx`, `GameView.tsx`, `styles.css`
+  - `docs/agents/tasks/issue-302-figure-movement.md`, `decisions.md`, `state.md`, `task-board.md`
+- **Notes:** based on `origin/main` at `14dfd9a`. First slice: enforced map movement, highlight, undo/lock and the passive speed cards. The live `spectator-readonly`, `trade-collection-timing`, `assisted-play-contract` and `action-panel-focus` claims list the same web files but their branches have no commits ahead of `origin/main`; the overlapping paths are treated as stale after their merges.
+
 ---
 
 ## Format
