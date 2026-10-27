@@ -178,6 +178,7 @@ function putMetropolisOnMap(
   column: number,
   row: number,
   rotation: 0 | 90 | 180 | 270,
+  centerOffsetAlongLongAxis = 0,
 ): GameState {
   const assetId = 'cities/redmetropolis2'
   const asset = findBoardAsset(assetId)
@@ -188,8 +189,8 @@ function putMetropolisOnMap(
   return unwrap(placePiece(state, {
     playerId,
     assetId,
-    x: centerX - asset.width / 2,
-    y: centerY - asset.height / 2,
+    x: centerX - asset.width / 2 + (horizontal ? centerOffsetAlongLongAxis : 0),
+    y: centerY - asset.height / 2 + (horizontal ? 0 : centerOffsetAlongLongAxis),
     rotation,
   }))
 }
@@ -282,8 +283,40 @@ describe('derived Bank and Adam Smith coins (issue #253 A3)', () => {
     expect(coinSourcesOf(state, fixturePlayer(state, CASH1981)).bank).toBe(0)
   })
 
+  it.each([
+    [0, 2, 1, [3, 0], [3, 1]],
+    [180, 2, 1, [3, 0], [3, 1]],
+    [90, 1, 2, [1, 0], [2, 0]],
+    [270, 1, 2, [1, 0], [2, 0]],
+  ] as const)(
+    'counts both Great Person markers on the outskirts of an offset metropolis at rotation %s',
+    (rotation, column, row, first, second) => {
+      let state = firstCivGame()
+      state = {
+        ...state,
+        players: state.players.map((p) => p.playerId === CASH1981
+          ? { ...p, color: 'Red' }
+          : p),
+      }
+      // The -8 px offset reproduces the live metropolis center sitting just before the grid line.
+      state = putMetropolisOnMap(state, CASH1981, column, row, rotation, -8)
+      state = putOnMap(state, CASH1981, 'great people/humanitarian', first[0], first[1])
+      state = putOnMap(state, CASH1981, 'great people/merchant', second[0], second[1])
+
+      expect(coinSourcesOf(state, fixturePlayer(state, CASH1981)).greatPeople).toBe(2)
+    },
+  )
+
   it('adds Adam Smith as a distinct coin and suppresses it while hidden or unusable', () => {
-    const state = firstCivGame()
+    let state = firstCivGame()
+    state = {
+      ...state,
+      players: state.players.map((p) => p.playerId === CASH1981
+        ? { ...p, color: 'Red' }
+        : p.playerId === KARANDRAS1 ? { ...p, color: 'Blue' } : p),
+    }
+    state = putOnMap(state, CASH1981, 'cities/redcity2', 5, 5)
+    state = putOnMap(state, CASH1981, 'great people/humanitarian', 6, 6)
     const base = findPlayer(state, CASH1981)
     if (base === undefined) throw new Error('fixture player missing')
     const adam = {
@@ -301,15 +334,13 @@ describe('derived Bank and Adam Smith coins (issue #253 A3)', () => {
     expect(coinSourcesOf(withSmith, fixturePlayer(withSmith, CASH1981)).adamSmith).toBe(1)
     expect(totalCoins(coinSourcesOf(withSmith, fixturePlayer(withSmith, CASH1981))) - totalCoins(coinSourcesOf(withHidden, fixturePlayer(withHidden, CASH1981)))).toBe(1)
 
-    const blocked = {
-      ...withSmith,
-      players: withSmith.players.map((p) => p.playerId === CASH1981
-        ? { ...p, color: 'Red' }
-        : p.playerId === KARANDRAS1 ? { ...p, color: 'Blue' } : p),
-    }
-    const withToken = putOnMap(blocked, CASH1981, 'great people/merchant', 5, 5)
-    const withEnemy = putOnMap(withToken, KARANDRAS1, 'figures/bluearmy', 5, 5)
+    const withToken = putOnMap(withSmith, CASH1981, 'great people/merchant', 6, 5)
+    expect(coinSourcesOf(withToken, fixturePlayer(withToken, CASH1981)).greatPeople).toBe(2)
+    expect(coinSourcesOf(withToken, fixturePlayer(withToken, CASH1981)).adamSmith).toBe(1)
+
+    const withEnemy = putOnMap(withToken, KARANDRAS1, 'figures/bluearmy', 6, 5)
     expect(coinSourcesOf(withEnemy, fixturePlayer(withEnemy, CASH1981)).adamSmith).toBe(0)
+    expect(coinSourcesOf(withEnemy, fixturePlayer(withEnemy, CASH1981)).greatPeople).toBe(1)
   })
 })
 
