@@ -23,8 +23,14 @@ import type {
   BlockedAvailability,
 } from './assisted-core.js'
 import { reshuffleItems } from './actions/draw.js'
-import { GREAT_PERSON_CARD_TYPES } from './blockade.js'
-import { activeGreatPerson } from './great-person-effects.js'
+import {
+  activeGreatPerson,
+  anyGreatPersonMarkerLeft as anyMarkerLeft,
+  greatPersonMarkerAssetId as markerAssetIdOf,
+  greatPersonMarkerLabel as markerLabelOf,
+  greatPersonMarkersLeft as markersLeft,
+  hasGreatPersonMarkerLeft as hasMarkerLeft,
+} from './great-person-effects.js'
 import {
   AREA_LABEL_HEIGHT,
   CULTURE_VICTORY_STEP,
@@ -32,9 +38,7 @@ import {
   boardAreas,
   cultureCellCenter,
   cultureStepOf,
-  findBoardAsset,
   playerAreas,
-  remainingBoardAssetCount,
 } from './board.js'
 import {
   cultureAdvanceCost,
@@ -300,37 +304,6 @@ export function shuffleSheetTwice(state: GameState, sheetName: SheetName): GameS
 }
 
 // -- Great Person cards and their markers --------------------------------------
-
-/**
- * The Great Person marker a card takes, by the card's `type`, through the table
- * the blockade rule already uses. A card whose type is not in the table has no
- * marker and is never valid.
- */
-function markerAssetIdOf(item: Item): string | undefined {
-  if (item.kind !== 'greatperson') return undefined
-  return GREAT_PERSON_CARD_TYPES.find(([, cardType]) => cardType === item.type)?.[0]
-}
-
-/** Markers of one kind still in the supply: the box holds 3, and every piece on the board counts, in an area or not. */
-function markersLeft(state: GameState, assetId: string): number {
-  const asset = findBoardAsset(assetId)
-  if (asset === undefined) return 0
-  return remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? 0
-}
-
-/** "scientist" or "merchant": the marker's artwork label, as the public line names a marker type. */
-export const markerLabelOf = (assetId: string): string =>
-  (findBoardAsset(assetId)?.label ?? 'Great Person').toLowerCase()
-
-/** True while at least one Great Person marker type still has a piece in the supply. */
-const anyMarkerLeft = (state: GameState): boolean =>
-  GREAT_PERSON_CARD_TYPES.some(([assetId]) => markersLeft(state, assetId) > 0)
-
-/** A card is valid while the marker of its type is in the supply. */
-function hasMarkerLeft(state: GameState, item: Item): boolean {
-  const assetId = markerAssetIdOf(item)
-  return assetId !== undefined && markersLeft(state, assetId) > 0
-}
 
 /** The player's own area, where a marker is put. */
 export const ownAreaOf = (state: GameState, playerId: string) =>

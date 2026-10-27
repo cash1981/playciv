@@ -16,7 +16,7 @@ import {
 } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
-import { isTradable, isUnit, revealAll, revealPublic } from '../item.js'
+import { isTradable, isUnit, itemName, revealAll, revealPublic } from '../item.js'
 import {
   appendInfoLog,
   appendItemLog,
@@ -30,6 +30,12 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 
 import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
+import {
+  anyGreatPersonMarkerLeft,
+  greatPersonMarkerAssetId,
+  greatPersonMarkerLabel,
+  hasGreatPersonMarkerLeft,
+} from '../great-person-effects.js'
 import { placeUnchecked } from './board.js'
 import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
@@ -107,6 +113,11 @@ export function draw(state: GameState, input: DrawInput): DrawResult {
     })
   }
 
+  // A Great Person card whose marker type is exhausted is discarded faceup and
+  // another card is drawn. The manual Draw button follows the same rule as the
+  // assisted culture gain.
+  if (input.sheetName === 'GREAT_PERSON') return drawGreatPerson(state, player)
+
   const index = state.items.findIndex((item) => item.sheetName === input.sheetName)
   if (index >= 0) {
     return ok(takeFromDeck(state, player, index))
@@ -124,6 +135,85 @@ export function draw(state: GameState, input: DrawInput): DrawResult {
     return err({ kind: 'ITEM_NOT_FOUND', sheetName: input.sheetName })
   }
   return ok(takeFromDeck(reshuffled.value, player, retryIndex))
+}
+
+/**
+ * Draws one valid Great Person card for the manual Draw button. A card whose
+ * marker type has no supply left is removed from the deck, named in a public
+ * line and put on the discard pile faceup; the loop continues until a valid card
+ * is found. With no marker of any type left nothing is drawn. One reshuffle of
+ * the Great Person discards is allowed, as for any other draw.
+ */
+function drawGreatPerson(state: GameState, player: Playerhand): DrawResult {
+  if (!anyGreatPersonMarkerLeft(state)) {
+    return err({ kind: 'NO_MORE_ITEMS', what: 'Great Person cards with a marker left' })
+  }
+
+  let current = state
+  const rejected: Item[] = []
+  let reshuffled = false
+
+  for (;;) {
+    const index = current.items.findIndex((item) => item.sheetName === 'GREAT_PERSON')
+    if (index < 0) {
+      if (reshuffled) break
+      const shuffled = reshuffleItems(current, 'GREAT_PERSON')
+      if (!shuffled.ok) break
+      current = shuffled.value
+      reshuffled = true
+      continue
+    }
+
+    const item = current.items[index] as Item
+    if (hasGreatPersonMarkerLeft(current, item)) {
+      const withRejected = putRejectedGreatPersons(current, player, rejected)
+      const validIndex = withRejected.items.findIndex((candidate) => candidate.id === item.id)
+      if (validIndex < 0) break
+      return ok(takeFromDeck(withRejected, player, validIndex))
+    }
+
+    const assetId = greatPersonMarkerAssetId(item)
+    current = appendPublicLog(
+      { ...current, items: current.items.filter((candidate) => candidate.id !== item.id) },
+      player.username,
+      player.playerId,
+      `drew the Great Person card ${itemName(item)}, but ` +
+        (assetId === undefined
+          ? 'it has no marker type'
+          : `no ${greatPersonMarkerLabel(assetId)} marker is left`) +
+        ', so it was discarded faceup',
+    )
+    rejected.push(item)
+  }
+
+  const finished = putRejectedGreatPersons(current, player, rejected)
+  if (rejected.length === 0) {
+    return err({ kind: 'NO_MORE_ITEMS', what: 'Great Person cards with a marker left' })
+  }
+  return ok(
+    appendPublicLog(
+      finished,
+      player.username,
+      player.playerId,
+      'found no Great Person card with a marker left to draw',
+    ),
+  )
+}
+
+/** Puts the rejected cards on the public discard pile, hidden as every discard is. */
+function putRejectedGreatPersons(
+  state: GameState,
+  player: Playerhand,
+  rejected: readonly Item[],
+): GameState {
+  if (rejected.length === 0) return state
+  return {
+    ...state,
+    discardedItems: [
+      ...state.discardedItems,
+      ...rejected.map((item): Item => ({ ...item, ownerId: player.playerId, hidden: true })),
+    ],
+  }
 }
 
 /**

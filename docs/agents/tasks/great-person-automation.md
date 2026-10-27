@@ -46,6 +46,10 @@ which Great Persons are automated.
   they hold. With no Uranium-spending ability in the current sheets, the card can
   still be armed and the next eligible action consumes it.
 
+- **Manual Great Person Draw:** the Draw button now follows the same marker-supply
+  rule as the culture gain: an exhausted-type card is named, discarded faceup and
+  skipped, with one reshuffle; no marker of any type means no draw.
+
 **Out:**
 
 - Movement effects (Captain James Cook, Henry Ford): movement is manual text and
@@ -130,5 +134,6 @@ Independent review approved round 2 with no findings above a nit (the accepted
 nit is that an already-revealed passive card still offers Use and logs again).
 Browser verification used a seeded local game: Pasteur's Use and passive note,
 Shakespeare's Advance-culture prompt/log, Michelangelo's Build discount note, and
-Edison's Play/log were observed in headless Chrome.
+Edison's Play/log were observed in headless Chrome. The manual Great Person Draw
+marker filter is covered by engine and HTTP tests, not a browser check.
 

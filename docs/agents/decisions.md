@@ -488,6 +488,12 @@ get no such button.
   next Uranium spend. `spendResource` uses it and clears the arm; returning the
   token restores the arm. No current sheet action spends Uranium, so the card is
   ready for such an action but has no visible trigger today.
+- **Manual Great Person draw:** the Draw button now follows the same marker-supply
+  rule as the assisted culture gain. A card whose type has no piece left is named
+  in a public line, discarded faceup and skipped; the draw continues until a valid
+  card is found, with one reshuffle of the Great Person discards. With no marker
+  of any type left nothing is drawn. Test: `assisted-gp.test.ts`, "the Draw button
+  discards an exhausted type …".
 - **Deferred:** Captain James Cook and Henry Ford change travel speed, which is
   still a manual `mvmt` text field and is not used in a calculation. They wait
   until movement is enforced.
