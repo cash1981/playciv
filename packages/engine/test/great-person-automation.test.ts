@@ -351,6 +351,12 @@ describe('Mother Teresa', () => {
     expect(me(undone, KARANDRAS1).stats.coinSources.sheet).toBe(0)
     expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(0)
     expect(me(undone).items.some((item) => item.id === card.itemId)).toBe(true)
+
+    // The once-per-turn use is freed by the undo, so she can give again.
+    const again = unwrap(
+      play(undone, 'teresa-again', card.itemId, { targets: [KARANDRAS1], coinSource: 'sheet' }),
+    )
+    expect(me(again).stats.coinSources.sheet).toBe(0)
   })
 
   it('is used once per turn', () => {
@@ -367,7 +373,8 @@ describe('Marie Curie', () => {
     const card = withCardInHand(startOfTurn(), 'Marie Curie')
     const armed = unwrap(play(card.state, 'curie-1', card.itemId, { substitute: 'Wheat' }))
     expect(me(armed).curieSubstitute).toBe('Wheat')
-    expect(armed.log.at(-1)?.publicLog).toContain('their next Uranium spend uses Wheat instead')
+    expect(armed.log.at(-1)?.publicLog).toContain('their next Uranium spend may use the resource they chose instead')
+    expect(armed.log.at(-1)?.publicLog).not.toContain('Wheat')
 
     const wheat = withHutInHand(armed, 'Wheat')
     const spent = unwrap(spendResource(wheat.state, CASH1981, 'Uranium'))

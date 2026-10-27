@@ -437,9 +437,10 @@ undo made itself (it can bring back a token that the vote removed; the record st
 ### Great Person automation (2026-10-27)
 
 The next low-hanging Great Persons after the four card exceptions. Automated
-passive cards (Valmiki, Adam Smith, Susan B. Anthony, Louis Pasteur) get a Use
-button in the phase tabs and the hand, which reveals the card; their effect is
-active while it stays faceup. Unimplemented passive cards get no such button.
+passive/triggered cards (Valmiki, Adam Smith, Susan B. Anthony, Louis Pasteur,
+Archimedes) get a Use button in the phase tabs and the hand, which reveals the
+card; their effect is active while it stays faceup. Unimplemented passive cards
+get no such button.
 
 - **Archimedes:** pays out once, after every player has finished the Research
   phase (`startMissingTurns`). For each tech the holder researched that turn
@@ -462,9 +463,10 @@ active while it stays faceup. Unimplemented passive cards get no such button.
 - **Thomas Edison:** playing the card discards it and grants a free tech
   restricted to the revealed techs of the player it names. The normal tech panel
   reveals and spends the grant.
-- **Mother Teresa:** playing the card discards it, moves one chosen coin token
+- **Mother Teresa:** using the card (it stays faceup) moves one chosen coin token
   from the investable sources to the named player's sheet and makes one free
-  culture advance, once per turn. The coin move and the advance undo together.
+  culture advance, once per turn. The coin move and the advance undo together,
+  and the undo frees the once-per-turn use.
 - **Marie Curie:** playing the card discards it and arms a chosen resource as the
   next Uranium spend. `spendResource` uses it and clears the arm; returning the
   token restores the arm. No current sheet action spends Uranium, so the card is

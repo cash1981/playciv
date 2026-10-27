@@ -193,6 +193,7 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Adam Smith', none],
   ['Susan B. Anthony', none],
   ['Louis Pasteur', none],
+  ['Archimedes', none],
 ])
 
 /**
@@ -220,6 +221,7 @@ export const PASSIVE_GREAT_PERSONS: ReadonlyMap<string, string> = new Map([
   ['Adam Smith', 'you have 1 extra coin while Adam Smith is faceup'],
   ['Susan B. Anthony', 'all of your cities produce 2 more hammers while Susan B. Anthony is faceup'],
   ['Louis Pasteur', 'your stacking limit is increased by 1 while Louis Pasteur is faceup'],
+  ['Archimedes', 'pays 3 culture after Research for each tech no other player has revealed'],
 ])
 
 const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')

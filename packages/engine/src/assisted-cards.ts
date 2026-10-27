@@ -343,7 +343,7 @@ function automate(
       return ok({
         state: withPlayerHand(state, { ...player, curieSubstitute: substitute }),
         extra: { curieSubstitute: substitute },
-        said: `, so their next Uranium spend uses ${substitute} instead`,
+        said: ', so their next Uranium spend may use the resource they chose instead',
       })
     }
     default:
@@ -582,23 +582,26 @@ export const playCard: AssistedActionDefinition = {
       }
     }
 
+    const freeMotherTeresa = (state: GameState): GameState => {
+      if (effect.coin === undefined) return state
+      const holder = playerOf(state, player.playerId) ?? hand
+      return freeTurnAction(state, holder, record.turnNumber, 'card:Mother Teresa')
+    }
     if (effect.discarded) {
-      let back: GameState = {
+      const back: GameState = freeMotherTeresa({
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
-      }
-      if (effect.coin !== undefined) {
-        const holder = playerOf(back, player.playerId) ?? hand
-        back = freeTurnAction(back, holder, record.turnNumber, 'card:Mother Teresa')
-      }
+      })
       return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand` })
     }
-    const back = withPlayerHand(current, {
-      ...hand,
-      items: hand.items.map((candidate) =>
-        candidate.id === effect.item.id ? { ...candidate, hidden: effect.item.hidden } : candidate,
-      ),
-    })
+    const back = freeMotherTeresa(
+      withPlayerHand(current, {
+        ...hand,
+        items: hand.items.map((candidate) =>
+          candidate.id === effect.item.id ? { ...candidate, hidden: effect.item.hidden } : candidate,
+        ),
+      }),
+    )
     return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: the card is facedown again` })
   },
 }

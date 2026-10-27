@@ -39,7 +39,7 @@ which Great Persons are automated.
   consumes the discount. Undo restores it.
 - **Thomas Edison:** playing the card discards it and grants a free tech restricted
   to techs another player has revealed.
-- **Mother Teresa:** playing the card discards it, moves one chosen coin token to
+- **Mother Teresa:** using the card (it stays faceup) moves one chosen coin token to
   the named player and performs one free culture advance, all with vote undo.
 - **Marie Curie:** playing the card arms a one-shot substitution for the next
   resource ability that spends Uranium, letting the player choose another resource
