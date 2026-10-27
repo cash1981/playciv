@@ -825,6 +825,21 @@ describe('Shakespeare asks during the advance', () => {
     expect(perform.mock.calls[0]!.slice(0, 2)).toEqual(['game-1', 'cultureAdvanceSkip'])
   })
 
+  it('offers the skip when the normal advance is blocked, and declines to send anything', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPanel(viewWith([
+      advance('unavailable', 'There are no culture I cards left to draw.'),
+      skip('ready', 'Skip to space 3 (Great Person): 3 culture.'),
+    ]))
+
+    const button = screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(button.getAttribute('title')).toBe('Skip to space 3 (Great Person): 3 culture.')
+    fireEvent.click(button)
+    await waitFor(() => expect(perform).not.toHaveBeenCalled())
+  })
+
   it('advances normally when the player declines the skip', async () => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
     vi.spyOn(window, 'confirm').mockReturnValue(false)
