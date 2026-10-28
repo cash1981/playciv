@@ -145,17 +145,27 @@ const centreOf = (board: Board, cell: Cell): readonly [number, number] => [
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
-/** The squares occupied by figures: another figure is not a destination in this slice. */
-function figureSquares(board: Board): ReadonlySet<string> {
+/** The map squares holding a piece that matches `wanted`. */
+function pieceSquares(board: Board, wanted: (piece: BoardPiece) => boolean): ReadonlySet<string> {
   const squares = new Set<string>()
   for (const piece of board.pieces) {
-    if (piece.category !== 'figure') continue
+    if (!wanted(piece)) continue
     const column = Math.floor((piece.x + piece.width / 2) / board.squareSize)
     const row = Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize)
     if (isMapCell(board, column, row)) squares.add(`${column},${row}`)
   }
   return squares
 }
+
+/** The squares occupied by figures: another figure is not a destination in this slice. */
+const figureSquares = (board: Board): ReadonlySet<string> =>
+  pieceSquares(board, (piece) => piece.category === 'figure')
+
+/** The resource markers a figure must stop on: it may not walk past a hut or village without Flight. */
+const HUT_AND_VILLAGE_ASSETS: ReadonlySet<string> = new Set(['resources/hut', 'resources/village'])
+
+const hutAndVillageSquares = (board: Board): ReadonlySet<string> =>
+  pieceSquares(board, (piece) => HUT_AND_VILLAGE_ASSETS.has(piece.assetId))
 
 /**
  * The movement options for one of the player's figures, or `null` when the
@@ -182,7 +192,9 @@ export function figureMovementOptions(
   if (locked || remaining === 0) return { speed, used, remaining, locked, destinations: [] }
 
   const water = waterRulesOf(player)
+  const flight = hasRevealedTech(player, 'Flight')
   const occupied = figureSquares(board)
+  const mustStop = flight ? new Set<string>() : hutAndVillageSquares(board)
   const distances = new Map<string, number>([[keyOf(start), 0]])
   const queue: Cell[] = [start]
   const destinations: MovementDestination[] = []
@@ -205,6 +217,9 @@ export function figureMovementOptions(
       }
     }
     if (distance >= speed) continue
+    // A hut or village ends the move: the figure may land there but not pass it.
+    // A revealed Flight flies over, so it neither stops nor blocks the squares beyond.
+    if (distance > 0 && mustStop.has(keyOf(cell))) continue
     for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
       const next = { column: cell.column + dc, row: cell.row + dr }
       if (!isMapCell(board, next.column, next.row)) continue

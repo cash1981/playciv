@@ -88,16 +88,18 @@ const figure = (state: GameState): BoardPiece => {
   return piece
 }
 
-const withSailing = (state: GameState): GameState => {
+const withTech = (state: GameState, name: string, hidden = false): GameState => {
   const player = playerOf(state)
   return withPlayer(state, {
     ...player,
     techsChosen: [
       ...player.techsChosen,
-      { name: 'Sailing', hidden: false } as Playerhand['techsChosen'][number],
+      { name, hidden } as Playerhand['techsChosen'][number],
     ],
   })
 }
+
+const withSailing = (state: GameState): GameState => withTech(state, 'Sailing')
 
 describe('movement speed', () => {
   it('adds the parts of the Movement expression', () => {
@@ -238,6 +240,61 @@ describe('reachable squares', () => {
 // Tile 05 has water in the upper-left and land below it.
 const waterGame = (): GameState =>
   place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 0, 3)
+
+describe('huts and villages', () => {
+  it.each(['resources/hut', 'resources/village'])(
+    'stops a move on a %s square unless Flight flies over it',
+    (assetId) => {
+      let state = place(game(), 'figures/redarmy', 1, 1)
+      state = place(state, assetId, 2, 1)
+      const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
+      if (options === null) throw new Error('expected movement options')
+      expect(options.destinations).toContainEqual(
+        expect.objectContaining({ column: 2, row: 1, distance: 1 }),
+      )
+      expect(options.destinations.some((cell) => cell.column === 3 && cell.row === 1)).toBe(false)
+
+      const flying = withTech(state, 'Flight')
+      const flown = figureMovementOptions(flying.board, playerOf(flying), figure(flying), 1)
+      if (flown === null) throw new Error('expected movement options')
+      expect(flown.destinations).toContainEqual(
+        expect.objectContaining({ column: 3, row: 1, distance: 2 }),
+      )
+    },
+  )
+
+  it('lets a figure that starts on a hut move away', () => {
+    let state = place(game(), 'figures/redarmy', 2, 1)
+    state = place(state, 'resources/hut', 2, 1)
+    const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
+    if (options === null) throw new Error('expected movement options')
+    expect(options.destinations).toContainEqual(
+      expect.objectContaining({ column: 3, row: 1, distance: 1 }),
+    )
+  })
+
+  it('does not fly over with a hidden Flight', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'resources/hut', 2, 1)
+    state = withTech(state, 'Flight', true)
+    const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
+    if (options === null) throw new Error('expected movement options')
+    expect(options.destinations.some((cell) => cell.column === 3 && cell.row === 1)).toBe(false)
+  })
+
+  it('refuses to travel past a hut without Flight', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'resources/hut', 2, 1)
+    const piece = figure(state)
+    expect(
+      unwrapErr(travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 3, row: 1 })).kind,
+    ).toBe('FIGURE_MOVE_ILLEGAL')
+    const stopped = unwrap(
+      travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 2, row: 1 }),
+    ).board.pieces.find((candidate) => candidate.id === piece.id)
+    expect(stopped?.movement).toMatchObject({ turn: 1, used: 1, locked: true })
+  })
+})
 
 describe('water', () => {
   it('does not offer a water square without a water tech', () => {

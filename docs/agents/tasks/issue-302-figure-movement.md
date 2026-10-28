@@ -31,7 +31,8 @@ foundation the issue's card, tech and Great Person movement effects need.
   James Cook doubles the speed for the turn when played.
 - Click a map figure to highlight reachable squares: cardinal steps only, within
   the speed, on map squares, not ending in water without a revealed Sailing,
-  Steam Power or Flight, and England may cross water but not end in it.
+  Steam Power or Flight, and England may cross water but not end in it. A hut or
+  village square ends the move; a revealed Flight flies over it.
 - A new engine reducer and HTTP route for one figure move. It records the
   distance and locks the figure for the turn in the same board history entry,
   so the existing board Undo restores both the square and the movement budget.
@@ -100,20 +101,22 @@ foundation the issue's card, tech and Great Person movement effects need.
 
 ## Acceptance criteria
 
-- [ ] Selecting a player's own army/scout on the map highlights cardinal
+- [x] Selecting a player's own army/scout on the map highlights cardinal
   destinations up to the movement speed, with no overlay on water unless the
   player may end there.
-- [ ] Clicking a highlighted square moves the figure, spends the move, and the
+- [x] Clicking a highlighted square moves the figure, spends the move, and the
   figure is not selectable for another move that turn; board Undo restores the
   square and the budget.
-- [ ] The engine rejects a move farther than the speed, a diagonal, an illegal
+- [x] A move onto a hut or village stops there; without Flight it cannot continue
+  past it, while a revealed Flight may fly over.
+- [x] The engine rejects a move farther than the speed, a diagonal, an illegal
   water destination and a locked figure. Natural Religion adds 1 to an army's
   speed; Sailing, Steam Power and Flight allow ending in water; England may
   cross but not end in water; Henry Ford adds 1 while faceup; Captain James Cook
   doubles the turn's speed.
-- [ ] The next turn gives the figure its speed again without a stored reset.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-- [ ] Hidden information: movement uses only the board and the viewer's own
+- [x] The next turn gives the figure its speed again without a stored reset.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+- [x] Hidden information: movement uses only the board and the viewer's own
   seat; no hand or private card data is added to public output.
 - [ ] Verified in the browser: not yet, the human will test manually.
 
@@ -125,13 +128,14 @@ None blocking this slice. The map-picking card/tech flows are explicitly out.
 
 Implemented on `feat/issue-302-figure-movement`: the engine movement helper,
 `travelFigure` and its route, the board highlight/pick UI, the movement state on
-the board history, and the Natural Religion/Ford/Cook speed rules. The engine,
+the board history, the Natural Religion/Ford/Cook speed rules, and the
+hut/village stop rule (Flight flies over). The engine,
 server and board tests cover the speed, water, lock, undo and interaction cases.
 
 Validation on 2026-10-27:
 
 - `pnpm -r typecheck` passed.
-- `pnpm -r test` passed: engine 68 files / 2118 tests, web 63 files / 1143 tests,
+- `pnpm -r test` passed: engine 68 files / 2123 tests, web 63 files / 1143 tests,
   server 40 files / 849 tests.
 - `pnpm -r build` passed.
 - Independent read-only review approved after three rounds; no finding above a

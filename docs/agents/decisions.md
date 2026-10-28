@@ -534,6 +534,10 @@ turn without a reset action.
   for this check and can be entered. A square holding any figure is neither a
   destination nor walked through, so stacking and battle outcomes remain the
   players' manual work rather than being skipped by a path around them.
+- **Huts and villages:** a move that reaches a square with a `resources/hut` or
+  `resources/village` marker must stop on that square; without a revealed Flight
+  the figure cannot continue past it in the same move. A revealed Flight flies
+  over the marker, so the squares beyond are reachable too.
 - **Lock and undo:** after any travel the figure is locked for the turn; pressing
   board Undo restores the square and the lock in one step, exactly the issue's
   requested redo. A freeform drag of the viewer's own map figure is disabled in

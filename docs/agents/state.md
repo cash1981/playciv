@@ -60,9 +60,10 @@ old test counts and past deployment reports do not establish present health.
 
 - Figure movement (#302, first slice): a player's own map army or scout shows
   yellow destination squares within its travel speed. Travel is cardinal, water
-  follows Sailing/Steam Power/Flight and England's crossing rule, and one board
-  Undo restores the square and the spent movement. Natural Religion, Henry Ford
-  and Captain James Cook feed the speed. Culture-card movement, Hannibal and
+  follows Sailing/Steam Power/Flight and England's crossing rule, a hut or
+  village stops the move unless Flight flies over it, and one board Undo
+  restores the square and the spent movement. Natural Religion, Henry Ford and
+  Captain James Cook feed the speed. Culture-card movement, Hannibal and
   Communism's square lock are still queued. See "Figure movement (#302, first
   slice)" in decisions.
 
