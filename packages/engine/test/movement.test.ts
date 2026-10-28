@@ -348,10 +348,10 @@ describe('travelFigure', () => {
     const moved = figure(travelled)
 
     expect(moved.x).toBe(Math.round(3 * SQUARE_SIZE + (SQUARE_SIZE - moved.width) / 2))
-    expect(movementOf(moved, 1)).toEqual({ turn: 1, used: 2, locked: true })
+    expect(movementOf(moved, 1)).toEqual({ turn: 1, used: 2, locked: true, reason: 'travel' })
     expect(travelled.board.history.at(-1)?.change).toMatchObject({
       kind: 'move',
-      movement: { from: null, to: { turn: 1, used: 2, locked: true } },
+      movement: { from: null, to: { turn: 1, used: 2, locked: true, reason: 'travel' } },
     })
   })
 

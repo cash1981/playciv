@@ -15,25 +15,15 @@
  * destination, and the destination may be water.
  */
 
-import { cityCenterCells, mapCellOf } from './blockade.js'
+import { mapCellOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import { columnLabel, isMapCell } from './board.js'
 import type { Board, BoardPiece } from './board.js'
+import { isEmptySquare } from './empty-square.js'
 import { figureBelongsTo } from './movement.js'
 import type { MovementPlayer } from './movement.js'
 
 export const GALILEO_NAME = 'Galileo Galilei'
-
-const HUT_AND_VILLAGE_ASSETS: ReadonlySet<string> = new Set(['resources/hut', 'resources/village'])
-const BLOCKING_CATEGORIES: ReadonlySet<string> = new Set([
-  'building',
-  'wonder',
-  'figure',
-  'greatperson',
-  'citystate',
-  'city',
-  'relic',
-])
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
@@ -72,26 +62,9 @@ export function galileoFiguresAt(
   })
 }
 
-/** Whether `piece` keeps Galileo's destination from being empty, by the human's reading. */
-export function galileoBlocksDestination(piece: BoardPiece): boolean {
-  return BLOCKING_CATEGORIES.has(piece.category) || HUT_AND_VILLAGE_ASSETS.has(piece.assetId)
-}
-
-/** The map squares a blocking piece covers. A city uses the shared metropolis footprint. */
-function pieceCells(board: Board, piece: BoardPiece): readonly Cell[] {
-  if (piece.category === 'city') return cityCenterCells(board, piece) ?? []
-  const at = mapCellOf(board, piece)
-  return at === null ? [] : [at]
-}
-
 /** Whether `cell` is an edge square with none of the pieces that make a square non-empty. */
 export function galileoDestinationAllowed(board: Board, cell: Cell): boolean {
-  if (!isOuterEdgeCell(board, cell)) return false
-  return !board.pieces.some(
-    (piece) =>
-      galileoBlocksDestination(piece) &&
-      pieceCells(board, piece).some((at) => keyOf(at) === keyOf(cell)),
-  )
+  return isOuterEdgeCell(board, cell) && isEmptySquare(board, cell)
 }
 
 /** The map squares holding at least one of the player's figures: Galileo's sources. */

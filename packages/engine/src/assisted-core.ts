@@ -217,10 +217,12 @@ export interface PlayCardPayload {
   readonly coinSource?: string
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
-  /** Galileo Galilei: the outer-edge square whose figures move. */
+  /** The map square whose figures move (Galileo and the movement culture cards). */
   readonly from?: CardSquare
-  /** Galileo Galilei: the empty outer-edge square they move to. */
+  /** The empty square they move to. */
   readonly to?: CardSquare
+  /** A one-figure movement card: the chosen figure when the source square holds several. */
+  readonly figureId?: string
 }
 
 /**

@@ -261,6 +261,12 @@ export interface PlayableCard {
   readonly resources: readonly string[]
   /** What the game does for the card when it is played, or null when it only logs it. */
   readonly automatic: string | null
+  /**
+   * The movement ability available now: a one-figure card in Movement or a group
+   * card in City Management. Absent or null when this play is only the card's
+   * other ability or no automation.
+   */
+  readonly mapMove?: { readonly kind: 'one' | 'group'; readonly allowance: number } | null
   /** A passive effect that is active while the card stays faceup; Use only reveals it. */
   readonly passive: boolean
   /** Playing it discards the card; otherwise a Great Person turns faceup and stays. */

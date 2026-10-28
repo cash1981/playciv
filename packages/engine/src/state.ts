@@ -650,6 +650,20 @@ export type AssistedEffect =
       readonly curieSubstitute?: string
       /** A once-per-turn marker the card wrote (Captain James Cook), so an undo frees it. */
       readonly usedAction?: { readonly key: string; readonly turnNumber: number }
+      /** A movement culture card: the source and destination, and each moved figure. */
+      readonly cardMove?: {
+        readonly card: string
+        readonly kind: 'one' | 'group'
+        readonly from: { readonly column: number; readonly row: number }
+        readonly to: { readonly column: number; readonly row: number }
+        readonly moves: readonly {
+          readonly pieceId: string
+          readonly from: { readonly x: number; readonly y: number }
+          readonly to: { readonly x: number; readonly y: number }
+          readonly movement: PieceMovement | null
+          readonly historyId: string
+        }[]
+      }
       /** Galileo Galilei: the edge source and destination, and each figure's before/after position. */
       readonly galileo?: {
         readonly from: { readonly column: number; readonly row: number }

@@ -14,12 +14,13 @@
  * reset step.
  */
 
-import { pieceColorOf } from './blockade.js'
+import { mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import type { Board, BoardPiece, PieceMovement } from './board.js'
 import { columnLabel, isMapCell, mapTop, whiteFigureCivilization } from './board.js'
 import { WATER_TECHS } from './build-options.js'
 import { terrainAt } from './terrain.js'
+import { isEmptySquare } from './empty-square.js'
 
 /**
  * The parts of a player the movement rules read. Narrower than `Playerhand` so
@@ -71,8 +72,11 @@ export function movementTotal(expression: string): number {
     .reduce((total, part) => total + part, 0)
 }
 
+/** What figure ownership needs to know: the seat's colour and civilization. */
+export type FigureOwner = Pick<MovementPlayer, 'color' | 'civilization'>
+
 /** Whether the piece is this player's own army or scout: its colour, or the white figure of its civ. */
-export function figureBelongsTo(player: MovementPlayer, piece: BoardPiece): boolean {
+export function figureBelongsTo(player: FigureOwner, piece: BoardPiece): boolean {
   if (piece.category !== 'figure') return false
   const white = whiteFigureCivilization(piece.assetId)
   if (white !== undefined) return player.civilization?.name === white
@@ -125,7 +129,7 @@ export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNum
 }
 
 /** How the player treats water: neither, crossing only (England), or crossing and ending. */
-interface WaterAllowed {
+export interface WaterAllowed {
   readonly cross: boolean
   readonly end: boolean
 }
@@ -238,6 +242,101 @@ export function figureMovementOptions(
   destinations.sort((a, b) => a.distance - b.distance || a.row - b.row || a.column - b.column)
   return { speed, used, remaining, locked, destinations }
 }
+
+/** The map cells holding at least one figure of `owner`. */
+export function figureSources(board: Board, owner: FigureOwner): readonly Cell[] {
+  const sources = new Map<string, Cell>()
+  for (const piece of board.pieces) {
+    if (!figureBelongsTo(owner, piece)) continue
+    const cell = mapCellOf(board, piece)
+    if (cell !== null) sources.set(keyOf(cell), cell)
+  }
+  return [...sources.values()].sort((a, b) => a.row - b.row || a.column - b.column)
+}
+
+/** The owner's figures whose centre is in `cell`. */
+export function figuresAt(board: Board, owner: FigureOwner, cell: Cell): readonly BoardPiece[] {
+  return board.pieces.filter((piece) => {
+    if (!figureBelongsTo(owner, piece)) return false
+    const at = mapCellOf(board, piece)
+    return at !== null && keyOf(at) === keyOf(cell)
+  })
+}
+
+/** A figure moved by Galileo in this City Management may not be moved by the movement cards. */
+export const movedByGalileoThisTurn = (piece: BoardPiece, turnNumber: number): boolean => {
+  const movement = movementOf(piece, turnNumber)
+  return movement?.locked === true && movement.reason === 'galileo'
+}
+
+/** Whether a movement culture card may pick the figure this turn. */
+export const canCultureMoveFigure = (piece: BoardPiece, turnNumber: number): boolean =>
+  !movedByGalileoThisTurn(piece, turnNumber)
+
+/**
+ * Destinations for the movement culture cards. The destination must be empty
+ * (rules 61 to 63); the path follows the same cardinal, figure-blocking and
+ * hut/village rules as travel, with the card's own allowance. `water` is the
+ * ordinary travel water rule for the movement cards, and neither crossing nor
+ * ending for the group cards, whose text forbids crossing water.
+ */
+export function cardMoveDestinations(
+  board: Board,
+  from: Cell,
+  allowance: number,
+  water: WaterAllowed,
+  flight: boolean,
+): readonly MovementDestination[] {
+  if (!isMapCell(board, from.column, from.row)) return []
+  const occupied = figureSquares(board)
+  const mustStop = hutAndVillageSquares(board)
+  const distances = new Map<string, number>([[keyOf(from), 0]])
+  const queue: Cell[] = [from]
+  const destinations: MovementDestination[] = []
+
+  while (queue.length > 0) {
+    const cell = queue.shift() as Cell
+    const distance = distances.get(keyOf(cell)) ?? 0
+    if (distance > 0) {
+      const [x, y] = centreOf(board, cell)
+      const terrain = terrainAt(board, x, y)
+      const mayEndHere = terrain === 'water' ? water.end : true
+      if (
+        mayEndHere &&
+        !occupied.has(keyOf(cell)) &&
+        !(flight && mustStop.has(keyOf(cell))) &&
+        isEmptySquare(board, cell)
+      ) {
+        destinations.push({
+          column: cell.column,
+          row: cell.row,
+          label: `${columnLabel(cell.column)}${cell.row + 1}`,
+          distance,
+        })
+      }
+    }
+    if (distance >= allowance) continue
+    // A hut or village ends the move unless Flight crosses it; the destination is never on it.
+    if (distance > 0 && !flight && mustStop.has(keyOf(cell))) continue
+    for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
+      const next = { column: cell.column + dc, row: cell.row + dr }
+      if (!isMapCell(board, next.column, next.row)) continue
+      if (occupied.has(keyOf(next))) continue
+      const [x, y] = centreOf(board, next)
+      const nextWater = terrainAt(board, x, y) === 'water'
+      if (nextWater && !water.cross) continue
+      if (distances.has(keyOf(next))) continue
+      distances.set(keyOf(next), distance + 1)
+      queue.push(next)
+    }
+  }
+
+  destinations.sort((a, b) => a.distance - b.distance || a.row - b.row || a.column - b.column)
+  return destinations
+}
+
+/** The ordinary water rule for the one-figure movement cards. */
+export const cardWaterRulesOf = (player: MovementPlayer): WaterAllowed => waterRulesOf(player)
 
 /** The option for exactly `cell`, or `undefined` when it is not a legal destination. */
 export function destinationTo(

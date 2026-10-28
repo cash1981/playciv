@@ -21,6 +21,7 @@ import { moveFigureWithMovementUnchecked, placeStartMarker } from './actions/boa
 import { unbuiltArmies } from './assisted-abilities.js'
 import { drawCandidates, performAdvance, reverseAdvanceEffect, shuffleSheetTwice } from './assisted-culture.js'
 import { squareLabel, unitSheetOf } from './build-options.js'
+import { cardMoveFigureChoices, cardMoveRuleOf, cardMoveSources } from './card-movement.js'
 import {
   GALILEO_NAME,
   galileoDestinationAllowed,
@@ -28,7 +29,12 @@ import {
   isOuterEdgeCell,
 } from './galileo.js'
 import { mapTop } from './board.js'
-import type { PieceMovement } from './board.js'
+import type { BoardPiece, PieceMovement } from './board.js'
+import {
+  cardMoveDestinations,
+  cardWaterRulesOf,
+  figuresAt,
+} from './movement.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import { revealedTechNamesOfOthers } from './great-person-effects.js'
 import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
@@ -106,6 +112,17 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
     if (timings.length === 0 && passiveText === undefined) return []
     if (item.kind === 'greatperson' && CARDS_WITH_OWN_BUTTON.has(name)) return []
     const rule = cardPlayRuleOf(name)
+    const moveRule = cardMoveRuleOf(name)
+    const mapMove =
+      moveRule === undefined
+        ? null
+        : moveRule.kind === 'one'
+          ? now === 'MOVEMENT'
+            ? moveRule
+            : null
+          : now === 'CM'
+            ? moveRule
+            : null
     const base = {
       itemId: item.id,
       name,
@@ -119,8 +136,13 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
         passiveText === undefined
           ? kind === 'greatPerson'
             ? (AUTOMATIC_EFFECTS.get(name) ?? null)
-            : null
+            : mapMove === null
+              ? null
+              : mapMove.kind === 'one'
+                ? `moves one of your figures up to ${mapMove.allowance} squares to an empty square`
+                : `moves all figures of the chosen player in a square up to ${mapMove.allowance} squares to an empty square`
           : passiveText,
+      mapMove,
       passive: passiveText !== undefined,
       discards: kind === 'culture' || discardsWhenUsed(item.description),
       coinSources:
@@ -206,6 +228,7 @@ interface Automated {
     | 'curieSubstitute'
     | 'usedAction'
     | 'galileo'
+    | 'cardMove'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -216,6 +239,80 @@ function turnFor(state: GameState, player: Playerhand) {
   const turnNumber = turnStatus(state).currentTurn
   return player.playerTurns.find((turn) => turn.turnNumber === turnNumber) ?? createPlayerTurn(player.username, turnNumber)
 }
+
+interface CardMoveResult {
+  readonly state: GameState
+  readonly moves: readonly {
+    readonly pieceId: string
+    readonly from: { readonly x: number; readonly y: number }
+    readonly to: { readonly x: number; readonly y: number }
+    readonly movement: PieceMovement | null
+    readonly historyId: string
+  }[]
+}
+
+/** Moves a set of figures together for a culture card, keeping their offsets within the square. */
+function moveFiguresForCard(
+  state: GameState,
+  playerId: string,
+  cardName: string,
+  figures: readonly BoardPiece[],
+  from: { readonly column: number; readonly row: number },
+  to: { readonly column: number; readonly row: number },
+  at: string | undefined,
+): CardMoveResult | string {
+  const sourceX = from.column * state.board.squareSize
+  const sourceY = mapTop(state.board) + from.row * state.board.squareSize
+  const destX = to.column * state.board.squareSize
+  const destY = mapTop(state.board) + to.row * state.board.squareSize
+  let current = state
+  const moves: {
+    pieceId: string
+    from: { x: number; y: number }
+    to: { x: number; y: number }
+    movement: PieceMovement | null
+    historyId: string
+  }[] = []
+  for (const figure of figures) {
+    const x = destX + (figure.x - sourceX)
+    const y = destY + (figure.y - sourceY)
+    const next = moveFigureWithMovementUnchecked(current, {
+      playerId,
+      pieceId: figure.id,
+      x,
+      y,
+      movementFrom: figure.movement ?? null,
+      movementTo: figure.movement ?? null,
+      description: `moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)} with ${cardName}`,
+      ...(at === undefined ? {} : { at }),
+    })
+    if (next === undefined) return 'The figures could not be moved.'
+    const historyId = next.board.history.at(-1)?.id
+    if (historyId === undefined) return 'The move could not be recorded.'
+    current = next
+    moves.push({
+      pieceId: figure.id,
+      from: { x: figure.x, y: figure.y },
+      to: { x, y },
+      movement: figure.movement ?? null,
+      historyId,
+    })
+  }
+  return { state: current, moves }
+}
+
+const sameCell = (
+  a: { readonly column: number; readonly row: number },
+  b: { readonly column: number; readonly row: number },
+): boolean => a.column === b.column && a.row === b.row
+
+const sameMovement = (a: PieceMovement | null, b: PieceMovement | null): boolean => {
+  if (a === null || b === null) return a === b
+  return a.turn === b.turn && a.used === b.used && a.locked === b.locked && a.reason === b.reason
+}
+
+const hasFlight = (player: Playerhand): boolean =>
+  player.techsChosen.some((tech) => tech.name === 'Flight' && !tech.hidden)
 
 /**
  * The effects of a Great Person card the game can carry out itself, because they need
@@ -408,6 +505,7 @@ function automate(
           turn: turnNumber,
           used: before?.used ?? 0,
           locked: true,
+          reason: 'galileo',
         }
         const x = destX + (figure.x - sourceX)
         const y = destY + (figure.y - sourceY)
@@ -442,6 +540,78 @@ function automate(
           ? `, locked ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} on ${squareLabel(from)}`
           : `, moved ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} from ` +
             `${squareLabel(from)} to ${squareLabel(to)}`,
+      })
+    }
+    case 'Migrants':
+    case 'Colonists':
+    case 'Immigrants': {
+      const rule = cardMoveRuleOf(name)
+      const from = payload?.from
+      const to = payload?.to
+      if (rule === undefined || from === undefined || to === undefined) {
+        return err('Choose one of your figures and an empty destination square.')
+      }
+      const turnNumber = turnStatus(state).currentTurn
+      const choices = cardMoveFigureChoices(state.board, player, from, turnNumber)
+      const figureId = payload?.figureId
+      const figure =
+        figureId === undefined
+          ? choices.length === 1
+            ? choices[0]
+            : undefined
+          : choices.find((candidate) => candidate.id === figureId)
+      if (figure === undefined) return err('Choose one of your figures in the source square.')
+      const destinations = cardMoveDestinations(
+        state.board,
+        from,
+        rule.allowance,
+        cardWaterRulesOf(player),
+        hasFlight(player),
+      )
+      if (!destinations.some((cell) => sameCell(cell, to))) {
+        return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
+      }
+      const moved = moveFiguresForCard(state, player.playerId, name, [figure], from, to, at)
+      if (typeof moved === 'string') return err(moved)
+      return ok({
+        state: moved.state,
+        extra: { cardMove: { card: name, kind: 'one', from, to, moves: moved.moves } },
+        said: `, moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)}`,
+      })
+    }
+    case 'Disoriented':
+    case 'Lost':
+    case 'Out of Position': {
+      const rule = cardMoveRuleOf(name)
+      const from = payload?.from
+      const to = payload?.to
+      const target = targets[0]
+      if (rule === undefined || from === undefined || to === undefined || target === undefined) {
+        return err('Choose another player, the square with their figures and an empty destination.')
+      }
+      const turnNumber = turnStatus(state).currentTurn
+      if (!cardMoveSources(state.board, target, turnNumber, 'group').some((cell) => sameCell(cell, from))) {
+        return err(`No movable figures of ${target.username} stand on ${squareLabel(from)}.`)
+      }
+      const destinations = cardMoveDestinations(
+        state.board,
+        from,
+        rule.allowance,
+        { cross: false, end: false },
+        hasFlight(target),
+      )
+      if (!destinations.some((cell) => sameCell(cell, to))) {
+        return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
+      }
+      const figures = figuresAt(state.board, target, from)
+      const moved = moveFiguresForCard(state, player.playerId, name, figures, from, to, at)
+      if (typeof moved === 'string') return err(moved)
+      return ok({
+        state: moved.state,
+        extra: { cardMove: { card: name, kind: 'group', from, to, moves: moved.moves } },
+        said:
+          `, moved ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} of ` +
+          `${target.username} from ${squareLabel(from)} to ${squareLabel(to)}`,
       })
     }
     case 'Marie Curie': {
@@ -548,7 +718,7 @@ export const playCard: AssistedActionDefinition = {
         })
 
     const automated =
-      card.kind === 'greatPerson'
+      card.kind === 'greatPerson' || card.mapMove != null
         ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name, context.at, payload, targets, context.requestId)
         : ok<Automated | null>(null)
     if (!automated.ok) return err(rejected('playCard', blocked('unavailable', automated.error)))
@@ -634,6 +804,20 @@ export const playCard: AssistedActionDefinition = {
         return blockedBy(`${effect.name} cannot be undone: a figure it moved has been moved again.`)
       }
     }
+    if (effect.cardMove !== undefined) {
+      const changed = effect.cardMove.moves.find((move) => {
+        const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        return (
+          piece === undefined ||
+          piece.x !== move.to.x ||
+          piece.y !== move.to.y ||
+          !sameMovement(piece.movement ?? null, move.movement)
+        )
+      })
+      if (changed !== undefined) {
+        return blockedBy(`${effect.name} cannot be undone: a figure it moved has moved or changed movement since.`)
+      }
+    }
     const coinTarget =
       effect.coin === undefined ? undefined : playerOf(state, effect.coin.targetId)
     if (effect.coin !== undefined && (coinTarget === undefined || coinTarget.stats.coinSources.sheet < 1)) {
@@ -691,6 +875,25 @@ export const playCard: AssistedActionDefinition = {
           y: move.from.y,
           movementFrom: piece.movement ?? null,
           movementTo: move.movementFrom,
+          description: `moved ${piece.label} back with ${effect.name}`,
+          ...(at === null || at === undefined ? {} : { at }),
+        })
+        if (next === undefined) return blockedBy(`${effect.name} cannot be undone: a figure could not be moved back.`)
+        current = next
+      }
+      hand = playerOf(current, player.playerId) ?? hand
+    }
+    if (effect.cardMove !== undefined) {
+      for (const move of [...effect.cardMove.moves].reverse()) {
+        const piece = current.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        if (piece === undefined) return blockedBy(`${effect.name} cannot be undone: a figure it moved is gone.`)
+        const next = moveFigureWithMovementUnchecked(current, {
+          playerId: player.playerId,
+          pieceId: move.pieceId,
+          x: move.from.x,
+          y: move.from.y,
+          movementFrom: piece.movement ?? null,
+          movementTo: move.movement,
           description: `moved ${piece.label} back with ${effect.name}`,
           ...(at === null || at === undefined ? {} : { at }),
         })

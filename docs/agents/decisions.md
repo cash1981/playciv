@@ -603,6 +603,42 @@ Source: `engine/src/galileo.ts`, `assisted-cards.ts` (`Galileo Galilei`),
 `web/src/views/mapPick.ts`, `PlayableCards.tsx`, `GameView.tsx`,
 `engine/test/galileo.test.ts`, `web/src/views/PlayableCards.test.tsx`.
 
+### Movement culture cards (#302)
+
+The movement ability of six culture cards is automated with the shared card map
+picker: Migrants (2), Colonists (4) and Immigrants (6) move one own figure, while
+Disoriented (2), Lost (3) and Out of Position (4) move every figure of another
+player in one square as a group.
+
+- **Choosing:** the source can be any map square with the owner's figures. A
+  one-figure card asks which figure when the square holds several. A group card
+  first names the other player in the card form, and every figure of that player
+  in the source moves together.
+- **Destination:** every destination must be empty by unofficial rules 61 to 63,
+  shared through `empty-square.ts`. The one-figure cards use the ordinary
+  cardinal travel rules, including figure squares, hut/village stops, Flight
+  crossing and the owner's water ability. The group cards may not enter or end on
+  water at all, as printed, and Flight still only crosses hut/village.
+- **Normal travel is separate:** these cards do not read or spend ordinary travel
+  speed, may move a figure after its normal travel, and do not set the movement
+  lock (rule 276). A figure locked by Galileo this City Management cannot be
+  targeted (rules 255, 287, 330); `PieceMovement.reason` now tells `travel` from
+  `galileo` for that check.
+- **City Management policy switch:** the other printed ability of Migrants,
+  Colonists and Immigrants stays manual. The card is only automated in Movement;
+  in City Management it is logged/discarded as before and the player uses the
+  Social policy panel.
+- **Undo:** the card and all moved figures are one assisted action. The card undo
+  vote restores the figures and returns the card to the hand; board Undo is
+  blocked for the individual moves and the reverse moves form the new floor.
+- **Not checked:** figures moved by Steam Power (not implemented), Brandenburg
+  Gate, and scout gathered-square/icon reuse (rules 198, 257, 334, 341, 422-424).
+
+Source: `engine/src/card-movement.ts`, `empty-square.ts`, `movement.ts`
+(`cardMoveDestinations`, `figureSources`, `PieceMovement.reason`),
+`assisted-cards.ts`, `actions/board.ts`, `web/src/views/PlayableCards.tsx`,
+tests `card-movement.test.ts`, `PlayableCards.test.tsx`.
+
 ### Turn warning in Your actions (2026-10-24)
 
 - "Your actions" repeats the header's turn line (`turnTitle`) under its title. A request sent from a phase

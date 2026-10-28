@@ -35,8 +35,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'from', 'to'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, from and to, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'from', 'to', 'figureId'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, from, to and figureId, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -54,6 +54,8 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   if (substitute !== undefined && (typeof substitute !== 'string' || substitute.length === 0 || substitute.length > 20)) {
     return 'substitute must be a short text'
   }
+  const figureId = args['figureId']
+  if (figureId !== undefined && !isId(figureId)) return 'figureId must be a piece id'
   const square = (value: unknown, name: string): { readonly column: number; readonly row: number } | string | undefined => {
     if (value === undefined) return undefined
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return `${name} must be a square`
@@ -82,6 +84,7 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     ...(substitute === undefined ? {} : { substitute }),
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
+    ...(figureId === undefined ? {} : { figureId }),
   }
 }
 

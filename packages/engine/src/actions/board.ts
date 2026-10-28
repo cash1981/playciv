@@ -502,7 +502,7 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
     input.row * state.board.squareSize +
     (state.board.squareSize - piece.height) / 2
   const used = (saved?.used ?? 0) + destination.distance
-  const movement: PieceMovement = { turn: turnNumber, used, locked: true }
+  const movement: PieceMovement = { turn: turnNumber, used, locked: true, reason: 'travel' }
   const areas = areasFor(state)
   const moved = moveFigureWithMovementUnchecked(state, {
     playerId: input.playerId,
@@ -979,6 +979,10 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'playCard' && effect.starter?.historyId === entry.id) return true
     // Galileo moved figures as part of playing the card: the board Undo must not take one move alone
     if (effect.kind === 'playCard' && effect.galileo?.moves.some((move) => move.historyId === entry.id) === true) {
+      return true
+    }
+    // A movement culture card moved figures as part of the play: the board Undo leaves them to the vote
+    if (effect.kind === 'playCard' && effect.cardMove?.moves.some((move) => move.historyId === entry.id) === true) {
       return true
     }
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip

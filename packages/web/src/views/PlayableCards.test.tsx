@@ -385,6 +385,39 @@ describe('confirming', () => {
   })
 })
 
+const testBoard = createBoard()
+const testArmy = findBoardAsset('figures/redarmy')
+if (testArmy === undefined) throw new Error('missing army asset')
+const testFigure: BoardPiece = {
+  id: 'army-galileo',
+  assetId: testArmy.id,
+  path: testArmy.path,
+  label: testArmy.label,
+  category: 'figure',
+  x: Math.round((SQUARE_SIZE - testArmy.width) / 2),
+  y: Math.round(mapTop(testBoard) + (SQUARE_SIZE - testArmy.height) / 2),
+  width: testArmy.width,
+  height: testArmy.height,
+  rotation: 0,
+  placedBy: 'me',
+}
+const testView = {
+  rev: 8,
+  board: { ...testBoard, pieces: [testFigure] },
+  you: {
+    playerId: 'me',
+    username: 'Alice',
+    color: 'Red',
+    civilization: null,
+    stats: { mvmt: '2' },
+    items: [],
+    socialPolicies: [],
+    techsChosen: [],
+    playerTurns: [],
+  },
+  opponents: [],
+} as unknown as PlayerView
+
 describe('Galileo Galilei', () => {
   const galileo = card({
     itemId: 'gp-galileo',
@@ -402,39 +435,8 @@ describe('Galileo Galilei', () => {
     reason: 'Can be played in city management, which you are in.',
   })
 
-  const board = createBoard()
-  const army = findBoardAsset('figures/redarmy')
-  if (army === undefined) throw new Error('missing army asset')
-  const figure: BoardPiece = {
-    id: 'army-galileo',
-    assetId: army.id,
-    path: army.path,
-    label: army.label,
-    category: 'figure',
-    x: Math.round((SQUARE_SIZE - army.width) / 2),
-    y: Math.round(mapTop(board) + (SQUARE_SIZE - army.height) / 2),
-    width: army.width,
-    height: army.height,
-    rotation: 0,
-    placedBy: 'me',
-  }
-  const view = {
-    rev: 8,
-    board: { ...board, pieces: [figure] },
-    you: {
-      playerId: 'me',
-      username: 'Alice',
-      color: 'Red',
-      civilization: null,
-      stats: { mvmt: '2' },
-      items: [],
-      socialPolicies: [],
-      techsChosen: [],
-      playerTurns: [],
-      playableCards: [galileo],
-    },
-    opponents: [],
-  } as unknown as PlayerView
+  const board = testBoard
+  const view = testView
 
   it('goes straight from the source pick to the edge pick and asks to confirm', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
@@ -526,6 +528,147 @@ describe('Galileo Galilei', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(cancel).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('form', { name: 'Play Galileo Galilei' })).toBeNull()
+  })
+})
+
+describe('movement culture cards', () => {
+  const board = testBoard
+  const figure = testFigure
+  const view = testView
+  const migrants = card({
+    itemId: 'c-migrants',
+    name: 'Migrants',
+    description:
+      'City Management : Switch one of your social policies. / Movement : Move one of your figures up to 2 squares to an empty square.',
+    timings: ['CM', 'MOVEMENT'],
+    targets: { kind: 'none' },
+    prompt: '',
+    automatic: 'moves one of your figures up to 2 squares to an empty square',
+    mapMove: { kind: 'one', allowance: 2 },
+    status: 'ready',
+    reason: 'Can be played in movement, which you are in.',
+  })
+
+  it('picks one figure and an empty destination and sends both', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={migrants} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Migrants'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'c-migrants',
+      from: { column: 0, row: 0 },
+      to: { column: 0, row: 2 },
+      figureId: 'army-galileo',
+    })
+  })
+
+  it('asks which figure to move when the source holds several', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const second = { ...figure, id: 'army-second', x: figure.x + 8 }
+    const twoFiguresView = {
+      ...view,
+      board: { ...board, pieces: [figure, second] },
+    } as unknown as PlayerView
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={migrants} gameId="g1" view={twoFiguresView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Migrants'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    fireEvent.change(screen.getByLabelText('Figure'), { target: { value: 'army-second' } })
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ figureId: 'army-second' })
+  })
+
+  it('moves every figure of the chosen opponent for a group card', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const blue = findBoardAsset('figures/bluearmy')
+    if (blue === undefined) throw new Error('missing blue army')
+    const blueFigure: BoardPiece = {
+      id: 'blue-army',
+      assetId: blue.id,
+      path: blue.path,
+      label: blue.label,
+      category: 'figure',
+      x: Math.round(2 * SQUARE_SIZE + (SQUARE_SIZE - blue.width) / 2),
+      y: Math.round(mapTop(board) + 2 * SQUARE_SIZE + (SQUARE_SIZE - blue.height) / 2),
+      width: blue.width,
+      height: blue.height,
+      rotation: 0,
+      placedBy: 'bob',
+    }
+    const lost = card({
+      itemId: 'c-lost',
+      name: 'Lost',
+      description:
+        'City Management: Choose a square. Move all figures belonging to another player in that square up to three squares as a group (no diagonals or crossing water). Figures cannot be forced to start a battle.',
+      timings: ['CM'],
+      targets: { kind: 'players', min: 1, max: 1 },
+      prompt: 'Whose figures are moved?',
+      automatic: 'moves all figures of the chosen player in a square up to 3 squares to an empty square',
+      mapMove: { kind: 'group', allowance: 3 },
+      status: 'ready',
+      reason: 'Can be played in city management, which you are in.',
+    })
+    const groupView = {
+      ...view,
+      board: { ...board, pieces: [blueFigure] },
+      opponents: [
+        {
+          playerId: 'bob',
+          username: 'Bob',
+          color: 'Blue',
+          civilization: null,
+          revealedTechs: [],
+        },
+      ],
+    } as unknown as PlayerView
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 5, label: 'C6' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={lost} gameId="g1" view={groupView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Lost'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'c-lost',
+      targets: ['bob'],
+      from: { column: 2, row: 2 },
+      to: { column: 2, row: 5 },
+    })
   })
 })
 

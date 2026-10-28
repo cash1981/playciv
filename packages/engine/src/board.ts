@@ -298,6 +298,12 @@ export interface PieceMovement {
   readonly used: number
   /** True once the figure has moved this turn (or a card locked it). */
   readonly locked: boolean
+  /**
+   * What locked it. Normal travel stays usable by the movement culture cards;
+   * Galileo's City Management lock does not (unofficial rule 287). Older saves
+   * and moves that clear the field leave it absent.
+   */
+  readonly reason?: 'travel' | 'galileo'
 }
 
 /** A piece lying on the board. */
