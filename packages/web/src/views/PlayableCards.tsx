@@ -24,6 +24,7 @@ import {
   cardMoveSources,
   cardWaterRulesOf,
   figuresAt,
+  figureSources,
   galileoDestinations,
   galileoSources,
   squareLabel,
@@ -82,6 +83,7 @@ export function PlayCardControl({
   const [moveTo, setMoveTo] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveHint, setMoveHint] = useState<string | null>(null)
   const [moveFigureId, setMoveFigureId] = useState<string | null>(null)
+  const [hannibalSelected, setHannibalSelected] = useState<readonly string[]>([])
   const mapPicker = useMapPicker()
   const formId = useId()
   if (view.you === null) return null
@@ -102,27 +104,57 @@ export function PlayCardControl({
     card.targets.kind === 'players' && min >= 1 && others.length === 1 && chosen.length === 0
       ? others.map((opponent) => opponent.playerId)
       : chosen
-  const moveTarget =
-    cardMove?.kind === 'group' && effective[0] !== undefined
-      ? others.find((opponent) => opponent.playerId === effective[0])
-      : undefined
-  const moveSourceCells = isGalileo
-    ? galileoSources(view.board, view.you)
-    : cardMove?.kind === 'one'
-      ? cardMoveSources(view.board, viewer, turnNumber, 'one')
-      : cardMove?.kind === 'group' && moveTarget !== undefined
-        ? cardMoveSources(view.board, moveTarget, turnNumber, 'group')
-        : []
+  const isLockedSquare = (cell: { readonly column: number; readonly row: number }): boolean =>
+    view.communismLocks.some((locked) => locked.column === cell.column && locked.row === cell.row)
+  const groupHoldersAt = (from: { readonly column: number; readonly row: number }) =>
+    others.filter((opponent) => figuresAt(view.board, opponent, from).length > 0)
+  const groupSourceCells = (() => {
+    if (cardMove?.kind !== 'group') return []
+    const cells = new Map<string, { column: number; row: number }>()
+    for (const opponent of others) {
+      for (const cell of cardMoveSources(view.board, opponent, turnNumber, 'group')) {
+        cells.set(`${cell.column},${cell.row}`, cell)
+      }
+    }
+    return [...cells.values()].filter((cell) => groupHoldersAt(cell).length === 1)
+  })()
+  const moveSourceCells = (
+    isGalileo
+      ? galileoSources(view.board, viewer)
+      : cardMove?.kind === 'one'
+        ? cardMoveSources(view.board, viewer, turnNumber, 'one')
+        : cardMove?.kind === 'hannibal'
+          ? cardMoveSources(view.board, viewer, turnNumber, 'one')
+          : groupSourceCells
+  ).filter((cell) => !isLockedSquare(cell))
   const moveFigureChoices =
     cardMove?.kind === 'one' && moveFrom !== null
       ? cardMoveFigureChoices(view.board, viewer, moveFrom, turnNumber)
       : []
+  const hannibalSourceFigures =
+    cardMove?.kind === 'hannibal' && moveFrom !== null
+      ? cardMoveFigureChoices(view.board, viewer, moveFrom, turnNumber)
+      : []
+  const hannibalDestinationCount =
+    cardMove?.kind === 'hannibal' && moveTo !== null
+      ? figuresAt(view.board, viewer, moveTo).length
+      : 0
+  const hannibalRoom = Math.max(0, viewer.stackingLimit - hannibalDestinationCount)
+  const hannibalNeedsChoice =
+    cardMove?.kind === 'hannibal' &&
+    moveTo !== null &&
+    hannibalSourceFigures.length > hannibalRoom
   const destinationCellsFor = (from: { readonly column: number; readonly row: number }) =>
     isGalileo
       ? galileoDestinations(view.board, from)
-      : cardMove === null
-        ? []
-        : cardMoveDestinations(
+      : cardMove?.kind === 'hannibal'
+        ? figureSources(view.board, viewer)
+            .filter((cell) => cell.column !== from.column || cell.row !== from.row)
+            .filter((cell) => figuresAt(view.board, viewer, cell).length < viewer.stackingLimit)
+            .map((cell) => ({ ...cell, label: squareLabel(cell), distance: 0 }))
+        : cardMove === null
+          ? []
+          : cardMoveDestinations(
             view.board,
             from,
             cardMove.allowance,
@@ -131,7 +163,8 @@ export function PlayCardControl({
               : { cross: false, end: false },
             cardMove.kind === 'one'
               ? viewer.techsChosen.some((tech) => tech.name === 'Flight' && !tech.hidden)
-              : moveTarget?.revealedTechs.some((tech) => tech.name === 'Flight') === true,
+              : groupHoldersAt(from)[0]?.revealedTechs.some((tech) => tech.name === 'Flight') === true,
+            view.communismLocks,
           )
   const moveDestinationCells = moveFrom === null ? [] : destinationCellsFor(moveFrom)
   const baseValid =
@@ -147,6 +180,7 @@ export function PlayCardControl({
     setMoveFrom(null)
     setMoveTo(null)
     setMoveFigureId(null)
+    setHannibalSelected([])
     setMoveHint(null)
   }
 
@@ -165,12 +199,13 @@ export function PlayCardControl({
     from: { readonly column: number; readonly row: number } | null = moveFrom,
     to: { readonly column: number; readonly row: number } | null = moveTo,
     figureId: string | null = moveFigureId,
+    figureIds: readonly string[] = hannibalSelected,
   ): void => {
     if (!baseValid) return
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -183,6 +218,7 @@ export function PlayCardControl({
           ...(needsSubstitute ? { substitute } : {}),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
+          ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
         }),
       view,
     ).then((succeeded) => {
@@ -205,7 +241,11 @@ export function PlayCardControl({
     if (mapPicker === null) return
     const cells = destinationCellsFor(from)
     if (cells.length === 0) {
-      setMoveHint('No empty square is reachable with this card.')
+      setMoveHint(
+        cardMove?.kind === 'hannibal'
+          ? 'No other square with your figures has room for another figure.'
+          : 'No empty square is reachable with this card.',
+      )
       return
     }
     const picked = await mapPicker.begin({
@@ -215,34 +255,57 @@ export function PlayCardControl({
         ? (cell) => `Move ${GALILEO_NAME}'s figures to ${cell.label}`
         : (cell) =>
             cardMove?.kind === 'group'
-              ? `Move ${moveTarget?.username ?? 'the other player'}'s figures to ${cell.label}`
-              : `Move ${card.name}'s figure to ${cell.label}`,
+              ? `Move the other player's figures to ${cell.label}`
+              : cardMove?.kind === 'hannibal'
+                ? `Move ${card.name}'s figures to ${cell.label}`
+                : `Move ${card.name}'s figure to ${cell.label}`,
     })
     if (picked === null) return
     const to = { column: picked.column, row: picked.row }
     setMoveTo(to)
     setMoveHint(null)
+    if (cardMove?.kind === 'hannibal') {
+      const sourceFigures = cardMoveFigureChoices(view.board, viewer, from, turnNumber)
+      const room = Math.max(0, viewer.stackingLimit - figuresAt(view.board, viewer, to).length)
+      const selected = sourceFigures.slice(0, room)
+      if (selected.length === 0) {
+        setMoveHint(`${squareLabel(to)} has no room for another of your figures.`)
+        return
+      }
+      setHannibalSelected(selected.map((piece) => piece.id))
+      if (selected.length < sourceFigures.length) return
+      if (
+        window.confirm(
+          `Move ${selected.length} ${selected.length === 1 ? 'figure' : 'figures'} from ` +
+            `${squareLabel(from)} to ${squareLabel(to)} with ${card.name}?`,
+        )
+      ) {
+        sendPlay(from, to, null, selected.map((piece) => piece.id))
+      }
+      return
+    }
     const figure = figureId === null ? undefined : view.board.pieces.find((piece) => piece.id === figureId)
     const message = isGalileo
       ? `Move every figure in ${squareLabel(from)} to ${squareLabel(to)} with ${GALILEO_NAME}?`
       : cardMove?.kind === 'group'
-        ? `Move ${moveTarget === undefined ? 0 : figuresAt(view.board, moveTarget, from).length} figures of ` +
-          `${moveTarget?.username ?? 'the other player'} from ${squareLabel(from)} to ${squareLabel(to)} with ${card.name}?`
+        ? (() => {
+            const holder = groupHoldersAt(from)[0]
+            return (
+              `Move ${holder === undefined ? 0 : figuresAt(view.board, holder, from).length} figures of ` +
+              `${holder?.username ?? 'the other player'} from ${squareLabel(from)} to ${squareLabel(to)} with ${card.name}?`
+            )
+          })()
         : `Move ${figure?.label ?? 'the figure'} from ${squareLabel(from)} to ${squareLabel(to)} with ${card.name}?`
     if (window.confirm(message)) sendPlay(from, to, figureId)
   }
 
   const pickMapMoveSource = async (): Promise<void> => {
     if (mapPicker === null) return
-    if (cardMove?.kind === 'group' && moveTarget === undefined) {
-      setMoveHint('Choose the player whose figures move first.')
-      return
-    }
     const cells = moveSourceCells.map((cell) => ({ ...cell, label: squareLabel(cell) }))
     if (cells.length === 0) {
       setMoveHint(
         cardMove?.kind === 'group'
-          ? `No movable figure of ${moveTarget?.username ?? 'that player'} is on the map.`
+          ? 'No square with another player\'s figures is available.'
           : 'None of your figures is on the map.',
       )
       return
@@ -255,11 +318,15 @@ export function PlayCardControl({
         ? (cell) => `Choose ${cell.label} as the source square for ${GALILEO_NAME}`
         : (cell) =>
             cardMove?.kind === 'group'
-              ? `Choose ${cell.label} for ${moveTarget?.username ?? 'the other player'}'s figures`
+              ? `Choose ${cell.label} for the other player's figures`
               : `Choose ${cell.label} as the source square for ${card.name}`,
     })
     if (picked === null) return
     const from = { column: picked.column, row: picked.row }
+    if (cardMove?.kind === 'group' && groupHoldersAt(from).length !== 1) {
+      setMoveHint('Choose a square holding figures of exactly one other player.')
+      return
+    }
     setMoveFrom(from)
     setMoveTo(null)
     setMoveHint(null)
@@ -285,6 +352,28 @@ export function PlayCardControl({
   const changeMoveFigure = (figureId: string): void => {
     setMoveFigureId(figureId)
     if (moveFrom !== null) void pickMapMoveDestination(moveFrom, figureId)
+  }
+
+  const toggleHannibalFigure = (figureId: string): void => {
+    setHannibalSelected((current) =>
+      current.includes(figureId)
+        ? current.filter((id) => id !== figureId)
+        : current.length >= hannibalRoom
+          ? current
+          : [...current, figureId],
+    )
+  }
+
+  const confirmHannibal = (): void => {
+    if (moveFrom === null || moveTo === null || hannibalSelected.length === 0) return
+    if (
+      window.confirm(
+        `Move ${hannibalSelected.length} ${hannibalSelected.length === 1 ? 'figure' : 'figures'} from ` +
+          `${squareLabel(moveFrom)} to ${squareLabel(moveTo)} with ${card.name}?`,
+      )
+    ) {
+      sendPlay(moveFrom, moveTo, null, hannibalSelected)
+    }
   }
 
   const closeForm = (): void => {
@@ -358,14 +447,18 @@ export function PlayCardControl({
                   ? 'Move figures to the outer edge'
                   : cardMove?.kind === 'group'
                     ? `${card.name}: move another player's figures`
-                    : `${card.name}: move one figure`}
+                    : cardMove?.kind === 'hannibal'
+                      ? `${card.name}: move figures to another group`
+                      : `${card.name}: move one figure`}
               </legend>
               <p className="muted">
                 {isGalileo
                   ? 'Every one of your figures in the source square moves together to an empty outer-edge square.'
                   : cardMove?.kind === 'group'
-                    ? 'Choose the player above, then a square with their figures, then an empty destination with no water on the way.'
-                    : `Choose one of your figures, then an empty square up to ${cardMove?.allowance ?? 0} squares away.`}
+                    ? "Choose a square with exactly one other player's figures, then an empty destination with no water on the way."
+                    : cardMove?.kind === 'hannibal'
+                      ? `Choose a square with your figures, then another square with your figures. You may move any or all that fit the stacking limit (${viewer.stackingLimit}).`
+                      : `Choose one of your figures, then an empty square up to ${cardMove?.allowance ?? 0} squares away.`}
               </p>
               <div className="play-card-buttons">
                 <button
@@ -384,7 +477,7 @@ export function PlayCardControl({
               {moveHint === null && moveSourceCells.length === 0 && (
                 <p className="muted">
                   {cardMove?.kind === 'group'
-                    ? 'Choose the player whose figures move first.'
+                    ? "No square with another player's figures is available."
                     : 'None of your figures is on the map.'}
                 </p>
               )}
@@ -415,7 +508,36 @@ export function PlayCardControl({
                 </button>
                 <span>{moveTo === null ? 'No destination chosen' : squareLabel(moveTo)}</span>
               </div>
-              {moveDestinationEmptyNote(moveDestinationCells.length)}
+              {cardMove?.kind !== 'hannibal' && moveDestinationEmptyNote(moveDestinationCells.length)}
+              {cardMove?.kind === 'hannibal' && moveTo !== null && hannibalNeedsChoice && (
+                <fieldset className="play-card-targets">
+                  <legend>Figures to move (up to {hannibalRoom})</legend>
+                  {hannibalSourceFigures.map((figure, index) => (
+                    <label key={figure.id} className="play-card-target">
+                      <input
+                        type="checkbox"
+                        checked={hannibalSelected.includes(figure.id)}
+                        disabled={
+                          disabled ||
+                          (!hannibalSelected.includes(figure.id) && hannibalSelected.length >= hannibalRoom)
+                        }
+                        onChange={() => toggleHannibalFigure(figure.id)}
+                      />{' '}
+                      {figure.label} {index + 1}
+                    </label>
+                  ))}
+                  <div className="play-card-buttons">
+                    <button
+                      type="button"
+                      className="small"
+                      disabled={disabled || hannibalSelected.length === 0}
+                      onClick={confirmHannibal}
+                    >
+                      Move selected figures
+                    </button>
+                  </div>
+                </fieldset>
+              )}
               <div className="play-card-buttons">
                 <button type="button" className="small" onClick={closeForm}>
                   Cancel

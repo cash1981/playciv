@@ -661,6 +661,7 @@ export function GameView({
         viewerColor={you?.color ?? null}
         movementPlayer={you ?? null}
         movementTurn={displayedView.activeTurn?.turnNumber ?? null}
+        movementLocks={displayedView.communismLocks}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />

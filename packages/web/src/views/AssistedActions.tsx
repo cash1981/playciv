@@ -15,7 +15,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { itemName } from '@civ/engine'
+import { isMapCell, itemName, squareLabel } from '@civ/engine'
 import type { AssistedActionKind, PendingRewardView, TurnPhase } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
@@ -23,6 +23,7 @@ import type { PlayerView } from '../lib/api.js'
 import type { BuildFlow } from './buildFlow.js'
 import { endTurnState } from './EndTurn.js'
 import { HelpHint } from './HelpHint.js'
+import { useMapPicker } from './mapPick.js'
 import { ItemCard } from './ItemCard.js'
 import { goToHandItem, goToPanel } from './PhaseSummary.js'
 import type { Run } from './GameView.js'
@@ -193,6 +194,8 @@ interface ButtonProps {
   readonly children?: ReactNode
   /** Called after a press that went through, once the page has the fresh view. */
   readonly onDone?: (() => void) | undefined
+  /** Called before an action that opens the board picker, so a dialog can close first. */
+  readonly onBeforePress?: (() => void) | undefined
 }
 
 /**
@@ -224,8 +227,10 @@ export function AssistedActionButton({
   className = 'small',
   children,
   onDone,
+  onBeforePress,
 }: ButtonProps): React.JSX.Element | null {
   const state = view.you?.availableActions?.find((candidate) => candidate.action === action)
+  const mapPicker = useMapPicker()
   if (view.you === null || state === undefined) return null
 
   const ready = state.status === 'ready'
@@ -248,7 +253,42 @@ export function AssistedActionButton({
   const rev = view.rev
   const playerId = view.you.playerId
 
+  const pressCommunism = async (): Promise<void> => {
+    if (mapPicker === null) return
+    if (used && !window.confirm(usedAgainQuestion(state.label))) return
+    onBeforePress?.()
+    const cells: { column: number; row: number; label: string }[] = []
+    for (let row = 0; row < view.board.rows; row += 1) {
+      for (let column = 0; column < view.board.columns; column += 1) {
+        if (isMapCell(view.board, column, row)) {
+          cells.push({ column, row, label: squareLabel({ column, row }) })
+        }
+      }
+    }
+    const picked = await mapPicker.begin({
+      title: 'the Communism square',
+      cells,
+      describeCell: (cell) => `Lock ${cell.label} with Communism`,
+    })
+    if (picked === null) return
+    const square = { column: picked.column, row: picked.row }
+    const key = `${gameId}:${playerId}:communism:${square.column},${square.row}`
+    if (inFlight.has(key)) return
+    void pressOnce(
+      key,
+      run,
+      (requestId) => api.actionWithArgs(gameId, 'communism', requestId, rev, { square }, used),
+      view,
+    ).then((done) => {
+      if (done) onDone?.()
+    })
+  }
+
   const press = (): void => {
+    if (action === 'communism') {
+      void pressCommunism()
+      return
+    }
     let chosen = action
     if (skip !== undefined && !used) {
       const question = `William Shakespeare can skip the occupied culture space(s). ${skip.reason} Skip them?`
@@ -280,7 +320,7 @@ export function AssistedActionButton({
       <button
         type="button"
         className={className}
-        disabled={busy || readOnly || !pressable}
+        disabled={busy || readOnly || !pressable || (action === 'communism' && mapPicker === null)}
         title={shownReason}
         onClick={press}
       >

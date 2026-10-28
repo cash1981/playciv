@@ -12,6 +12,7 @@ import { isGovernment } from '@civ/engine'
 import type {
   AssignScoutPayload,
   AssistedPayload,
+  CommunismPayload,
   FoundCityPayload,
   GovernmentPayload,
   FeudalismHarvestPayload,
@@ -35,8 +36,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'from', 'to', 'figureId'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, from, to and figureId, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'from', 'to', 'figureId', 'figureIds'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, from, to, figureId and figureIds, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -56,6 +57,10 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   }
   const figureId = args['figureId']
   if (figureId !== undefined && !isId(figureId)) return 'figureId must be a piece id'
+  const figureIds = args['figureIds']
+  if (figureIds !== undefined && (!Array.isArray(figureIds) || figureIds.length > 12 || !figureIds.every(isId))) {
+    return 'figureIds must be a list of at most 12 piece ids'
+  }
   const square = (value: unknown, name: string): { readonly column: number; readonly row: number } | string | undefined => {
     if (value === undefined) return undefined
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return `${name} must be a square`
@@ -85,7 +90,27 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
     ...(figureId === undefined ? {} : { figureId }),
+    ...(figureIds === undefined ? {} : { figureIds: figureIds as readonly string[] }),
   }
+}
+
+function parseCommunism(args: Record<string, unknown>): CommunismPayload | string {
+  const extra = extraKeys(args, ['square'])
+  if (extra.length > 0) return `communism takes only square, not ${extra.join(', ')}`
+  const square = args['square']
+  if (typeof square !== 'object' || square === null || Array.isArray(square)) return 'square is required'
+  const record = asRecord(square)
+  const squareExtra = extraKeys(record, ['column', 'row'])
+  if (squareExtra.length > 0) return `square takes only column and row, not ${squareExtra.join(', ')}`
+  const column = record['column']
+  const row = record['row']
+  if (
+    typeof column !== 'number' || !Number.isInteger(column) || column < 0 || column > 999 ||
+    typeof row !== 'number' || !Number.isInteger(row) || row < 0 || row > 999
+  ) {
+    return 'square needs whole column and row numbers'
+  }
+  return { square: { column, row } }
 }
 
 function parseSwitchGovernment(args: Record<string, unknown>): GovernmentPayload | string {
@@ -139,6 +164,7 @@ type Parser = (args: Record<string, unknown>) => AssistedPayload | string
 /** The actions whose payload is `args`, with the parser of each. A map, so a request can only pick an entry that is here. */
 const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['playCard', parsePlayCard],
+  ['communism', parseCommunism],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['feudalismHarvest', parseHarvest],

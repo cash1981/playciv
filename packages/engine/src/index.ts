@@ -18,6 +18,7 @@ export * from './movement.js'
 export * from './galileo.js'
 export * from './empty-square.js'
 export * from './card-movement.js'
+export * from './communism.js'
 export * from './tile-icons.js'
 export * from './migrate.js'
 export * from './turn.js'
@@ -61,6 +62,7 @@ export type {
   BlockedAvailability,
   AssignScoutPayload,
   ChooseRewardPayload,
+  CommunismPayload,
   DevoteToTheArtsPayload,
   FeudalismHarvestPayload,
   FoundCityPayload,

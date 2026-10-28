@@ -56,6 +56,8 @@ export interface FigureMovementOptions {
   readonly used: number
   readonly remaining: number
   readonly locked: boolean
+  /** True when Communism locks the figure's starting square: it may not leave. */
+  readonly squareLocked?: boolean
   readonly destinations: readonly MovementDestination[]
 }
 
@@ -180,6 +182,7 @@ export function figureMovementOptions(
   player: MovementPlayer,
   piece: BoardPiece,
   turnNumber: number,
+  lockedCells: readonly Cell[] = [],
 ): FigureMovementOptions | null {
   if (!figureBelongsTo(player, piece)) return null
   const start: Cell = {
@@ -193,6 +196,9 @@ export function figureMovementOptions(
   const locked = saved?.locked ?? false
   const speed = travelSpeedOf(player, piece, turnNumber)
   const remaining = Math.max(0, speed - used)
+  const lockedKeys = new Set(lockedCells.map(keyOf))
+  const squareLocked = lockedKeys.has(keyOf(start))
+  if (squareLocked) return { speed, used, remaining, locked, squareLocked: true, destinations: [] }
   if (locked || remaining === 0) return { speed, used, remaining, locked, destinations: [] }
 
   const water = waterRulesOf(player)
@@ -221,6 +227,8 @@ export function figureMovementOptions(
       }
     }
     if (distance >= speed) continue
+    // A figure may enter a Communism-locked square but never leave it.
+    if (distance > 0 && lockedKeys.has(keyOf(cell))) continue
     // A hut or village ends the move: the figure may land there but not pass it.
     // A revealed Flight flies over, so it neither stops nor blocks the squares beyond,
     // but rule 283 still forbids ending the move on the marker square.
@@ -286,8 +294,11 @@ export function cardMoveDestinations(
   allowance: number,
   water: WaterAllowed,
   flight: boolean,
+  lockedCells: readonly Cell[] = [],
 ): readonly MovementDestination[] {
   if (!isMapCell(board, from.column, from.row)) return []
+  const lockedKeys = new Set(lockedCells.map(keyOf))
+  if (lockedKeys.has(keyOf(from))) return []
   const occupied = figureSquares(board)
   const mustStop = hutAndVillageSquares(board)
   const distances = new Map<string, number>([[keyOf(from), 0]])
@@ -316,6 +327,7 @@ export function cardMoveDestinations(
       }
     }
     if (distance >= allowance) continue
+    if (distance > 0 && lockedKeys.has(keyOf(cell))) continue
     // A hut or village ends the move unless Flight crosses it; the destination is never on it.
     if (distance > 0 && !flight && mustStop.has(keyOf(cell))) continue
     for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {

@@ -1705,11 +1705,14 @@ const upgradeBuildings: AssistedActionDefinition = {
   },
 }
 
+import { communism } from './assisted-communism.js'
+
 /** Every assisted action, in the order the projection lists them. */
 export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ...RESOURCE_CULTURE_CARDS.map(resourceCultureCard),
   coinPurchase('democracy'),
   coinPurchase('printingPress'),
+  communism,
   cultureAdvance,
   cultureAdvanceSkip,
   chooseReward,

@@ -824,7 +824,15 @@ export const api = {
     requestId: string,
     rev: number,
     args: Record<string, unknown>,
-  ) => post<PlayerView>(`/api/games/${gameId}/actions`, { action, requestId, rev, args }),
+    confirmedRepeat = false,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action,
+      requestId,
+      rev,
+      args,
+      ...(confirmedRepeat ? { confirmedRepeat } : {}),
+    }),
   /**
    * The card choice after a culture advance: the same route as `performAction`,
    * with the reward and the card to keep. The request id is kept like any other.

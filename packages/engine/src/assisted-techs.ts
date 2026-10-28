@@ -16,4 +16,5 @@ export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = ne
   ['Metal Casting', 'metalCasting'],
   ['Democracy', 'democracy'],
   ['Printing Press', 'printingPress'],
+  ['Communism', 'communism'],
 ])

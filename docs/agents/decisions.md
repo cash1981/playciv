@@ -612,8 +612,9 @@ player in one square as a group.
 
 - **Choosing:** the source can be any map square with the owner's figures. A
   one-figure card asks which figure when the square holds several. A group card
-  first names the other player in the card form, and every figure of that player
-  in the source moves together.
+  has no target picker: the source square itself names the other player. The
+  picker offers only squares whose figures belong to exactly one other player,
+  and every one of those figures moves together.
 - **Destination:** every destination must be empty by unofficial rules 61 to 63,
   shared through `empty-square.ts`. The one-figure cards use the ordinary
   cardinal travel rules, including figure squares, hut/village stops, Flight
@@ -638,6 +639,34 @@ Source: `engine/src/card-movement.ts`, `empty-square.ts`, `movement.ts`
 (`cardMoveDestinations`, `figureSources`, `PieceMovement.reason`),
 `assisted-cards.ts`, `actions/board.ts`, `web/src/views/PlayableCards.tsx`,
 tests `card-movement.test.ts`, `PlayableCards.test.tsx`.
+
+### Hannibal and Communism (#302)
+
+- **Hannibal** is automated in City Management. Choose a source square with the
+  player's figures and a different square that already contains one of their
+  figures. `figureIds` carries any or all source figures; the number moved is
+  capped by the effective stacking limit (`stackingLimitOf`, including Pasteur)
+  minus the figures already at the destination. The card move does not set or
+  spend the normal movement lock, and the undo vote restores positions and the
+  card. An empty destination or the same square is refused, and a figure locked
+  by Galileo is not offered (Galileo says it cannot move again that turn).
+- **Communism** is a Spy resource ability in the Movement phase. The assisted
+  action spends a Spy, writes the once-per-turn marker and stamps the chosen map
+  square in its effect. `communismLocksOf` derives the current turn's locks from
+  the applied records, so the undo vote returns the Spy and removes the lock; no
+  extra saved field or migration is needed. The lock is public in
+  `PlayerView.communismLocks`. A confirmed second use with another Spy is
+  allowed and notes itself in the log like the other resource abilities.
+- A figure may enter a Communism-locked square but may not leave it. Normal
+  travel, Galileo, the one-figure and group culture cards, and Hannibal all read
+  the locks; a locked starting square has no destinations. A figure can be locked
+  on water without Sailing, as the lock only prevents leaving.
+- **Not checked:** Steam Power, Brandenburg Gate, and scout/icon follow-ups.
+
+Source: `engine/src/assisted-communism.ts`, `communism.ts`, `assisted-cards.ts`
+(Hannibal), `movement.ts`, `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
+`web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `TechPanel.tsx`,
+tests `hannibal.test.ts`, `communism.test.ts`.
 
 ### Turn warning in Your actions (2026-10-24)
 

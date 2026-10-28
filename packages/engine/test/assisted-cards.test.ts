@@ -78,6 +78,7 @@ describe('the registry and the tech map', () => {
   it('lists the three incense cards, Democracy, Printing Press, the culture advance and the Start of Turn abilities as buttons', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
+      'communism',
       'cultureAdvance',
       'cultureAdvanceSkip',
       'currency',
@@ -100,6 +101,7 @@ describe('the registry and the tech map', () => {
   it('maps each tech name to its action, and nothing else', () => {
     expect(Object.fromEntries(ASSISTED_TECH_ACTIONS)).toEqual({
       Chivalry: 'chivalry',
+      Communism: 'communism',
       Currency: 'currency',
       'Metal Casting': 'metalCasting',
       Democracy: 'democracy',

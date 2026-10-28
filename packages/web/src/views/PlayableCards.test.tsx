@@ -403,7 +403,9 @@ const testFigure: BoardPiece = {
 }
 const testView = {
   rev: 8,
+  activeTurn: { turnNumber: 1 },
   board: { ...testBoard, pieces: [testFigure] },
+  communismLocks: [],
   you: {
     playerId: 'me',
     username: 'Alice',
@@ -414,6 +416,7 @@ const testView = {
     socialPolicies: [],
     techsChosen: [],
     playerTurns: [],
+    stackingLimit: 2,
   },
   opponents: [],
 } as unknown as PlayerView
@@ -628,9 +631,9 @@ describe('movement culture cards', () => {
       description:
         'City Management: Choose a square. Move all figures belonging to another player in that square up to three squares as a group (no diagonals or crossing water). Figures cannot be forced to start a battle.',
       timings: ['CM'],
-      targets: { kind: 'players', min: 1, max: 1 },
-      prompt: 'Whose figures are moved?',
-      automatic: 'moves all figures of the chosen player in a square up to 3 squares to an empty square',
+      targets: { kind: 'none' },
+      prompt: '',
+      automatic: 'moves all figures of another player in a square up to 3 squares to an empty square',
       mapMove: { kind: 'group', allowance: 3 },
       status: 'ready',
       reason: 'Can be played in city management, which you are in.',
@@ -665,9 +668,120 @@ describe('movement culture cards', () => {
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[4]).toMatchObject({
       itemId: 'c-lost',
-      targets: ['bob'],
+      targets: [],
       from: { column: 2, row: 2 },
       to: { column: 2, row: 5 },
+    })
+  })
+})
+
+describe('Hannibal', () => {
+  const hannibal = card({
+    itemId: 'gp-hannibal',
+    name: 'Hannibal',
+    kind: 'greatPerson',
+    description:
+      'City Management: You may discard this card to choose a square. Move any or all of your figures in that square to any other square on the map containing at least on of your figures. You may not exceed your stacking limit.',
+    timings: ['CM'],
+    targets: { kind: 'none' },
+    prompt: '',
+    automatic:
+      'moves any or all of your figures from one square to another square with your figures without exceeding your stacking limit',
+    mapMove: { kind: 'hannibal', allowance: 0 },
+    discards: true,
+    status: 'ready',
+    reason: 'Can be played in city management, which you are in.',
+  })
+
+  it('ignores a Galileo-locked figure in the source', async () => {
+    if (testArmy === undefined) throw new Error('missing army')
+    const at = (id: string, column: number, row: number): BoardPiece => ({
+      id,
+      assetId: testArmy.id,
+      path: testArmy.path,
+      label: testArmy.label,
+      category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - testArmy.width) / 2),
+      y: Math.round(mapTop(testBoard) + row * SQUARE_SIZE + (SQUARE_SIZE - testArmy.height) / 2),
+      width: testArmy.width,
+      height: testArmy.height,
+      rotation: 0,
+      placedBy: 'me',
+    })
+    const locked = { ...at('locked', 2, 2), movement: { turn: 1, used: 0, locked: true, reason: 'galileo' as const } }
+    const movable = at('movable', 2, 2)
+    const destination = at('destination', 2, 4)
+    const view = {
+      ...testView,
+      board: { ...testBoard, pieces: [locked, movable, destination] },
+    } as unknown as PlayerView
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 4, label: 'C5' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={hannibal} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Hannibal'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ figureIds: ['movable'] })
+  })
+
+  it('asks which figures to move when the destination has only some room', async () => {
+    if (testArmy === undefined) throw new Error('missing army')
+    const at = (id: string, column: number, row: number, xOffset = 0): BoardPiece => ({
+      id,
+      assetId: testArmy.id,
+      path: testArmy.path,
+      label: testArmy.label,
+      category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - testArmy.width) / 2) + xOffset,
+      y: Math.round(mapTop(testBoard) + row * SQUARE_SIZE + (SQUARE_SIZE - testArmy.height) / 2),
+      width: testArmy.width,
+      height: testArmy.height,
+      rotation: 0,
+      placedBy: 'me',
+    })
+    const sourceA = at('source-a', 2, 2)
+    const sourceB = at('source-b', 2, 2, 8)
+    const destination = at('destination', 2, 4)
+    const view = {
+      ...testView,
+      board: { ...testBoard, pieces: [sourceA, sourceB, destination] },
+    } as unknown as PlayerView
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 4, label: 'C5' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={hannibal} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Hannibal'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(screen.getByText(/Figures to move \(up to 1\)/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Move selected figures' }))
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/C3 to C5 with Hannibal/))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'gp-hannibal',
+      from: { column: 2, row: 2 },
+      to: { column: 2, row: 4 },
+      figureIds: ['source-a'],
     })
   })
 })

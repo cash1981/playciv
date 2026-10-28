@@ -21,7 +21,7 @@ import {
 } from './movement.js'
 import type { FigureOwner } from './movement.js'
 
-export type CardMoveKind = 'one' | 'group'
+export type CardMoveKind = 'one' | 'group' | 'hannibal'
 
 export interface CardMoveRule {
   readonly kind: CardMoveKind
@@ -36,6 +36,7 @@ export const CARD_MOVE_RULES: ReadonlyMap<string, CardMoveRule> = new Map<string
   ['Disoriented', { kind: 'group', allowance: 2 }],
   ['Lost', { kind: 'group', allowance: 3 }],
   ['Out of Position', { kind: 'group', allowance: 4 }],
+  ['Hannibal', { kind: 'hannibal', allowance: 0 }],
 ])
 
 export const cardMoveRuleOf = (name: string): CardMoveRule | undefined => CARD_MOVE_RULES.get(name)

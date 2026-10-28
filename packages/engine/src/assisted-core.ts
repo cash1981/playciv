@@ -223,6 +223,8 @@ export interface PlayCardPayload {
   readonly to?: CardSquare
   /** A one-figure movement card: the chosen figure when the source square holds several. */
   readonly figureId?: string
+  /** Hannibal: any or all of the figures in the source square. */
+  readonly figureIds?: readonly string[]
 }
 
 /**
@@ -239,6 +241,11 @@ export interface GovernmentPayload {
 export interface InvestPayload {
   readonly source: string
   readonly card: InvestmentCard
+}
+
+/** What `communism` carries: the square whose figures may not leave this turn. */
+export interface CommunismPayload {
+  readonly square: CardSquare
 }
 
 /** What `feudalismHarvest` carries: the city whose outskirts are harvested, and the resource. */
@@ -268,6 +275,7 @@ export type AssistedPayload =
   | PlayCardPayload
   | GovernmentPayload
   | InvestPayload
+  | CommunismPayload
   | FeudalismHarvestPayload
   | FoundCityPayload
   | AssignScoutPayload

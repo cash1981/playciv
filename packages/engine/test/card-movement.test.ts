@@ -278,11 +278,26 @@ describe('group cards', () => {
     const withFigures = place(place(state, 'figures/bluearmy', 4, 4, KARANDRAS1), 'figures/bluearmy', 4, 4, KARANDRAS1)
     expect(figuresIn(withFigures, 4, 4)).toHaveLength(2)
     const played = unwrap(
-      play(withFigures, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 7 }, { targets: [KARANDRAS1] }),
+      play(withFigures, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 7 }),
     )
     expect(figuresIn(played, 4, 7)).toHaveLength(2)
     expect(figuresIn(played, 4, 4)).toHaveLength(0)
     for (const figure of figuresIn(played, 4, 7)) expect(figure.movement).toBeUndefined()
+  })
+
+  it('refuses a source with figures of two other players, and ignores the acting player’s own figure', () => {
+    const { state, itemId } = withCardInHand(cmTurn(), 'Lost')
+    const joint = place(place(state, 'figures/bluearmy', 4, 4, KARANDRAS1), 'figures/greenarmy', 4, 4, ITCHI)
+    expect(unwrapErr(play(joint, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 7 })).kind).toBe(
+      'ASSISTED_ACTION_REJECTED',
+    )
+
+    const mixed = place(place(state, 'figures/redarmy', 4, 4, CASH1981), 'figures/bluearmy', 4, 4, KARANDRAS1)
+    const played = unwrap(play(mixed, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 7 }))
+    expect(figuresIn(played, 4, 4)).toHaveLength(1)
+    expect(figuresIn(played, 4, 4)[0]?.assetId).toBe('figures/redarmy')
+    expect(figuresIn(played, 4, 7)).toHaveLength(1)
+    expect(figuresIn(played, 4, 7)[0]?.assetId).toBe('figures/bluearmy')
   })
 
   it('refuses a non-empty destination and a group with a Galileo-locked figure', () => {
@@ -292,7 +307,7 @@ describe('group cards', () => {
     if (blue === undefined) throw new Error('missing blue army')
     const blocked = place(withFigure, 'buildings/temple', 4, 5)
     expect(
-      unwrapErr(play(blocked, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 5 }, { targets: [KARANDRAS1] })).kind,
+      unwrapErr(play(blocked, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 5 })).kind,
     ).toBe('ASSISTED_ACTION_REJECTED')
 
     const galileoLocked: GameState = {
@@ -307,7 +322,7 @@ describe('group cards', () => {
       },
     }
     expect(
-      unwrapErr(play(galileoLocked, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 7 }, { targets: [KARANDRAS1] })).kind,
+      unwrapErr(play(galileoLocked, itemId, 'Lost', { column: 4, row: 4 }, { column: 4, row: 7 })).kind,
     ).toBe('ASSISTED_ACTION_REJECTED')
   })
 
@@ -316,7 +331,7 @@ describe('group cards', () => {
     // Tile 05 has land at A4 and water at A3.
     const withFigures = place(place(state, 'tiles/tile05', 0, 0), 'figures/bluearmy', 0, 3, KARANDRAS1)
     const refused = unwrapErr(
-      play(withFigures, itemId, 'Lost', { column: 0, row: 3 }, { column: 0, row: 2 }, { targets: [KARANDRAS1] }),
+      play(withFigures, itemId, 'Lost', { column: 0, row: 3 }, { column: 0, row: 2 }),
     )
     expect(refused.kind).toBe('ASSISTED_ACTION_REJECTED')
   })

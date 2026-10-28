@@ -21,16 +21,18 @@ and returns the card.
 - Migrants 2, Colonists 4, Immigrants 6: one own figure to an empty square,
   using the ordinary cardinal travel rules for figures, huts/villages, water and
   Flight.
-- Disoriented 2, Lost 3, Out of Position 4: all figures of the named other player
-  in a source square, together, to an empty square, with no water and no
-  diagonals.
+- Disoriented 2, Lost 3, Out of Position 4: all figures of the other player whose
+  figures are in the source square, together, to an empty square, with no water
+  and no diagonals. The source square names the player; there is no target
+  picker.
 - Empty follows rules 61 to 63 through `empty-square.ts`.
 - A figure moved by its normal travel may still be moved by these cards; they do
   not spend or set the normal movement lock.
 - A figure locked by Galileo this City Management is not a valid choice.
 - One card and all moved figures are one assisted action with one undo vote.
 - The card form uses the shared board picker and confirmation popup. Multiple
-  figures in a one-figure source get a figure selector.
+  figures in a one-figure source get a figure selector. A group source must hold
+  figures of exactly one other player.
 
 **Out:**
 

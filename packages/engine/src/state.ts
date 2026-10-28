@@ -14,6 +14,8 @@ import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './b
 import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
+import { stackingLimitOf } from './great-person-effects.js'
+import { communismLocksOf } from './communism.js'
 import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
 import { tradeEstimateOf } from './trade-estimate.js'
@@ -421,6 +423,7 @@ export type AssistedActionKind =
   | 'assignScout'
   | 'devoteToTheArts'
   | 'harvest'
+  | 'communism'
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
   | `sot:${string}`
 
@@ -653,7 +656,7 @@ export type AssistedEffect =
       /** A movement culture card: the source and destination, and each moved figure. */
       readonly cardMove?: {
         readonly card: string
-        readonly kind: 'one' | 'group'
+        readonly kind: 'one' | 'group' | 'hannibal'
         readonly from: { readonly column: number; readonly row: number }
         readonly to: { readonly column: number; readonly row: number }
         readonly moves: readonly {
@@ -676,6 +679,11 @@ export type AssistedEffect =
           readonly historyId: string
         }[]
       }
+    }
+  | {
+      readonly kind: 'communism'
+      readonly square: { readonly column: number; readonly row: number }
+      readonly spent: SpentResource
     }
   | {
       readonly kind: 'coinPurchase'
@@ -1420,6 +1428,8 @@ export interface StartOfTurnView {
 }
 
 export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
+  /** The effective stacking limit: the status number plus a faceup, unblockaded Louis Pasteur. */
+  readonly stackingLimit: number
   /**
    * The card choices waiting for the viewer, each with its candidate cards.
    * Only ever the viewer's own: an opponent or a spectator gets no such field,
@@ -1505,6 +1515,8 @@ export interface PlayerView {
    * Derived from the public board alone, so every player gets the same list.
    */
   readonly blockadedPieceIds: readonly string[]
+  /** Squares locked by Communism for the current turn, public. */
+  readonly communismLocks: readonly { readonly column: number; readonly row: number }[]
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
   /** Assisted actions already performed, public summary only. */
   readonly assistedActions: readonly PublicAssistedAction[]
@@ -1584,6 +1596,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       ? null
       : {
           ...withDerivedStats(state, player),
+          stackingLimit: stackingLimitOf(state, player),
           cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
           cityCount: cityCountOf(state, viewerId),
           buildingCount: buildingCountOf(state, viewerId),
@@ -1616,6 +1629,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     board: state.board,
     boardAreas: boardAreas(state.board, state.players),
     blockadedPieceIds: blockadedPieceIds(state),
+    communismLocks: communismLocksOf(state),
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),

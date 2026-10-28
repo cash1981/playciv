@@ -115,6 +115,8 @@ interface Props {
   readonly movementPlayer?: MovementPlayer | null
   /** The current turn number, so a figure's movement allowance is fresh each turn. */
   readonly movementTurn?: number | null
+  /** Squares locked by Communism for this turn. */
+  readonly movementLocks?: readonly { readonly column: number; readonly row: number }[]
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -344,6 +346,7 @@ export function BoardView({
   pickSquares,
   movementPlayer = null,
   movementTurn = null,
+  movementLocks = [],
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -525,8 +528,8 @@ export function BoardView({
     (piece: BoardPiece) =>
       movementPlayer === null || movementTurn === null
         ? null
-        : figureMovementOptions(board, movementPlayer, piece, movementTurn),
-    [board, movementPlayer, movementTurn],
+        : figureMovementOptions(board, movementPlayer, piece, movementTurn, movementLocks),
+    [board, movementLocks, movementPlayer, movementTurn],
   )
 
   const width = boardWidth(board)
@@ -1285,7 +1288,9 @@ export function BoardView({
               )}
               {selectedMovement !== null && (
                 <div className="board-placement-status" role="status" aria-live="polite">
-                  {selectedMovement.locked ? (
+                  {selectedMovement.squareLocked === true ? (
+                    <span>{selected.label} is locked by Communism this turn and may not leave its square.</span>
+                  ) : selectedMovement.locked ? (
                     <span>
                       {selected.label} has moved this turn. Undo the move on the board to move it again.
                     </span>

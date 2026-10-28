@@ -29,6 +29,7 @@ import {
   isOuterEdgeCell,
 } from './galileo.js'
 import { mapTop } from './board.js'
+import { communismLocksOf } from './communism.js'
 import type { BoardPiece, PieceMovement } from './board.js'
 import {
   cardMoveDestinations,
@@ -36,7 +37,7 @@ import {
   figuresAt,
 } from './movement.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
-import { revealedTechNamesOfOthers } from './great-person-effects.js'
+import { revealedTechNamesOfOthers, stackingLimitOf } from './great-person-effects.js'
 import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
@@ -140,7 +141,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
               ? null
               : mapMove.kind === 'one'
                 ? `moves one of your figures up to ${mapMove.allowance} squares to an empty square`
-                : `moves all figures of the chosen player in a square up to ${mapMove.allowance} squares to an empty square`
+                : `moves all figures of another player in a square up to ${mapMove.allowance} squares to an empty square`
           : passiveText,
       mapMove,
       passive: passiveText !== undefined,
@@ -472,6 +473,9 @@ function automate(
       if (figures.length === 0) {
         return err(`No figure of yours stands on ${squareLabel(from)}.`)
       }
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
       const sameSquare = from.column === to.column && from.row === to.row
       if (sameSquare) {
         if (!isOuterEdgeCell(state.board, from)) {
@@ -542,6 +546,47 @@ function automate(
             `${squareLabel(from)} to ${squareLabel(to)}`,
       })
     }
+    case 'Hannibal': {
+      const from = payload?.from
+      const to = payload?.to
+      if (from === undefined || to === undefined) {
+        return err('Choose a source square with your figures and another square with your figures.')
+      }
+      if (sameCell(from, to)) return err('Hannibal moves figures to another square.')
+      const sourceFigures = cardMoveFigureChoices(state.board, player, from, turnStatus(state).currentTurn)
+      if (sourceFigures.length === 0) return err(`No movable figure of yours stands on ${squareLabel(from)}.`)
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
+      const atDestination = figuresAt(state.board, player, to)
+      if (atDestination.length === 0) {
+        return err(`${squareLabel(to)} must already contain one of your figures.`)
+      }
+      const selected =
+        payload?.figureIds === undefined
+          ? sourceFigures
+          : sourceFigures.filter((figure) => payload.figureIds?.includes(figure.id) === true)
+      if (selected.length === 0) return err('Choose at least one figure to move.')
+      if (
+        payload?.figureIds !== undefined &&
+        (new Set(payload.figureIds).size !== payload.figureIds.length || selected.length !== payload.figureIds.length)
+      ) {
+        return err('Choose each figure in the source square only once.')
+      }
+      const room = stackingLimitOf(state, player) - atDestination.length
+      if (selected.length > room) {
+        return err(
+          `${squareLabel(to)} has room for ${Math.max(0, room)} more of your figures, not ${selected.length}.`,
+        )
+      }
+      const moved = moveFiguresForCard(state, player.playerId, name, selected, from, to, at)
+      if (typeof moved === 'string') return err(moved)
+      return ok({
+        state: moved.state,
+        extra: { cardMove: { card: name, kind: 'hannibal', from, to, moves: moved.moves } },
+        said: `, moved ${selected.length} ${selected.length === 1 ? 'figure' : 'figures'} from ${squareLabel(from)} to ${squareLabel(to)}`,
+      })
+    }
     case 'Migrants':
     case 'Colonists':
     case 'Immigrants': {
@@ -552,6 +597,9 @@ function automate(
         return err('Choose one of your figures and an empty destination square.')
       }
       const turnNumber = turnStatus(state).currentTurn
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
       const choices = cardMoveFigureChoices(state.board, player, from, turnNumber)
       const figureId = payload?.figureId
       const figure =
@@ -567,6 +615,7 @@ function automate(
         rule.allowance,
         cardWaterRulesOf(player),
         hasFlight(player),
+        communismLocksOf(state),
       )
       if (!destinations.some((cell) => sameCell(cell, to))) {
         return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
@@ -585,9 +634,18 @@ function automate(
       const rule = cardMoveRuleOf(name)
       const from = payload?.from
       const to = payload?.to
-      const target = targets[0]
-      if (rule === undefined || from === undefined || to === undefined || target === undefined) {
-        return err('Choose another player, the square with their figures and an empty destination.')
+      if (rule === undefined || from === undefined || to === undefined) {
+        return err('Choose a square with another player\'s figures and an empty destination.')
+      }
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
+      const holders = state.players
+        .filter((candidate) => candidate.playerId !== player.playerId)
+        .filter((candidate) => figuresAt(state.board, candidate, from).length > 0)
+      const target = holders.length === 1 ? holders[0] : undefined
+      if (target === undefined) {
+        return err(`Choose a square holding figures of exactly one other player.`)
       }
       const turnNumber = turnStatus(state).currentTurn
       if (!cardMoveSources(state.board, target, turnNumber, 'group').some((cell) => sameCell(cell, from))) {
@@ -599,6 +657,7 @@ function automate(
         rule.allowance,
         { cross: false, end: false },
         hasFlight(target),
+        communismLocksOf(state),
       )
       if (!destinations.some((cell) => sameCell(cell, to))) {
         return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
