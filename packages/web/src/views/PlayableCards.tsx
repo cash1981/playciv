@@ -94,13 +94,13 @@ export function PlayCardControl({
     card.targets.kind === 'players' && min >= 1 && others.length === 1 && chosen.length === 0
       ? others.map((opponent) => opponent.playerId)
       : chosen
-  const valid =
+  const baseValid =
     effective.length >= min &&
     effective.length <= max &&
     (!needsResource || resource !== '') &&
     (!needsCoin || coinSource !== '') &&
-    (!needsSubstitute || substitute !== '') &&
-    (!isGalileo || (galileoFrom !== null && galileoTo !== null))
+    (!needsSubstitute || substitute !== '')
+  const valid = baseValid && (!isGalileo || (galileoFrom !== null && galileoTo !== null))
   const disabled = busy || readOnly
 
   const toggle = (playerId: string): void =>
@@ -112,39 +112,14 @@ export function PlayCardControl({
           : [...effective, playerId],
     )
 
-  const pickGalileo = async (which: 'from' | 'to'): Promise<void> => {
-    if (mapPicker === null) return
-    const cells =
-      which === 'from'
-        ? galileoSourceCells.map((cell) => ({ ...cell, label: squareLabel(cell) }))
-        : galileoToCells
-    if (which === 'from' && cells.length === 0) {
-      setGalileoHint('None of your figures is on the map.')
-      return
-    }
-    setGalileoHint(null)
-    const picked = await mapPicker.begin({
-      title: which === 'from' ? 'the Galileo source square' : 'the Galileo destination square',
-      cells,
-      describeCell:
-        which === 'from'
-          ? (cell) => `Choose ${cell.label} as the source square for ${GALILEO_NAME}`
-          : (cell) => `Move ${GALILEO_NAME}'s figures to ${cell.label}`,
-    })
-    if (picked === null) return
-    const square = { column: picked.column, row: picked.row }
-    if (which === 'from') {
-      setGalileoFrom(square)
-      setGalileoTo(null)
-    } else {
-      setGalileoTo(square)
-    }
-  }
-
-  const confirm = (): void => {
-    if (!valid || view.you === null) return
+  const sendPlay = (
+    from: { readonly column: number; readonly row: number } | null = galileoFrom,
+    to: { readonly column: number; readonly row: number } | null = galileoTo,
+  ): void => {
+    if (!baseValid || view.you === null) return
+    if (isGalileo && (from === null || to === null)) return
     const playerId = view.you.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${galileoFrom?.column ?? ''},${galileoFrom?.row ?? ''}:${galileoTo?.column ?? ''},${galileoTo?.row ?? ''}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}`
     void pressOnce(
       key,
       run,
@@ -155,12 +130,73 @@ export function PlayCardControl({
           ...(needsResource ? { resource } : {}),
           ...(needsCoin ? { coinSource } : {}),
           ...(needsSubstitute ? { substitute } : {}),
-          ...(isGalileo && galileoFrom !== null && galileoTo !== null ? { from: galileoFrom, to: galileoTo } : {}),
+          ...(isGalileo && from !== null && to !== null ? { from, to } : {}),
         }),
       view,
     ).then((succeeded) => {
-      if (succeeded) setOpen(false)
+      if (succeeded) {
+        setGalileoFrom(null)
+        setGalileoTo(null)
+        setGalileoHint(null)
+        setOpen(false)
+      }
     })
+  }
+
+  const confirm = (): void => {
+    if (!valid) return
+    sendPlay()
+  }
+
+  const pickGalileoDestination = async (
+    from: { readonly column: number; readonly row: number },
+  ): Promise<void> => {
+    if (mapPicker === null) return
+    const cells = galileoDestinations(view.board, from)
+    if (cells.length === 0) {
+      setGalileoHint('No empty outer-edge square is left.')
+      return
+    }
+    const picked = await mapPicker.begin({
+      title: 'the Galileo destination square',
+      cells,
+      describeCell: (cell) => `Move ${GALILEO_NAME}'s figures to ${cell.label}`,
+    })
+    if (picked === null) return
+    const to = { column: picked.column, row: picked.row }
+    setGalileoTo(to)
+    if (
+      window.confirm(
+        `Move every figure in ${squareLabel(from)} to ${squareLabel(to)} with ${GALILEO_NAME}?`,
+      )
+    ) {
+      sendPlay(from, to)
+    }
+  }
+
+  const pickGalileoSource = async (): Promise<void> => {
+    if (mapPicker === null) return
+    const cells = galileoSourceCells.map((cell) => ({ ...cell, label: squareLabel(cell) }))
+    if (cells.length === 0) {
+      setGalileoHint('None of your figures is on the map.')
+      return
+    }
+    setGalileoHint(null)
+    const picked = await mapPicker.begin({
+      title: 'the Galileo source square',
+      cells,
+      describeCell: (cell) => `Choose ${cell.label} as the source square for ${GALILEO_NAME}`,
+    })
+    if (picked === null) return
+    const from = { column: picked.column, row: picked.row }
+    setGalileoFrom(from)
+    setGalileoTo(null)
+    // Choosing the figure is the old "Choose destination square" press: go straight to the edge.
+    await pickGalileoDestination(from)
+  }
+
+  const repickGalileoDestination = (): void => {
+    if (galileoFrom !== null) void pickGalileoDestination(galileoFrom)
   }
 
   const closeForm = (): void => {
@@ -199,7 +235,7 @@ export function PlayCardControl({
           aria-label={`Play ${card.name}`}
           onSubmit={(event) => {
             event.preventDefault()
-            confirm()
+            if (!isGalileo) confirm()
           }}
         >
           {card.targets.kind === 'players' && (
@@ -240,7 +276,7 @@ export function PlayCardControl({
                   type="button"
                   className="small"
                   disabled={disabled || mapPicker === null}
-                  onClick={() => void pickGalileo('from')}
+                  onClick={() => void pickGalileoSource()}
                 >
                   Choose source square
                 </button>
@@ -257,7 +293,7 @@ export function PlayCardControl({
                   type="button"
                   className="small"
                   disabled={disabled || mapPicker === null || galileoFrom === null || galileoToCells.length === 0}
-                  onClick={() => void pickGalileo('to')}
+                  onClick={repickGalileoDestination}
                 >
                   Choose destination square
                 </button>
@@ -265,9 +301,6 @@ export function PlayCardControl({
               </div>
               {galileoDestinationEmptyNote(galileoToCells.length)}
               <div className="play-card-buttons">
-                <button type="submit" className="small" disabled={disabled || !valid}>
-                  {card.kind === 'greatPerson' && !card.discards ? 'Confirm use' : 'Confirm play'}
-                </button>
                 <button type="button" className="small" onClick={closeForm}>
                   Cancel
                 </button>

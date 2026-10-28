@@ -560,9 +560,11 @@ Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`, the `move` change
 ### Galileo Galilei and the card map picker (#302)
 
 Galileo is the first card whose effect is applied through a map choice. The Play
-form asks for a source edge square and a destination edge square; the board
-picker is the same one Build uses, through a small `MapPickerContext` bridge, and
-`playCard` carries the two squares in its payload. The engine moves every one of
+form asks for a source square with the player's figures and a destination edge
+square; the board picker is the same one Build uses, through a small
+`MapPickerContext` bridge, and `playCard` carries the two squares in its payload.
+Choosing the source goes straight on to the destination pick, and choosing the
+destination asks for confirmation in a popup rather than an inline button. The engine moves every one of
 the player's figures in the source together and writes each move with the
 figure's travel lock, so the existing card undo vote puts the figures back and
 frees the card.

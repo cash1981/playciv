@@ -436,8 +436,9 @@ describe('Galileo Galilei', () => {
     opponents: [],
   } as unknown as PlayerView
 
-  it('picks a source and destination on the board and sends them with the card', async () => {
+  it('goes straight from the source pick to the edge pick and asks to confirm', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const begin = vi
       .fn()
       .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
@@ -452,21 +453,40 @@ describe('Galileo Galilei', () => {
 
     fireEvent.click(playButton('Galileo Galilei'))
     fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
-    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
-    expect(screen.getByText('A1')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Choose destination square' }))
     await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
-    expect(screen.getByText('A3')).toBeTruthy()
-    const box = screen.getByRole('group', { name: 'Move figures to the outer edge' })
-    expect(within(box).getByRole('button', { name: /^Confirm play$/ })).toBeTruthy()
+    expect(begin.mock.calls[1]?.[0]).toMatchObject({
+      title: 'the Galileo destination square',
+    })
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/A1 to A3/))
 
-    fireEvent.click(confirmButton())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[4]).toMatchObject({
       itemId: 'gp-galileo',
       from: { column: 0, row: 0 },
       to: { column: 0, row: 2 },
     })
+  })
+
+  it('leaves the card unplayed when the Galileo confirmation is cancelled', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Galileo Galilei'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(send).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Choose destination square' })).toBeTruthy()
   })
 
   it('keeps the source button pressable when no figure is on the edge, with a reason', () => {
