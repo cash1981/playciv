@@ -12,6 +12,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-297-revealed-discards
+
+- **Owner:** opencode (orchestrator/coder)
+- **Branch:** `fix/issue-297-revealed-discards`
+- **Brief:** `docs/agents/tasks/issue-297-revealed-discards.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/actions/game.ts`
+  - `packages/engine/test/revealed-feed.test.ts`
+  - `docs/agents/tasks/issue-297-revealed-discards.md`, `docs/agents/task-board.md`, `docs/agents/decisions.md`
+- **Notes:** based on `origin/main` at `14dfd9a`. No other live claim lists these paths.
+
 ### great-person-automation
 
 - **Owner:** opencode (orchestrator/coder)

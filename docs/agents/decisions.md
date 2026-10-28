@@ -43,13 +43,17 @@ draws it hidden again. The discard was public, so its history does not reveal
 where the card is now. An assisted card play that discards without a `DISCARD`
 item line (Great Person/culture play) is kept the same way from its applied
 assisted record. A culture or Great Person card discarded by a reward choice is
-kept from its `chooseReward` record and the advance's drawn cards. A resource hut
-spent into the discard pile shows from the pile; huts are never reshuffled. A
-revealed card that leaves the public set without a discard still vanishes, and
-technologies/social policies are never added from the log. Tests:
+kept from its `chooseReward` record and the advance's drawn cards. That row uses
+the assisted record's time and log position even when the card is still in the
+discard pile, so a just-played card sorts with its play line rather than at the
+bottom of the feed. A resource hut spent into the discard pile shows from the
+pile; huts are never reshuffled. A revealed card that leaves the public set
+without a discard still vanishes, and technologies/social policies are never
+added from the log. Tests:
 `revealed-feed.test.ts` ("keeps a historical discard …", "keeps an assisted
-card-play discard …", "keeps a culture card discarded by a reward choice …",
-"shows a resource hut spent …" and "does not resurrect a revealed card …").
+card-play discard …", "dates a played card that is already in the discard pile
+…", "keeps a culture card discarded by a reward choice …", "shows a resource hut
+spent …" and "does not resurrect a revealed card …").
 
 Source: `packages/engine/src/actions/game.ts` (`revealedFeed`).
 

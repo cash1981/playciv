@@ -206,6 +206,43 @@ describe('revealedFeed', () => {
     expect(after === undefined ? undefined : itemName(after.item)).toBe('St. Francis of Assisi')
   })
 
+  it('dates a played card that is already in the discard pile, so it sorts newest first', () => {
+    // The card is discarded into the pile, which seeds a row without a
+    // timestamp. Its play line is when it entered the feed, so the feed must use
+    // that time; otherwise the card sits at the bottom of the history and the
+    // first page of the panel never shows it (issue #297).
+    let state = firstCivGame()
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'HUTS' }))
+    const hut = handItem(state, 'HUTS')
+    state = unwrap(
+      revealItem(state, { playerId: CASH1981, sheetName: 'HUTS', itemNumber: hut.itemNumber }),
+    )
+    state = {
+      ...state,
+      log: state.log.map((entry) =>
+        entry.logType === 'REVEAL' && entry.item?.itemNumber === hut.itemNumber
+          ? { ...entry, createdAt: '2026-01-01T00:00:00.000Z' }
+          : entry,
+      ),
+    }
+    const { state: withCard, itemId } = withCardInHand(state, 'Barbarian Encampment')
+    const played = unwrap(
+      performAssistedAction(withCard, {
+        playerId: CASH1981,
+        action: 'playCard',
+        requestId: 'req-encampment',
+        at: AT,
+        payload: { itemId, targets: [] },
+      }),
+    )
+
+    const feed = revealedFeed(played)
+    const row = feed.find((entry) => entry.item.id === itemId)
+    expect(row?.discarded).toBe(true)
+    expect(row?.createdAt).toBe(AT)
+    expect(feed[0]?.item.id).toBe(itemId)
+  })
+
   it('keeps a culture card discarded by a reward choice after a culture reshuffle', () => {
     const state = advanceTurn({ techs: ['Mysticism'] })
     const advanced = unwrap(

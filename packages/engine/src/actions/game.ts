@@ -388,14 +388,29 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     return undefined
   }
 
+  const newer = (a: string | null, b: string | null): string | null => {
+    if (a === null) return b
+    if (b === null) return a
+    return a.localeCompare(b) >= 0 ? a : b
+  }
+
   const rememberDiscard = (
     item: Item,
     record: (typeof state.assistedActions)[number],
     revealed: boolean,
   ): void => {
+    const logOrder = state.log.findIndex((entry) => entry.id === record.logId)
     const existing = rows.get(item.itemNumber)
     if (existing !== undefined) {
       existing.discarded = true
+      existing.revealed = existing.revealed || revealed
+      if (existing.playerId === null) existing.playerId = record.playerId
+      // The card is already in the public set (normally the discard pile), but
+      // its row has no chronology yet. The play line is when it entered the
+      // feed, so the newest-first order must use it rather than leaving the card
+      // at the bottom of the history.
+      existing.createdAt = newer(existing.createdAt, record.at)
+      existing.logOrder = Math.max(existing.logOrder, logOrder)
       return
     }
     // The card may have been reshuffled and drawn hidden since. Its identity is
@@ -406,7 +421,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
       revealed,
       discarded: true,
       createdAt: record.at,
-      logOrder: state.log.findIndex((entry) => entry.id === record.logId),
+      logOrder,
     })
   }
 
@@ -437,11 +452,6 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
   // whether a discarded item was revealed first. A public DISCARD entry also
   // keeps its row after a reshuffle or hidden redraw; the discard was public,
   // so the history does not reveal where the card is now.
-  const newer = (a: string | null, b: string | null): string | null => {
-    if (a === null) return b
-    if (b === null) return a
-    return a.localeCompare(b) >= 0 ? a : b
-  }
   const revealedNumbers = new Set(
     state.log.flatMap((entry) =>
       entry.logType === 'REVEAL' && entry.item !== null ? [entry.item.itemNumber] : [],
