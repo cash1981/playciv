@@ -369,18 +369,24 @@ function automate(
       const from = payload?.from
       const to = payload?.to
       if (from === undefined || to === undefined) {
-        return err('Choose an outer-edge source square and an empty outer-edge destination.')
-      }
-      if (!isOuterEdgeCell(state.board, from) || !isOuterEdgeCell(state.board, to)) {
-        return err('Galileo moves between squares on the outer edge of the map.')
+        return err('Choose a source square with your figures and an empty outer-edge destination.')
       }
       const figures = galileoFiguresAt(state.board, player, from)
       if (figures.length === 0) {
         return err(`No figure of yours stands on ${squareLabel(from)}.`)
       }
       const sameSquare = from.column === to.column && from.row === to.row
-      if (!sameSquare && !galileoDestinationAllowed(state.board, to)) {
-        return err(`${squareLabel(to)} is not an empty outer-edge square.`)
+      if (sameSquare) {
+        if (!isOuterEdgeCell(state.board, from)) {
+          return err('Galileo can only lock figures in place when they stand on the outer edge.')
+        }
+      } else {
+        if (!isOuterEdgeCell(state.board, to)) {
+          return err('The destination must be a square on the outer edge of the map.')
+        }
+        if (!galileoDestinationAllowed(state.board, to)) {
+          return err(`${squareLabel(to)} is not an empty outer-edge square.`)
+        }
       }
 
       const turnNumber = turnStatus(state).currentTurn

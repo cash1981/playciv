@@ -5,13 +5,14 @@
  * edge of the map. Move your figures in that square to any empty square on the
  * outer edge of the map. They cannot move again this turn."
  *
- * The source is one edge square holding the player's figures, and every one of
- * those figures moves together. "Empty" follows the unofficial rules 61 to 63:
+ * The human's reading: the source is any map square holding the player's
+ * figures, and the destination is an empty outer-edge square. Every figure in
+ * the source moves together. "Empty" follows the unofficial rules 61 to 63:
  * no figure, building, Great Person, wonder, city-state, city, hut, village or
  * relic token; a disaster or another resource token alone does not block it.
- * Rule 332 also allows the chosen source square itself, to lock the figures
- * without moving them. There is no stacking check at the destination, and the
- * destination may be water.
+ * Rule 332 also allows a chosen source square that is itself on the outer edge,
+ * to lock the figures without moving them. There is no stacking check at the
+ * destination, and the destination may be water.
  */
 
 import { cityCenterCells, mapCellOf } from './blockade.js'
@@ -93,15 +94,21 @@ export function galileoDestinationAllowed(board: Board, cell: Cell): boolean {
   )
 }
 
-/** The edge squares holding at least one of the player's figures: Galileo's sources. */
+/** The map squares holding at least one of the player's figures: Galileo's sources. */
 export function galileoSources(board: Board, player: MovementPlayer): readonly Cell[] {
-  return outerEdgeCells(board).filter((cell) => galileoFiguresAt(board, player, cell).length > 0)
+  const sources = new Map<string, Cell>()
+  for (const piece of board.pieces) {
+    if (piece.category !== 'figure' || !figureBelongsTo(player, piece)) continue
+    const cell = mapCellOf(board, piece)
+    if (cell !== null) sources.set(keyOf(cell), cell)
+  }
+  return [...sources.values()].sort((a, b) => a.row - b.row || a.column - b.column)
 }
 
 /**
  * The edge squares Galileo may move to, with a label ready for pickers. When the
- * chosen source is given, it is offered even though it holds the figures: rule
- * 332 lets Galileo pick the same square to lock them without moving.
+ * chosen source is on the edge, it is also offered even though it holds the
+ * figures: rule 332 lets Galileo pick the same square to lock them without moving.
  */
 export function galileoDestinations(
   board: Board,
@@ -111,7 +118,10 @@ export function galileoDestinations(
     .filter(
       (cell) =>
         galileoDestinationAllowed(board, cell) ||
-        (source !== undefined && cell.column === source.column && cell.row === source.row),
+        (source !== undefined &&
+          isOuterEdgeCell(board, source) &&
+          cell.column === source.column &&
+          cell.row === source.row),
     )
     .map((cell) => ({ ...cell, label: `${columnLabel(cell.column)}${cell.row + 1}` }))
 }

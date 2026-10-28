@@ -70,13 +70,20 @@ const voted = (state: GameState, logId: string): GameState =>
   )
 
 describe('outer edge squares', () => {
-  it('finds the border of the whole map', () => {
-    const state = place(cmTurn(), 'figures/redarmy', 0, 5)
+  it('uses any square with own figures as a source and only the border as a destination', () => {
+    const state = place(place(cmTurn(), 'figures/redarmy', 0, 5), 'figures/redarmy', 8, 8)
     const sources = galileoSources(state.board, player(state))
     expect(sources).toContainEqual({ column: 0, row: 5 })
+    expect(sources).toContainEqual({ column: 8, row: 8 })
     const destinations = galileoDestinations(state.board)
     expect(destinations).toContainEqual(expect.objectContaining({ column: 0, row: 0, label: 'A1' }))
     expect(destinations.some((cell) => cell.column === 8 && cell.row === 8)).toBe(false)
+    // The destination picker does not add an interior source as a same-square option.
+    expect(
+      galileoDestinations(state.board, { column: 8, row: 8 }).some(
+        (cell) => cell.column === 8 && cell.row === 8,
+      ),
+    ).toBe(false)
   })
 
   it('treats the rim of a stepped board and of the five-player hole as edge', () => {
@@ -244,7 +251,15 @@ describe('playing Galileo Galilei', () => {
     expect(last?.ok === false ? last.error.kind : null).toBe('ASSISTED_UNDO_BLOCKED')
   })
 
-  it('refuses a source without an edge figure and a blocked destination', () => {
+  it('moves from an interior source to an edge destination', () => {
+    const { state, itemId } = withCardInHand(cmTurn(), 'Galileo Galilei')
+    const withFigures = place(state, 'figures/redarmy', 8, 8)
+    const played = unwrap(play(withFigures, itemId, { column: 8, row: 8 }, { column: 0, row: 2 }))
+    expect(figuresIn(played, 0, 2)).toHaveLength(1)
+    expect(figuresIn(played, 8, 8)).toHaveLength(0)
+  })
+
+  it('refuses a source without a figure and a blocked destination', () => {
     const { state, itemId } = withCardInHand(cmTurn(), 'Galileo Galilei')
     const withFigures = place(state, 'figures/redarmy', 0, 0)
     const noSource = unwrapErr(play(withFigures, itemId, { column: 0, row: 2 }, { column: 0, row: 3 }))
@@ -255,10 +270,14 @@ describe('playing Galileo Galilei', () => {
     expect(noDestination.kind).toBe('ASSISTED_ACTION_REJECTED')
   })
 
-  it('refuses a square that is not on the outer edge', () => {
+  it('refuses a destination that is not on the outer edge', () => {
     const { state, itemId } = withCardInHand(cmTurn(), 'Galileo Galilei')
-    const withFigures = place(state, 'figures/redarmy', 0, 0)
-    const refused = unwrapErr(play(withFigures, itemId, { column: 8, row: 8 }, { column: 0, row: 2 }))
+    const withFigures = place(state, 'figures/redarmy', 8, 8)
+    const refused = unwrapErr(play(withFigures, itemId, { column: 8, row: 8 }, { column: 8, row: 9 }))
     expect(refused.kind).toBe('ASSISTED_ACTION_REJECTED')
+
+    // Rule 332's same-square lock needs the source itself to be on the edge.
+    const sameSquare = unwrapErr(play(withFigures, itemId, { column: 8, row: 8 }, { column: 8, row: 8 }))
+    expect(sameSquare.kind).toBe('ASSISTED_ACTION_REJECTED')
   })
 })

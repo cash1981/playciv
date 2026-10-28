@@ -8,9 +8,9 @@
 
 ## Goal
 
-A player can play Galileo Galilei during City Management, choose one outer-edge
-map square holding their figures and one empty outer-edge destination, and the
-game moves every figure from the source together and locks them for the turn.
+A player can play Galileo Galilei during City Management, choose any map square
+holding their figures and one empty outer-edge destination, and the game moves
+every figure from the source together and locks them for the turn.
 The card's undo vote puts the figures back and returns the card to the hand.
 
 ## Why
@@ -24,10 +24,12 @@ Migrants, Colonists, Immigrants, Disoriented, Lost, Out of Position and Hannibal
 **In:**
 
 - Outer-edge squares for every board shape.
-- Source with one or more of the player's own figures; all of them move together.
+- Source is any map square with one or more of the player's own figures; all of
+  them move together.
 - Empty destination by unofficial rules 61 to 63: no figure, building, Great
   Person, wonder, city-state, city, hut, village or relic token. A disaster alone
   or another resource token does not block. Rule 332 allows the source itself.
+- Rule 332's same square is allowed when the source is itself on the outer edge.
 - No terrain or stacking gate on the destination; an empty water edge square is
   allowed.
 - Each moved figure is locked for the turn; one card undo vote reverses the whole
@@ -51,8 +53,8 @@ Migrants, Colonists, Immigrants, Disoriented, Lost, Out of Position and Hannibal
 
 ## Acceptance criteria
 
-- [x] Galileo source and destination are outer-edge squares; all source figures
-  move together.
+- [x] Galileo's source is any square with own figures; the destination is an
+  outer-edge square; all source figures move together.
 - [x] Non-empty destinations are refused; resource/disaster-only squares and the
   source square itself are allowed.
 - [x] Moved figures are locked and one undo vote restores positions, movement
@@ -64,7 +66,7 @@ Migrants, Colonists, Immigrants, Disoriented, Lost, Out of Position and Hannibal
 ## Handover
 
 Implemented on the same branch and PR as the first movement slice. Validation:
-`pnpm -r typecheck` passed; `pnpm -r test` passed (engine 69 files / 2136 tests,
-web 63 files / 1145 tests, server 40 files / 850 tests); `pnpm -r build` passed.
+`pnpm -r typecheck` passed; `pnpm -r test` passed (engine 69 files / 2137 tests,
+web 63 files / 1146 tests, server 40 files / 850 tests); `pnpm -r build` passed.
 Independent review is pending. Details and source references are in the
 "Galileo Galilei and the card map picker (#302)" decision topic.

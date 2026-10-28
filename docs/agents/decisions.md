@@ -567,18 +567,21 @@ the player's figures in the source together and writes each move with the
 figure's travel lock, so the existing card undo vote puts the figures back and
 frees the card.
 
-- **Edge:** a map square with at least one cardinal neighbour that is not a
-  playable map square. This covers the outer border of every board shape, and
-  the rim of a stepped board or hole as the human described.
+- **Source and destination:** the source is any map square holding the player's
+  own figures; every one of them moves together. The destination must be an
+  outer-edge square, where an edge square is one with at least one cardinal
+  neighbour that is not a playable map square. This covers the outer border of
+  every board shape, and the rim of a stepped board or hole as the human
+  described.
 - **Empty:** unofficial rules 61 to 63. A square with no figure, building, Great
   Person, wonder, city-state, city, hut, village or relic token. A disaster
   alone, or another resource token such as wheat, does not block it. A square
   whose hut/village/relic token has been taken has no such piece on the board.
   A metropolis blocks both squares its artwork covers, not just the one under its
   centre.
-- **Same square:** rule 332 allows the source itself as the destination, which
-  locks the figures without moving them. The destination picker offers it once a
-  source is chosen.
+- **Same square:** rule 332 allows a source that is already on the outer edge to
+  use itself as the destination, which locks the figures without moving them.
+  The destination picker offers it once such a source is chosen.
 - **No terrain or stacking gate:** the card names no terrain, so an empty water
   edge square is allowed. Every destination is empty of figures, so the stacking
   limit cannot be exceeded by this move. There is no extra stacking check.

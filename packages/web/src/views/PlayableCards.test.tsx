@@ -484,7 +484,7 @@ describe('Galileo Galilei', () => {
     const source = screen.getByRole('button', { name: 'Choose source square' }) as HTMLButtonElement
     expect(source.disabled).toBe(false)
     fireEvent.click(source)
-    expect(screen.getByText(/Move one there first/)).toBeTruthy()
+    expect(screen.getByText(/None of your figures is on the map/)).toBeTruthy()
     expect(begin).not.toHaveBeenCalled()
   })
 

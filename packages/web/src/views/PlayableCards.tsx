@@ -119,7 +119,7 @@ export function PlayCardControl({
         ? galileoSourceCells.map((cell) => ({ ...cell, label: squareLabel(cell) }))
         : galileoToCells
     if (which === 'from' && cells.length === 0) {
-      setGalileoHint('None of your figures is on an outer-edge square. Move one there first.')
+      setGalileoHint('None of your figures is on the map.')
       return
     }
     setGalileoHint(null)
@@ -230,7 +230,7 @@ export function PlayCardControl({
           )}
           {isGalileo && (
             <fieldset className="play-card-targets">
-              <legend>Outer edge of the map</legend>
+              <legend>Move figures to the outer edge</legend>
               <p className="muted">
                 Every one of your figures in the source square moves together to an empty outer-edge square.
               </p>
@@ -249,7 +249,7 @@ export function PlayCardControl({
                 <p className="muted">{galileoHint}</p>
               )}
               {galileoHint === null && galileoSourceCells.length === 0 && (
-                <p className="muted">None of your figures is on an outer-edge square.</p>
+                <p className="muted">None of your figures is on the map.</p>
               )}
               <div className="play-card-buttons">
                 <button
