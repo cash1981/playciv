@@ -457,6 +457,8 @@ describe('Galileo Galilei', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose destination square' }))
     await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
     expect(screen.getByText('A3')).toBeTruthy()
+    const box = screen.getByRole('group', { name: 'Move figures to the outer edge' })
+    expect(within(box).getByRole('button', { name: /^Confirm play$/ })).toBeTruthy()
 
     fireEvent.click(confirmButton())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))

@@ -163,6 +163,14 @@ export function PlayCardControl({
     })
   }
 
+  const closeForm = (): void => {
+    mapPicker?.cancel()
+    setGalileoFrom(null)
+    setGalileoTo(null)
+    setGalileoHint(null)
+    setOpen(false)
+  }
+
   return (
     <div className="play-card">
       <div className="play-card-row">
@@ -175,15 +183,8 @@ export function PlayCardControl({
           disabled={disabled || !ready}
           title={ready ? undefined : card.reason}
           onClick={() => {
-            if (open) {
-              mapPicker?.cancel()
-              setGalileoFrom(null)
-              setGalileoTo(null)
-              setGalileoHint(null)
-              setOpen(false)
-            } else {
-              setOpen(true)
-            }
+            if (open) closeForm()
+            else setOpen(true)
           }}
         >
           {card.kind === 'greatPerson' && !card.discards ? 'Use' : 'Play'}
@@ -263,6 +264,14 @@ export function PlayCardControl({
                 <span>{galileoTo === null ? 'No destination chosen' : squareLabel(galileoTo)}</span>
               </div>
               {galileoDestinationEmptyNote(galileoToCells.length)}
+              <div className="play-card-buttons">
+                <button type="submit" className="small" disabled={disabled || !valid}>
+                  {card.kind === 'greatPerson' && !card.discards ? 'Confirm use' : 'Confirm play'}
+                </button>
+                <button type="button" className="small" onClick={closeForm}>
+                  Cancel
+                </button>
+              </div>
             </fieldset>
           )}
           {needsResource && (
@@ -324,24 +333,16 @@ export function PlayCardControl({
                 ? 'It does not apply the effect: do that yourself unless another player cancels the card.'
                 : `It also ${card.automatic}. Undo it with a vote if another player cancels the card.`}
           </p>
-          <div className="play-card-buttons">
-            <button type="submit" className="small" disabled={disabled || !valid}>
-              {card.kind === 'greatPerson' && !card.discards ? 'Confirm use' : 'Confirm play'}
-            </button>
-            <button
-              type="button"
-              className="small"
-              onClick={() => {
-                mapPicker?.cancel()
-                setGalileoFrom(null)
-                setGalileoTo(null)
-                setGalileoHint(null)
-                setOpen(false)
-              }}
-            >
-              Cancel
-            </button>
-          </div>
+          {!isGalileo && (
+            <div className="play-card-buttons">
+              <button type="submit" className="small" disabled={disabled || !valid}>
+                {card.kind === 'greatPerson' && !card.discards ? 'Confirm use' : 'Confirm play'}
+              </button>
+              <button type="button" className="small" onClick={closeForm}>
+                Cancel
+              </button>
+            </div>
+          )}
         </form>
       )}
     </div>
