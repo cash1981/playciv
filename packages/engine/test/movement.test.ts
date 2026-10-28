@@ -260,6 +260,8 @@ describe('huts and villages', () => {
       expect(flown.destinations).toContainEqual(
         expect.objectContaining({ column: 3, row: 1, distance: 2 }),
       )
+      // Flight crosses the marker but cannot end on it (unofficial rule 283).
+      expect(flown.destinations.some((cell) => cell.column === 2 && cell.row === 1)).toBe(false)
     },
   )
 

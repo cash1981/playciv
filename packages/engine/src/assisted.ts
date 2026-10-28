@@ -1977,6 +1977,11 @@ export function reverseAssistedAction(
   if (effect.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }
+  // Galileo's undo wrote the reverse moves itself. Keep the board Undo from walking past them into
+  // the forward moves, which would teleport the already-restored figures to the destination again.
+  if (effect.kind === 'playCard' && effect.galileo !== undefined) {
+    return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
+  }
   return ok(counted)
 }
 

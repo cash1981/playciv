@@ -210,6 +210,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],
   ['Captain James Cook', 'doubles your travel speed until the end of the turn'],
+  ['Galileo Galilei', 'moves every figure in the chosen outer-edge square to another outer-edge square and locks them for the turn'],
 ])
 
 /**

@@ -17,10 +17,18 @@ import { tradeCeilingOf } from './limits.js'
 import { investableCoinsOf } from './sot.js'
 import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
-import { placeStartMarker } from './actions/board.js'
+import { moveFigureWithMovementUnchecked, placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import { drawCandidates, performAdvance, reverseAdvanceEffect, shuffleSheetTwice } from './assisted-culture.js'
-import { unitSheetOf } from './build-options.js'
+import { squareLabel, unitSheetOf } from './build-options.js'
+import {
+  GALILEO_NAME,
+  galileoDestinationAllowed,
+  galileoFiguresAt,
+  isOuterEdgeCell,
+} from './galileo.js'
+import { mapTop } from './board.js'
+import type { PieceMovement } from './board.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import { revealedTechNamesOfOthers } from './great-person-effects.js'
 import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
@@ -197,6 +205,7 @@ interface Automated {
     | 'advance'
     | 'curieSubstitute'
     | 'usedAction'
+    | 'galileo'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -354,6 +363,79 @@ function automate(
         state: useTurnAction(state, player, turn, key, player.stats),
         extra: { usedAction: { key, turnNumber: turn.turnNumber } },
         said: ', doubling their travel speed until the end of the turn',
+      })
+    }
+    case GALILEO_NAME: {
+      const from = payload?.from
+      const to = payload?.to
+      if (from === undefined || to === undefined) {
+        return err('Choose an outer-edge source square and an empty outer-edge destination.')
+      }
+      if (!isOuterEdgeCell(state.board, from) || !isOuterEdgeCell(state.board, to)) {
+        return err('Galileo moves between squares on the outer edge of the map.')
+      }
+      const figures = galileoFiguresAt(state.board, player, from)
+      if (figures.length === 0) {
+        return err(`No figure of yours stands on ${squareLabel(from)}.`)
+      }
+      const sameSquare = from.column === to.column && from.row === to.row
+      if (!sameSquare && !galileoDestinationAllowed(state.board, to)) {
+        return err(`${squareLabel(to)} is not an empty outer-edge square.`)
+      }
+
+      const turnNumber = turnStatus(state).currentTurn
+      const sourceX = from.column * state.board.squareSize
+      const sourceY = mapTop(state.board) + from.row * state.board.squareSize
+      const destX = to.column * state.board.squareSize
+      const destY = mapTop(state.board) + to.row * state.board.squareSize
+      const moves: {
+        pieceId: string
+        from: { x: number; y: number }
+        to: { x: number; y: number }
+        movementFrom: PieceMovement | null
+        historyId: string
+      }[] = []
+      let current = state
+      for (const figure of figures) {
+        const before = figure.movement?.turn === turnNumber ? figure.movement : null
+        const movementTo: PieceMovement = {
+          turn: turnNumber,
+          used: before?.used ?? 0,
+          locked: true,
+        }
+        const x = destX + (figure.x - sourceX)
+        const y = destY + (figure.y - sourceY)
+        const next = moveFigureWithMovementUnchecked(current, {
+          playerId: player.playerId,
+          pieceId: figure.id,
+          x,
+          y,
+          movementFrom: figure.movement ?? null,
+          movementTo,
+          description: sameSquare
+            ? `locked ${figure.label} on ${squareLabel(from)} with ${GALILEO_NAME}`
+            : `moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)} with ${GALILEO_NAME}`,
+          ...(at === undefined ? {} : { at }),
+        })
+        if (next === undefined) return err('The figures could not be moved.')
+        const historyId = next.board.history.at(-1)?.id
+        if (historyId === undefined) return err('The move could not be recorded.')
+        current = next
+        moves.push({
+          pieceId: figure.id,
+          from: { x: figure.x, y: figure.y },
+          to: { x, y },
+          movementFrom: figure.movement ?? null,
+          historyId,
+        })
+      }
+      return ok({
+        state: current,
+        extra: { galileo: { from, to, moves } },
+        said: sameSquare
+          ? `, locked ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} on ${squareLabel(from)}`
+          : `, moved ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} from ` +
+            `${squareLabel(from)} to ${squareLabel(to)}`,
       })
     }
     case 'Marie Curie': {
@@ -537,6 +619,15 @@ export const playCard: AssistedActionDefinition = {
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
       return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
     }
+    if (effect.galileo !== undefined) {
+      const movedAway = effect.galileo.moves.find((move) => {
+        const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        return piece === undefined || piece.x !== move.to.x || piece.y !== move.to.y
+      })
+      if (movedAway !== undefined) {
+        return blockedBy(`${effect.name} cannot be undone: a figure it moved has been moved again.`)
+      }
+    }
     const coinTarget =
       effect.coin === undefined ? undefined : playerOf(state, effect.coin.targetId)
     if (effect.coin !== undefined && (coinTarget === undefined || coinTarget.stats.coinSources.sheet < 1)) {
@@ -582,6 +673,25 @@ export const playCard: AssistedActionDefinition = {
     }
     if (effect.curieSubstitute !== undefined) {
       hand = { ...hand, curieSubstitute: null }
+    }
+    if (effect.galileo !== undefined) {
+      for (const move of [...effect.galileo.moves].reverse()) {
+        const piece = current.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        if (piece === undefined) return blockedBy(`${effect.name} cannot be undone: a figure it moved is gone.`)
+        const next = moveFigureWithMovementUnchecked(current, {
+          playerId: player.playerId,
+          pieceId: move.pieceId,
+          x: move.from.x,
+          y: move.from.y,
+          movementFrom: piece.movement ?? null,
+          movementTo: move.movementFrom,
+          description: `moved ${piece.label} back with ${effect.name}`,
+          ...(at === null || at === undefined ? {} : { at }),
+        })
+        if (next === undefined) return blockedBy(`${effect.name} cannot be undone: a figure could not be moved back.`)
+        current = next
+      }
+      hand = playerOf(current, player.playerId) ?? hand
     }
     if (effect.coin !== undefined && coinTarget !== undefined) {
       const recipient = playerOf(current, effect.coin.targetId) ?? coinTarget

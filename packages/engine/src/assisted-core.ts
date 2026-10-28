@@ -204,6 +204,11 @@ export interface UpgradeBuildingsPayload {
  * What `playCard` carries: the card, the players it names (a card that names every
  * other player ignores them) and the resource it is played as, when it has one.
  */
+export interface CardSquare {
+  readonly column: number
+  readonly row: number
+}
+
 export interface PlayCardPayload {
   readonly itemId: string
   readonly targets: readonly string[]
@@ -212,6 +217,10 @@ export interface PlayCardPayload {
   readonly coinSource?: string
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
+  /** Galileo Galilei: the outer-edge square whose figures move. */
+  readonly from?: CardSquare
+  /** Galileo Galilei: the empty outer-edge square they move to. */
+  readonly to?: CardSquare
 }
 
 /**

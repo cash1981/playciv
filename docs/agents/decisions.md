@@ -537,7 +537,8 @@ turn without a reset action.
 - **Huts and villages:** a move that reaches a square with a `resources/hut` or
   `resources/village` marker must stop on that square; without a revealed Flight
   the figure cannot continue past it in the same move. A revealed Flight flies
-  over the marker, so the squares beyond are reachable too.
+  over the marker, so the squares beyond are reachable, but rule 283 still
+  forbids ending the move on the marker square.
 - **Lock and undo:** after any travel the figure is locked for the turn; pressing
   board Undo restores the square and the lock in one step, exactly the issue's
   requested redo. A freeform drag of the viewer's own map figure is disabled in
@@ -555,6 +556,47 @@ Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`, the `move` change
 `server/src/routes/board.ts`, `web/src/views/BoardView.tsx`, and tests
 `movement.test.ts`, `board-api.test.ts`, `BoardView.test.tsx`,
 `assisted-play-card.test.ts`.
+
+### Galileo Galilei and the card map picker (#302)
+
+Galileo is the first card whose effect is applied through a map choice. The Play
+form asks for a source edge square and a destination edge square; the board
+picker is the same one Build uses, through a small `MapPickerContext` bridge, and
+`playCard` carries the two squares in its payload. The engine moves every one of
+the player's figures in the source together and writes each move with the
+figure's travel lock, so the existing card undo vote puts the figures back and
+frees the card.
+
+- **Edge:** a map square with at least one cardinal neighbour that is not a
+  playable map square. This covers the outer border of every board shape, and
+  the rim of a stepped board or hole as the human described.
+- **Empty:** unofficial rules 61 to 63. A square with no figure, building, Great
+  Person, wonder, city-state, city, hut, village or relic token. A disaster
+  alone, or another resource token such as wheat, does not block it. A square
+  whose hut/village/relic token has been taken has no such piece on the board.
+  A metropolis blocks both squares its artwork covers, not just the one under its
+  centre.
+- **Same square:** rule 332 allows the source itself as the destination, which
+  locks the figures without moving them. The destination picker offers it once a
+  source is chosen.
+- **No terrain or stacking gate:** the card names no terrain, so an empty water
+  edge square is allowed. Every destination is empty of figures, so the stacking
+  limit cannot be exceeded by this move. There is no extra stacking check.
+- **Lock and undo:** every moved figure gets `movement{locked:true}` for the turn;
+  the same board history entries carry the old positions and movement state. The
+  board Undo refuses the individual moves (`BOARD_UNDO_ASSISTED`), and the card's
+  undo vote moves every figure back and returns the card to the hand, ready to be
+  used on another group. Undo is refused if one of the moved figures has been
+  moved again since.
+- **Not yet checked:** Brandenburg Gate's outskirts rule (rule 333) and the
+  interaction with scouts' gathered squares and icon reuse (rules 198, 257, 334,
+  341, 422 to 424) need those systems first.
+
+Source: `engine/src/galileo.ts`, `assisted-cards.ts` (`Galileo Galilei`),
+`actions/board.ts` (`moveFigureWithMovementUnchecked`),
+`assisted-core.ts` (`CardSquare`), `server/src/routes/assisted-args.ts`,
+`web/src/views/mapPick.ts`, `PlayableCards.tsx`, `GameView.tsx`,
+`engine/test/galileo.test.ts`, `web/src/views/PlayableCards.test.tsx`.
 
 ### Turn warning in Your actions (2026-10-24)
 

@@ -63,9 +63,12 @@ old test counts and past deployment reports do not establish present health.
   follows Sailing/Steam Power/Flight and England's crossing rule, a hut or
   village stops the move unless Flight flies over it, and one board Undo
   restores the square and the spent movement. Natural Religion, Henry Ford and
-  Captain James Cook feed the speed. Culture-card movement, Hannibal and
-  Communism's square lock are still queued. See "Figure movement (#302, first
-  slice)" in decisions.
+  Captain James Cook feed the speed. Galileo Galilei is implemented through the
+  shared card map picker: every own figure in one outer-edge square moves together
+  to an empty edge square, or the same square to lock them. Culture-card movement,
+  Hannibal and Communism's square lock are still queued. See "Figure movement
+  (#302, first slice)" and "Galileo Galilei and the card map picker (#302)" in
+  decisions.
 
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override, shown on each city card.

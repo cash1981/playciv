@@ -399,6 +399,60 @@ export interface TravelFigureInput {
   readonly at?: string
 }
 
+export interface MoveFigureWithMovementInput {
+  readonly playerId: string
+  readonly pieceId: string
+  readonly x: number
+  readonly y: number
+  /** The raw travel bookkeeping before the move, for an exact undo. */
+  readonly movementFrom: PieceMovement | null
+  /** The bookkeeping after it; `null` clears the field, as an undo does. */
+  readonly movementTo: PieceMovement | null
+  /** What the history line says, after the actor's name and a space. */
+  readonly description: string
+  readonly at?: string
+}
+
+/**
+ * Moves a figure and writes its travel bookkeeping in the same board history
+ * entry. Used by the enforced travel route, and by an assisted card (Galileo)
+ * that moves figures by its own rule. No rule is checked here; the caller has.
+ */
+export function moveFigureWithMovementUnchecked(
+  state: GameState,
+  input: MoveFigureWithMovementInput,
+): GameState | undefined {
+  const fromIndex = state.board.pieces.findIndex((candidate) => candidate.id === input.pieceId)
+  const piece = state.board.pieces[fromIndex]
+  if (piece === undefined) return undefined
+
+  const x = Math.round(input.x)
+  const y = Math.round(input.y)
+  const moved: BoardPiece =
+    input.movementTo === null
+      ? (() => {
+          const { movement: _cleared, ...rest } = piece
+          return { ...rest, x, y }
+        })()
+      : { ...piece, x, y, movement: input.movementTo }
+  const others = state.board.pieces.filter((candidate) => candidate.id !== piece.id)
+  const pieces = [...others, moved]
+
+  return record(input, {
+    state,
+    pieces,
+    change: {
+      kind: 'move',
+      pieceId: piece.id,
+      from: { x: piece.x, y: piece.y },
+      to: { x, y },
+      fromIndex,
+      movement: { from: input.movementFrom, to: input.movementTo },
+    },
+    description: input.description,
+  })
+}
+
 /**
  * Moves one of the player's own figures on the map by the Movement rules: a
  * cardinal path within its travel speed, no illegal water, and only while the
@@ -442,39 +496,29 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
     })
   }
 
-  const fromIndex = state.board.pieces.findIndex((candidate) => candidate.id === piece.id)
-  const x = Math.round(
-    input.column * state.board.squareSize + (state.board.squareSize - piece.width) / 2,
-  )
-  const y = Math.round(
+  const x = input.column * state.board.squareSize + (state.board.squareSize - piece.width) / 2
+  const y =
     mapTop(state.board) +
-      input.row * state.board.squareSize +
-      (state.board.squareSize - piece.height) / 2,
-  )
+    input.row * state.board.squareSize +
+    (state.board.squareSize - piece.height) / 2
   const used = (saved?.used ?? 0) + destination.distance
   const movement: PieceMovement = { turn: turnNumber, used, locked: true }
-  const moved: BoardPiece = { ...piece, x, y, movement }
-  const others = state.board.pieces.filter((candidate) => candidate.id !== piece.id)
-  const pieces = [...others, moved]
   const areas = areasFor(state)
-
-  return ok(
-    record(input, {
-      state,
-      pieces,
-      change: {
-        kind: 'move',
-        pieceId: piece.id,
-        from: { x: piece.x, y: piece.y },
-        to: { x, y },
-        fromIndex,
-        movement: { from: piece.movement ?? null, to: movement },
-      },
-      description:
-        `moved ${piece.label} from ${locationOf(state.board, areas, piece)} to ${destination.label}` +
-        ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})`,
-    }),
-  )
+  const moved = moveFigureWithMovementUnchecked(state, {
+    playerId: input.playerId,
+    pieceId: piece.id,
+    x,
+    y,
+    movementFrom: piece.movement ?? null,
+    movementTo: movement,
+    description:
+      `moved ${piece.label} from ${locationOf(state.board, areas, piece)} to ${destination.label}` +
+      ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})`,
+    ...(input.at === undefined ? {} : { at: input.at }),
+  })
+  return moved === undefined
+    ? err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+    : ok(moved)
 }
 
 /**
@@ -933,6 +977,10 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     }
     // Khalid moved the start player marker: stepping that back alone would undo only half the card
     if (effect.kind === 'playCard' && effect.starter?.historyId === entry.id) return true
+    // Galileo moved figures as part of playing the card: the board Undo must not take one move alone
+    if (effect.kind === 'playCard' && effect.galileo?.moves.some((move) => move.historyId === entry.id) === true) {
+      return true
+    }
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
     // A harvest put one resource token in the player's area

@@ -10,7 +10,7 @@
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
-import type { Board, BoardArea, BoardPiece, PieceFace } from './board.js'
+import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
 import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
@@ -650,6 +650,18 @@ export type AssistedEffect =
       readonly curieSubstitute?: string
       /** A once-per-turn marker the card wrote (Captain James Cook), so an undo frees it. */
       readonly usedAction?: { readonly key: string; readonly turnNumber: number }
+      /** Galileo Galilei: the edge source and destination, and each figure's before/after position. */
+      readonly galileo?: {
+        readonly from: { readonly column: number; readonly row: number }
+        readonly to: { readonly column: number; readonly row: number }
+        readonly moves: readonly {
+          readonly pieceId: string
+          readonly from: { readonly x: number; readonly y: number }
+          readonly to: { readonly x: number; readonly y: number }
+          readonly movementFrom: PieceMovement | null
+          readonly historyId: string
+        }[]
+      }
     }
   | {
       readonly kind: 'coinPurchase'

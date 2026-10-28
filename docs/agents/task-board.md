@@ -128,12 +128,12 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Brief:** `docs/agents/tasks/issue-302-figure-movement.md`
 - **Status:** in review
 - **Claimed paths:**
-  - `packages/engine/src/movement.ts` (new), `board.ts`, `actions/board.ts`, `errors.ts`, `index.ts`, `state.ts`, `assisted-cards.ts`, `card-timing.ts`
-  - `packages/engine/test/movement.test.ts` (new), `assisted-play-card.test.ts`
-  - `packages/server/src/routes/board.ts`, `errors.ts`, `packages/server/test/board-api.test.ts`
-  - `packages/web/src/lib/api.ts`, `packages/web/src/views/BoardView.tsx`, `BoardView.test.tsx`, `GameView.tsx`, `styles.css`
-  - `docs/agents/tasks/issue-302-figure-movement.md`, `decisions.md`, `state.md`, `task-board.md`
-- **Notes:** based on `origin/main` at `14dfd9a`. First slice: enforced map movement, highlight, undo/lock and the passive speed cards. The live `spectator-readonly`, `trade-collection-timing`, `assisted-play-contract` and `action-panel-focus` claims list the same web files but their branches have no commits ahead of `origin/main`; the overlapping paths are treated as stale after their merges.
+  - `packages/engine/src/movement.ts` (new), `galileo.ts` (new), `board.ts`, `actions/board.ts`, `errors.ts`, `index.ts`, `state.ts`, `assisted-cards.ts`, `assisted-core.ts`, `card-timing.ts`
+  - `packages/engine/test/movement.test.ts` (new), `galileo.test.ts` (new), `assisted-play-card.test.ts`
+  - `packages/server/src/routes/board.ts`, `routes/assisted-args.ts`, `errors.ts`, `packages/server/test/board-api.test.ts`, `assisted-play-card-api.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/BoardView.tsx`, `BoardView.test.tsx`, `GameView.tsx`, `PlayableCards.tsx`, `PlayableCards.test.tsx`, `mapPick.ts` (new), `styles.css`
+  - `docs/agents/tasks/issue-302-figure-movement.md`, `issue-302-galileo.md`, `decisions.md`, `state.md`, `task-board.md`
+- **Notes:** based on `origin/main` at `14dfd9a`. First slice: enforced map movement, highlight, undo/lock, the passive speed cards and the hut/village stop rule. Second slice on the same branch: Galileo Galilei and the shared card map picker. The live `spectator-readonly`, `trade-collection-timing`, `assisted-play-contract` and `action-panel-focus` claims list the same web files but their branches have no commits ahead of `origin/main`; the overlapping paths are treated as stale after their merges.
 
 ---
 

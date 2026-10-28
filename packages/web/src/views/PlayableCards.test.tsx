@@ -3,13 +3,21 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { PlayableCard } from '@civ/engine'
+import {
+  SQUARE_SIZE,
+  createBoard,
+  findBoardAsset,
+  mapTop,
+} from '@civ/engine'
+import type { BoardPiece, PlayableCard } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
+import { MapPickerContext } from './mapPick.js'
+import type { MapPicker } from './mapPick.js'
 import { PlayCardControl, PlayableCardList, timingLabel } from './PlayableCards.js'
 
 beforeEach(() => {
@@ -374,6 +382,107 @@ describe('confirming', () => {
     fireEvent.click(confirmButton())
     await waitFor(() => expect(api.actionWithArgs).toHaveBeenCalled())
     expect(screen.getByRole('form', { name: 'Play Counterfeiters' })).toBeTruthy()
+  })
+})
+
+describe('Galileo Galilei', () => {
+  const galileo = card({
+    itemId: 'gp-galileo',
+    name: 'Galileo Galilei',
+    kind: 'greatPerson',
+    description:
+      'City Management: You may discard this card to choose a square on the outer edge of the map. Move your figures in that square to any empty square on the outer edge of the map. They cannot move again this turn.',
+    timings: ['CM'],
+    targets: { kind: 'none' },
+    prompt: '',
+    automatic:
+      'moves every figure in the chosen outer-edge square to another outer-edge square and locks them for the turn',
+    discards: true,
+    status: 'ready',
+    reason: 'Can be played in city management, which you are in.',
+  })
+
+  const board = createBoard()
+  const army = findBoardAsset('figures/redarmy')
+  if (army === undefined) throw new Error('missing army asset')
+  const figure: BoardPiece = {
+    id: 'army-galileo',
+    assetId: army.id,
+    path: army.path,
+    label: army.label,
+    category: 'figure',
+    x: Math.round((SQUARE_SIZE - army.width) / 2),
+    y: Math.round(mapTop(board) + (SQUARE_SIZE - army.height) / 2),
+    width: army.width,
+    height: army.height,
+    rotation: 0,
+    placedBy: 'me',
+  }
+  const view = {
+    rev: 8,
+    board: { ...board, pieces: [figure] },
+    you: {
+      playerId: 'me',
+      username: 'Alice',
+      color: 'Red',
+      civilization: null,
+      stats: { mvmt: '2' },
+      items: [],
+      socialPolicies: [],
+      techsChosen: [],
+      playerTurns: [],
+      playableCards: [galileo],
+    },
+    opponents: [],
+  } as unknown as PlayerView
+
+  it('picks a source and destination on the board and sends them with the card', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+
+    fireEvent.click(playButton('Galileo Galilei'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('A1')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose destination square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(screen.getByText('A3')).toBeTruthy()
+
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'gp-galileo',
+      from: { column: 0, row: 0 },
+      to: { column: 0, row: 2 },
+    })
+  })
+
+  it('cancels an open board pick when the card form closes', async () => {
+    const begin = vi.fn().mockResolvedValue(null)
+    const cancel = vi.fn()
+    const mapPicker: MapPicker = { begin, cancel }
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+
+    fireEvent.click(playButton('Galileo Galilei'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('form', { name: 'Play Galileo Galilei' })).toBeNull()
   })
 })
 

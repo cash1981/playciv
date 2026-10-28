@@ -194,7 +194,7 @@ export function figureMovementOptions(
   const water = waterRulesOf(player)
   const flight = hasRevealedTech(player, 'Flight')
   const occupied = figureSquares(board)
-  const mustStop = flight ? new Set<string>() : hutAndVillageSquares(board)
+  const mustStop = hutAndVillageSquares(board)
   const distances = new Map<string, number>([[keyOf(start), 0]])
   const queue: Cell[] = [start]
   const destinations: MovementDestination[] = []
@@ -207,7 +207,7 @@ export function figureMovementOptions(
       const terrain = terrainAt(board, x, y)
       const waterHere = terrain === 'water'
       const mayEndHere = waterHere ? water.end : true
-      if (mayEndHere && !occupied.has(keyOf(cell))) {
+      if (mayEndHere && !occupied.has(keyOf(cell)) && !(flight && mustStop.has(keyOf(cell)))) {
         destinations.push({
           column: cell.column,
           row: cell.row,
@@ -218,8 +218,9 @@ export function figureMovementOptions(
     }
     if (distance >= speed) continue
     // A hut or village ends the move: the figure may land there but not pass it.
-    // A revealed Flight flies over, so it neither stops nor blocks the squares beyond.
-    if (distance > 0 && mustStop.has(keyOf(cell))) continue
+    // A revealed Flight flies over, so it neither stops nor blocks the squares beyond,
+    // but rule 283 still forbids ending the move on the marker square.
+    if (distance > 0 && !flight && mustStop.has(keyOf(cell))) continue
     for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
       const next = { column: cell.column + dc, row: cell.row + dr }
       if (!isMapCell(board, next.column, next.row)) continue

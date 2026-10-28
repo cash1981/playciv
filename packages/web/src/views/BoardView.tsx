@@ -86,6 +86,8 @@ export interface PickSquares {
   readonly onPick: (cell: PickableSquare) => void
   /** Escape. The board never leaves pick mode by itself. */
   readonly onCancel: () => void
+  /** A sentence for one cell's button, when this is not a Build placement. */
+  readonly describeCell?: (cell: PickableSquare) => string
 }
 
 interface Props {
@@ -1199,13 +1201,16 @@ export function BoardView({
                     type="button"
                     className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : cell.replaces === undefined ? ' noted' : ' replacing'}`}
                     // A square note is the enemy figure on a square an army is placed on, or what the item replaces; the bar spells it out once the square is picked.
-                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${
-                      cell.note === undefined
-                        ? ''
-                        : cell.replaces === undefined
-                          ? ', enemy figure there, resolve by hand'
-                          : `, replaces ${cell.replaces.label}`
-                    }`}
+                    aria-label={
+                      pickSquares.describeCell?.(cell) ??
+                      `Place ${pickSquares.itemLabel} on ${cell.label}${
+                        cell.note === undefined
+                          ? ''
+                          : cell.replaces === undefined
+                            ? ', enemy figure there, resolve by hand'
+                            : `, replaces ${cell.replaces.label}`
+                      }`
+                    }
                     aria-pressed={chosen}
                     disabled={busy || readOnly}
                     style={{
