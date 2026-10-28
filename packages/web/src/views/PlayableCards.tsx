@@ -75,6 +75,7 @@ export function PlayCardControl({
   const [substitute, setSubstitute] = useState('')
   const [galileoFrom, setGalileoFrom] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [galileoTo, setGalileoTo] = useState<{ readonly column: number; readonly row: number } | null>(null)
+  const [galileoHint, setGalileoHint] = useState<string | null>(null)
   const mapPicker = useMapPicker()
   const formId = useId()
   if (view.you === null) return null
@@ -117,6 +118,11 @@ export function PlayCardControl({
       which === 'from'
         ? galileoSourceCells.map((cell) => ({ ...cell, label: squareLabel(cell) }))
         : galileoToCells
+    if (which === 'from' && cells.length === 0) {
+      setGalileoHint('None of your figures is on an outer-edge square. Move one there first.')
+      return
+    }
+    setGalileoHint(null)
     const picked = await mapPicker.begin({
       title: which === 'from' ? 'the Galileo source square' : 'the Galileo destination square',
       cells,
@@ -173,6 +179,7 @@ export function PlayCardControl({
               mapPicker?.cancel()
               setGalileoFrom(null)
               setGalileoTo(null)
+              setGalileoHint(null)
               setOpen(false)
             } else {
               setOpen(true)
@@ -231,15 +238,18 @@ export function PlayCardControl({
                 <button
                   type="button"
                   className="small"
-                  disabled={disabled || mapPicker === null || galileoSourceCells.length === 0}
+                  disabled={disabled || mapPicker === null}
                   onClick={() => void pickGalileo('from')}
                 >
                   Choose source square
                 </button>
                 <span>{galileoFrom === null ? 'No source chosen' : squareLabel(galileoFrom)}</span>
               </div>
-              {galileoSourceCells.length === 0 && (
-                <p className="muted">None of your figures stands on the outer edge.</p>
+              {galileoHint !== null && galileoSourceCells.length === 0 && (
+                <p className="muted">{galileoHint}</p>
+              )}
+              {galileoHint === null && galileoSourceCells.length === 0 && (
+                <p className="muted">None of your figures is on an outer-edge square.</p>
               )}
               <div className="play-card-buttons">
                 <button
@@ -325,6 +335,7 @@ export function PlayCardControl({
                 mapPicker?.cancel()
                 setGalileoFrom(null)
                 setGalileoTo(null)
+                setGalileoHint(null)
                 setOpen(false)
               }}
             >

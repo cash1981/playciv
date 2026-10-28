@@ -467,6 +467,27 @@ describe('Galileo Galilei', () => {
     })
   })
 
+  it('keeps the source button pressable when no figure is on the edge, with a reason', () => {
+    const begin = vi.fn()
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+    const emptyView = {
+      ...view,
+      board: { ...board, pieces: [] },
+    } as unknown as PlayerView
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={emptyView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+
+    fireEvent.click(playButton('Galileo Galilei'))
+    const source = screen.getByRole('button', { name: 'Choose source square' }) as HTMLButtonElement
+    expect(source.disabled).toBe(false)
+    fireEvent.click(source)
+    expect(screen.getByText(/Move one there first/)).toBeTruthy()
+    expect(begin).not.toHaveBeenCalled()
+  })
+
   it('cancels an open board pick when the card form closes', async () => {
     const begin = vi.fn().mockResolvedValue(null)
     const cancel = vi.fn()
