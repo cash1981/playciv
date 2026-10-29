@@ -56,6 +56,7 @@ import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess } from '../state.js'
 import { communismLocksOf } from '../communism.js'
+import { activeGreatPerson } from '../great-person-effects.js'
 import {
   destinationTo,
   figureBelongsTo,
@@ -482,7 +483,11 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
       reason: `${piece.label} has already moved this turn. Undo the move on the board to move it again.`,
     })
   }
-  const options = figureMovementOptions(state.board, player, piece, turnNumber, communismLocksOf(state))
+  const movementPlayer = {
+    ...player,
+    activeGreatPersonNames: activeGreatPerson(state, player, 'Henry Ford') ? ['Henry Ford'] : [],
+  }
+  const options = figureMovementOptions(state.board, movementPlayer, piece, turnNumber, communismLocksOf(state))
   if (options === null) {
     return err({
       kind: 'FIGURE_MOVE_ILLEGAL',

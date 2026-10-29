@@ -175,6 +175,39 @@ describe('movement speed', () => {
     })
     expect(travelSpeedOf(playerOf(withCook), piece, 1)).toBe(6)
   })
+
+  it('does not apply Henry Ford while every Builder or Inventor token is blockaded', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'great people/builder', 5, 5)
+    const unblocked = withPlayer(state, {
+      ...playerOf(state),
+      items: [
+        {
+          kind: 'greatperson',
+          name: 'Henry Ford',
+          type: 'Builder or Inventor',
+          hidden: false,
+        } as Playerhand['items'][number],
+      ],
+    })
+    const piece = figure(unblocked)
+    expect(
+      travelFigure(unblocked, { playerId: CASH1981, pieceId: piece.id, column: 4, row: 1 }).ok,
+    ).toBe(true)
+
+    const blocked = place(unblocked, 'figures/bluearmy', 5, 5, KARANDRAS1)
+    const blockedPiece = figure(blocked)
+    expect(
+      unwrapErr(
+        travelFigure(blocked, {
+          playerId: CASH1981,
+          pieceId: blockedPiece.id,
+          column: 4,
+          row: 1,
+        }),
+      ).kind,
+    ).toBe('FIGURE_MOVE_ILLEGAL')
+  })
 })
 
 describe('reachable squares', () => {

@@ -143,7 +143,7 @@ export function PlayCardControl({
   const hannibalNeedsChoice =
     cardMove?.kind === 'hannibal' &&
     moveTo !== null &&
-    hannibalSourceFigures.length > hannibalRoom
+    hannibalSourceFigures.length > 1
   const destinationCellsFor = (from: { readonly column: number; readonly row: number }) =>
     isGalileo
       ? galileoDestinations(view.board, from)
@@ -273,7 +273,7 @@ export function PlayCardControl({
         return
       }
       setHannibalSelected(selected.map((piece) => piece.id))
-      if (selected.length < sourceFigures.length) return
+      if (sourceFigures.length > 1) return
       if (
         window.confirm(
           `Move ${selected.length} ${selected.length === 1 ? 'figure' : 'figures'} from ` +

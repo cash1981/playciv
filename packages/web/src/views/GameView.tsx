@@ -516,6 +516,7 @@ export function GameView({
     view !== null && !(selectedRevision !== null && historical !== null) && (view.active || player?.role === 'admin')
   const buildFlow = useBuildFlow(buildAllowed ? (view.you?.buildOptions ?? null) : null)
   type PendingMapPick = MapPickRequest & {
+    readonly gameId: string
     readonly resolve: (cell: PickableSquare | null) => void
   }
   const [mapPick, setMapPick] = useState<PendingMapPick | null>(null)
@@ -532,14 +533,15 @@ export function GameView({
       begin: (request) =>
         new Promise((resolve) => {
           mapPickRef.current?.resolve(null)
-          const pending: PendingMapPick = { ...request, resolve }
+          const pending: PendingMapPick = { ...request, gameId, resolve }
           mapPickRef.current = pending
           setMapPick(pending)
         }),
       cancel: () => settleMapPick(null),
     }),
-    [settleMapPick],
+    [gameId, settleMapPick],
   )
+  useEffect(() => () => settleMapPick(null), [gameId, settleMapPick])
 
   if (view === null) {
     return (
@@ -558,6 +560,19 @@ export function GameView({
   const locked = !view.active && player?.role !== 'admin'
   const interactionBusy = busy || replaying || locked
   const you = displayedView.you
+  const movementPlayer =
+    you === null
+      ? null
+      : {
+          ...you,
+          activeGreatPersonNames: (you.items ?? []).flatMap((item) =>
+            item.kind === 'greatperson' &&
+            !item.hidden &&
+            (item.type === null || !you.blockadedGreatPersonTypes?.includes(item.type))
+              ? [item.name]
+              : [],
+          ),
+        }
   const activePlayer = activePlayerOf(displayedView)
   const chatAuthors = chatAuthorsOf(displayedView)
   const buildPlan = buildFlow.plan
@@ -572,7 +587,7 @@ export function GameView({
           onCancel: buildFlow.clear,
         }
   const cardPickSquares: PickSquares | undefined =
-    mapPick === null
+    mapPick === null || mapPick.gameId !== gameId
       ? undefined
       : {
           itemLabel: mapPick.title,
@@ -659,7 +674,7 @@ export function GameView({
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
         viewerColor={you?.color ?? null}
-        movementPlayer={you ?? null}
+        movementPlayer={movementPlayer}
         movementTurn={displayedView.activeTurn?.turnNumber ?? null}
         movementLocks={displayedView.communismLocks}
         {...(pickSquares === undefined ? {} : { pickSquares })}

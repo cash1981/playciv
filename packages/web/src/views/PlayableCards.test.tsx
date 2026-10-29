@@ -784,6 +784,55 @@ describe('Hannibal', () => {
       figureIds: ['source-a'],
     })
   })
+
+  it('lets the player choose fewer figures even when all source figures fit', async () => {
+    if (testArmy === undefined) throw new Error('missing army')
+    const at = (id: string, column: number, row: number, xOffset = 0): BoardPiece => ({
+      id,
+      assetId: testArmy.id,
+      path: testArmy.path,
+      label: testArmy.label,
+      category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - testArmy.width) / 2) + xOffset,
+      y: Math.round(mapTop(testBoard) + row * SQUARE_SIZE + (SQUARE_SIZE - testArmy.height) / 2),
+      width: testArmy.width,
+      height: testArmy.height,
+      rotation: 0,
+      placedBy: 'me',
+    })
+    const sourceA = at('source-a', 2, 2)
+    const sourceB = at('source-b', 2, 2, 8)
+    const destination = at('destination', 2, 4)
+    const view = {
+      ...testView,
+      board: { ...testBoard, pieces: [sourceA, sourceB, destination] },
+      you: { ...testView.you, stackingLimit: 3 },
+    } as unknown as PlayerView
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 4, label: 'C5' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={hannibal} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Hannibal'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+
+    expect(screen.getByText(/Figures to move \(up to 2\)/)).toBeTruthy()
+    expect(confirm).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Red army 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move selected figures' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ figureIds: ['source-a'] })
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Move 1 figure from C3 to C5 with Hannibal/))
+  })
 })
 
 describe('the list of cards in a phase tab', () => {

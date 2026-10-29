@@ -3,7 +3,8 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Item } from '@civ/engine'
+import { SQUARE_SIZE, createBoard, findBoardAsset, mapTop } from '@civ/engine'
+import type { BoardPiece, Item, PlayableCard } from '@civ/engine'
 
 import { useIsBusy } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
@@ -12,6 +13,7 @@ import { clearToasts } from '../lib/toasts.js'
 import { ToastRegion } from './ToastRegion.js'
 import type { GameMenuActions } from './Navigation.js'
 import { BOARD_PANEL_ID } from './PhaseSummary.js'
+import type { PickSquares } from './BoardView.js'
 import {
   AUTO_REFRESH_MS,
   ArenaUnitCard,
@@ -30,12 +32,14 @@ import {
 vi.mock('./BoardView.js', () => ({
   BoardView: ({
     viewerCivilization,
+    movementPlayer,
     pickSquares,
     readOnly,
     showReadOnlyOutline,
   }: {
     viewerCivilization?: string | null
-    pickSquares?: { cells: readonly unknown[] }
+    movementPlayer?: { activeGreatPersonNames?: readonly string[] } | null
+    pickSquares?: PickSquares
     readOnly?: boolean
     showReadOnlyOutline?: boolean
   }) => (
@@ -45,9 +49,18 @@ vi.mock('./BoardView.js', () => ({
       data-testid="board"
       data-viewer-civilization={String(viewerCivilization)}
       data-pick-count={pickSquares === undefined ? 'off' : String(pickSquares.cells.length)}
+      data-henry-ford-active={String(movementPlayer?.activeGreatPersonNames?.includes('Henry Ford') ?? false)}
       data-readonly={String(readOnly)}
       data-show-outline={String(showReadOnlyOutline)}
-    />
+    >
+      {pickSquares?.cells[0] !== undefined && (
+        <button
+          type="button"
+          aria-label={`Pick ${pickSquares.itemLabel} ${pickSquares.cells[0].label}`}
+          onClick={() => pickSquares.onPick(pickSquares.cells[0]!)}
+        />
+      )}
+    </section>
   ),
 }))
 // Only the panel is replaced; the helpers GameView uses stay real
@@ -313,6 +326,139 @@ const renderOrderInCityManagement = async (
   if (tab !== null) fireEvent.click(tab)
   return rendered
 }
+
+describe('figure movement eligibility', () => {
+  it('does not pass Henry Ford to movement when his Great Person type is blockaded', async () => {
+    const henryFord = {
+      id: 'gp-henry-ford',
+      kind: 'greatperson',
+      sheetName: 'GREAT_PERSON',
+      name: 'Henry Ford',
+      type: 'Builder or Inventor',
+      description: null,
+      itemNumber: 1,
+      used: false,
+      hidden: false,
+      ownerId: 'p1',
+    } as unknown as Item
+    const view = orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        color: 'Red',
+        civilization: null,
+        items: [henryFord],
+        blockadedGreatPersonTypes: ['Builder or Inventor'],
+        playableCards: [],
+      },
+    })
+
+    await renderOrder(view)
+
+    expect(screen.getByTestId('board').getAttribute('data-henry-ford-active')).toBe('false')
+  })
+})
+
+describe('map pick lifecycle', () => {
+  it('cancels a pending destination pick when the view changes games', async () => {
+    localStorage.setItem('civ.autoRefresh', 'false')
+    const board = createBoard()
+    const army = findBoardAsset('figures/redarmy')
+    if (army === undefined) throw new Error('missing army asset')
+    const pieceAt = (id: string, column: number, row: number): BoardPiece => ({
+      id,
+      assetId: army.id,
+      path: army.path,
+      label: army.label,
+      category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - army.width) / 2),
+      y: Math.round(mapTop(board) + row * SQUARE_SIZE + (SQUARE_SIZE - army.height) / 2),
+      width: army.width,
+      height: army.height,
+      rotation: 0,
+      placedBy: 'p1',
+    })
+    const card = {
+      itemId: 'gp-hannibal',
+      name: 'Hannibal',
+      kind: 'greatPerson',
+      description: '',
+      timings: ['CM'],
+      targets: { kind: 'none' },
+      prompt: '',
+      resources: [],
+      automatic: null,
+      passive: false,
+      discards: true,
+      coinSources: [],
+      substituteResources: [],
+      status: 'ready',
+      reason: '',
+      mapMove: { kind: 'hannibal', allowance: 0 },
+    } as unknown as PlayableCard
+    const item = {
+      id: 'gp-hannibal',
+      kind: 'greatperson',
+      sheetName: 'GREAT_PERSON',
+      name: 'Hannibal',
+      type: 'General',
+      description: null,
+      itemNumber: 1,
+      used: false,
+      hidden: false,
+      ownerId: 'p1',
+    } as unknown as Item
+    const view = orderView({
+      board: { ...board, pieces: [pieceAt('source', 2, 2), pieceAt('destination', 2, 4)] },
+      activeTurn: {
+        playerId: 'p1',
+        username: 'viewer',
+        turnNumber: 1,
+        phase: 'CM',
+        startPlayer: 'viewer',
+        waitingFor: [],
+      },
+      communismLocks: [],
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        color: 'Red',
+        civilization: null,
+        items: [item],
+        blockadedGreatPersonTypes: [],
+        playableCards: [card],
+        stackingLimit: 2,
+        stats: { mvmt: '2' },
+        socialPolicies: [],
+        techsChosen: [],
+        playerTurns: [],
+      },
+    })
+    vi.spyOn(api, 'game').mockResolvedValue(view)
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const props = {
+      player: { username: 'viewer' } as unknown as PlayerDto,
+      onUnauthorized: vi.fn(),
+      onDeleted: vi.fn(),
+      onWithdrawn: vi.fn(),
+      onEnded: vi.fn(),
+    }
+    const rendered = render(<GameView gameId="game-1" {...props} />)
+
+    await screen.findByRole('heading', { name: 'Your hand (1)' })
+    fireEvent.click(screen.getByRole('button', { name: 'Play Hannibal' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    fireEvent.click(await screen.findByRole('button', { name: /source square C3/ }))
+    const destinationPick = await screen.findByRole('button', { name: /destination square C5/ })
+
+    expect(destinationPick).toBeTruthy()
+    rendered.rerender(<GameView gameId="game-2" {...props} />)
+
+    await waitFor(() => expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('off'))
+    expect(send).not.toHaveBeenCalled()
+  })
+})
 
 /** A city of the projection's `cities` list, with the fields the card reads. */
 const cityOf = (pieceId: string, label: string): Record<string, unknown> => ({

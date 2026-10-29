@@ -35,6 +35,7 @@ export interface MovementPlayer {
     readonly name?: string | null
     readonly hidden: boolean
   }[]
+  readonly activeGreatPersonNames?: readonly string[]
   readonly socialPolicies: readonly { readonly name: string; readonly hidden: boolean }[]
   readonly techsChosen: readonly { readonly name: string; readonly hidden: boolean }[]
   readonly government?: string
@@ -91,6 +92,11 @@ const isArmy = (piece: BoardPiece): boolean => piece.assetId.endsWith('army')
 const hasFaceup = (player: MovementPlayer, name: string): boolean =>
   player.items.some((item) => item.kind === 'greatperson' && item.name === name && !item.hidden)
 
+const hasActiveGreatPerson = (player: MovementPlayer, name: string): boolean =>
+  player.activeGreatPersonNames === undefined
+    ? hasFaceup(player, name)
+    : player.activeGreatPersonNames.includes(name)
+
 /** A revealed social policy of the player; a chosen but hidden one has no effect. */
 const hasPolicy = (player: MovementPlayer, name: string): boolean =>
   player.socialPolicies.some((policy) => policy.name === name && !policy.hidden)
@@ -123,7 +129,7 @@ export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNum
   ) {
     speed += 1
   }
-  if (hasFaceup(player, 'Henry Ford')) speed += 1
+  if (hasActiveGreatPerson(player, 'Henry Ford')) speed += 1
   const cook = player.playerTurns
     .find((turn) => turn.turnNumber === turnNumber)
     ?.usedActions.includes('card:Captain James Cook')
