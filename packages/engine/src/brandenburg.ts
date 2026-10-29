@@ -8,10 +8,8 @@
  * movement culture cards (rules 212 and 213). The rule is preventive, so the
  * engine simply never offers such an ending square.
  *
- * The wonder protects the outskirts of the holder's capital (rule 210 calls the
- * city-states "part of the capital outskirts"); a holder whose capital marker is
- * not on the map (a capital that grew into a metropolis has none) is protected
- * around its metropolis, and around every city when there is neither, and that is noted in decisions. A wonder that is
+ * The wonder protects the outskirts of every city of its holder (the human's reading,
+ * 2026-10-29), and the city-states the holder controls (rule 210). A wonder that is
  * disabled, or blockaded by an enemy figure on its own square (rule 214), has no
  * effect. Communism's Spy exception to the rule is not modelled.
  *
@@ -51,10 +49,7 @@ export function brandenburgZonesOf(state: Pick<GameState, 'board' | 'players'>):
     if (holder === undefined || colour === undefined) continue
 
     const footprints = cityFootprintsOf(state, colour)
-    // A capital that grew into a metropolis has no capital marker, so the metropolis is the capital
-    const capitals = footprints.filter((footprint) => footprint.piece.assetId.includes('capital'))
-    const metropolises = footprints.filter((footprint) => footprint.piece.assetId.includes('metropolis'))
-    const guarded = capitals.length > 0 ? capitals : metropolises.length > 0 ? metropolises : footprints
+    const guarded = footprints
     const cells = new Map<string, Cell>()
     for (const footprint of guarded) {
       for (const cell of footprint.outskirts) {

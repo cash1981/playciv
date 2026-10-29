@@ -37,7 +37,7 @@ the scout gathered-square follow-up.
    this turn. Source: the card art `SteamPower.jpg`, rules 193 to 199 of the
    official/unofficial summary.
 3. Brandenburg Gate (rules 209 to 214, 333, 340): a figure may not end a move in
-   the outskirts of another player's Brandenburg Gate (not the city centre);
+   the outskirts of every city of another player's Brandenburg Gate holder (not the city centre);
    applies to travel, Galileo, Hannibal, Steam Power and the movement culture
    cards. Communism's Spy exception is not modelled.
 4. Map-tile discovery as decided above.
@@ -79,4 +79,4 @@ Verified 2026-10-29: `pnpm -r typecheck`, `pnpm -r test` (engine 2202, web 1156,
 and `pnpm -r build` pass. Browser run on a seeded two-player game: yellow squares with own-figure
 stacking, blue Explore squares, tile placed, remaining range reduced, two Undos restore. Steam
 Power and Brandenburg Gate were not browser-tested. Independent review approved in round 2.
-Open for the human: Brandenburg Gate capital-only reading, Steam Power onto enemy figures.
+Brandenburg Gate guards every city (confirmed by the human). Open for the human: Steam Power onto enemy figures.

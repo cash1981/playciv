@@ -66,7 +66,7 @@ const inZone = (state: GameState, moverId: string, column: number, row: number):
   brandenburgForbiddenFor(state, moverId).some((cell) => cell.column === column && cell.row === row)
 
 describe('Brandenburg Gate zones', () => {
-  it('guards the eight squares around the holder\'s capital but not the centre', () => {
+  it('guards the eight squares around the holder\'s city but not the centre', () => {
     const state = withGate()
     expect(brandenburgZonesOf(state)).toHaveLength(1)
     expect(inZone(state, CASH1981, 7, 7)).toBe(true)
@@ -90,7 +90,7 @@ describe('Brandenburg Gate zones', () => {
     expect(brandenburgZonesOf(blockaded)).toHaveLength(0)
   })
 
-  it('guards the outskirts of every city when the holder has no capital marker', () => {
+  it('guards the outskirts of a city that is not the capital', () => {
     let state = place(game(), 'cities/bluecity2', 8, 8, KARANDRAS1)
     state = place(state, 'wonders/brandenburggate', 8, 5, KARANDRAS1)
     const gate = state.board.pieces.find((piece) => piece.assetId === 'wonders/brandenburggate') as BoardPiece
@@ -99,17 +99,21 @@ describe('Brandenburg Gate zones', () => {
   })
 })
 
-describe('Brandenburg Gate with a metropolis', () => {
-  it('guards the metropolis that is the capital, not the holder\'s ordinary cities', () => {
+describe('Brandenburg Gate with several cities', () => {
+  it('guards the outskirts of every city of the holder, a metropolis and the capital included', () => {
     let state = place(game(), 'cities/bluemetropolis2', 8, 8, KARANDRAS1)
     state = place(state, 'cities/bluecity2', 2, 2, KARANDRAS1)
+    state = place(state, 'cities/bluecapital2', 13, 2, KARANDRAS1)
     state = place(state, 'wonders/brandenburggate', 8, 5, KARANDRAS1)
     const gate = state.board.pieces.find((piece) => piece.assetId === 'wonders/brandenburggate') as BoardPiece
     state = unwrap(setWonderOwner(state, { playerId: KARANDRAS1, pieceId: gate.id, ownerId: KARANDRAS1 }))
-    // Squares next to the metropolis are guarded, squares next to the ordinary city are not
-    expect(brandenburgForbiddenFor(state, CASH1981).some((cell) => cell.column >= 6 && cell.row >= 6)).toBe(true)
-    expect(inZone(state, CASH1981, 1, 1)).toBe(false)
-    expect(inZone(state, CASH1981, 3, 3)).toBe(false)
+    expect(inZone(state, CASH1981, 7, 7)).toBe(true)
+    expect(inZone(state, CASH1981, 1, 1)).toBe(true)
+    expect(inZone(state, CASH1981, 3, 3)).toBe(true)
+    expect(inZone(state, CASH1981, 12, 1)).toBe(true)
+    // The centres are not outskirts
+    expect(inZone(state, CASH1981, 2, 2)).toBe(false)
+    expect(inZone(state, CASH1981, 13, 2)).toBe(false)
   })
 })
 

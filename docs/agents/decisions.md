@@ -693,15 +693,14 @@ manual** ("Stacking only"), and exploring works **from the edge**.
   rule 196 that goes beyond "enemy squares stay excluded"; the human should confirm it. Communism-locked
   sources and Brandenburg outskirts are refused. The moves belong to the action: the board
   Undo refuses them and the undo vote returns the figures and the Silk.
-- **Brandenburg Gate** (rules 209 to 214, 333): the outskirts of the owner's capital,
-  and the city-states the owner holds, are closed as an *ending* square for every other
-  player's figures in travel, Galileo, Hannibal, Steam Power and the movement culture
-  cards (a group card is judged by the moved figures' owner). Crossing is allowed. The
-  city centre is not outskirts. A disabled wonder, one without an owner, or one blockaded
-  by an enemy figure on its own square has no effect. Without a capital marker (a
-  metropolis has none) the owner's metropolis is the capital, and only without either is every city of the owner guarded. **This reading of the
-  card (capital only) is from rule 210's wording; the human should confirm it.** Not
-  modelled: Communism's Spy exception (rule 214) and the obligation to leave the outskirts.
+- **Brandenburg Gate** (rules 209 to 214, 333): the outskirts of **every city** of the owner
+  (capital, city or metropolis; the human's reading, 2026-10-29), and the city-states the
+  owner holds, are closed as an *ending* square for every other player's figures in travel,
+  Galileo, Hannibal, Steam Power and the movement culture cards (a group card is judged by the
+  moved figures' owner). Crossing is allowed. The city centre is not outskirts. A disabled
+  wonder, one without an owner, or one blockaded by an enemy figure on its own square has no
+  effect. Not modelled: Communism's Spy exception (rule 214) and the obligation to leave the
+  outskirts.
   Derived from the board each time and public (`PlayerView.brandenburgZones`).
 - **Exploring:** a square with no tile under it is fog, drawn as the tile back. Fog is not
   walked onto and is not a Galileo or card destination. A figure on a square next to fog
