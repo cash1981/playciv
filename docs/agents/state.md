@@ -60,7 +60,8 @@ old test counts and past deployment reports do not establish present health.
 
 - Figure movement (#302): a player's own map army or scout shows yellow destination squares
   within its travel speed (cardinal steps, water by tech, huts/villages stop the move, stacking
-  up to the limit, other players' figures crossed only with Flight), and one board Undo restores
+  up to the limit, an army may land on another player's figures and stops there, crossing them only with
+  Flight), and one board Undo restores
   the square and the spent movement. Blue Explore buttons uncover the fog next to a figure for 1
   movement. Natural Religion, Henry Ford and Captain James Cook feed the speed; Galileo, Steam
   Power (Silk), Hannibal and the culture movement cards use the shared card map picker;

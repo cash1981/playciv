@@ -15,10 +15,10 @@ the scout gathered-square follow-up.
 
 ## Human decisions (2026-10-29)
 
-- **Battle, loot and stacking: "Stacking only".** Own-figure stacking up to the
-  effective stacking limit (including Pasteur) is enforced and offered as a
-  destination. An enemy figure's square stays excluded; battle and loot remain
-  manual, as today. Nothing starts a battle or removes figures.
+- **Battle, loot and stacking.** Own-figure stacking up to the effective stacking
+  limit (including Pasteur) is enforced. Updated 2026-10-29: an army may move onto
+  another player's figures and ends its move there; battle and loot remain manual.
+  Nothing starts a battle or removes figures.
 - **Discovery: "Explore from the edge".** Unexplored squares can no longer be
   walked onto. A figure on, or moving to, a square next to an unexplored slot can
   explore it: a popup asks to spend 1 movement, the next tile is drawn from the
@@ -62,7 +62,7 @@ the scout gathered-square follow-up.
 ## Acceptance criteria
 
 - [x] A figure may end on a square holding fewer own figures than the stacking
-  limit and may not exceed it; enemy squares are still excluded.
+  limit and may not exceed it; an army may end on another player's figures (battle and loot by hand), nothing crosses them without Flight.
 - [x] Steam Power's Silk moves every own figure in a chosen square to a water
   square, locks them, spends a Silk, and the card/action undo restores all.
 - [x] No move ends in another player's Brandenburg Gate outskirts, with the
@@ -79,4 +79,4 @@ Verified 2026-10-29: `pnpm -r typecheck`, `pnpm -r test` (engine 2202, web 1156,
 and `pnpm -r build` pass. Browser run on a seeded two-player game: yellow squares with own-figure
 stacking, blue Explore squares, tile placed, remaining range reduced, two Undos restore. Steam
 Power and Brandenburg Gate were not browser-tested. Independent review approved in round 2.
-Brandenburg Gate guards every city (confirmed by the human). Open for the human: Steam Power onto enemy figures.
+Brandenburg Gate guards every city (confirmed by the human). 

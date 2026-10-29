@@ -55,6 +55,8 @@ export interface MovementPlayer {
 export interface MovementDestination extends Cell {
   readonly label: string
   readonly distance: number
+  /** Another player's figures stand here: moving in ends the move and starts a battle, settled by hand. */
+  readonly contact?: boolean
 }
 
 /** What the board and the movement panel need to know about one figure. */
@@ -255,7 +257,10 @@ export function figureMovementOptions(
   const occupancy = occupancyOf(board, player)
   const limit = Math.max(1, player.stackingLimit ?? 1)
   // Stacking limit is absolute (rule 50): a square already at it cannot be crossed or ended on.
-  // Another player's figures are never ended on here (battle stays manual) and are crossed only with Flight.
+  // An army may end its move on another player's figures: the move ends there and a battle starts, which
+  // (like loot) is settled by hand. A scout never attacks (rule 431). Without Flight another player's
+  // figures cannot be crossed (rule 52), so the move ends on their square.
+  const attacker = isArmy(piece)
   const hasRoom = (key: string): boolean => (occupancy.own.get(key) ?? 0) < limit
   const mustStop = hutAndVillageSquares(board)
   const distances = new Map<string, number>([[keyOf(start), 0]])
@@ -272,7 +277,7 @@ export function figureMovementOptions(
       const mayEndHere = waterHere ? water.end : true
       if (
         mayEndHere &&
-        !occupancy.foreign.has(keyOf(cell)) &&
+        (attacker || !occupancy.foreign.has(keyOf(cell))) &&
         !forbiddenKeys.has(keyOf(cell)) &&
         hasRoom(keyOf(cell)) &&
         !(flight && mustStop.has(keyOf(cell)))
@@ -282,6 +287,7 @@ export function figureMovementOptions(
           row: cell.row,
           label: `${columnLabel(cell.column)}${cell.row + 1}`,
           distance,
+          ...(occupancy.foreign.has(keyOf(cell)) ? { contact: true } : {}),
         })
       }
     }
@@ -293,12 +299,14 @@ export function figureMovementOptions(
     // A revealed Flight flies over, so it neither stops nor blocks the squares beyond,
     // but rule 283 still forbids ending the move on the marker square.
     if (distance > 0 && !flight && mustStop.has(keyOf(cell))) continue
+    // Landing on another player's figures ends the move unless Flight flies over them (rule 52)
+    if (distance > 0 && !flight && occupancy.foreign.has(keyOf(cell))) continue
     for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
       const next = { column: cell.column + dc, row: cell.row + dr }
       if (!isMapCell(board, next.column, next.row)) continue
-      // Another player's figures are crossed only with Flight (rule 52); contact (battle, loot)
-      // is left to the players. A square at the stacking limit cannot be crossed either.
-      if (occupancy.foreign.has(keyOf(next)) && !flight) continue
+      // A scout never attacks, so it does not enter another player's square at all without Flight.
+      // A square at the stacking limit cannot be crossed either.
+      if (occupancy.foreign.has(keyOf(next)) && !flight && !attacker) continue
       if (!hasRoom(keyOf(next))) continue
       // Fog is not walked onto: it is explored first, from the square next to it.
       if (isUnexploredCell(board, next)) continue

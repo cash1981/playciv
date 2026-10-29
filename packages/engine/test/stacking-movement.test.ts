@@ -128,26 +128,53 @@ describe('stacking on own figures', () => {
 })
 
 describe('another player\'s figures', () => {
-  it('never ends a move on them, and does not cross them without Flight', () => {
+  it('lets an army land on them, ends the move there and does not cross them without Flight', () => {
     let state = game(3)
     state = place(state, 'figures/redarmy', 1, 1)
     state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
     const mover = figures(state)[0] as BoardPiece
 
     const cells = destinationsOf(state, mover)
-    expect(cells.some((cell) => cell.column === 2 && cell.row === 1)).toBe(false)
+    expect(cells.find((cell) => cell.column === 2 && cell.row === 1)).toMatchObject({ distance: 1, contact: true })
+    // The square beyond is not reached through the enemy square: only around it, which is too far
     expect(cells.some((cell) => cell.column === 3 && cell.row === 1)).toBe(false)
   })
 
-  it('crosses them with Flight (rule 52) but still cannot end there', () => {
+  it('crosses them with Flight (rule 52) and may also land on them', () => {
     let state = game(3)
     state = place(state, 'figures/redarmy', 1, 1)
     state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
     const mover = figures(state)[0] as BoardPiece
 
     const cells = destinationsOf(state, mover, true)
-    expect(cells.some((cell) => cell.column === 2 && cell.row === 1)).toBe(false)
+    expect(cells.find((cell) => cell.column === 2 && cell.row === 1)?.contact).toBe(true)
     expect(cells.find((cell) => cell.column === 3 && cell.row === 1)?.distance).toBe(2)
+  })
+
+  it('never lets a scout attack (rule 431): it cannot land on them', () => {
+    let state = game(3)
+    state = place(state, 'figures/redscout', 1, 1)
+    state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    const mover = figures(state)[0] as BoardPiece
+
+    expect(destinationsOf(state, mover).some((cell) => cell.column === 2 && cell.row === 1)).toBe(false)
+    expect(destinationsOf(state, mover).some((cell) => cell.column === 3 && cell.row === 1)).toBe(false)
+    const flying = destinationsOf(state, mover, true)
+    expect(flying.some((cell) => cell.column === 2 && cell.row === 1)).toBe(false)
+    expect(flying.find((cell) => cell.column === 3 && cell.row === 1)?.distance).toBe(2)
+  })
+
+  it('travels onto them through the route, and logs that the battle is settled by hand', () => {
+    let state = game(3)
+    state = place(state, 'figures/redarmy', 1, 1)
+    state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    const mover = figures(state)[0] as BoardPiece
+
+    const moved = unwrap(travelFigure(state, { playerId: CASH1981, pieceId: mover.id, column: 2, row: 1 }))
+    expect(moved.board.history.at(-1)?.description).toContain('settle the battle and loot by hand')
+    expect(
+      unwrapErr(travelFigure(state, { playerId: CASH1981, pieceId: mover.id, column: 3, row: 1 })).kind,
+    ).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
   it('does not count them against your stacking limit (rule 51)', () => {
@@ -160,16 +187,5 @@ describe('another player\'s figures', () => {
 
     // Three enemy figures on a square, a limit of 1 for the mover: Flight still crosses it
     expect(destinationsOf(state, mover, true).find((cell) => cell.column === 3 && cell.row === 1)?.distance).toBe(2)
-  })
-
-  it('keeps the stacking count to a single player (rule 51)', () => {
-    let state = game(1)
-    state = place(state, 'figures/redarmy', 1, 1)
-    state = place(state, 'figures/redscout', 2, 3)
-    state = place(state, 'figures/bluearmy', 2, 3, KARANDRAS1)
-    const mover = figures(state)[0] as BoardPiece
-
-    // The square holds one own figure and one foreign one: it is closed on both counts.
-    expect(destinationsOf(state, mover).some((cell) => cell.column === 2 && cell.row === 3)).toBe(false)
   })
 })

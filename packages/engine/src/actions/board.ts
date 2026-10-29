@@ -528,7 +528,8 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
     movementTo: movement,
     description:
       `moved ${piece.label} from ${locationOf(state.board, areas, piece)} to ${destination.label}` +
-      ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})`,
+      ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})` +
+      (destination.contact === true ? ', onto another player\'s figures: settle the battle and loot by hand' : ''),
     ...(input.at === undefined ? {} : { at: input.at }),
   })
   return moved === undefined

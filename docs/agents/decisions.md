@@ -673,24 +673,30 @@ tests `hannibal.test.ts`, `communism.test.ts`.
 ### Stacking, Steam Power, Brandenburg Gate and exploring (#302)
 
 The human's choices for the last slices of #302 (2026-10-29): **battle and loot stay
-manual** ("Stacking only"), and exploring works **from the edge**.
+manual**, and exploring works **from the edge**.
 
 - **Stacking:** normal travel may end on, and cross, a square that holds fewer of the
   player's own figures than the effective stacking limit (`stackingLimitOf`, Pasteur
   included). The limit is absolute (rule 50), so a full square is closed to crossing too;
-  it counts one player's own figures only (rule 51). Another player's figure is never an
-  ending square (no battle is started or resolved) and is crossed only with a revealed
-  Flight (rule 52). `MovementPlayer.stackingLimit` defaults to 1, which keeps every
-  occupied square closed as before; the server passes the real value, the web view
+  it counts one player's own figures only (rule 51), never another player's.
+  `MovementPlayer.stackingLimit` defaults to 1; the server passes the real value, the web view
   carries it as `you.stackingLimit`.
+- **Another player's figures (the human, 2026-10-29, replacing "never an ending square"):** an
+  army may move onto a square holding another player's figures and ends its move there; a
+  battle starts, but the battle and the loot are settled by hand (nothing is started or removed
+  by the engine). Without a revealed Flight they cannot be crossed (rule 52), so the move stops on
+  them; with Flight the figure may cross them or land on them. A scout never attacks (rule 431):
+  it cannot land on them, and crosses them only with Flight. The destination carries
+  `contact: true`; the board shows it in red, asks first, and the history line says the battle is
+  settled by hand. The movement culture cards keep their empty-square destination (rules 61 to 63).
 - **Steam Power** (`steamPower`, a City Management assisted action spending a Silk, text
   read from the card art): all of the player's figures in one square move to any explored
   water square on the map and are locked for the turn (`movement.reason: 'steamPower'`,
   which keeps them out of the movement culture cards like Galileo's). A source that is
   itself water may name itself to lock in place (rule 193+). The group may not exceed the
   stacking limit there; armies may land on water holding another player's figures and the
-  battle stays manual (the picker notes it), a group with a scout may not. This is a reading of
-  rule 196 that goes beyond "enemy squares stay excluded"; the human should confirm it. Communism-locked
+  battle stays manual (the picker notes it), a group with a scout may not (rule 196), which now
+  agrees with normal travel. Communism-locked
   sources and Brandenburg outskirts are refused. The moves belong to the action: the board
   Undo refuses them and the undo vote returns the figures and the Silk.
 - **Brandenburg Gate** (rules 209 to 214, 333): the outskirts of **every city** of the owner

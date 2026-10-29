@@ -1171,13 +1171,15 @@ export function BoardView({
                 <button
                   key={`move-${cell.column}-${cell.row}`}
                   type="button"
-                  className="board-move-cell"
+                  className={`board-move-cell${cell.contact === true ? ' board-contact-cell' : ''}`}
                   data-move-column={cell.column}
                   data-move-row={cell.row}
                   aria-label={`Move ${selected?.label ?? 'figure'} to ${cell.label}, ${cell.distance} ${
                     cell.distance === 1 ? 'square' : 'squares'
+                  }${cell.contact === true ? ', onto another player’s figures' : ''}`}
+                  title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}${
+                    cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''
                   }`}
-                  title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}`}
                   disabled={busy || readOnly}
                   style={{
                     left: cell.column * board.squareSize * zoom,
@@ -1188,6 +1190,14 @@ export function BoardView({
                   onClick={(event) => {
                     event.stopPropagation()
                     if (selected === null) return
+                    if (
+                      cell.contact === true &&
+                      !window.confirm(
+                        `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
+                      )
+                    ) {
+                      return
+                    }
                     setMoveModeId(null)
                     void run(() =>
                       api.travelFigure(gameId, selected.id, cell.column, cell.row),
