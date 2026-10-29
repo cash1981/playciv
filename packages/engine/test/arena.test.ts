@@ -1196,6 +1196,43 @@ describe('face-off on arrival', () => {
     })
   })
 
+  it('applies the opponent\'s attack on rotate even when the rotated unit would then trump and kill it', () => {
+    // Artillery 1.5 vs infantry 2.2: 1 < 2, so they lock (attacker 3 HP, defender 1 HP).
+    let state = faceOff('artillery', { attack: 1, health: 5 }, 'infantry', { attack: 2, health: 2 })
+    const { attacker, defender } = arenaOf(state)
+    expect(defender.health).toBe(1)
+    state = unwrap(rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker.id }))
+    const rotated = arenaOf(state).attacker
+    // The new tier's attack would one-shot the 1 HP defender, but rotate must
+    // not run another first strike: the unit still takes the defender's 2 attack.
+    expect(arenaUnitTier(rotated).attack).toBeGreaterThanOrEqual(1)
+    expect(rotated.health).toBe(Math.max(0, arenaUnitTier(rotated).health - defender.attack))
+    expect(arenaOf(state).defender.health).toBe(1)
+  })
+
+  it('resolves a face-off when an existing unit is moved onto a living opponent', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const cashUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const karUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: cashUnit.id, side: 'attacker', position: 0, attack: 2, health: 4,
+    }))
+    state = unwrap(placeUnitInArena(state, {
+      playerId: KARANDRAS1, unitId: karUnit.id, side: 'defender', position: 1, attack: 3, health: 4,
+    }))
+    // Different fronts: nothing has happened yet.
+    expect(state.battle!.arena.map((u) => u.health)).toEqual([4, 4])
+
+    const mover = state.battle!.arena.find((u) => u.side === 'attacker')!
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: mover.id, position: 1 }))
+
+    const arena = state.battle!.arena
+    expect(arena.find((u) => u.side === 'attacker')).toMatchObject({ health: 1, killed: false })
+    expect(arena.find((u) => u.side === 'defender')).toMatchObject({ health: 2, killed: false })
+  })
+
   it('re-applies the opponent’s blows when a unit is rotated to a new tier', () => {
     let state = faceOff('infantry', { attack: 2, health: 4 }, 'infantry', { attack: 3, health: 4 })
     const attacker = arenaOf(state).attacker

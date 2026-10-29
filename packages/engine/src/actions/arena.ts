@@ -712,7 +712,7 @@ export function rotateArenaUnit(
     ? undefined
     : battle.arena.find((u) => u.side !== unit.side && u.position === unit.position && !u.killed)
   const updatedUnit: ArenaUnit =
-    opponent === undefined ? reseeded : withDamage(reseeded, faceOffDamage(reseeded, opponent).toA)
+    opponent === undefined ? reseeded : withDamage(reseeded, opponent.attack)
 
   const nextState = appendPublicLog(
     state,
