@@ -1,7 +1,7 @@
 /**
  * The Start of Turn abilities of wonders, Great Persons, techs, huts and relics
  * (assisted play, part 13; `src/assisted-abilities.ts`). Card texts and rules:
- * `docs/agents/tasks/assisted-sot.md`.
+ * `docs/agents/decisions.md` ("Assisted play").
  */
 
 import { describe, expect, it } from 'vitest'

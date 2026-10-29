@@ -1,5 +1,5 @@
 {
- "_note": "Terrain of each map tile, 4 rows of 4 squares, read from the tile image in its printed (unrotated) orientation, top row first. Read by eye and colour from the images in packages/web/public/board/tiles, not from a printed list. Squares marked in docs/agents/tasks/building-terrain.md were guesses.",
+ "_note": "Terrain of each map tile, 4 rows of 4 squares, read from the tile image in its printed (unrotated) orientation, top row first. Read by eye and colour from the images in packages/web/public/board/tiles, not from a printed list.",
  "tiles": {
   "tiles/Aztec": [
    [

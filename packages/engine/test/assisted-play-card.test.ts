@@ -1,7 +1,7 @@
 /**
  * Playing a culture event or Great Person card (assisted play, part 13). The game
  * takes the card out of the hand and writes who played what against whom; it applies
- * nothing to the target. Specification: `docs/agents/tasks/assisted-sot.md`.
+ * nothing to the target. Specification: `docs/agents/decisions.md` ("Assisted play").
  */
 
 import { describe, expect, it } from 'vitest'

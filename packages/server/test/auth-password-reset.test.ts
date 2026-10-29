@@ -3,7 +3,7 @@
  * `verifyPassword` and `PlayerAction.newPassword(ForgotpassDTO)`, but with a
  * signed, expiring link instead of Java's plaintext `Player.newPassword` and
  * its public `verify/{playerId}` link. See
- * `docs/agents/tasks/issue-37-password-reset.md` and `decisions.md`.
+ * `docs/agents/decisions.md` ("Accounts, mail and ratings").
  */
 
 import { describe, expect, it } from 'vitest'

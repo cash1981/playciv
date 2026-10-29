@@ -1,5 +1,5 @@
 /**
- * The single chat (`docs/agents/tasks/single-chat.md`): a game saved while the
+ * The single chat (see "Timeline and turns" in `docs/agents/decisions.md`): a game saved while the
  * old baton view was on is adopted by `migrateGameState`. New in the port, so no
  * Java counterpart.
  */

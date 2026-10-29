@@ -1,115 +1,43 @@
 # Current state
 
-Current orientation, not a release history. Keep this under 80 lines and read
-only the reference sections relevant to the task. Check the current revision;
-old test counts and past deployment reports do not establish present health.
+Orientation, not a release history. Keep it under 60 lines. Old test counts and
+deployment reports do not establish present health.
 
 ## Development
 
-- Four workspace packages: pure engine, Hono server, React/Vite web and Worker.
-- Node >=24 and the pnpm version pinned in root `package.json` (11.24.0 at this
-  cleanup). `.node-version` still says 22; follow the manifest requirement.
-- Local development uses Node and JSON-file storage. Production uses a
-  Cloudflare Worker and D1. See [repo-map.md](repo-map.md) for entry points.
-- Run `pnpm -r typecheck && pnpm -r test && pnpm -r build` from the root.
-- Active work and path ownership belong in [task-board.md](task-board.md).
+- Four workspace packages: pure engine, Hono server, React/Vite web and Worker;
+  see [repo-map.md](repo-map.md).
+- Node >=24 and the pnpm version pinned in root `package.json`. `.node-version`
+  still says 22; follow the manifest.
+- Local development uses Node and JSON-file storage; production uses a
+  Cloudflare Worker and D1.
+- Verify with `pnpm -r typecheck && pnpm -r test && pnpm -r build` from the root.
 
-## Current behavior and compatibility
+## Current behavior
 
-- Every game uses the chat/orders timeline. The classic Turn orders panel,
-  mode switch and admin chat-migration tool are removed.
-- Classic saves still need load-time adoption and the compatibility flags
-  `legacyOrdersCopied` / `legacyRevealsCopied`.
-- Public views filter hidden information. See limitations for active-game
-  spectator board controls and the current game-chat posting permissions.
-- Revisions use keyframes and deltas; supported cleanup/compaction preserves
-  chains. Do not manually remove revision rows.
-- Standalone barbarian drawing and Undo End battle are implemented.
-- Email notifications, broadcast queues and idle-turn reminders are implemented.
-  Verify configuration/migrations in the target environment before deployment;
-  repository history does not establish whether production is up to date.
+- Every game uses the chat/orders timeline. Classic saves are adopted on load
+  (`legacyOrdersCopied` / `legacyRevealsCopied`); archived Mongo games are not
+  playable.
+- Public views filter hidden information. Spectators get a read-only board,
+  Battle panel and Social policy panel.
+- Revisions use keyframes and deltas; only the supported cleanup/compaction may
+  remove rows.
+- Email notifications, broadcast queues and idle-turn reminders exist. Check the
+  target environment's configuration and migrations before deploying.
+- Assisted play (#260, #264): "Your actions" has a tab per phase with possible
+  actions, playable cards, Start of Turn abilities, Research (with the tech tree)
+  and City Management (city cards, production estimate, Build, Start Building
+  Program, Upgrades, Devote to the Arts and Harvest). End turn ends the viewer's
+  open phase. Used policies and wonders are disabled; a repeat of a Great Person
+  or culture card asks first.
+- Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
+  Edison, Mother Teresa, Marie Curie, Cook and Ford apply through the engine.
+- Trade: free-text trade offers (#265); trade resets to coins at turn start for
+  a player who researched, and city trade is collected once when Trade starts.
+- Figure movement (#302): enforced speed, water, stacking and stops; movement is
+  a pool shared with exploring; card map picker for Galileo, Steam Power,
+  Hannibal and movement culture cards; Communism and Brandenburg Gate. Battle,
+  loot and removal stay manual by the human's choice.
 
-- Assisted play (#260) is on PR #271: card buttons, culture advance, Great Person
-  markers, phase summary, confirm before reuse. See the "Assisted play" section
-  of decisions and `tasks/assisted-*.md`. Free-text trade offers (#265, #274) are
-  built too, and a player who researched resets trade to coins at turn start while one
-  who only ended Research keeps it; the city trade is collected once when Trade starts.
-  See "Trade offers (#265)" in decisions.
-
-- Phase tabs and Start of Turn (part 13) are on PR #271: the Your actions panel has a tab per
-  phase, each with a "Possible actions" box (Advance culture scrolls to Your hand afterwards),
-  cards play from the tabs and the hand as log lines, and Start of Turn has buttons for
-  policies, governments, investing, founding cities from scouts, scout squares, and wonder,
-  Great Person, tech, hut and relic abilities. A used policy or wonder is disabled (strict
-  once per turn, no confirmation); a used Great Person or culture card still asks before a
-  confirmed repeat. Briefs `tasks/assisted-sot.md` and `tasks/assisted-polish.md`; see "Phase
-  tabs and Start of Turn" and "Toasts" in decisions.
-
-- The action panel shows only ready or used actions for the open phase; button reasons
-  are behind `?`, playable card names link to the card in the hand and tech actions to
-  the tech panel, and Invest is hidden without a coin. See "Action panel focus" in
-  decisions.
-
-- Great Person automation (2026-10-27): Archimedes (paid after Research), Shakespeare (culture skip),
-  Pasteur (Build stacking), Michelangelo (wonder discount), Edison (free tech),
-  Mother Teresa (coin and free advance) and Marie Curie (armed Uranium
-  substitution) apply through the engine. Automated passive cards get a Use
-  button that reveals them. The manual Draw button now also skips Great Person
-  cards whose marker type is exhausted. Cook and Ford wait for movement
-  enforcement. See "Great Person automation" in decisions.
-
-- Figure movement (#302): a player's own map army or scout shows yellow destination squares
-  within its travel speed (cardinal steps, water by tech, huts/villages stop the move, stacking
-  up to the limit, an army may land on another player's figures and stops there, crossing them only with
-  Flight), and movement is a pool (move, explore, move again while speed is left; a hut, village or enemy ends
-  it). Board Undo takes moves back one at a time. Blue Explore buttons uncover the fog next to a figure for 1
-  movement. Natural Religion, Henry Ford and Captain James Cook feed the speed; Galileo, Steam
-  Power (Silk), Hannibal and the culture movement cards use the shared card map picker;
-  Communism locks a square; Brandenburg Gate keeps other players out of its holder's city outskirts.
-  Automated battle, loot and removal are not built (the human chose to keep them manual).
-  See the #302 sections of decisions.
-
-- City production (#250 slice A, first part of #264) is on PR #271: a per-city
-  estimate with a hand-set override, shown on each city card.
-  Brief `tasks/city-production.md`; see "City production" in decisions.
-
-- Assisted build (#264) is on PR #271: a Build button per city for buildings, army and
-  scout figures and military units, legal choices only, square picking on the board, trade
-  rush, undo by vote; also Start Building Program and Upgrade buildings. Devote to the Arts and
-  Harvest read the resource and culture icons from `engine/data/tile-icons.json` (read by eye from
-  the tile images; see "Devote to the Arts and Harvest" in decisions). Briefs
-  `tasks/assisted-build.md`, `tasks/assisted-units.md`, `tasks/assisted-city-actions.md` and `tasks/assisted-gather.md`;
-  see "Assisted build" in decisions.
-
-- The Tech content is in the Research tab of "Your actions", below that phase's playable
-  cards and with no collapsible wrapper; a viewer without the actions panel still gets it
-  on its own. The Tech tree shortcut opens Research first. See "Tech in the Research tab"
-  in decisions.
-- A viewer without a seat (spectator) gets a read-only board, Battle panel and Social
-  policy panel: no draws, no battle start or arena moves, no policy choice, and no
-  board or player-area changes. See "Spectator read-only controls" in decisions.
-
-- The game header names the player furthest behind as the one who is up and lists
-  only the earliest open phase under "Waiting for"; the shortcuts are Board, Actions,
-  Your cards and Tech tree; a city's arithmetic opens in a popup. Brief
-  `tasks/phase-cities-polish.md`; see "Assisted play" in decisions.
-
-- The viewer's own cities (cards, Build, Start Building Program, Upgrades, production) are in the
-  City Management tab of "Your actions", under the board. There is no panel for the opponents'
-  cities. See "Assisted play" in decisions.
-
-- Build: a button per group (buildings, wonders, figures, units), placed by the tap on a square;
-  removing the piece before End turn takes the build back. See "Build polish and wonders" in decisions.
-
-- End turn (it ends the viewer's open phase) is a button in "Your actions"; the Order tab keeps
-  its own for now. See "Assisted play" in decisions.
-
-Read [current decisions](decisions.md) for the relevant compatibility/rationale
-and [limitations](limitations.md) for known gaps. Archived Mongo games remaining
-nonplayable is separate from the completed single-chat migration.
-
-## Documentation lifecycle
-
-Completed task history lives in Git, with retrieval instructions in
-[the history guide](../history/README.md). Historical briefs and old decision
-entries must not be treated as active requirements or automatically loaded.
+The matching topics in [decisions.md](decisions.md) give the rules and
+reasons; [limitations.md](limitations.md) lists known gaps.

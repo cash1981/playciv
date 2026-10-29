@@ -1,7 +1,7 @@
 /**
  * Assisted actions (issue #260): the registry, Chivalry, resource spending, and
  * the projection. There is no old-system counterpart; the specification is
- * `docs/agents/tasks/assisted-play-contract.md`.
+ * `docs/agents/decisions.md` ("Assisted play").
  */
 
 import { describe, expect, it } from 'vitest'

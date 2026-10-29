@@ -58,7 +58,7 @@ runs against the JSON file only.
 | `src/routes/board.ts` | Place, move, rotate, stack, remove, undo, history. |
 | `src/errors.ts` | `EngineError` to HTTP status. The only place that mapping exists. |
 | `src/store/` | `Repository` interface, `D1Repository` (production) and `JsonFileRepository` (local dev). |
-| `src/migrate/` | Pure mapping from the old mongodump export to D1 rows, and SQL emission. Run once with `migrate:d1`. |
+| `src/migrate/` | Legacy rating backfill from the old mongodump (`migrate:rating`). The one-off Mongo→D1 import was removed after it ran. |
 | `test/` | Vitest through Hono's `app.request` (via the `inject` helper in `test/helpers.ts`), no network. `D1Repository` runs against a `node:sqlite` adapter. |
 
 ## packages/web

@@ -3,7 +3,7 @@
  * social policies, government abilities, changing government and investing a coin.
  *
  * Every one is a button with a log line and an undo through the vote the game already
- * has. The rules and who said them are in `docs/agents/tasks/assisted-sot.md`; what is
+ * has. The rules and who said them are in `docs/agents/decisions.md` ("Assisted play"); what is
  * open to the player in this phase is worked out in `sot.ts`.
  *
  * An ability that only adds trade or culture is one definition built from a row

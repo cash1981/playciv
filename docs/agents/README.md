@@ -1,34 +1,22 @@
 # Agent documentation
 
-Keep the default reading small and current. Start with `AGENTS.md`, `state.md`
-and `task-board.md`; use the other files only when the task needs them.
+Start with `AGENTS.md`, [state.md](state.md) and [task-board.md](task-board.md);
+read the rest only when the task needs it.
 
-| File | Purpose and maintenance |
+| File | Purpose |
 | --- | --- |
-| [state.md](state.md) | Current orientation, ideally under 80 lines; no delivery ledger or stale test totals. |
-| [task-board.md](task-board.md) | Active path claims and explicitly queued work; clear ownership on release. |
-| [repo-map.md](repo-map.md) | Find relevant packages/files without reading the whole codebase. |
+| [state.md](state.md) | Current orientation, under 60 lines; no delivery ledger. |
+| [task-board.md](task-board.md) | Live path claims and queued work. |
+| [repo-map.md](repo-map.md) | Where packages and files are. |
 | [conventions.md](conventions.md) | Coding and privacy rules. |
-| [workflow.md](workflow.md) | One canonical workflow for every host. |
-| [roles.md](roles.md) | Author, orchestrator and independent reviewer responsibilities. |
-| [decisions.md](decisions.md) | Current rationale and compatibility requirements, organized by topic. |
-| [limitations.md](limitations.md) | Concrete limitations and unverified risks; not an automatic work queue. |
-| [tasks/README.md](tasks/README.md) | Active brief lifecycle and historical citation redirects. |
+| [workflow.md](workflow.md) | The shared task procedure. |
+| [roles.md](roles.md) | Orchestrator, coder and reviewer boundaries. |
+| [decisions.md](decisions.md) | Current rationale and compatibility, by topic. |
+| [limitations.md](limitations.md) | Known gaps; not a work queue. |
+| [tasks/](tasks/README.md) | Briefs for active work only. |
 | [templates/](templates/) | Brief and review-report formats. |
-| [../history/README.md](../history/README.md) | Retrieve retired documents from Git when history is needed. |
+| [../history/](../history/README.md) | Retrieving retired documents from Git. |
 
-## Keeping it useful
-
-- Put a fact in one place and link to it. README describes the product; code and
-  tests define current behavior; decisions explain important reasons.
-- Update or replace a superseded current decision in place, noting why and
-  linking its replacement. Git preserves the original; do not append contradictory
-  instructions indefinitely.
-- Keep task briefs while work is active or under review. After merge, preserve
-  durable decisions and unresolved requirements in the appropriate current
-  document, then retire the brief in a subsequent change. Keep an explicitly
-  historical redirect only if source/tests/data still cite that path.
-- Unchecked historical acceptance criteria are not proof that work is pending.
-  Verify against merged code before adding an item to the queue.
-- Model selection and tool permissions belong in host adapters. Shared workflow
-  must not assume Windows, a specific preview tool or a particular cloud machine.
+Put each fact in one place and link to it. Replace a superseded decision in
+place instead of appending a contradiction. An unchecked box in an old brief is
+not proof that work is pending.

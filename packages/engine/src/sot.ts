@@ -5,7 +5,7 @@
  * board, the revealed cards and the turn marks, so the numbers follow the game and
  * cannot drift. The rules are the base rulebook p. 12 to 14 and 26 to 27, Wisdom and
  * Warfare p. 9 to 10, Fame and Fortune p. 13 and FAQ 2.0, summarised in
- * `docs/agents/tasks/assisted-sot.md`.
+ * `docs/agents/decisions.md` ("Assisted play").
  */
 
 import {

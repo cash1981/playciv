@@ -1,7 +1,7 @@
 /**
  * Chat orders (issue #215), slice 3: the new turn, the start player marker.
  * New in the port, so there is no Java counterpart; the rules are in
- * `docs/agents/tasks/chat-orders.md`, "Slice 3".
+ * `docs/agents/decisions.md` ("Timeline and turns").
  */
 
 import { describe, expect, it } from 'vitest'

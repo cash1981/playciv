@@ -18,7 +18,7 @@
  *
  * Which Great Person cards play from the hand is `playCard`; the two with a number here
  * are left out of that list (`CARDS_WITH_OWN_BUTTON`). The rules and the card texts are in
- * `docs/agents/tasks/assisted-sot.md`.
+ * `docs/agents/decisions.md` ("Assisted play").
  *
  * Whether a wonder has been made obsolete is not tracked: the player judges that, as
  * they do for the Pyramids.

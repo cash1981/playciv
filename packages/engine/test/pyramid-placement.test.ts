@@ -2,7 +2,7 @@
  * `setTechSlot`, `placeGreatPersonInPyramid` and `setPyramidPlacementSlot`.
  *
  * New in this port, no old-system equivalent — see
- * `docs/agents/tasks/issue-168-tech-revamp-pyramid-reposition.md` and
+ * `docs/agents/decisions.md` ("Board and manual bookkeeping") and
  * `decisions.md`. Deliberately unenforced (no legality checking of any kind)
  * and unlogged (no public log entry), per the task brief.
  */

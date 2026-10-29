@@ -873,7 +873,7 @@ describe('great person discard', () => {
 
 /**
  * New in this port, no old-system equivalent — see
- * `docs/agents/tasks/issue-168-tech-revamp-pyramid-reposition.md`. Both routes
+ * `docs/agents/decisions.md` ("Board and manual bookkeeping"). Both routes
  * are deliberately unvalidated beyond ownership and shape, and write no log
  * entry.
  */
