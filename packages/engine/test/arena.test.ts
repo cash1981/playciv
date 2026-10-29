@@ -12,6 +12,7 @@ import {
   endBattleTurn,
   initiateBattle,
   killArenaUnit,
+  arenaUnitTier,
   moveArenaUnit,
   placeUnitInArena,
   returnArenaUnitToHand,
@@ -24,7 +25,7 @@ import { draw, drawBarbarians, drawUnitsForBattle } from '../src/actions/draw.js
 import { isUnit, revealAll } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import { findPlayer, toPlayerView } from '../src/state.js'
+import { findPlayer, toPlayerView, withPlayer } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
 import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -733,7 +734,7 @@ describe('endBattleAction', () => {
         playerId: KARANDRAS1,
         unitId: defenderUnit.id,
         side: 'defender',
-        position: 0,
+        position: 5,
         attack: 1,
         health: 2,
       }),
@@ -771,7 +772,7 @@ describe('endBattleAction', () => {
         playerId: KARANDRAS1,
         unitId: defenderUnit.id,
         side: 'defender',
-        position: 0,
+        position: 5,
         attack: 1,
         health: 2,
       }),
@@ -806,7 +807,7 @@ describe('endBattleAction', () => {
         playerId: KARANDRAS1,
         unitId: defenderUnit.id,
         side: 'defender',
-        position: 0,
+        position: 5,
         attack: 1,
         health: 3,
       }),
@@ -1093,6 +1094,157 @@ describe('rotateArenaUnit', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Face-offs: trump order and first strike
+// ---------------------------------------------------------------------------
+
+describe('face-off on arrival', () => {
+  type Kind = 'infantry' | 'artillery' | 'mounted'
+
+  /** Attacker (CASH1981) holds `attackerKind`, defender (KARANDRAS1) `defenderKind`, both on front 0. */
+  function faceOff(
+    attackerKind: Kind,
+    attacker: { attack: number; health: number },
+    defenderKind: Kind,
+    defender: { attack: number; health: number },
+  ): GameState {
+    let state = withBattlehand(CASH1981, 1)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const place = (playerId: string, kind: Kind, side: 'attacker' | 'defender', stats: { attack: number; health: number }) => {
+      const player = findPlayer(state, playerId)!
+      const unit = player.battlehand[0]!
+      state = withPlayer(state, {
+        ...player,
+        battlehand: player.battlehand.map((u) => (u.id === unit.id ? ({ ...u, kind } as typeof u) : u)),
+      })
+      state = unwrap(
+        placeUnitInArena(state, { playerId, unitId: unit.id, side, position: 0, ...stats }),
+      )
+    }
+    place(CASH1981, attackerKind, 'attacker', attacker)
+    place(KARANDRAS1, defenderKind, 'defender', defender)
+    return state
+  }
+
+  const arenaOf = (state: GameState) => {
+    const arena = state.battle!.arena
+    return {
+      attacker: arena.find((u) => u.side === 'attacker')!,
+      defender: arena.find((u) => u.side === 'defender')!,
+    }
+  }
+
+  it('lets the trumper kill first, so the trumped unit deals nothing back', () => {
+    // Artillery 4.3 trumps infantry 5.3: 4 ≥ 3 kills it before it can strike.
+    const { attacker, defender } = arenaOf(
+      faceOff('artillery', { attack: 4, health: 3 }, 'infantry', { attack: 5, health: 3 }),
+    )
+    expect(defender.killed).toBe(true)
+    expect(defender.health).toBe(0)
+    expect(attacker.killed).toBe(false)
+    expect(attacker.health).toBe(3)
+  })
+
+  it('applies the same first strike when the defender is the trumper', () => {
+    // Mounted 4.3 trumps artillery 5.3.
+    const { attacker, defender } = arenaOf(
+      faceOff('artillery', { attack: 5, health: 3 }, 'mounted', { attack: 4, health: 3 }),
+    )
+    expect(attacker.killed).toBe(true)
+    expect(defender.health).toBe(3)
+  })
+
+  it('locks both units when the first strike is not lethal, and both lose HP', () => {
+    // Infantry 2.4 trumps mounted 3.4, but 2 < 4: both hit.
+    const { attacker, defender } = arenaOf(
+      faceOff('infantry', { attack: 2, health: 4 }, 'mounted', { attack: 3, health: 4 }),
+    )
+    expect(attacker.health).toBe(1)
+    expect(defender.health).toBe(2)
+    expect(attacker.killed).toBe(false)
+    expect(defender.killed).toBe(false)
+  })
+
+  it('has both hit each other when neither trumps the other', () => {
+    const { attacker, defender } = arenaOf(
+      faceOff('infantry', { attack: 4, health: 3 }, 'infantry', { attack: 2, health: 5 }),
+    )
+    expect(attacker.health).toBe(1)
+    expect(defender.health).toBe(1)
+  })
+
+  it('leaves a unit that faces nobody untouched', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981, unitId: unit.id, side: 'attacker', position: 0, attack: 3, health: 4,
+      }),
+    )
+    expect(state.battle!.arena[0]).toMatchObject({ attack: 3, health: 4, killed: false })
+  })
+
+  it('keeps the printed tier for the label while HP drops', () => {
+    const { attacker } = arenaOf(
+      faceOff('infantry', { attack: 2, health: 4 }, 'infantry', { attack: 3, health: 4 }),
+    )
+    expect(attacker.health).toBe(1)
+    expect(arenaUnitTier(attacker)).toEqual({
+      attack: attacker.unit.attack,
+      health: attacker.unit.health,
+    })
+  })
+
+  it('applies the opponent\'s attack on rotate even when the rotated unit would then trump and kill it', () => {
+    // Artillery 1.5 vs infantry 2.2: 1 < 2, so they lock (attacker 3 HP, defender 1 HP).
+    let state = faceOff('artillery', { attack: 1, health: 5 }, 'infantry', { attack: 2, health: 2 })
+    const { attacker, defender } = arenaOf(state)
+    expect(defender.health).toBe(1)
+    state = unwrap(rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker.id }))
+    const rotated = arenaOf(state).attacker
+    // The new tier's attack would one-shot the 1 HP defender, but rotate must
+    // not run another first strike: the unit still takes the defender's 2 attack.
+    expect(arenaUnitTier(rotated).attack).toBeGreaterThanOrEqual(1)
+    expect(rotated.health).toBe(Math.max(0, arenaUnitTier(rotated).health - defender.attack))
+    expect(arenaOf(state).defender.health).toBe(1)
+  })
+
+  it('resolves a face-off when an existing unit is moved onto a living opponent', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const cashUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const karUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: cashUnit.id, side: 'attacker', position: 0, attack: 2, health: 4,
+    }))
+    state = unwrap(placeUnitInArena(state, {
+      playerId: KARANDRAS1, unitId: karUnit.id, side: 'defender', position: 1, attack: 3, health: 4,
+    }))
+    // Different fronts: nothing has happened yet.
+    expect(state.battle!.arena.map((u) => u.health)).toEqual([4, 4])
+
+    const mover = state.battle!.arena.find((u) => u.side === 'attacker')!
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: mover.id, position: 1 }))
+
+    const arena = state.battle!.arena
+    expect(arena.find((u) => u.side === 'attacker')).toMatchObject({ health: 1, killed: false })
+    expect(arena.find((u) => u.side === 'defender')).toMatchObject({ health: 2, killed: false })
+  })
+
+  it('re-applies the opponent’s blows when a unit is rotated to a new tier', () => {
+    let state = faceOff('infantry', { attack: 2, health: 4 }, 'infantry', { attack: 3, health: 4 })
+    const attacker = arenaOf(state).attacker
+    state = unwrap(rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker.id }))
+    const rotated = arenaOf(state).attacker
+    const tier = arenaUnitTier(rotated)
+    expect(tier.health).toBe(attacker.unit.health + 1)
+    expect(rotated.health).toBe(Math.max(0, tier.health - 3))
+  })
+})
+
+// ---------------------------------------------------------------------------
 // endBattleTurn
 // ---------------------------------------------------------------------------
 
@@ -1215,7 +1367,7 @@ describe('battleSummaries', () => {
         playerId: KARANDRAS1,
         unitId: barbarianUnits[0]!.id,
         side: 'defender',
-        position: 0,
+        position: 5,
         attack: 2,
         health: 4,
       }),

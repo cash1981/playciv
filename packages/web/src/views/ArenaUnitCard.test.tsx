@@ -73,4 +73,19 @@ describe('ArenaUnitCard', () => {
     // 90 (the unit's own rotation) + 180 (attacker base) = 270.
     expect(markup).toContain('transform:rotate(270deg)')
   })
+  it('labels the card with the unit\'s tier, not its damaged or hand-edited values', () => {
+    const render = (overrides: Partial<ArenaUnit>) =>
+      renderToStaticMarkup(
+        <ArenaUnitCard
+          unit={arenaUnit(overrides)}
+          gameId="game-1" busy={false} rev={0} run={noopAsync}
+          canManage={false} canMove={false} onDragStart={noop} onDragEnd={noop}
+        />,
+      )
+    // Printed 1.3, hurt down to 1.2: the label still says 1.3.
+    expect(render({ health: 2 })).toContain('Artillery 1.3')
+    expect(render({ health: 2 })).not.toContain('Artillery 1.2')
+    // One rotate press lifts the tier to 2.4 whatever the HP field says.
+    expect(render({ rotation: 270, attack: 2, health: 1 })).toContain('Artillery 2.4')
+  })
 })

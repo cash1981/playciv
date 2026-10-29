@@ -236,6 +236,66 @@ export function initiateBattle(
 }
 
 // ---------------------------------------------------------------------------
+// Face-off resolution
+// ---------------------------------------------------------------------------
+
+/** Artillery trumps Infantry, Infantry trumps Mounted, Mounted trumps Artillery. */
+const TRUMPS: Readonly<Partial<Record<UnitItem['kind'], UnitItem['kind']>>> = {
+  artillery: 'infantry',
+  infantry: 'mounted',
+  mounted: 'artillery',
+}
+
+/**
+ * The attack/health a unit really has at its current rotation level — the
+ * printed values plus one per rotate press (see `rotateArenaUnit`). Unlike
+ * `ArenaUnit.attack/health` this ignores damage and hand edits, so the card
+ * label can keep saying what the unit is while the fields show how it fares.
+ * Aircraft print no level ladder, so they stay at the printed values.
+ */
+export function arenaUnitTier(unit: ArenaUnit): { readonly attack: number; readonly health: number } {
+  const bonus = unit.unit.kind === 'aircraft' ? 0 : rotationLevel(unit.rotation)
+  return { attack: unit.unit.attack + bonus, health: unit.unit.health + bonus }
+}
+
+/**
+ * One round between two facing units. A trumping unit strikes first: if that
+ * is lethal the trumped unit never strikes back and the trumper takes no
+ * damage. Otherwise (no trump, or the first strike does not kill) they lock
+ * and both take the other's attack.
+ */
+function faceOffDamage(a: ArenaUnit, b: ArenaUnit): { readonly toA: number; readonly toB: number } {
+  if (TRUMPS[a.unit.kind] === b.unit.kind && a.attack >= b.health) return { toA: 0, toB: a.attack }
+  if (TRUMPS[b.unit.kind] === a.unit.kind && b.attack >= a.health) return { toA: b.attack, toB: 0 }
+  return { toA: b.attack, toB: a.attack }
+}
+
+function withDamage(unit: ArenaUnit, damage: number): ArenaUnit {
+  const health = Math.max(0, unit.health - damage)
+  return health === 0 ? { ...unit, health, killed: true } : { ...unit, health }
+}
+
+/**
+ * Applies one face-off to a unit that just arrived on its front (placed or
+ * moved) against the living unit facing it, if any. The arrival keeps the
+ * values it came in with; the opponent's current health is what takes the
+ * damage, so a survivor of an earlier round stays hurt. A killed unit is
+ * flagged `killed` (still undoable by hand).
+ */
+function resolveArrival(arena: readonly ArenaUnit[], arrivalId: string): readonly ArenaUnit[] {
+  const arrival = arena.find((u) => u.id === arrivalId)
+  if (arrival === undefined || arrival.killed) return arena
+  const opponent = arena.find(
+    (u) => u.side !== arrival.side && u.position === arrival.position && !u.killed,
+  )
+  if (opponent === undefined) return arena
+  const { toA, toB } = faceOffDamage(arrival, opponent)
+  return arena.map((u) =>
+    u.id === arrival.id ? withDamage(u, toA) : u.id === opponent.id ? withDamage(u, toB) : u,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // placeUnitInArena
 // ---------------------------------------------------------------------------
 
@@ -374,7 +434,7 @@ export function placeUnitInArena(
     ...nextState,
     battle: {
       ...battle,
-      arena: [...arena, arenaUnit],
+      arena: resolveArrival([...arena, arenaUnit], arenaUnitId),
       departedUnits,
     },
   })
@@ -453,7 +513,10 @@ export function moveArenaUnit(
     ...nextState,
     battle: {
       ...battle,
-      arena: arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
+      arena: resolveArrival(
+        arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
+        input.arenaUnitId,
+      ),
       departedUnits,
     },
   })
@@ -641,13 +704,21 @@ export function rotateArenaUnit(
   const bonus = hasLevels ? rotationLevel(rotation) : 0
   const attack = hasLevels ? unit.unit.attack + bonus : unit.attack
   const health = hasLevels ? unit.unit.health + bonus : unit.health
-  const updatedUnit: ArenaUnit = { ...unit, rotation, attack, health }
+  const reseeded: ArenaUnit = { ...unit, rotation, attack, health }
+  // The new tier starts undamaged, but the unit still faces whoever it was
+  // fighting: re-apply that opponent's blows (and only those) so the HP field
+  // keeps showing what the unit has lost.
+  const opponent = unit.killed
+    ? undefined
+    : battle.arena.find((u) => u.side !== unit.side && u.position === unit.position && !u.killed)
+  const updatedUnit: ArenaUnit =
+    opponent === undefined ? reseeded : withDamage(reseeded, opponent.attack)
 
   const nextState = appendPublicLog(
     state,
     player.username,
     player.playerId,
-    `rotates ${revealAll(unit.unit)} to ${rotation}° (${attack}.${health})`,
+    `rotates ${revealAll(unit.unit)} to ${rotation}° (${updatedUnit.attack}.${updatedUnit.health})`,
   )
 
   return ok({
