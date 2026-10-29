@@ -37,10 +37,13 @@ export function ReferenceDialog({
   // Kept in a ref so a fresh `onClose` each render cannot re-run the effect and
   // steal focus back to Close while the dialog is open.
   const onCloseRef = useRef(onClose)
+  // The control that had focus when the dialog opened is the one that opened it; a
+  // shared `returnFocusTo` ref can point at another row's button.
+  const openerRef = useRef<Element | null>(typeof document === 'undefined' ? null : document.activeElement)
   onCloseRef.current = onClose
 
   useEffect(() => {
-    closeRef.current?.focus()
+    closeRef.current?.focus({ preventScroll: true })
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -61,10 +64,10 @@ export function ReferenceDialog({
       if (first === undefined || last === undefined) return
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault()
-        last.focus()
+        last.focus({ preventScroll: true })
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault()
-        first.focus()
+        first.focus({ preventScroll: true })
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -76,7 +79,14 @@ export function ReferenceDialog({
   // runs on close.
   useEffect(() => {
     const target = returnFocusTo
-    return () => target?.current?.focus()
+    return () => {
+      const opener = openerRef.current
+      const back =
+        opener instanceof HTMLElement && opener.isConnected && opener.matches('button, a, [role="button"]')
+          ? opener
+          : target?.current
+      back?.focus({ preventScroll: true })
+    }
   }, [returnFocusTo])
 
   return (

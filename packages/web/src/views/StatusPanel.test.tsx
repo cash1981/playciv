@@ -361,6 +361,7 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByText('Terrain')).toBeTruthy()
     expect(screen.getByText('Sheet')).toBeTruthy()
     for (const absent of [
+      'Adam Smith',
       'Code of Laws (I)',
       'Pottery (I)',
       'Civil Service (II)',
@@ -457,6 +458,14 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByText('Adam Smith')).toBeTruthy()
     expect(screen.getByLabelText('Alice Adam Smith').textContent).toBe('1')
     expect(screen.queryByRole('button', { name: 'Increase Alice Adam Smith' })).toBeNull()
+  })
+
+  it('hides the Adam Smith row until he is revealed and usable (issue #310)', () => {
+    render(
+      <StatusPanel gameId="game-1" view={coinView({})} busy={false} readOnly={false} run={run} />,
+    )
+    openCoins()
+    expect(screen.queryByText('Adam Smith')).toBeNull()
   })
 
   const democracyAction = (

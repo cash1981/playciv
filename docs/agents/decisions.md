@@ -43,13 +43,17 @@ draws it hidden again. The discard was public, so its history does not reveal
 where the card is now. An assisted card play that discards without a `DISCARD`
 item line (Great Person/culture play) is kept the same way from its applied
 assisted record. A culture or Great Person card discarded by a reward choice is
-kept from its `chooseReward` record and the advance's drawn cards. A resource hut
-spent into the discard pile shows from the pile; huts are never reshuffled. A
-revealed card that leaves the public set without a discard still vanishes, and
-technologies/social policies are never added from the log. Tests:
+kept from its `chooseReward` record and the advance's drawn cards. That row uses
+the assisted record's time and log position even when the card is still in the
+discard pile, so a just-played card sorts with its play line rather than at the
+bottom of the feed. A resource hut spent into the discard pile shows from the
+pile; huts are never reshuffled. A revealed card that leaves the public set
+without a discard still vanishes, and technologies/social policies are never
+added from the log. Tests:
 `revealed-feed.test.ts` ("keeps a historical discard …", "keeps an assisted
-card-play discard …", "keeps a culture card discarded by a reward choice …",
-"shows a resource hut spent …" and "does not resurrect a revealed card …").
+card-play discard …", "dates a played card that is already in the discard pile
+…", "keeps a culture card discarded by a reward choice …", "shows a resource hut
+spent …" and "does not resurrect a revealed card …").
 
 Source: `packages/engine/src/actions/game.ts` (`revealedFeed`).
 
@@ -161,6 +165,8 @@ switches it back on. Its culture token is unaffected. Panama's coins belong to t
 unblockaded owner. Bank/Great Person/Adam Smith effects derive from board
 ownership and revealed cards; `placedBy` is not city ownership. Metropolis
 outskirts include ten squares around two centers, excluding both centers.
+The Coins tab lists the Adam Smith row only while his card is revealed and usable (#310). The
+reference dialogs (governments, policies) move focus with `preventScroll` so `?` never scrolls the page (#296).
 
 A Great Person with no tracked matching token is not assumed blockaded, for
 compatibility with existing games. Public totals never include hidden bonuses.
