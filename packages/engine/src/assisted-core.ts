@@ -204,6 +204,11 @@ export interface UpgradeBuildingsPayload {
  * What `playCard` carries: the card, the players it names (a card that names every
  * other player ignores them) and the resource it is played as, when it has one.
  */
+export interface CardSquare {
+  readonly column: number
+  readonly row: number
+}
+
 export interface PlayCardPayload {
   readonly itemId: string
   readonly targets: readonly string[]
@@ -212,6 +217,14 @@ export interface PlayCardPayload {
   readonly coinSource?: string
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
+  /** The map square whose figures move (Galileo and the movement culture cards). */
+  readonly from?: CardSquare
+  /** The empty square they move to. */
+  readonly to?: CardSquare
+  /** A one-figure movement card: the chosen figure when the source square holds several. */
+  readonly figureId?: string
+  /** Hannibal: any or all of the figures in the source square. */
+  readonly figureIds?: readonly string[]
 }
 
 /**
@@ -228,6 +241,17 @@ export interface GovernmentPayload {
 export interface InvestPayload {
   readonly source: string
   readonly card: InvestmentCard
+}
+
+/** What `communism` carries: the square whose figures may not leave this turn. */
+export interface CommunismPayload {
+  readonly square: CardSquare
+}
+
+/** What `steamPower` carries: the square whose figures move, and the water square they move to. */
+export interface SteamPowerPayload {
+  readonly from: CardSquare
+  readonly to: CardSquare
 }
 
 /** What `feudalismHarvest` carries: the city whose outskirts are harvested, and the resource. */
@@ -257,6 +281,8 @@ export type AssistedPayload =
   | PlayCardPayload
   | GovernmentPayload
   | InvestPayload
+  | CommunismPayload
+  | SteamPowerPayload
   | FeudalismHarvestPayload
   | FoundCityPayload
   | AssignScoutPayload

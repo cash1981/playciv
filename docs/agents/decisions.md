@@ -506,14 +506,250 @@ get no such button.
   card is found, with one reshuffle of the Great Person discards. With no marker
   of any type left nothing is drawn. Test: `assisted-gp.test.ts`, "the Draw button
   discards an exhausted type …".
-- **Deferred:** Captain James Cook and Henry Ford change travel speed, which is
-  still a manual `mvmt` text field and is not used in a calculation. They wait
-  until movement is enforced.
+- **Movement cards:** Captain James Cook and Henry Ford now feed the travel
+  speed instead of a manual calculation; see "Figure movement (#302, first
+  slice)".
 
 Source: `packages/engine/src/great-person-effects.ts`,
 `actions/player.ts` (`chooseTech`, `removeTech`, `revealTech`),
 `assisted-cards.ts`, `assisted-culture.ts`, `assisted-resources.ts`,
 `build-options.ts`, `assisted.ts` and `great-person-automation.test.ts`.
+
+### Figure movement (#302, first slice)
+
+The first slice of issue #302 makes normal army and scout movement part of the
+game. The board still stores free pixel positions, but a player's own figure on
+the map is selected and given highlighted destination squares; a destination
+comes from a cardinal breadth-first walk whose length is the travel speed. The
+server has a separate `travelFigure` reducer and `/travel` route; it checks the
+path, the water rule and the figure's ownership and writes the position and the
+spent movement in one board history entry. That makes the existing board Undo
+restore both, and the stored turn number makes the allowance fresh on the next
+turn without a reset action.
+
+- **Speed:** the total of the manual `mvmt` expression. A revealed Natural
+  Religion adds 1 for an army outside Anarchy (group movement is out of scope, so
+  every army move is individual), except when the expression already has a `+`
+  term (the older way players recorded the bonus, `3+1`); Henry Ford adds 1 while
+  faceup; Captain James Cook doubles it
+  for the turn through a `card:Captain James Cook` usage marker, and undoing the
+  play frees it. Spain's civilization bonus and the tech-listed speed steps stay
+  what the player typed.
+- **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
+  England crosses but cannot end there. A square under a tile whose terrain is
+  unknown (the tile back) is not water for this check. Stacking, enemy squares
+  and fog are refined by "Stacking, Steam Power, Brandenburg Gate and exploring
+  (#302)" below.
+- **Huts and villages:** a move that reaches a square with a `resources/hut` or
+  `resources/village` marker must stop on that square; without a revealed Flight
+  the figure cannot continue past it in the same move. A revealed Flight flies
+  over the marker, so the squares beyond are reachable, but rule 283 still
+  forbids ending the move on the marker square.
+- **Movement is a pool (the human, 2026-10-29, replacing "locked after any travel"):** each
+  travel adds its distance to `movement.used` and the figure may move again while speed is left.
+  It is locked at once when the pool is spent, or when the move ended on a hut, a village or
+  another player's figures (`MovementDestination.ends`), which end movement directly. Pressing
+  board Undo takes the moves back one at a time and restores the spent movement with each. A
+  freeform drag of the viewer's own map figure is disabled in the board UI; the general `movePiece`
+  route remains the manual board tool for setups and pieces off the map, so it is not a
+  rules-enforced second path. The `/travel` route also has no phase or turn-holder gate, matching
+  the shared board's "everyone may move everything" behaviour.
+- **Out of this slice:** the culture cards that move figures (Migrants,
+  Colonists, Immigrants, Disoriented, Lost, Out of Position), Hannibal, the
+  Communism square lock, and map-tile discovery. They need map-picking
+  assisted-card/resource flows rather than another hidden movement switch.
+
+Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`, the `move` change),
+`actions/board.ts` (`travelFigure`), `assisted-cards.ts`, `card-timing.ts`,
+`server/src/routes/board.ts`, `web/src/views/BoardView.tsx`, and tests
+`movement.test.ts`, `board-api.test.ts`, `BoardView.test.tsx`,
+`assisted-play-card.test.ts`.
+
+### Galileo Galilei and the card map picker (#302)
+
+Galileo is the first card whose effect is applied through a map choice. The Play
+form asks for a source square with the player's figures and a destination edge
+square; the board picker is the same one Build uses, through a small
+`MapPickerContext` bridge, and `playCard` carries the two squares in its payload.
+Choosing the source goes straight on to the destination pick, and choosing the
+destination asks for confirmation in a popup rather than an inline button. The engine moves every one of
+the player's figures in the source together and writes each move with the
+figure's travel lock, so the existing card undo vote puts the figures back and
+frees the card.
+
+- **Source and destination:** the source is any map square holding the player's
+  own figures; every one of them moves together. The destination must be an
+  outer-edge square, where an edge square is one with at least one cardinal
+  neighbour that is not a playable map square. This covers the outer border of
+  every board shape, and the rim of a stepped board or hole as the human
+  described.
+- **Empty:** unofficial rules 61 to 63. A square with no figure, building, Great
+  Person, wonder, city-state, city, hut, village or relic token. A disaster
+  alone, or another resource token such as wheat, does not block it. A square
+  whose hut/village/relic token has been taken has no such piece on the board.
+  A metropolis blocks both squares its artwork covers, not just the one under its
+  centre.
+- **Same square:** rule 332 allows a source that is already on the outer edge to
+  use itself as the destination, which locks the figures without moving them.
+  The destination picker offers it once such a source is chosen.
+- **No terrain or stacking gate:** the card names no terrain, so an empty water
+  edge square is allowed. Every destination is empty of figures, so the stacking
+  limit cannot be exceeded by this move. There is no extra stacking check.
+- **Lock and undo:** every moved figure gets `movement{locked:true}` for the turn;
+  the same board history entries carry the old positions and movement state. The
+  board Undo refuses the individual moves (`BOARD_UNDO_ASSISTED`), and the card's
+  undo vote moves every figure back and returns the card to the hand, ready to be
+  used on another group. Undo is refused if one of the moved figures has been
+  moved again since.
+- **Follow-ups:** Brandenburg Gate (rule 333) and scouts' gathered squares
+  (rules 198, 257, 334, 341, 422 to 424) are settled in "Stacking, Steam Power,
+  Brandenburg Gate and exploring (#302)" below.
+
+Source: `engine/src/galileo.ts`, `assisted-cards.ts` (`Galileo Galilei`),
+`actions/board.ts` (`moveFigureWithMovementUnchecked`),
+`assisted-core.ts` (`CardSquare`), `server/src/routes/assisted-args.ts`,
+`web/src/views/mapPick.ts`, `PlayableCards.tsx`, `GameView.tsx`,
+`engine/test/galileo.test.ts`, `web/src/views/PlayableCards.test.tsx`.
+
+### Movement culture cards (#302)
+
+The movement ability of six culture cards is automated with the shared card map
+picker: Migrants (2), Colonists (4) and Immigrants (6) move one own figure, while
+Disoriented (2), Lost (3) and Out of Position (4) move every figure of another
+player in one square as a group.
+
+- **Choosing:** the source can be any map square with the owner's figures. A
+  one-figure card asks which figure when the square holds several. A group card
+  has no target picker: the source square itself names the other player. The
+  picker offers only squares whose figures belong to exactly one other player,
+  and every one of those figures moves together.
+- **Destination:** every destination must be empty by unofficial rules 61 to 63,
+  shared through `empty-square.ts`. The one-figure cards use the ordinary
+  cardinal travel rules, including figure squares, hut/village stops, Flight
+  crossing and the owner's water ability. The group cards may not enter or end on
+  water at all, as printed, and Flight still only crosses hut/village.
+- **Normal travel is separate:** these cards do not read or spend ordinary travel
+  speed, may move a figure after its normal travel, and do not set the movement
+  lock (rule 276). A figure locked by Galileo this City Management cannot be
+  targeted (rules 255, 287, 330); `PieceMovement.reason` now tells `travel` from
+  `galileo` for that check.
+- **City Management policy switch:** the other printed ability of Migrants,
+  Colonists and Immigrants stays manual. The card is only automated in Movement;
+  in City Management it is logged/discarded as before and the player uses the
+  Social policy panel.
+- **Undo:** the card and all moved figures are one assisted action. The card undo
+  vote restores the figures and returns the card to the hand; board Undo is
+  blocked for the individual moves and the reverse moves form the new floor.
+- **Follow-ups:** figures moved by Steam Power are locked like Galileo's (the
+  `steamPower` movement reason), and Brandenburg Gate and the scout rules are in
+  "Stacking, Steam Power, Brandenburg Gate and exploring (#302)" below.
+
+Source: `engine/src/card-movement.ts`, `empty-square.ts`, `movement.ts`
+(`cardMoveDestinations`, `figureSources`, `PieceMovement.reason`),
+`assisted-cards.ts`, `actions/board.ts`, `web/src/views/PlayableCards.tsx`,
+tests `card-movement.test.ts`, `PlayableCards.test.tsx`.
+
+### Hannibal and Communism (#302)
+
+- **Hannibal** is automated in City Management. Choose a source square with the
+  player's figures and a different square that already contains one of their
+  figures. `figureIds` carries any or all source figures; the number moved is
+  capped by the effective stacking limit (`stackingLimitOf`, including Pasteur)
+  minus the figures already at the destination. The card move does not set or
+  spend the normal movement lock, and the undo vote restores positions and the
+  card. An empty destination or the same square is refused, and a figure locked
+  by Galileo is not offered (Galileo says it cannot move again that turn).
+- **Communism** is a Spy resource ability in the Movement phase. The assisted
+  action spends a Spy, writes the once-per-turn marker and stamps the chosen map
+  square in its effect. `communismLocksOf` derives the current turn's locks from
+  the applied records, so the undo vote returns the Spy and removes the lock; no
+  extra saved field or migration is needed. The lock is public in
+  `PlayerView.communismLocks`. A confirmed second use with another Spy is
+  allowed and notes itself in the log like the other resource abilities.
+- A figure may enter a Communism-locked square but may not leave it. Normal
+  travel, Galileo, the one-figure and group culture cards, and Hannibal all read
+  the locks; a locked starting square has no destinations. A figure can be locked
+  on water without Sailing, as the lock only prevents leaving.
+- **Follow-ups:** Steam Power, Brandenburg Gate and the scout rules are in
+  "Stacking, Steam Power, Brandenburg Gate and exploring (#302)" below.
+
+Source: `engine/src/assisted-communism.ts`, `communism.ts`, `assisted-cards.ts`
+(Hannibal), `movement.ts`, `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
+`web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `TechPanel.tsx`,
+tests `hannibal.test.ts`, `communism.test.ts`.
+
+### Stacking, Steam Power, Brandenburg Gate and exploring (#302)
+
+The human's choices for the last slices of #302 (2026-10-29): **battle and loot stay
+manual**, and exploring works **from the edge**.
+
+- **Stacking:** normal travel may end on, and cross, a square that holds fewer of the
+  player's own figures than the effective stacking limit (`stackingLimitOf`, Pasteur
+  included). The limit is absolute (rule 50), so a full square is closed to crossing too;
+  it counts one player's own figures only (rule 51), never another player's.
+  `MovementPlayer.stackingLimit` defaults to 1; the server passes the real value, the web view
+  carries it as `you.stackingLimit`.
+- **Culture cards cross like travel:** Migrants, Colonists, Immigrants and the group cards cross the
+  mover's own figures while the square has stacking room (the target's limit for a group card, rule
+  50), and another player's figures only with Flight; the destination must still be empty. The
+  human confirmed nothing passes through enemy figures without Flight.
+- **Steam Power moves the whole square:** a source holding a figure that Galileo or Steam Power
+  already moved this turn is refused (and left out of the picker) rather than leaving that figure
+  behind; Galileo has the same refusal. Undoing Galileo or Steam Power is refused once a moved
+  figure's movement no longer matches what the action set (a later exploration or move).
+- **Another player's figures (the human, 2026-10-29, replacing "never an ending square"):** an
+  army may move onto a square holding another player's figures and ends its move there; a
+  battle starts, but the battle and the loot are settled by hand (nothing is started or removed
+  by the engine). Without a revealed Flight they cannot be crossed (rule 52), so the move stops on
+  them; with Flight the figure may cross them or land on them. A scout never attacks (rule 431):
+  it cannot land on them, and crosses them only with Flight. The destination carries
+  `contact: true`; the board shows it in red, asks first, and the history line says the battle is
+  settled by hand. The movement culture cards keep their empty-square destination (rules 61 to 63).
+- **Steam Power** (`steamPower`, a City Management assisted action spending a Silk, text
+  read from the card art): all of the player's figures in one square move to any explored
+  water square on the map and are locked for the turn (`movement.reason: 'steamPower'`,
+  which keeps them out of the movement culture cards like Galileo's). A source that is
+  itself water may name itself to lock in place (rule 193+). The group may not exceed the
+  stacking limit there; armies may land on water holding another player's figures and the
+  battle stays manual (the picker notes it), a group with a scout may not (rule 196), which now
+  agrees with normal travel. Communism-locked
+  sources and Brandenburg outskirts are refused. The moves belong to the action: the board
+  Undo refuses them and the undo vote returns the figures and the Silk.
+- **Brandenburg Gate** (rules 209 to 214, 333): the outskirts of **every city** of the owner
+  (capital, city or metropolis; the human's reading, 2026-10-29), and the city-states the
+  owner holds, are closed as an *ending* square for every other player's figures in travel,
+  Galileo, Hannibal, Steam Power and the movement culture cards (a group card is judged by the
+  moved figures' owner). Crossing is allowed. The city centre is not outskirts. A disabled
+  wonder, one without an owner, or one blockaded by an enemy figure on its own square has no
+  effect. Not modelled: Communism's Spy exception (rule 214) and the obligation to leave the
+  outskirts.
+  Derived from the board each time and public (`PlayerView.brandenburgZones`).
+- **Exploring:** a square with no tile under it is fog, drawn as the tile back. Fog is not
+  walked onto and is not a Galileo or card destination. A figure on a square next to fog
+  can *explore* it: `exploreSquare` (route `POST .../pieces/:id/explore`, the board shows
+  the squares as blue "Explore" buttons with a confirmation) spends 1 movement, draws the
+  next TILES card and lays it in the slot that covers the clicked square (rotation 0,
+  turned by hand). It neither moves nor locks the figure, so travel, explore and travel again all work within the
+  speed (speed 4: move 1, explore 1, then 2 more; travel reaches only what is left). Any lock
+  forbids exploring: a move that ended on a hut, village or enemy, a spent pool, Galileo, Steam Power. The tile card goes to the player's hand like any draw, so a board Undo
+  does not return the card: a player could explore, undo and explore again to see more tiles
+  (accepted for now; the draw's log line can be undone by vote). Exploring has no turn check, like
+  travel, and fails without spending movement when the drawn card has no tile artwork. Undo is
+  two board Undo presses: the tile first, then the spent movement; the draw's log line can
+  be undone by vote to return the card. An unlisted engine unit test helper (`coverMap`)
+  lays tile backs so older movement tests do not see fog.
+- **Scout gathered squares** (rules 198, 257, 334, 341, 422 to 424): needs no new code.
+  Gathering reads the square a scout stands on now, so a scout moved in City Management
+  gathers where it ended, and the game keeps no record of an icon being used, so the rule
+  that the same icon may be used twice after such a move is already how it behaves
+  (`assisted-gather.test.ts`). The trade phase is not re-run, as before.
+- **Not done:** automated battle, loot and figure removal when figures meet.
+
+Source: `engine/src/explore.ts`, `actions/explore.ts`, `steam-power.ts`,
+`assisted-steam-power.ts`, `brandenburg.ts`, `movement.ts` (`occupancyOf`), `galileo.ts`,
+`assisted-cards.ts`, `actions/draw.ts` (`drawTileAt`), `server/src/routes/board.ts`,
+`routes/assisted-args.ts`, `web/src/views/BoardView.tsx`, `AssistedActions.tsx`,
+tests `stacking-movement`, `steam-power`, `brandenburg`, `explore`, `assisted-gather`.
 
 ### Turn warning in Your actions (2026-10-24)
 
@@ -1122,3 +1358,16 @@ stored rating.
 Source: `packages/server/src/auth.ts`, `routes/auth.ts`, `notifications.ts`,
 `turn-reminders.ts`, `store/rating.ts`, and their tests. README contains operational
 configuration and migration instructions.
+
+### Caching and new deploys (2026-10-29)
+
+Vite names every file under `/assets/` after its content, so `packages/web/public/_headers` caches them
+for a year (`immutable`); `index.html` keeps the host's default (`max-age=0, must-revalidate`: the
+browser asks, gets a 304 when nothing changed). A tab that stays open across a deploy keeps its old
+JavaScript, so `vite build` writes one build id into the bundle (`__BUILD_ID__`) and into `/version.json`
+(served `no-store`), and `UpdateBanner` offers a reload when the deployed id differs. It checks when the
+tab becomes visible and every 5 minutes, never reloads by itself, and does nothing under `vite dev`.
+The id is the Workers build's commit (`WORKERS_CI_COMMIT_SHA`), else `GITHUB_SHA`, else the build time.
+Not verified on the live site until deployed: that `_headers` is honoured for the Worker's
+`env.ASSETS.fetch` responses. In development the web app imports the engine from `packages/engine/dist`,
+so engine changes need `pnpm --filter @civ/engine build` (or `tsc --watch`) and a page reload.

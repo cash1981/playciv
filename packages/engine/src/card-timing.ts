@@ -116,7 +116,7 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Bread and Circuses', one(CANCEL)],
   ['Counterfeiters', one('Which player discards a coin token?')],
   ['Defection', optional('Whose figure is killed?')],
-  ['Disoriented', one('Whose figures are moved?')],
+  ['Disoriented', none],
   ['Drought', none],
   ['Duty and Honor', none],
   ['Exchange of Ideas', one('Which player do you exchange a tech with?')],
@@ -133,7 +133,7 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Flooding', none],
   ['Jousting Tourney', one('Whose culture event does it cancel?')],
   ['Knowledge Shared', one('Which player do you exchange a tech with?')],
-  ['Lost', one('Whose figures are moved?')],
+  ['Lost', none],
   ['Mass Defection', optional('Whose figures are killed?')],
   ['Nationalism', none],
   ['Roaming Horde', optional('Whose army or city is attacked?')],
@@ -144,7 +144,7 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Bank Scandal', { targets: { kind: 'allOthers' }, prompt: '', resources: [] }],
   ['Disaster', optional('Whose buildings are destroyed? (optional, up to two players)', 2)],
   ['Immigrants', none],
-  ['Out of Position', one('Whose figures are moved?')],
+  ['Out of Position', none],
   ['Patriotism', none],
   ['Primetime TV', one(CANCEL)],
   ['Supply Drop', none],
@@ -209,6 +209,9 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Thomas Edison', 'grants a free research of a tech another player has revealed'],
   ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],
+  ['Captain James Cook', 'doubles your travel speed until the end of the turn'],
+  ['Galileo Galilei', 'moves every figure in the chosen outer-edge square to another outer-edge square and locks them for the turn'],
+  ['Hannibal', 'moves any or all of your figures from one square to another square with your figures without exceeding your stacking limit'],
 ])
 
 /**
@@ -222,6 +225,7 @@ export const PASSIVE_GREAT_PERSONS: ReadonlyMap<string, string> = new Map([
   ['Susan B. Anthony', 'all of your cities produce 2 more hammers while Susan B. Anthony is faceup'],
   ['Louis Pasteur', 'your stacking limit is increased by 1 while Louis Pasteur is faceup'],
   ['Archimedes', 'pays 3 culture after Research for each tech no other player has revealed'],
+  ['Henry Ford', 'your travel speed is increased by 1 while Henry Ford is faceup'],
 ])
 
 const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')
@@ -258,6 +262,12 @@ export interface PlayableCard {
   readonly resources: readonly string[]
   /** What the game does for the card when it is played, or null when it only logs it. */
   readonly automatic: string | null
+  /**
+   * The movement ability available now: a one-figure card in Movement or a group
+   * card in City Management. Absent or null when this play is only the card's
+   * other ability or no automation.
+   */
+  readonly mapMove?: { readonly kind: 'one' | 'group' | 'hannibal'; readonly allowance: number } | null
   /** A passive effect that is active while the card stays faceup; Use only reveals it. */
   readonly passive: boolean
   /** Playing it discards the card; otherwise a Great Person turns faceup and stays. */

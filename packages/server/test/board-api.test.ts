@@ -8,6 +8,8 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { mapTop } from '@civ/engine'
+
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
 import { inject } from './helpers.js'
@@ -41,7 +43,7 @@ async function register(username: string): Promise<string> {
 /** A started two-player game, and the token of whoever got the first turn. */
 async function startedGame(
   name: string,
-): Promise<{ gameId: string; starter: string; waiting: string }> {
+): Promise<{ gameId: string; starter: string; waiting: string; starterName: string }> {
   const creator = await register(`${name}-a`)
   const created = await inject(app, {
     method: 'POST',
@@ -62,7 +64,7 @@ async function startedGame(
   const state = await repo.findGame(gameId)
   const starterName = state?.players.find((player) => player.yourTurn)?.username
   const starter = starterName === `${name}-a` ? creator : other
-  return { gameId, starter, waiting: starter === creator ? other : creator }
+  return { gameId, starter, waiting: starter === creator ? other : creator, starterName: starterName ?? '' }
 }
 
 const place = (gameId: string, token: string, assetId: string, x: number, y: number) =>
@@ -261,6 +263,99 @@ describe('history over HTTP', () => {
       .history
     expect(history).toHaveLength(2)
     expect(history[1]?.description).toMatch(/moved Red army from .+ to .+/)
+  })
+
+  it('moves a figure by the Movement rules and locks it (issue #302)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Travel')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    // Fog is not walked onto: the first slot needs a tile (a tile back has no terrain)
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const placed = await place(gameId, starter, assetId, square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+
+    const travelled = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+      headers: bearer(starter),
+      payload: { column: 3, row: 1 },
+    })
+    expect(travelled.status).toBe(200)
+    const view = await travelled.json() as {
+      board: { pieces: { id: string; movement?: { turn: number; used: number; locked: boolean } }[]; history: { description: string }[] }
+    }
+    expect(view.board.pieces.find((candidate) => candidate.id === piece.id)?.movement).toMatchObject({
+      used: 2,
+      locked: true,
+    })
+    expect(view.board.history.at(-1)?.description).toContain('(2 squares)')
+
+    const again = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+      headers: bearer(starter),
+      payload: { column: 3, row: 2 },
+    })
+    expect(again.status).toBe(400)
+    expect((await again.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+
+  it('explores the fog next to a figure for 1 movement and lays the next tile there (issue #302)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Explore')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const placed = await place(gameId, starter, assetId, 3 * square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+
+    const explored = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/explore`,
+      headers: bearer(starter),
+      payload: { column: 4, row: 1 },
+    })
+    expect(explored.status).toBe(200)
+    const view = await explored.json() as {
+      board: { pieces: { id: string; category: string; movement?: { used: number; locked: boolean } }[] }
+    }
+    expect(view.board.pieces.filter((candidate) => candidate.category === 'tile')).toHaveLength(2)
+    expect(view.board.pieces.find((candidate) => candidate.id === piece.id)?.movement).toMatchObject({
+      used: 1,
+      locked: false,
+    })
+
+    const noFog = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/explore`,
+      headers: bearer(starter),
+      payload: { column: 4, row: 1 },
+    })
+    expect(noFog.status).toBe(400)
+    expect((await noFog.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
+
+    const bad = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/explore`,
+      headers: bearer(starter),
+      payload: { column: 'x' },
+    })
+    expect(bad.status).toBe(400)
   })
 
   it('keeps a piece moved in a player area at the requested spot (issue #100)', async () => {

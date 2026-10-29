@@ -17,12 +17,29 @@ import { tradeCeilingOf } from './limits.js'
 import { investableCoinsOf } from './sot.js'
 import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
-import { placeStartMarker } from './actions/board.js'
+import { moveFigureWithMovementUnchecked, placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import { drawCandidates, performAdvance, reverseAdvanceEffect, shuffleSheetTwice } from './assisted-culture.js'
-import { unitSheetOf } from './build-options.js'
+import { squareLabel, unitSheetOf } from './build-options.js'
+import { cardMoveFigureChoices, cardMoveRuleOf, cardMoveSources } from './card-movement.js'
+import {
+  GALILEO_NAME,
+  galileoDestinationAllowed,
+  galileoFiguresAt,
+  isOuterEdgeCell,
+} from './galileo.js'
+import { mapTop } from './board.js'
+import { brandenburgForbiddenFor } from './brandenburg.js'
+import { communismLocksOf } from './communism.js'
+import type { BoardPiece, PieceMovement } from './board.js'
+import {
+  canCultureMoveFigure,
+  cardMoveDestinations,
+  cardWaterRulesOf,
+  figuresAt,
+} from './movement.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
-import { revealedTechNamesOfOthers } from './great-person-effects.js'
+import { revealedTechNamesOfOthers, stackingLimitOf } from './great-person-effects.js'
 import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
@@ -98,6 +115,17 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
     if (timings.length === 0 && passiveText === undefined) return []
     if (item.kind === 'greatperson' && CARDS_WITH_OWN_BUTTON.has(name)) return []
     const rule = cardPlayRuleOf(name)
+    const moveRule = cardMoveRuleOf(name)
+    const mapMove =
+      moveRule === undefined
+        ? null
+        : moveRule.kind === 'one'
+          ? now === 'MOVEMENT'
+            ? moveRule
+            : null
+          : now === 'CM'
+            ? moveRule
+            : null
     const base = {
       itemId: item.id,
       name,
@@ -111,8 +139,13 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
         passiveText === undefined
           ? kind === 'greatPerson'
             ? (AUTOMATIC_EFFECTS.get(name) ?? null)
-            : null
+            : mapMove === null
+              ? null
+              : mapMove.kind === 'one'
+                ? `moves one of your figures up to ${mapMove.allowance} squares to an empty square`
+                : `moves all figures of another player in a square up to ${mapMove.allowance} squares to an empty square`
           : passiveText,
+      mapMove,
       passive: passiveText !== undefined,
       discards: kind === 'culture' || discardsWhenUsed(item.description),
       coinSources:
@@ -188,7 +221,17 @@ interface Automated {
   readonly state: GameState
   readonly extra: Pick<
     PlayCardEffect,
-    'gain' | 'drew' | 'starter' | 'grantId' | 'wonderDiscount' | 'coin' | 'advance' | 'curieSubstitute'
+    | 'gain'
+    | 'drew'
+    | 'starter'
+    | 'grantId'
+    | 'wonderDiscount'
+    | 'coin'
+    | 'advance'
+    | 'curieSubstitute'
+    | 'usedAction'
+    | 'galileo'
+    | 'cardMove'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -199,6 +242,80 @@ function turnFor(state: GameState, player: Playerhand) {
   const turnNumber = turnStatus(state).currentTurn
   return player.playerTurns.find((turn) => turn.turnNumber === turnNumber) ?? createPlayerTurn(player.username, turnNumber)
 }
+
+interface CardMoveResult {
+  readonly state: GameState
+  readonly moves: readonly {
+    readonly pieceId: string
+    readonly from: { readonly x: number; readonly y: number }
+    readonly to: { readonly x: number; readonly y: number }
+    readonly movement: PieceMovement | null
+    readonly historyId: string
+  }[]
+}
+
+/** Moves a set of figures together for a culture card, keeping their offsets within the square. */
+function moveFiguresForCard(
+  state: GameState,
+  playerId: string,
+  cardName: string,
+  figures: readonly BoardPiece[],
+  from: { readonly column: number; readonly row: number },
+  to: { readonly column: number; readonly row: number },
+  at: string | undefined,
+): CardMoveResult | string {
+  const sourceX = from.column * state.board.squareSize
+  const sourceY = mapTop(state.board) + from.row * state.board.squareSize
+  const destX = to.column * state.board.squareSize
+  const destY = mapTop(state.board) + to.row * state.board.squareSize
+  let current = state
+  const moves: {
+    pieceId: string
+    from: { x: number; y: number }
+    to: { x: number; y: number }
+    movement: PieceMovement | null
+    historyId: string
+  }[] = []
+  for (const figure of figures) {
+    const x = destX + (figure.x - sourceX)
+    const y = destY + (figure.y - sourceY)
+    const next = moveFigureWithMovementUnchecked(current, {
+      playerId,
+      pieceId: figure.id,
+      x,
+      y,
+      movementFrom: figure.movement ?? null,
+      movementTo: figure.movement ?? null,
+      description: `moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)} with ${cardName}`,
+      ...(at === undefined ? {} : { at }),
+    })
+    if (next === undefined) return 'The figures could not be moved.'
+    const historyId = next.board.history.at(-1)?.id
+    if (historyId === undefined) return 'The move could not be recorded.'
+    current = next
+    moves.push({
+      pieceId: figure.id,
+      from: { x: figure.x, y: figure.y },
+      to: { x, y },
+      movement: figure.movement ?? null,
+      historyId,
+    })
+  }
+  return { state: current, moves }
+}
+
+const sameCell = (
+  a: { readonly column: number; readonly row: number },
+  b: { readonly column: number; readonly row: number },
+): boolean => a.column === b.column && a.row === b.row
+
+const sameMovement = (a: PieceMovement | null, b: PieceMovement | null): boolean => {
+  if (a === null || b === null) return a === b
+  return a.turn === b.turn && a.used === b.used && a.locked === b.locked && a.reason === b.reason
+}
+
+const hasFlight = (player: Playerhand): boolean =>
+  player.techsChosen.some((tech) => tech.name === 'Flight' && !tech.hidden)
 
 /**
  * The effects of a Great Person card the game can carry out itself, because they need
@@ -336,6 +453,241 @@ function automate(
         said: `, gave their ${known.label} coin to ${target.username} and advanced one space for free`,
       })
     }
+    case 'Captain James Cook': {
+      const key = 'card:Captain James Cook'
+      const turn = turnFor(state, player)
+      if (turn.usedActions.includes(key)) {
+        return err('Captain James Cook can double travel speed only once each turn.')
+      }
+      return ok({
+        state: useTurnAction(state, player, turn, key, player.stats),
+        extra: { usedAction: { key, turnNumber: turn.turnNumber } },
+        said: ', doubling their travel speed until the end of the turn',
+      })
+    }
+    case GALILEO_NAME: {
+      const from = payload?.from
+      const to = payload?.to
+      if (from === undefined || to === undefined) {
+        return err('Choose a source square with your figures and an empty outer-edge destination.')
+      }
+      const figures = galileoFiguresAt(state.board, player, from)
+      if (figures.length === 0) {
+        return err(`No figure of yours stands on ${squareLabel(from)}.`)
+      }
+      if (figures.some((figure) => !canCultureMoveFigure(figure, turnStatus(state).currentTurn))) {
+        return err(`A figure on ${squareLabel(from)} has already been moved by Galileo or Steam Power this turn and cannot move again.`)
+      }
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
+      const sameSquare = from.column === to.column && from.row === to.row
+      if (sameSquare) {
+        if (!isOuterEdgeCell(state.board, from)) {
+          return err('Galileo can only lock figures in place when they stand on the outer edge.')
+        }
+      } else {
+        if (!isOuterEdgeCell(state.board, to)) {
+          return err('The destination must be a square on the outer edge of the map.')
+        }
+        if (!galileoDestinationAllowed(state.board, to)) {
+          return err(`${squareLabel(to)} is not an empty outer-edge square.`)
+        }
+        if (brandenburgForbiddenFor(state, player.playerId).some((cell) => sameCell(cell, to))) {
+          return err(`${squareLabel(to)} is in the outskirts of a Brandenburg Gate; your figures may not end there.`)
+        }
+      }
+
+      const turnNumber = turnStatus(state).currentTurn
+      const sourceX = from.column * state.board.squareSize
+      const sourceY = mapTop(state.board) + from.row * state.board.squareSize
+      const destX = to.column * state.board.squareSize
+      const destY = mapTop(state.board) + to.row * state.board.squareSize
+      const moves: {
+        pieceId: string
+        from: { x: number; y: number }
+        to: { x: number; y: number }
+        movementFrom: PieceMovement | null
+        historyId: string
+      }[] = []
+      let current = state
+      for (const figure of figures) {
+        const before = figure.movement?.turn === turnNumber ? figure.movement : null
+        const movementTo: PieceMovement = {
+          turn: turnNumber,
+          used: before?.used ?? 0,
+          locked: true,
+          reason: 'galileo',
+        }
+        const x = destX + (figure.x - sourceX)
+        const y = destY + (figure.y - sourceY)
+        const next = moveFigureWithMovementUnchecked(current, {
+          playerId: player.playerId,
+          pieceId: figure.id,
+          x,
+          y,
+          movementFrom: figure.movement ?? null,
+          movementTo,
+          description: sameSquare
+            ? `locked ${figure.label} on ${squareLabel(from)} with ${GALILEO_NAME}`
+            : `moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)} with ${GALILEO_NAME}`,
+          ...(at === undefined ? {} : { at }),
+        })
+        if (next === undefined) return err('The figures could not be moved.')
+        const historyId = next.board.history.at(-1)?.id
+        if (historyId === undefined) return err('The move could not be recorded.')
+        current = next
+        moves.push({
+          pieceId: figure.id,
+          from: { x: figure.x, y: figure.y },
+          to: { x, y },
+          movementFrom: figure.movement ?? null,
+          historyId,
+        })
+      }
+      return ok({
+        state: current,
+        extra: { galileo: { from, to, moves } },
+        said: sameSquare
+          ? `, locked ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} on ${squareLabel(from)}`
+          : `, moved ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} from ` +
+            `${squareLabel(from)} to ${squareLabel(to)}`,
+      })
+    }
+    case 'Hannibal': {
+      const from = payload?.from
+      const to = payload?.to
+      if (from === undefined || to === undefined) {
+        return err('Choose a source square with your figures and another square with your figures.')
+      }
+      if (sameCell(from, to)) return err('Hannibal moves figures to another square.')
+      const sourceFigures = cardMoveFigureChoices(state.board, player, from, turnStatus(state).currentTurn)
+      if (sourceFigures.length === 0) return err(`No movable figure of yours stands on ${squareLabel(from)}.`)
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
+      const atDestination = figuresAt(state.board, player, to)
+      if (atDestination.length === 0) {
+        return err(`${squareLabel(to)} must already contain one of your figures.`)
+      }
+      if (brandenburgForbiddenFor(state, player.playerId).some((cell) => sameCell(cell, to))) {
+        return err(`${squareLabel(to)} is in the outskirts of a Brandenburg Gate; your figures may not end there.`)
+      }
+      const selected =
+        payload?.figureIds === undefined
+          ? sourceFigures
+          : sourceFigures.filter((figure) => payload.figureIds?.includes(figure.id) === true)
+      if (selected.length === 0) return err('Choose at least one figure to move.')
+      if (
+        payload?.figureIds !== undefined &&
+        (new Set(payload.figureIds).size !== payload.figureIds.length || selected.length !== payload.figureIds.length)
+      ) {
+        return err('Choose each figure in the source square only once.')
+      }
+      const room = stackingLimitOf(state, player) - atDestination.length
+      if (selected.length > room) {
+        return err(
+          `${squareLabel(to)} has room for ${Math.max(0, room)} more of your figures, not ${selected.length}.`,
+        )
+      }
+      const moved = moveFiguresForCard(state, player.playerId, name, selected, from, to, at)
+      if (typeof moved === 'string') return err(moved)
+      return ok({
+        state: moved.state,
+        extra: { cardMove: { card: name, kind: 'hannibal', from, to, moves: moved.moves } },
+        said: `, moved ${selected.length} ${selected.length === 1 ? 'figure' : 'figures'} from ${squareLabel(from)} to ${squareLabel(to)}`,
+      })
+    }
+    case 'Migrants':
+    case 'Colonists':
+    case 'Immigrants': {
+      const rule = cardMoveRuleOf(name)
+      const from = payload?.from
+      const to = payload?.to
+      if (rule === undefined || from === undefined || to === undefined) {
+        return err('Choose one of your figures and an empty destination square.')
+      }
+      const turnNumber = turnStatus(state).currentTurn
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
+      const choices = cardMoveFigureChoices(state.board, player, from, turnNumber)
+      const figureId = payload?.figureId
+      const figure =
+        figureId === undefined
+          ? choices.length === 1
+            ? choices[0]
+            : undefined
+          : choices.find((candidate) => candidate.id === figureId)
+      if (figure === undefined) return err('Choose one of your figures in the source square.')
+      const destinations = cardMoveDestinations(
+        state.board,
+        from,
+        rule.allowance,
+        cardWaterRulesOf(player),
+        hasFlight(player),
+        communismLocksOf(state),
+        brandenburgForbiddenFor(state, player.playerId),
+        { owner: player, stackingLimit: stackingLimitOf(state, player) },
+      )
+      if (!destinations.some((cell) => sameCell(cell, to))) {
+        return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
+      }
+      const moved = moveFiguresForCard(state, player.playerId, name, [figure], from, to, at)
+      if (typeof moved === 'string') return err(moved)
+      return ok({
+        state: moved.state,
+        extra: { cardMove: { card: name, kind: 'one', from, to, moves: moved.moves } },
+        said: `, moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)}`,
+      })
+    }
+    case 'Disoriented':
+    case 'Lost':
+    case 'Out of Position': {
+      const rule = cardMoveRuleOf(name)
+      const from = payload?.from
+      const to = payload?.to
+      if (rule === undefined || from === undefined || to === undefined) {
+        return err('Choose a square with another player\'s figures and an empty destination.')
+      }
+      if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
+        return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
+      }
+      const holders = state.players
+        .filter((candidate) => candidate.playerId !== player.playerId)
+        .filter((candidate) => figuresAt(state.board, candidate, from).length > 0)
+      const target = holders.length === 1 ? holders[0] : undefined
+      if (target === undefined) {
+        return err(`Choose a square holding figures of exactly one other player.`)
+      }
+      const turnNumber = turnStatus(state).currentTurn
+      if (!cardMoveSources(state.board, target, turnNumber, 'group').some((cell) => sameCell(cell, from))) {
+        return err(`No movable figures of ${target.username} stand on ${squareLabel(from)}.`)
+      }
+      const destinations = cardMoveDestinations(
+        state.board,
+        from,
+        rule.allowance,
+        { cross: false, end: false },
+        hasFlight(target),
+        communismLocksOf(state),
+        brandenburgForbiddenFor(state, target.playerId),
+        { owner: target, stackingLimit: stackingLimitOf(state, target) },
+      )
+      if (!destinations.some((cell) => sameCell(cell, to))) {
+        return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
+      }
+      const figures = figuresAt(state.board, target, from)
+      const moved = moveFiguresForCard(state, player.playerId, name, figures, from, to, at)
+      if (typeof moved === 'string') return err(moved)
+      return ok({
+        state: moved.state,
+        extra: { cardMove: { card: name, kind: 'group', from, to, moves: moved.moves } },
+        said:
+          `, moved ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} of ` +
+          `${target.username} from ${squareLabel(from)} to ${squareLabel(to)}`,
+      })
+    }
     case 'Marie Curie': {
       const substitute = payload?.substitute
       if (substitute === undefined) return err('Choose the resource to spend instead of Uranium.')
@@ -440,7 +792,7 @@ export const playCard: AssistedActionDefinition = {
         })
 
     const automated =
-      card.kind === 'greatPerson'
+      card.kind === 'greatPerson' || card.mapMove != null
         ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name, context.at, payload, targets, context.requestId)
         : ok<Automated | null>(null)
     if (!automated.ok) return err(rejected('playCard', blocked('unavailable', automated.error)))
@@ -517,6 +869,38 @@ export const playCard: AssistedActionDefinition = {
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
       return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
     }
+    if (effect.galileo !== undefined) {
+      const movedAway = effect.galileo.moves.find((move) => {
+        const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        // Still where the card put it and still carrying its lock from that turn: a later exploration
+        // or move of the figure changes the allowance, which an undo would otherwise refund
+        return (
+          piece === undefined ||
+          piece.x !== move.to.x ||
+          piece.y !== move.to.y ||
+          piece.movement?.turn !== record.turnNumber ||
+          piece.movement.locked !== true ||
+          piece.movement.reason !== 'galileo'
+        )
+      })
+      if (movedAway !== undefined) {
+        return blockedBy(`${effect.name} cannot be undone: a figure it moved has been moved again.`)
+      }
+    }
+    if (effect.cardMove !== undefined) {
+      const changed = effect.cardMove.moves.find((move) => {
+        const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        return (
+          piece === undefined ||
+          piece.x !== move.to.x ||
+          piece.y !== move.to.y ||
+          !sameMovement(piece.movement ?? null, move.movement)
+        )
+      })
+      if (changed !== undefined) {
+        return blockedBy(`${effect.name} cannot be undone: a figure it moved has moved or changed movement since.`)
+      }
+    }
     const coinTarget =
       effect.coin === undefined ? undefined : playerOf(state, effect.coin.targetId)
     if (effect.coin !== undefined && (coinTarget === undefined || coinTarget.stats.coinSources.sheet < 1)) {
@@ -563,6 +947,44 @@ export const playCard: AssistedActionDefinition = {
     if (effect.curieSubstitute !== undefined) {
       hand = { ...hand, curieSubstitute: null }
     }
+    if (effect.galileo !== undefined) {
+      for (const move of [...effect.galileo.moves].reverse()) {
+        const piece = current.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        if (piece === undefined) return blockedBy(`${effect.name} cannot be undone: a figure it moved is gone.`)
+        const next = moveFigureWithMovementUnchecked(current, {
+          playerId: player.playerId,
+          pieceId: move.pieceId,
+          x: move.from.x,
+          y: move.from.y,
+          movementFrom: piece.movement ?? null,
+          movementTo: move.movementFrom,
+          description: `moved ${piece.label} back with ${effect.name}`,
+          ...(at === null || at === undefined ? {} : { at }),
+        })
+        if (next === undefined) return blockedBy(`${effect.name} cannot be undone: a figure could not be moved back.`)
+        current = next
+      }
+      hand = playerOf(current, player.playerId) ?? hand
+    }
+    if (effect.cardMove !== undefined) {
+      for (const move of [...effect.cardMove.moves].reverse()) {
+        const piece = current.board.pieces.find((candidate) => candidate.id === move.pieceId)
+        if (piece === undefined) return blockedBy(`${effect.name} cannot be undone: a figure it moved is gone.`)
+        const next = moveFigureWithMovementUnchecked(current, {
+          playerId: player.playerId,
+          pieceId: move.pieceId,
+          x: move.from.x,
+          y: move.from.y,
+          movementFrom: piece.movement ?? null,
+          movementTo: move.movement,
+          description: `moved ${piece.label} back with ${effect.name}`,
+          ...(at === null || at === undefined ? {} : { at }),
+        })
+        if (next === undefined) return blockedBy(`${effect.name} cannot be undone: a figure could not be moved back.`)
+        current = next
+      }
+      hand = playerOf(current, player.playerId) ?? hand
+    }
     if (effect.coin !== undefined && coinTarget !== undefined) {
       const recipient = playerOf(current, effect.coin.targetId) ?? coinTarget
       current = withPlayer(current, {
@@ -582,19 +1004,29 @@ export const playCard: AssistedActionDefinition = {
       }
     }
 
-    const freeMotherTeresa = (state: GameState): GameState => {
-      if (effect.coin === undefined) return state
-      const holder = playerOf(state, player.playerId) ?? hand
-      return freeTurnAction(state, holder, record.turnNumber, 'card:Mother Teresa')
+    const freeTurnUse = (state: GameState): GameState => {
+      let freed = state
+      if (effect.coin !== undefined) {
+        freed = freeTurnAction(freed, playerOf(freed, player.playerId) ?? hand, record.turnNumber, 'card:Mother Teresa')
+      }
+      if (effect.usedAction !== undefined) {
+        freed = freeTurnAction(
+          freed,
+          playerOf(freed, player.playerId) ?? hand,
+          effect.usedAction.turnNumber,
+          effect.usedAction.key,
+        )
+      }
+      return freed
     }
     if (effect.discarded) {
-      const back: GameState = freeMotherTeresa({
+      const back: GameState = freeTurnUse({
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       })
       return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand` })
     }
-    const back = freeMotherTeresa(
+    const back = freeTurnUse(
       withPlayerHand(current, {
         ...hand,
         items: hand.items.map((candidate) =>

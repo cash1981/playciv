@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import tileIcons from '../data/tile-icons.json' with { type: 'json' }
 import tileTerrain from '../data/tile-terrain.json' with { type: 'json' }
 
-import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { movePiece, placePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseSocialPolicy, revealSocialPolicy } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -381,6 +381,28 @@ describe('what a city offers: devote to the arts', () => {
     expect(option.notes.join(' ')).toContain('A scout gathers from the turn after it was placed')
     // The scout's culture is not in the sum: the player says whether to send it
     expect(option.culture).toBe(1)
+  })
+
+  it('reads the square a scout stands on now, so a scout moved in City Management gathers there (rules 198, 334)', () => {
+    let state = tile01()
+    state = put(state, CASH1981, 'figures/redscout', 2, 1)
+    expect(optionOf(state).devoteToTheArts.scouts).toHaveLength(0)
+
+    // Galileo, Steam Power, Hannibal and the culture cards all move the figure on the board: the
+    // gathering follows it, and the game keeps no once-per-turn record of an icon (rules 422 to 424).
+    const scout = state.board.pieces.find((piece) => piece.assetId === 'figures/redscout')
+    if (scout === undefined) throw new Error('missing scout')
+    const moved = unwrap(
+      movePiece(state, {
+        playerId: CASH1981,
+        pieceId: scout.id,
+        x: scout.x - SQUARE_SIZE,
+        y: scout.y + 2 * SQUARE_SIZE,
+      }),
+    )
+    expect(optionOf(moved).devoteToTheArts.scouts).toEqual([
+      expect.objectContaining({ square: 'B4', culture: 1 }),
+    ])
   })
 
   it('an enemy scout is not offered', () => {

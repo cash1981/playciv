@@ -6,9 +6,9 @@
  * them by accident.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -20,7 +20,7 @@ import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, Pl
 
 import { hasActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
-import type { PickSquares } from './BoardView.js'
+import type { PickableSquare, PickSquares } from './BoardView.js'
 import { BuildBar } from './BuildPicker.js'
 import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
@@ -31,6 +31,8 @@ import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary, handItemId } from './PhaseSummary.js'
 import { PhaseActionsPanel } from './PhaseTabs.js'
+import { MapPickerContext } from './mapPick.js'
+import type { MapPicker, MapPickRequest } from './mapPick.js'
 import { PlayCardControl } from './PlayableCards.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
@@ -513,6 +515,33 @@ export function GameView({
   const buildAllowed =
     view !== null && !(selectedRevision !== null && historical !== null) && (view.active || player?.role === 'admin')
   const buildFlow = useBuildFlow(buildAllowed ? (view.you?.buildOptions ?? null) : null)
+  type PendingMapPick = MapPickRequest & {
+    readonly gameId: string
+    readonly resolve: (cell: PickableSquare | null) => void
+  }
+  const [mapPick, setMapPick] = useState<PendingMapPick | null>(null)
+  const mapPickRef = useRef<PendingMapPick | null>(null)
+  const settleMapPick = useCallback((cell: PickableSquare | null) => {
+    const pending = mapPickRef.current
+    if (pending === null) return
+    mapPickRef.current = null
+    setMapPick(null)
+    pending.resolve(cell)
+  }, [])
+  const mapPicker = useMemo<MapPicker>(
+    () => ({
+      begin: (request) =>
+        new Promise((resolve) => {
+          mapPickRef.current?.resolve(null)
+          const pending: PendingMapPick = { ...request, gameId, resolve }
+          mapPickRef.current = pending
+          setMapPick(pending)
+        }),
+      cancel: () => settleMapPick(null),
+    }),
+    [gameId, settleMapPick],
+  )
+  useEffect(() => () => settleMapPick(null), [gameId, settleMapPick])
 
   if (view === null) {
     return (
@@ -531,10 +560,24 @@ export function GameView({
   const locked = !view.active && player?.role !== 'admin'
   const interactionBusy = busy || replaying || locked
   const you = displayedView.you
+  const movementPlayer =
+    you === null
+      ? null
+      : {
+          ...you,
+          activeGreatPersonNames: (you.items ?? []).flatMap((item) =>
+            item.kind === 'greatperson' &&
+            !item.hidden &&
+            (item.type === null || !you.blockadedGreatPersonTypes?.includes(item.type))
+              ? [item.name]
+              : [],
+          ),
+        }
+  const movementForbidden = you === null ? [] : brandenburgForbiddenCells(displayedView.brandenburgZones, you.playerId)
   const activePlayer = activePlayerOf(displayedView)
   const chatAuthors = chatAuthorsOf(displayedView)
   const buildPlan = buildFlow.plan
-  const pickSquares: PickSquares | undefined =
+  const buildPickSquares: PickSquares | undefined =
     buildPlan === null
       ? undefined
       : {
@@ -544,13 +587,26 @@ export function GameView({
           onPick: buildFlow.pick,
           onCancel: buildFlow.clear,
         }
+  const cardPickSquares: PickSquares | undefined =
+    mapPick === null || mapPick.gameId !== gameId
+      ? undefined
+      : {
+          itemLabel: mapPick.title,
+          cells: mapPick.cells,
+          selected: null,
+          onPick: (cell) => settleMapPick(cell),
+          onCancel: () => settleMapPick(null),
+          ...(mapPick.describeCell === undefined ? {} : { describeCell: mapPick.describeCell }),
+        }
+  const pickSquares = cardPickSquares ?? buildPickSquares
 
   // An ended game has nobody on turn: the title names the winner, and the
   // turn chips and the progress strip, which describe whose move it is, go.
   const ended = !displayedView.active
 
   return (
-    <>
+    <MapPickerContext.Provider value={mapPicker}>
+      <>
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
           {/* Civ, then colour, then the name in the title: who is up (the
@@ -619,6 +675,10 @@ export function GameView({
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
         viewerColor={you?.color ?? null}
+        movementPlayer={movementPlayer}
+        movementTurn={displayedView.activeTurn?.turnNumber ?? null}
+        movementLocks={displayedView.communismLocks}
+        movementForbidden={movementForbidden}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />
@@ -699,7 +759,8 @@ export function GameView({
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
       </div>
-    </>
+      </>
+    </MapPickerContext.Provider>
   )
 }
 

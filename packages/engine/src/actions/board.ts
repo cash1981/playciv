@@ -15,7 +15,15 @@
  * log would drown.
  */
 
-import type { Board, BoardArea, BoardChange, BoardHistoryEntry, BoardPiece, Rotation } from '../board.js'
+import type {
+  Board,
+  BoardArea,
+  BoardChange,
+  BoardHistoryEntry,
+  BoardPiece,
+  PieceMovement,
+  Rotation,
+} from '../board.js'
 import {
   applyChange,
   areaAt,
@@ -28,6 +36,7 @@ import {
   findBoardAsset,
   findPiece,
   locationOf,
+  mapTop,
   nearestSlotOrigin,
   nextFreeSlot,
   nextRotation,
@@ -46,7 +55,16 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess } from '../state.js'
-import { startMarkerOf, startPlayerOf } from '../turn.js'
+import { communismLocksOf } from '../communism.js'
+import { brandenburgForbiddenFor } from '../brandenburg.js'
+import { activeGreatPerson, stackingLimitOf } from '../great-person-effects.js'
+import {
+  destinationTo,
+  figureBelongsTo,
+  figureMovementOptions,
+  movementOf,
+} from '../movement.js'
+import { startMarkerOf, startPlayerOf, turnStatus } from '../turn.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -369,6 +387,157 @@ export function movePieceUnchecked(
         ? `nudged ${piece.label} in ${to}`
         : `moved ${piece.label} from ${from} to ${to}`,
   })
+}
+
+// ---------------------------------------------------------------------------
+// With travel speed (issue #302)
+// ---------------------------------------------------------------------------
+
+export interface TravelFigureInput {
+  readonly playerId: string
+  readonly pieceId: string
+  /** The destination map square, zero based from the map's top-left corner. */
+  readonly column: number
+  readonly row: number
+  readonly at?: string
+}
+
+export interface MoveFigureWithMovementInput {
+  readonly playerId: string
+  readonly pieceId: string
+  readonly x: number
+  readonly y: number
+  /** The raw travel bookkeeping before the move, for an exact undo. */
+  readonly movementFrom: PieceMovement | null
+  /** The bookkeeping after it; `null` clears the field, as an undo does. */
+  readonly movementTo: PieceMovement | null
+  /** What the history line says, after the actor's name and a space. */
+  readonly description: string
+  readonly at?: string
+}
+
+/**
+ * Moves a figure and writes its travel bookkeeping in the same board history
+ * entry. Used by the enforced travel route, and by an assisted card (Galileo)
+ * that moves figures by its own rule. No rule is checked here; the caller has.
+ */
+export function moveFigureWithMovementUnchecked(
+  state: GameState,
+  input: MoveFigureWithMovementInput,
+): GameState | undefined {
+  const fromIndex = state.board.pieces.findIndex((candidate) => candidate.id === input.pieceId)
+  const piece = state.board.pieces[fromIndex]
+  if (piece === undefined) return undefined
+
+  const x = Math.round(input.x)
+  const y = Math.round(input.y)
+  const moved: BoardPiece =
+    input.movementTo === null
+      ? (() => {
+          const { movement: _cleared, ...rest } = piece
+          return { ...rest, x, y }
+        })()
+      : { ...piece, x, y, movement: input.movementTo }
+  const others = state.board.pieces.filter((candidate) => candidate.id !== piece.id)
+  const pieces = [...others, moved]
+
+  return record(input, {
+    state,
+    pieces,
+    change: {
+      kind: 'move',
+      pieceId: piece.id,
+      from: { x: piece.x, y: piece.y },
+      to: { x, y },
+      fromIndex,
+      movement: { from: input.movementFrom, to: input.movementTo },
+    },
+    description: input.description,
+  })
+}
+
+/**
+ * Moves one of the player's own figures on the map by the Movement rules: a
+ * cardinal path within its travel speed, no illegal water, and only while the
+ * figure has not moved this turn. The board history entry holds the position and
+ * the spent allowance together, so one Undo gives both back.
+ */
+export function travelFigure(state: GameState, input: TravelFigureInput): ActionResult {
+  const denied = requireAccess(state, input.playerId)
+  if (denied !== undefined) return err(denied)
+  const player = findPlayer(state, input.playerId)
+  const piece = findPiece(state.board, input.pieceId)
+  if (player === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })
+  if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+
+  const turnNumber = turnStatus(state).currentTurn
+  if (!figureBelongsTo(player, piece)) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `${piece.label} is not one of your figures on the map.`,
+    })
+  }
+  const saved = movementOf(piece, turnNumber)
+  if (saved?.locked === true) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `${piece.label} has no movement left this turn. Undo a move on the board to move it again.`,
+    })
+  }
+  const movementPlayer = {
+    ...player,
+    activeGreatPersonNames: activeGreatPerson(state, player, 'Henry Ford') ? ['Henry Ford'] : [],
+    stackingLimit: stackingLimitOf(state, player),
+  }
+  const options = figureMovementOptions(
+    state.board,
+    movementPlayer,
+    piece,
+    turnNumber,
+    communismLocksOf(state),
+    brandenburgForbiddenFor(state, input.playerId),
+  )
+  if (options === null) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `${piece.label} is not on the map.`,
+    })
+  }
+  const destination = destinationTo(options, { column: input.column, row: input.row })
+  if (destination === undefined) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `That square is not a legal destination for ${piece.label} this turn.`,
+    })
+  }
+
+  const x = input.column * state.board.squareSize + (state.board.squareSize - piece.width) / 2
+  const y =
+    mapTop(state.board) +
+    input.row * state.board.squareSize +
+    (state.board.squareSize - piece.height) / 2
+  const used = (saved?.used ?? 0) + destination.distance
+  // Movement is a pool: the figure may move again while it has speed left. It is locked once the pool is
+  // spent, or at once when the move ended on a hut, a village or another player's figures.
+  const locked = destination.ends === true || used >= options.speed
+  const movement: PieceMovement = { turn: turnNumber, used, locked, reason: 'travel' }
+  const areas = areasFor(state)
+  const moved = moveFigureWithMovementUnchecked(state, {
+    playerId: input.playerId,
+    pieceId: piece.id,
+    x,
+    y,
+    movementFrom: piece.movement ?? null,
+    movementTo: movement,
+    description:
+      `moved ${piece.label} from ${locationOf(state.board, areas, piece)} to ${destination.label}` +
+      ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})` +
+      (destination.contact === true ? ', onto another player\'s figures: settle the battle and loot by hand' : ''),
+    ...(input.at === undefined ? {} : { at: input.at }),
+  })
+  return moved === undefined
+    ? err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+    : ok(moved)
 }
 
 /**
@@ -827,6 +996,16 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     }
     // Khalid moved the start player marker: stepping that back alone would undo only half the card
     if (effect.kind === 'playCard' && effect.starter?.historyId === entry.id) return true
+    // Galileo moved figures as part of playing the card: the board Undo must not take one move alone
+    if (effect.kind === 'playCard' && effect.galileo?.moves.some((move) => move.historyId === entry.id) === true) {
+      return true
+    }
+    // Steam Power teleported figures as part of its action: only the vote takes them back
+    if (effect.kind === 'steamPower' && effect.moves.some((move) => move.historyId === entry.id)) return true
+    // A movement culture card moved figures as part of the play: the board Undo leaves them to the vote
+    if (effect.kind === 'playCard' && effect.cardMove?.moves.some((move) => move.historyId === entry.id) === true) {
+      return true
+    }
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
     // A harvest put one resource token in the player's area
