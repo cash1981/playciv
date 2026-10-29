@@ -374,8 +374,16 @@ export function cardMoveDestinations(
   flight: boolean,
   lockedCells: readonly Cell[] = [],
   forbiddenCells: readonly Cell[] = [],
+  /**
+   * Who moves, and their stacking limit. With it the path crosses squares as ordinary travel does: the
+   * mover's own figures while there is room (rule 50), another player's only with Flight (rule 52). The
+   * destination must still be empty. Without it every figure square blocks the path.
+   */
+  crossing?: { readonly owner: FigureOwner; readonly stackingLimit: number },
 ): readonly MovementDestination[] {
   if (!isMapCell(board, from.column, from.row)) return []
+  const occupancy = crossing === undefined ? undefined : occupancyOf(board, crossing.owner)
+  const limit = Math.max(1, crossing?.stackingLimit ?? 1)
   const lockedKeys = new Set(lockedCells.map(keyOf))
   const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
   if (lockedKeys.has(keyOf(from))) return []
@@ -414,7 +422,12 @@ export function cardMoveDestinations(
     for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
       const next = { column: cell.column + dc, row: cell.row + dr }
       if (!isMapCell(board, next.column, next.row)) continue
-      if (occupied.has(keyOf(next))) continue
+      if (occupancy === undefined) {
+        if (occupied.has(keyOf(next))) continue
+      } else {
+        if (occupancy.foreign.has(keyOf(next)) && !flight) continue
+        if ((occupancy.own.get(keyOf(next)) ?? 0) >= limit) continue
+      }
       if (isUnexploredCell(board, next)) continue
       const [x, y] = centreOf(board, next)
       const nextWater = terrainAt(board, x, y) === 'water'

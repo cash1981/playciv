@@ -665,6 +665,7 @@ describe('movement culture cards', () => {
           color: 'Blue',
           civilization: null,
           revealedTechs: [],
+          stats: { stacking: 2 },
         },
       ],
     } as unknown as PlayerView

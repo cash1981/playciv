@@ -33,6 +33,7 @@ import { brandenburgForbiddenFor } from './brandenburg.js'
 import { communismLocksOf } from './communism.js'
 import type { BoardPiece, PieceMovement } from './board.js'
 import {
+  canCultureMoveFigure,
   cardMoveDestinations,
   cardWaterRulesOf,
   figuresAt,
@@ -474,6 +475,9 @@ function automate(
       if (figures.length === 0) {
         return err(`No figure of yours stands on ${squareLabel(from)}.`)
       }
+      if (figures.some((figure) => !canCultureMoveFigure(figure, turnStatus(state).currentTurn))) {
+        return err(`A figure on ${squareLabel(from)} has already been moved by Galileo or Steam Power this turn and cannot move again.`)
+      }
       if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
         return err(`${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)
       }
@@ -624,6 +628,7 @@ function automate(
         hasFlight(player),
         communismLocksOf(state),
         brandenburgForbiddenFor(state, player.playerId),
+        { owner: player, stackingLimit: stackingLimitOf(state, player) },
       )
       if (!destinations.some((cell) => sameCell(cell, to))) {
         return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
@@ -667,6 +672,7 @@ function automate(
         hasFlight(target),
         communismLocksOf(state),
         brandenburgForbiddenFor(state, target.playerId),
+        { owner: target, stackingLimit: stackingLimitOf(state, target) },
       )
       if (!destinations.some((cell) => sameCell(cell, to))) {
         return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
@@ -866,7 +872,16 @@ export const playCard: AssistedActionDefinition = {
     if (effect.galileo !== undefined) {
       const movedAway = effect.galileo.moves.find((move) => {
         const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
-        return piece === undefined || piece.x !== move.to.x || piece.y !== move.to.y
+        // Still where the card put it and still carrying its lock from that turn: a later exploration
+        // or move of the figure changes the allowance, which an undo would otherwise refund
+        return (
+          piece === undefined ||
+          piece.x !== move.to.x ||
+          piece.y !== move.to.y ||
+          piece.movement?.turn !== record.turnNumber ||
+          piece.movement.locked !== true ||
+          piece.movement.reason !== 'galileo'
+        )
       })
       if (movedAway !== undefined) {
         return blockedBy(`${effect.name} cannot be undone: a figure it moved has been moved again.`)

@@ -21,7 +21,7 @@ import { columnLabel, isMapCell } from './board.js'
 import type { Board, BoardPiece } from './board.js'
 import { isEmptySquare } from './empty-square.js'
 import { isExploredCell } from './explore.js'
-import { figureBelongsTo } from './movement.js'
+import { canCultureMoveFigure, figureBelongsTo } from './movement.js'
 import type { MovementPlayer } from './movement.js'
 
 export const GALILEO_NAME = 'Galileo Galilei'
@@ -68,13 +68,24 @@ export function galileoDestinationAllowed(board: Board, cell: Cell): boolean {
   return isOuterEdgeCell(board, cell) && isExploredCell(board, cell) && isEmptySquare(board, cell)
 }
 
-/** The map squares holding at least one of the player's figures: Galileo's sources. */
-export function galileoSources(board: Board, player: MovementPlayer): readonly Cell[] {
+/**
+ * The map squares holding the player's figures that Galileo can move as a whole. With `turnNumber`, a
+ * square holding a figure Galileo or Steam Power already moved this turn is left out: "they cannot move
+ * again this turn", and the square is moved together.
+ */
+export function galileoSources(board: Board, player: MovementPlayer, turnNumber?: number): readonly Cell[] {
   const sources = new Map<string, Cell>()
   for (const piece of board.pieces) {
     if (piece.category !== 'figure' || !figureBelongsTo(player, piece)) continue
     const cell = mapCellOf(board, piece)
-    if (cell !== null) sources.set(keyOf(cell), cell)
+    if (cell === null) continue
+    if (
+      turnNumber !== undefined &&
+      galileoFiguresAt(board, player, cell).some((figure) => !canCultureMoveFigure(figure, turnNumber))
+    ) {
+      continue
+    }
+    sources.set(keyOf(cell), cell)
   }
   return [...sources.values()].sort((a, b) => a.row - b.row || a.column - b.column)
 }

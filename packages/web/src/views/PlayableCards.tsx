@@ -122,7 +122,7 @@ export function PlayCardControl({
   })()
   const moveSourceCells = (
     isGalileo
-      ? galileoSources(view.board, viewer)
+      ? galileoSources(view.board, viewer, turnNumber)
       : cardMove?.kind === 'one'
         ? cardMoveSources(view.board, viewer, turnNumber, 'one')
         : cardMove?.kind === 'hannibal'
@@ -171,6 +171,9 @@ export function PlayCardControl({
             cardMove.kind === 'one'
               ? viewerForbidden
               : brandenburgForbiddenCells(view.brandenburgZones, groupHoldersAt(from)[0]?.playerId ?? ''),
+            cardMove.kind === 'one'
+              ? { owner: viewer, stackingLimit: viewer.stackingLimit }
+              : { owner: groupHoldersAt(from)[0] ?? viewer, stackingLimit: groupHoldersAt(from)[0]?.stats.stacking ?? 1 },
           )
   const moveDestinationCells = moveFrom === null ? [] : destinationCellsFor(moveFrom)
   const baseValid =

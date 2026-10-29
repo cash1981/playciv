@@ -93,7 +93,7 @@ export const steamPower: AssistedActionDefinition = {
     const turnNumber = turnStatus(state).currentTurn
     const figures = steamPowerFiguresAt(state.board, player, from, turnNumber)
     if (figures.length === 0) {
-      return err(rejected('steamPower', blocked('unavailable', `No figure of yours that can move stands on ${squareLabel(from)}.`)))
+      return err(rejected('steamPower', blocked('unavailable', `None of your figures can be moved from ${squareLabel(from)}: it holds no figure of yours, or one that Galileo or Steam Power already moved this turn.`)))
     }
     if (communismLocksOf(state).some((cell) => sameCell(cell, from))) {
       return err(rejected('steamPower', blocked('unavailable', `${squareLabel(from)} is locked by Communism; no figure may leave it this turn.`)))
@@ -180,7 +180,16 @@ export const steamPower: AssistedActionDefinition = {
       err({ kind: 'ASSISTED_ACTION_REJECTED' as const, action: 'steamPower', status: 'unavailable' as const, reason })
     for (const move of effect.moves) {
       const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
-      if (piece === undefined || piece.x !== move.to.x || piece.y !== move.to.y) {
+      // Still where Steam Power put it with its lock from that turn: a later exploration or move
+      // changes the allowance, which an undo would otherwise refund
+      if (
+        piece === undefined ||
+        piece.x !== move.to.x ||
+        piece.y !== move.to.y ||
+        piece.movement?.turn !== record.turnNumber ||
+        piece.movement.locked !== true ||
+        piece.movement.reason !== 'steamPower'
+      ) {
         return refuse(`${STEAM_POWER_NAME} cannot be undone: a figure it moved has been moved again.`)
       }
     }

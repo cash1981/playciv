@@ -341,3 +341,52 @@ describe('group cards', () => {
     expect(refused.kind).toBe('ASSISTED_ACTION_REJECTED')
   })
 })
+
+describe('crossing squares on the way (rules 50 and 52)', () => {
+  const migrantsTurn = () => withCardInHand(movementTurn(), 'Migrants')
+
+  it('lets Migrants cross a friendly figure while there is stacking room', () => {
+    const { state, itemId } = migrantsTurn()
+    let withFigures = place(state, 'figures/redarmy', 2, 2)
+    withFigures = place(withFigures, 'figures/redscout', 2, 3)
+    const army = figuresIn(withFigures, 2, 2)[0]
+    if (army === undefined) throw new Error('missing army')
+    // Two squares south, past the scout on (2, 3), to the empty (2, 4)
+    const played = unwrap(play(withFigures, itemId, 'Migrants', { column: 2, row: 2 }, { column: 2, row: 4 }, { figureId: army.id }))
+    expect(figuresIn(played, 2, 4)).toHaveLength(1)
+  })
+
+  it('does not let Migrants cross another player\'s figure without Flight, but does with Flight', () => {
+    const { state, itemId } = migrantsTurn()
+    let withFigures = place(state, 'figures/redarmy', 2, 2)
+    withFigures = place(withFigures, 'figures/bluearmy', 2, 3, KARANDRAS1)
+    const army = figuresIn(withFigures, 2, 2)[0]
+    if (army === undefined) throw new Error('missing army')
+    // (2, 4) is two squares away and every shorter way round is longer than the card's 2
+    const refused = unwrapErr(
+      play(withFigures, itemId, 'Migrants', { column: 2, row: 2 }, { column: 2, row: 4 }, { figureId: army.id }),
+    )
+    expect(refused.kind).toBe('ASSISTED_ACTION_REJECTED')
+
+    const flying = withTech(withFigures, 'Flight')
+    const played = unwrap(play(flying, itemId, 'Migrants', { column: 2, row: 2 }, { column: 2, row: 4 }, { figureId: army.id }))
+    expect(figuresIn(played, 2, 4)).toHaveLength(1)
+  })
+
+  it('does not let Migrants cross a friendly square already at the stacking limit', () => {
+    const { state, itemId } = migrantsTurn()
+    const limited: GameState = {
+      ...state,
+      players: state.players.map((candidate) =>
+        candidate.playerId === CASH1981 ? { ...candidate, stats: { ...candidate.stats, stacking: 1 } } : candidate,
+      ),
+    }
+    let withFigures = place(limited, 'figures/redarmy', 2, 2)
+    withFigures = place(withFigures, 'figures/redscout', 2, 3)
+    const army = figuresIn(withFigures, 2, 2)[0]
+    if (army === undefined) throw new Error('missing army')
+    expect(
+      unwrapErr(play(withFigures, itemId, 'Migrants', { column: 2, row: 2 }, { column: 2, row: 4 }, { figureId: army.id })).kind,
+    ).toBe('ASSISTED_ACTION_REJECTED')
+  })
+})

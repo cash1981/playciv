@@ -283,3 +283,51 @@ describe('playing Galileo Galilei', () => {
     expect(sameSquare.kind).toBe('ASSISTED_ACTION_REJECTED')
   })
 })
+
+describe('figures that cannot move again this turn', () => {
+  it('refuses a source holding a figure Steam Power already moved, and leaves it out of the picker', () => {
+    const { state, itemId } = withCardInHand(cmTurn(), 'Galileo Galilei')
+    const withFigures = place(place(state, 'figures/redarmy', 0, 0), 'figures/redscout', 0, 0)
+    const locked: GameState = {
+      ...withFigures,
+      board: {
+        ...withFigures.board,
+        pieces: withFigures.board.pieces.map((piece) =>
+          piece.assetId === 'figures/redscout'
+            ? { ...piece, movement: { turn: 1, used: 0, locked: true, reason: 'steamPower' as const } }
+            : piece,
+        ),
+      },
+    }
+    expect(unwrapErr(play(locked, itemId, { column: 0, row: 0 }, { column: 0, row: 2 })).kind).toBe('ASSISTED_ACTION_REJECTED')
+    const player = locked.players.find((candidate) => candidate.playerId === CASH1981)
+    if (player === undefined) throw new Error('missing player')
+    expect(galileoSources(locked.board, player, 1)).toEqual([])
+    expect(galileoSources(locked.board, player)).toEqual([{ column: 0, row: 0 }])
+  })
+
+  it('refuses the undo once a figure\'s movement has changed since, even on its own square', () => {
+    const { state, itemId } = withCardInHand(cmTurn(), 'Galileo Galilei')
+    const played = unwrap(play(place(state, 'figures/redarmy', 0, 0), itemId, { column: 0, row: 0 }, { column: 0, row: 2 }))
+    const record = played.assistedActions.at(-1)
+    if (record === undefined) throw new Error('missing assisted record')
+    // A later turn's exploration spent movement on the figure: an undo would refund it
+    const changed: GameState = {
+      ...played,
+      board: {
+        ...played.board,
+        pieces: played.board.pieces.map((piece) =>
+          piece.category === 'figure' ? { ...piece, movement: { turn: 2, used: 1, locked: false, reason: 'travel' as const } } : piece,
+        ),
+      },
+    }
+    let next = unwrap(initiateUndo(changed, { logId: record.logId, playerId: CASH1981 }))
+    let last = null as ReturnType<typeof vote> | null
+    for (const playerId of [KARANDRAS1, ITCHI, CHUL]) {
+      last = vote(next, { logId: record.logId, playerId, vote: true, at: AT })
+      if (!last.ok) break
+      next = last.value
+    }
+    expect(last?.ok).toBe(false)
+  })
+})

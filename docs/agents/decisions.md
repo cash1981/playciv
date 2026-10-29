@@ -689,6 +689,14 @@ manual**, and exploring works **from the edge**.
   it counts one player's own figures only (rule 51), never another player's.
   `MovementPlayer.stackingLimit` defaults to 1; the server passes the real value, the web view
   carries it as `you.stackingLimit`.
+- **Culture cards cross like travel:** Migrants, Colonists, Immigrants and the group cards cross the
+  mover's own figures while the square has stacking room (the target's limit for a group card, rule
+  50), and another player's figures only with Flight; the destination must still be empty. The
+  human confirmed nothing passes through enemy figures without Flight.
+- **Steam Power moves the whole square:** a source holding a figure that Galileo or Steam Power
+  already moved this turn is refused (and left out of the picker) rather than leaving that figure
+  behind; Galileo has the same refusal. Undoing Galileo or Steam Power is refused once a moved
+  figure's movement no longer matches what the action set (a later exploration or move).
 - **Another player's figures (the human, 2026-10-29, replacing "never an ending square"):** an
   army may move onto a square holding another player's figures and ends its move there; a
   battle starts, but the battle and the loot are settled by hand (nothing is started or removed

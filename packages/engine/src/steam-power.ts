@@ -27,22 +27,28 @@ const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
 const isScout = (piece: BoardPiece): boolean => piece.assetId.endsWith('scout')
 
-/** The figures Steam Power can move from `cell`: the owner's, and not already moved by Galileo or Steam Power this turn. */
+/**
+ * The figures Steam Power moves from `cell`: all of the owner's figures there ("move all of your
+ * figures in one square"). Empty when any of them was already moved by Galileo or Steam Power this
+ * turn, since the square cannot then be moved as a whole.
+ */
 export const steamPowerFiguresAt = (
   board: Board,
   owner: FigureOwner,
   cell: Cell,
   turnNumber: number,
-): readonly BoardPiece[] =>
-  figuresAt(board, owner, cell).filter((piece) => canCultureMoveFigure(piece, turnNumber))
+): readonly BoardPiece[] => {
+  const figures = figuresAt(board, owner, cell)
+  return figures.every((piece) => canCultureMoveFigure(piece, turnNumber)) ? figures : []
+}
 
-/** The squares with at least one figure Steam Power can move. */
+/** The squares whose figures Steam Power can move as a whole. */
 export function steamPowerSources(board: Board, owner: FigureOwner, turnNumber: number): readonly Cell[] {
   const sources = new Map<string, Cell>()
   for (const piece of board.pieces) {
-    if (!figureBelongsTo(owner, piece) || !canCultureMoveFigure(piece, turnNumber)) continue
+    if (!figureBelongsTo(owner, piece)) continue
     const cell = mapCellOf(board, piece)
-    if (cell !== null) sources.set(keyOf(cell), cell)
+    if (cell !== null && steamPowerFiguresAt(board, owner, cell, turnNumber).length > 0) sources.set(keyOf(cell), cell)
   }
   return [...sources.values()].sort((a, b) => a.row - b.row || a.column - b.column)
 }

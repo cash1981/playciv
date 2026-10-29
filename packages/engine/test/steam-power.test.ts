@@ -13,7 +13,7 @@ import type { BoardPiece } from '../src/board.js'
 import { movementOf } from '../src/movement.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
-import { steamPowerDestinations, steamPowerFiguresAt, waterCells } from '../src/steam-power.js'
+import { steamPowerDestinations, steamPowerFiguresAt, steamPowerSources, waterCells } from '../src/steam-power.js'
 
 import { player, withCardInHand, withHutInHand } from './assisted-fixture.js'
 import { coverMap } from './cover-map.js'
@@ -193,5 +193,50 @@ describe('Steam Power Silk ability', () => {
     expect(mapCellOf(undone.board, figures(undone)[0] as BoardPiece)).toEqual({ column: 2, row: 3 })
     expect(movementOf(figures(undone)[0] as BoardPiece, 1)).toBeNull()
     expect(player(undone).items.some((item) => item.kind === 'hut' && item.name === 'Silk')).toBe(true)
+  })
+})
+
+describe('Steam Power moves the whole square', () => {
+  const lockedByGalileo = (state: GameState, assetId: string): GameState => ({
+    ...state,
+    board: {
+      ...state.board,
+      pieces: state.board.pieces.map((piece) =>
+        piece.assetId === assetId
+          ? { ...piece, movement: { turn: 1, used: 0, locked: true, reason: 'galileo' as const } }
+          : piece,
+      ),
+    },
+  })
+
+  it('refuses a square where one figure already moved, instead of leaving it behind', () => {
+    const state = lockedByGalileo(place(place(cmTurn(), 'figures/redarmy', 2, 3), 'figures/redscout', 2, 3), 'figures/redscout')
+    expect(unwrapErr(use(state, { column: 2, row: 3 }, WATER(state))).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(steamPowerFiguresAt(state.board, player(state), { column: 2, row: 3 }, 1)).toEqual([])
+    expect(steamPowerSources(state.board, player(state), 1)).toEqual([])
+  })
+
+  it('refuses the undo once the figures\' movement has changed since', () => {
+    const state = place(cmTurn(), 'figures/redarmy', 2, 3)
+    const used = unwrap(use(state, { column: 2, row: 3 }, WATER(state)))
+    const record = used.assistedActions.at(-1)
+    if (record === undefined) throw new Error('missing record')
+    const changed: GameState = {
+      ...used,
+      board: {
+        ...used.board,
+        pieces: used.board.pieces.map((piece) =>
+          piece.category === 'figure' ? { ...piece, movement: { turn: 2, used: 1, locked: false, reason: 'travel' as const } } : piece,
+        ),
+      },
+    }
+    let next = unwrap(initiateUndo(changed, { logId: record.logId, playerId: CASH1981 }))
+    let last = null as ReturnType<typeof vote> | null
+    for (const playerId of [KARANDRAS1, ITCHI, CHUL]) {
+      last = vote(next, { logId: record.logId, playerId, vote: true, at: AT })
+      if (!last.ok) break
+      next = last.value
+    }
+    expect(last?.ok).toBe(false)
   })
 })
