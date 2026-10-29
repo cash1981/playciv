@@ -459,6 +459,14 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Alice Adam Smith' })).toBeNull()
   })
 
+  it('hides the Adam Smith row until he is revealed and usable (issue #310)', () => {
+    render(
+      <StatusPanel gameId="game-1" view={coinView({})} busy={false} readOnly={false} run={run} />,
+    )
+    openCoins()
+    expect(screen.queryByText('Adam Smith')).toBeNull()
+  })
+
   const democracyAction = (
     status: 'ready' | 'wrong-phase' | 'needs-resource' | 'used',
     reason: string,

@@ -165,6 +165,8 @@ switches it back on. Its culture token is unaffected. Panama's coins belong to t
 unblockaded owner. Bank/Great Person/Adam Smith effects derive from board
 ownership and revealed cards; `placedBy` is not city ownership. Metropolis
 outskirts include ten squares around two centers, excluding both centers.
+The Coins tab lists the Adam Smith row only while his card is revealed and usable (#310). The
+reference dialogs (governments, policies) move focus with `preventScroll` so `?` never scrolls the page (#296).
 
 A Great Person with no tracked matching token is not assumed blockaded, for
 compatibility with existing games. Public totals never include hidden bonuses.

@@ -183,13 +183,13 @@ const FLAT_REVEAL_COIN_SOURCES: ReadonlySet<CoinSourceKey> = new Set([
 
 /**
  * The sources the Coins table always offers for manual bookkeeping. Terrain
- * refers to public board pieces, Bank/Adam Smith/Great Person coins are derived, and
- * Sheet is the catch-all the human asked for. The other rows are conditional;
+ * refers to public board pieces, Bank/Great Person coins are derived, and
+ * Sheet is the catch-all the human asked for. Adam Smith is derived and only
+ * appears once his card is revealed and usable (issue #310). The other rows are conditional;
  * see `techCoinSource`, `socialPolicyCoinSource` and `docs/agents/tasks/issue-158-valid-coins.md`.
  */
 export const ALWAYS_AVAILABLE_COIN_SOURCES: readonly CoinSourceKey[] = [
   'bank',
-  'adamSmith',
   'greatPeople',
   'terrain',
   'sheet',

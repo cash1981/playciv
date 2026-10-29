@@ -40,7 +40,7 @@ export function ReferenceDialog({
   onCloseRef.current = onClose
 
   useEffect(() => {
-    closeRef.current?.focus()
+    closeRef.current?.focus({ preventScroll: true })
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -61,10 +61,10 @@ export function ReferenceDialog({
       if (first === undefined || last === undefined) return
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault()
-        last.focus()
+        last.focus({ preventScroll: true })
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault()
-        first.focus()
+        first.focus({ preventScroll: true })
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -76,7 +76,7 @@ export function ReferenceDialog({
   // runs on close.
   useEffect(() => {
     const target = returnFocusTo
-    return () => target?.current?.focus()
+    return () => target?.current?.focus({ preventScroll: true })
   }, [returnFocusTo])
 
   return (
