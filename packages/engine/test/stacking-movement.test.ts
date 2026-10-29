@@ -150,6 +150,18 @@ describe('another player\'s figures', () => {
     expect(cells.find((cell) => cell.column === 3 && cell.row === 1)?.distance).toBe(2)
   })
 
+  it('does not count them against your stacking limit (rule 51)', () => {
+    let state = game(1)
+    state = place(state, 'figures/redarmy', 1, 1)
+    state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    state = place(state, 'figures/bluescout', 2, 1, KARANDRAS1)
+    state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    const mover = figures(state)[0] as BoardPiece
+
+    // Three enemy figures on a square, a limit of 1 for the mover: Flight still crosses it
+    expect(destinationsOf(state, mover, true).find((cell) => cell.column === 3 && cell.row === 1)?.distance).toBe(2)
+  })
+
   it('keeps the stacking count to a single player (rule 51)', () => {
     let state = game(1)
     state = place(state, 'figures/redarmy', 1, 1)
