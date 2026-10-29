@@ -133,6 +133,21 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - related tests, `docs/agents/decisions.md`
 - **Notes:** adds an Aircraft-unlocked checkbox to Player status
 
+### issue-302-figure-movement
+
+- **Owner:** opencode (orchestrator/coder)
+- **Branch:** `feat/issue-302-figure-movement`
+- **Brief:** `docs/agents/tasks/issue-302-figure-movement.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/movement.ts` (new), `galileo.ts` (new), `card-movement.ts` (new), `empty-square.ts` (new), `communism.ts` (new), `assisted-communism.ts` (new), `board.ts`, `actions/board.ts`, `errors.ts`, `index.ts`, `state.ts`, `assisted-cards.ts`, `assisted-core.ts`, `assisted.ts`, `assisted-techs.ts`, `card-timing.ts`
+  - `packages/engine/test/movement.test.ts` (new), `galileo.test.ts` (new), `card-movement.test.ts` (new), `hannibal.test.ts` (new), `communism.test.ts` (new), `assisted-play-card.test.ts`
+  - `packages/server/src/routes/board.ts`, `routes/assisted-args.ts`, `errors.ts`, `packages/server/test/board-api.test.ts`, `assisted-play-card-api.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/BoardView.tsx`, `BoardView.test.tsx`, `GameView.tsx`, `PlayableCards.tsx`, `PlayableCards.test.tsx`, `AssistedActions.tsx`, `TechPanel.tsx`, `mapPick.ts` (new), `styles.css`
+  - Final slices (`docs/agents/tasks/issue-302-remaining.md`): `packages/engine/src/steam-power.ts`, `assisted-steam-power.ts`, `brandenburg.ts`, `explore.ts`, `actions/explore.ts`, `actions/draw.ts` (`drawTileAt`), `galileo.ts`, `card-movement.ts`, `assisted-techs.ts`; their tests, `cover-map.ts`, `assisted-gather.test.ts`; `packages/server/src/routes/board.ts`, `routes/assisted-args.ts`; `packages/web/src/views/BoardView.tsx`, `AssistedActions.tsx`, `PlayableCards.tsx`, `TechPanel.tsx`
+  - `docs/agents/tasks/issue-302-figure-movement.md`, `issue-302-galileo.md`, `issue-302-movement-cards.md`, `issue-302-hannibal-communism.md`, `issue-302-remaining.md`, `decisions.md`, `state.md`, `task-board.md`
+- **Notes:** based on `origin/main` at `14dfd9a`. First slice: enforced map movement, highlight, undo/lock, the passive speed cards and the hut/village stop rule. Second slice on the same branch: Galileo Galilei and the shared card map picker. Third: the movement culture cards. Fourth: Hannibal and Communism. Fifth: stacking, Steam Power, Brandenburg Gate, map-tile discovery and the scout follow-up (battle and loot stay manual by the human's choice). The live `spectator-readonly`, `trade-collection-timing`, `assisted-play-contract` and `action-panel-focus` claims list the same web files but their branches have no commits ahead of `origin/main`; the overlapping paths are treated as stale after their merges.
+
 ---
 
 ## Format

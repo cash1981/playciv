@@ -44,6 +44,7 @@ describe('the registry', () => {
   it('lists the incense cards, Democracy, Printing Press, the culture advance and the Start of Turn abilities', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
+      'communism',
       'cultureAdvance',
       'cultureAdvanceSkip',
       'currency',
@@ -57,6 +58,7 @@ describe('the registry', () => {
       'printingPress',
       'rationalismI',
       'rationalismII',
+      'steamPower',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -73,7 +75,13 @@ describe('the registry', () => {
     for (const action of actions) {
       expect(action.group.length).toBeGreaterThan(0)
       const startOfTurn = ['expansionism', 'pacifism', 'patronage', 'rationalismI', 'rationalismII', 'democracyTrade', 'fundamentalismCulture']
-      expect(action.phase).toBe(startOfTurn.includes(action.action) || action.action.startsWith('sot:') ? 'SOT' : 'CM')
+      expect(action.phase).toBe(
+        startOfTurn.includes(action.action) || action.action.startsWith('sot:')
+          ? 'SOT'
+          : action.action === 'communism'
+            ? 'MOVEMENT'
+            : 'CM',
+      )
     }
     expect(actions.find((action) => action.action === 'chivalry')?.group).toBe('Resource abilities')
     expect(actions.find((action) => action.action === 'democracy')?.group).toBe('Coins')

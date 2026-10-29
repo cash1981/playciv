@@ -256,6 +256,14 @@ export function TechPanel({
                 readOnly={historical !== null}
                 run={run}
                 reasonPlacement="inline"
+                onBeforePress={
+                  assistedAction === 'communism' || assistedAction === 'steamPower'
+                    ? () => {
+                        setDetailTech(null)
+                        setDetailCanRemove(false)
+                      }
+                    : undefined
+                }
               />
             </div>
           )}

@@ -221,7 +221,12 @@ function putRejectedGreatPersons(
  * draw. Java set `hidden = true` in `createDraw` — items come out of
  * ItemReader hidden already, so it is only a confirmation.
  */
-function takeFromDeck(state: GameState, player: Playerhand, index: number): GameState {
+function takeFromDeck(
+  state: GameState,
+  player: Playerhand,
+  index: number,
+  tileOrigin?: readonly [x: number, y: number],
+): GameState {
   const item = state.items[index] as Item
   const drawn: Item = { ...item, ownerId: player.playerId, hidden: true }
 
@@ -235,7 +240,7 @@ function takeFromDeck(state: GameState, player: Playerhand, index: number): Game
   })
 
   const logged = appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
-  return drawn.kind === 'tile' ? placeExploredTile(logged, player.playerId, drawn) : logged
+  return drawn.kind === 'tile' ? placeExploredTile(logged, player.playerId, drawn, tileOrigin) : logged
 }
 
 /**
@@ -245,14 +250,42 @@ function takeFromDeck(state: GameState, player: Playerhand, index: number): Game
  * up in the first free 4 x 4 slot and is dragged and turned into place from
  * there. That is a convenience, not a game rule.
  */
-function placeExploredTile(state: GameState, playerId: string, tile: Item): GameState {
+function placeExploredTile(
+  state: GameState,
+  playerId: string,
+  tile: Item,
+  origin?: readonly [x: number, y: number],
+): GameState {
   if (tile.kind !== 'tile') return state
   // Tile cards are named "1" to "27"; the images are tile01, tile15a, Tile26b …
   const assetId = tileAssetIdForNumber(Number(tile.name))
   if (assetId === undefined) return state
 
-  const [x, y] = firstFreeSlot(state.board)
+  const [x, y] = origin ?? firstFreeSlot(state.board)
   return placeUnchecked(state, { playerId, assetId, x, y }) ?? state
+}
+
+/**
+ * Draws the next exploration tile and lays it at `origin` instead of the first free slot: what a
+ * figure's exploration does (issue #302). Like a manual draw the card goes to the player's hand,
+ * faceup on the map from then on; the deck is reshuffled from the discards when it has run out.
+ * It has no turn check: the caller (the figure's movement) has made its own.
+ */
+export function drawTileAt(
+  state: GameState,
+  playerId: string,
+  origin: readonly [x: number, y: number],
+): DrawResult {
+  const found = requirePlayer(state, playerId)
+  if (!found.ok) return found
+  const index = state.items.findIndex((item) => item.sheetName === 'TILES')
+  if (index >= 0) return ok(takeFromDeck(state, found.value, index, origin))
+
+  const reshuffled = reshuffleItems(state, 'TILES')
+  if (!reshuffled.ok) return reshuffled
+  const retryIndex = reshuffled.value.items.findIndex((item) => item.sheetName === 'TILES')
+  if (retryIndex < 0) return err({ kind: 'ITEM_NOT_FOUND', sheetName: 'TILES' })
+  return ok(takeFromDeck(reshuffled.value, found.value, retryIndex, origin))
 }
 
 /**

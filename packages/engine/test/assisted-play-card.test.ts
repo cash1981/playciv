@@ -11,6 +11,7 @@ import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
+import { itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
@@ -101,8 +102,14 @@ describe('which cards can be played, and when', () => {
     expect(valmiki.status).toBe('ready')
     expect(valmiki.discards).toBe(false)
 
-    const unimplemented = withCardInHand(startOfTurn(), 'Henry Ford').state
-    expect(playableCardsOf(unimplemented, player(unimplemented)).some((card) => card.name === 'Henry Ford')).toBe(false)
+    const ford = withCardInHand(startOfTurn(), 'Henry Ford').state
+    const henryFord = cardOf(ford, 'Henry Ford')
+    expect(henryFord.passive).toBe(true)
+    expect(henryFord.status).toBe('ready')
+    expect(henryFord.discards).toBe(false)
+
+    const unimplemented = withCardInHand(startOfTurn(), 'Dr. Martin Luther King').state
+    expect(playableCardsOf(unimplemented, player(unimplemented)).some((card) => card.name === 'Dr. Martin Luther King')).toBe(false)
 
     const anyTime = withCardInHand(startOfTurn(), 'Marco Polo').state
     const card = cardOf(anyTime, 'Marco Polo')
@@ -428,5 +435,33 @@ describe('Great Persons the game carries out', () => {
       asked,
     )
     expect(startPlayerOf(undone)?.playerId).toBe(before)
+  })
+})
+
+describe('Captain James Cook doubles travel speed for the turn', () => {
+  const movementTurn = (): GameState =>
+    unwrap(markPhasesDone(startOfTurn(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'CM' }))
+
+  it('writes a once-per-turn marker when played and frees it on undo', () => {
+    const { state, itemId } = withCardInHand(movementTurn(), 'Captain James Cook')
+    const played = unwrap(play(state, 'req-cook', itemId))
+    const holder = player(played)
+    expect(holder.playerTurns.find((turn) => turn.turnNumber === 1)?.usedActions).toContain(
+      'card:Captain James Cook',
+    )
+    expect(played.discardedItems.some((card) => itemName(card) === 'Captain James Cook')).toBe(true)
+
+    const logId = played.assistedActions.at(-1)?.logId
+    if (logId === undefined) throw new Error('missing assisted action')
+    const asked = unwrap(initiateUndo(played, { logId, playerId: CASH1981 }))
+    const undone = [KARANDRAS1, ITCHI, CHUL].reduce(
+      (next, playerId) => unwrap(vote(next, { logId, playerId, vote: true, at: AT })),
+      asked,
+    )
+    const after = player(undone)
+    expect(after.playerTurns.find((turn) => turn.turnNumber === 1)?.usedActions).not.toContain(
+      'card:Captain James Cook',
+    )
+    expect(after.items.some((card) => itemName(card) === 'Captain James Cook')).toBe(true)
   })
 })

@@ -85,6 +85,8 @@ export type EngineError =
   | { readonly kind: 'PIECE_NOT_A_CITY'; readonly pieceId: string }
   /** `setCityProductionOverride` got something other than a whole number from 0 to 99 (or `null` to clear). */
   | { readonly kind: 'INVALID_PRODUCTION_OVERRIDE'; readonly value: number }
+  /** An enforced figure move (issue #302) is not allowed, with the sentence for the player. */
+  | { readonly kind: 'FIGURE_MOVE_ILLEGAL'; readonly reason: string }
   /** The board history is empty, so there is nothing to take back */
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
   /** The board's last change belongs to someone else, not the caller */
@@ -251,6 +253,8 @@ export function describeError(error: EngineError): string {
       return `Piece ${error.pieceId} is not a city`
     case 'INVALID_PRODUCTION_OVERRIDE':
       return `Production must be a whole number between 0 and 99, got ${error.value}`
+    case 'FIGURE_MOVE_ILLEGAL':
+      return error.reason
     case 'NOTHING_TO_UNDO_ON_BOARD':
       return 'There is no board change to undo'
     case 'BOARD_UNDO_NOT_YOURS':

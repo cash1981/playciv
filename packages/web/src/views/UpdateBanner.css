@@ -1,0 +1,18 @@
+/* A thin bar at the bottom of the screen, above the page but out of the way of the toasts at the top. */
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 0.75rem;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--good);
+  border-radius: var(--radius);
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  max-width: calc(100vw - 2rem);
+}

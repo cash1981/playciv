@@ -1705,11 +1705,16 @@ const upgradeBuildings: AssistedActionDefinition = {
   },
 }
 
+import { communism } from './assisted-communism.js'
+import { steamPower } from './assisted-steam-power.js'
+
 /** Every assisted action, in the order the projection lists them. */
 export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ...RESOURCE_CULTURE_CARDS.map(resourceCultureCard),
   coinPurchase('democracy'),
   coinPurchase('printingPress'),
+  communism,
+  steamPower,
   cultureAdvance,
   cultureAdvanceSkip,
   chooseReward,
@@ -1975,6 +1980,14 @@ export function reverseAssistedAction(
   // drawn piece back while its card is in the deck, or the next draw would make a second one
   const effect = record.effect
   if (effect.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined) {
+    return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
+  }
+  // Galileo's undo wrote the reverse moves itself. Keep the board Undo from walking past them into
+  // the forward moves, which would teleport the already-restored figures to the destination again.
+  if (
+    effect.kind === 'steamPower' ||
+    (effect.kind === 'playCard' && (effect.galileo !== undefined || effect.cardMove !== undefined))
+  ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }
   return ok(counted)

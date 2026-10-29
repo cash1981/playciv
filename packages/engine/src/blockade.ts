@@ -89,34 +89,38 @@ export function mapCellOf(board: Board, piece: BoardPiece): Cell | null {
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
-/** The metropolis marker spans two city squares along its long axis. */
-function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFootprint | undefined {
+/**
+ * The map squares a city marker covers: one for a city, two along the long axis for a
+ * metropolis. The square containing the pixel centre comes first.
+ */
+export function cityCenterCells(board: Board, piece: BoardPiece): readonly Cell[] | undefined {
   const anchor = mapCellOf(board, piece)
   if (anchor === null) return undefined
-  const isMetropolis = piece.assetId.includes('metropolis')
+  if (!piece.assetId.includes('metropolis')) return [anchor]
   const isVertical = piece.rotation === 90 || piece.rotation === 270
-  let centers: readonly Cell[] = [anchor]
-  if (isMetropolis) {
-    const centerOnLongAxis = isVertical
-      ? piece.y + piece.height / 2 - mapTop(board)
-      : piece.x + piece.width / 2
-    const anchorOnLongAxis = isVertical ? anchor.row : anchor.column
-    const nearestBoundary = Math.round(centerOnLongAxis / board.squareSize)
-    const isNearBoundary =
-      Math.abs(centerOnLongAxis - nearestBoundary * board.squareSize) <= board.squareSize / 8
-    // Rotation and sprite rounding can leave the center just before a grid
-    // boundary. Snap only near a boundary; a metropolis centered in a square
-    // keeps the original anchor-minus-one footprint.
-    const otherAxis = isNearBoundary && nearestBoundary > anchorOnLongAxis
-      ? nearestBoundary
-      : anchorOnLongAxis - 1
-    // Keep the square containing the pixel center first for callers that use
-    // it as the metropolis anchor.
-    const otherCenter = isVertical
-      ? { column: anchor.column, row: otherAxis }
-      : { column: otherAxis, row: anchor.row }
-    centers = [anchor, otherCenter]
-  }
+  const centerOnLongAxis = isVertical
+    ? piece.y + piece.height / 2 - mapTop(board)
+    : piece.x + piece.width / 2
+  const anchorOnLongAxis = isVertical ? anchor.row : anchor.column
+  const nearestBoundary = Math.round(centerOnLongAxis / board.squareSize)
+  const isNearBoundary =
+    Math.abs(centerOnLongAxis - nearestBoundary * board.squareSize) <= board.squareSize / 8
+  // Rotation and sprite rounding can leave the center just before a grid
+  // boundary. Snap only near a boundary; a metropolis centered in a square
+  // keeps the original anchor-minus-one footprint.
+  const otherAxis = isNearBoundary && nearestBoundary > anchorOnLongAxis
+    ? nearestBoundary
+    : anchorOnLongAxis - 1
+  const otherCenter = isVertical
+    ? { column: anchor.column, row: otherAxis }
+    : { column: otherAxis, row: anchor.row }
+  return [anchor, otherCenter]
+}
+
+/** The metropolis marker spans two city squares along its long axis. */
+function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFootprint | undefined {
+  const centers = cityCenterCells(board, piece)
+  if (centers === undefined) return undefined
   const cells = new Map<string, Cell>()
   for (const center of centers) {
     for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {

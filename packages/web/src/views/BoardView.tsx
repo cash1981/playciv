@@ -41,6 +41,7 @@ import {
   compareWonderNames,
   cultureCellCenter,
   cultureTrackHeight,
+  figureMovementOptions,
   findBoardAsset,
   locationOf,
   mapHeight,
@@ -53,7 +54,7 @@ import {
   terrainWarning,
   whiteFigureCivilization,
 } from '@civ/engine'
-import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
+import type { Board, BoardArea, BoardAsset, BoardPiece, MovementPlayer } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
@@ -85,6 +86,8 @@ export interface PickSquares {
   readonly onPick: (cell: PickableSquare) => void
   /** Escape. The board never leaves pick mode by itself. */
   readonly onCancel: () => void
+  /** A sentence for one cell's button, when this is not a Build placement. */
+  readonly describeCell?: (cell: PickableSquare) => string
 }
 
 interface Props {
@@ -108,6 +111,14 @@ interface Props {
   readonly blockadedPieceIds?: readonly string[]
   /** Set while a Build waits for the player to pick a square. */
   readonly pickSquares?: PickSquares
+  /** The viewer's own seat, for enforcing figure movement (issue #302). Absent for a spectator or a test. */
+  readonly movementPlayer?: MovementPlayer | null
+  /** The current turn number, so a figure's movement allowance is fresh each turn. */
+  readonly movementTurn?: number | null
+  /** Squares locked by Communism for this turn. */
+  readonly movementLocks?: readonly { readonly column: number; readonly row: number }[]
+  /** Squares the viewer's figures may not end a move on: the outskirts of another player's Brandenburg Gate. */
+  readonly movementForbidden?: readonly { readonly column: number; readonly row: number }[]
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -335,6 +346,10 @@ export function BoardView({
   viewerColor = null,
   blockadedPieceIds = [],
   pickSquares,
+  movementPlayer = null,
+  movementTurn = null,
+  movementLocks = [],
+  movementForbidden = [],
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -506,6 +521,20 @@ export function BoardView({
     [board, youId, viewerColor],
   )
 
+  /**
+   * The figure movement options for one piece, or `null` when it is not the
+   * viewer's own army or scout on the map. The engine derives the speed, water
+   * allowance and reachable squares, so the client and the move route cannot
+   * disagree about the rules.
+   */
+  const movementOptionsFor = useCallback(
+    (piece: BoardPiece) =>
+      movementPlayer === null || movementTurn === null
+        ? null
+        : figureMovementOptions(board, movementPlayer, piece, movementTurn, movementLocks, movementForbidden),
+    [board, movementForbidden, movementLocks, movementPlayer, movementTurn],
+  )
+
   const width = boardWidth(board)
   const zoom = zoomChoice === 'auto' ? autoZoom : zoomChoice
 
@@ -579,6 +608,8 @@ export function BoardView({
 
       const piece = pieces.find((candidate) => candidate.id === selectedId)
       if (piece === undefined) return
+      // A map figure moves by the Movement rules, not by pixel nudges (issue #302).
+      if (movementOptionsFor(piece) !== null) return
 
       event.preventDefault()
       const step = NUDGE_STEP_PX / zoom
@@ -596,7 +627,7 @@ export function BoardView({
 
     document.addEventListener('keydown', nudgeSelectedPiece)
     return () => document.removeEventListener('keydown', nudgeSelectedPiece)
-  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board, terrainAllows])
+  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board, terrainAllows, movementOptionsFor])
 
   useEffect(() => {
     const scroll = scrollRef.current
@@ -629,6 +660,9 @@ export function BoardView({
 
   const selected = pieces.find((piece) => piece.id === selectedId) ?? null
   const pendingAsset = assets.find((asset) => asset.id === pendingAssetId) ?? null
+  const selectedMovement =
+    selected !== null && !readOnly && !picking ? movementOptionsFor(selected) : null
+  const moveSquares = selectedMovement?.destinations ?? []
 
   /**
    * Empty map slots are unknown territory until a tile is placed there. Only
@@ -714,6 +748,8 @@ export function BoardView({
     // Picking a square is the only thing a tap on the board means now, and the
     // candidate squares are buttons of their own.
     if (picking) return
+    // A movement square is its own button; its click sends the figure there.
+    if (event.target instanceof Element && event.target.closest('.board-move-cell') !== null) return
 
     const [x, y] = toBoard(event.clientX, event.clientY)
     if (pendingAsset !== null) {
@@ -788,6 +824,9 @@ export function BoardView({
     }
     if (event.button !== 0) return
     setSelectedId(piece.id)
+    // The viewer's own map figure moves through the highlighted squares, not
+    // through a freeform drag or the Move button (issue #302).
+    const movementPiece = movementOptionsFor(piece) !== null
     if (event.pointerType !== 'mouse' && selectedId !== piece.id) {
       // The first touch marks the piece and, for anything but a map tile, arms
       // destination mode in the same tap, so the next tap on the board moves it
@@ -796,8 +835,13 @@ export function BoardView({
       // safely mean "deselect". Returning here, before the pointer is captured,
       // keeps an untouched piece pannable; the next touch-drag on the marked
       // piece still becomes a drag.
-      setMoveModeId(isMapTile(piece) ? null : piece.id)
+      setMoveModeId(isMapTile(piece) || movementPiece ? null : piece.id)
       surfaceGestureRef.current = null
+      return
+    }
+    if (movementPiece) {
+      setMoveModeId(null)
+      setExplicitMoveId(null)
       return
     }
     const previous = event.pointerType === 'mouse' && tileTapsSurface(piece) && selectedId !== null
@@ -1123,6 +1167,82 @@ export function BoardView({
                 )
               })}
 
+              {moveSquares.map((cell) => (
+                <button
+                  key={`move-${cell.column}-${cell.row}`}
+                  type="button"
+                  className={`board-move-cell${cell.contact === true ? ' board-contact-cell' : ''}`}
+                  data-move-column={cell.column}
+                  data-move-row={cell.row}
+                  aria-label={`Move ${selected?.label ?? 'figure'} to ${cell.label}, ${cell.distance} ${
+                    cell.distance === 1 ? 'square' : 'squares'
+                  }${cell.contact === true ? ', onto another player’s figures' : ''}`}
+                  title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}${
+                    cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''
+                  }`}
+                  disabled={busy || readOnly}
+                  style={{
+                    left: cell.column * board.squareSize * zoom,
+                    top: (mapStart + cell.row * board.squareSize) * zoom,
+                    width: board.squareSize * zoom,
+                    height: board.squareSize * zoom,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (selected === null) return
+                    if (
+                      cell.contact === true &&
+                      !window.confirm(
+                        `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
+                      )
+                    ) {
+                      return
+                    }
+                    setMoveModeId(null)
+                    void run(() =>
+                      api.travelFigure(gameId, selected.id, cell.column, cell.row),
+                    )
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <span aria-hidden="true">{cell.label}</span>
+                </button>
+              ))}
+
+              {(selectedMovement?.explore ?? []).map((cell) => (
+                <button
+                  key={`explore-${cell.column}-${cell.row}`}
+                  type="button"
+                  className="board-move-cell board-explore-cell"
+                  data-explore-column={cell.column}
+                  data-explore-row={cell.row}
+                  aria-label={`Explore ${cell.label} with ${selected?.label ?? 'figure'} for 1 movement`}
+                  title={`Explore ${cell.label} · 1 movement`}
+                  disabled={busy || readOnly}
+                  style={{
+                    left: cell.column * board.squareSize * zoom,
+                    top: (mapStart + cell.row * board.squareSize) * zoom,
+                    width: board.squareSize * zoom,
+                    height: board.squareSize * zoom,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (selected === null) return
+                    if (
+                      !window.confirm(
+                        `Spend 1 movement to explore ${cell.label}? The next map tile is drawn and placed there.`,
+                      )
+                    ) {
+                      return
+                    }
+                    void run(() => api.exploreSquare(gameId, selected.id, cell.column, cell.row))
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <span aria-hidden="true">Explore</span>
+                </button>
+              ))}
+
               {pickSquares?.cells.map((cell) => {
                 const chosen = pickSquares.selected?.column === cell.column && pickSquares.selected.row === cell.row
                 return (
@@ -1131,13 +1251,16 @@ export function BoardView({
                     type="button"
                     className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : cell.replaces === undefined ? ' noted' : ' replacing'}`}
                     // A square note is the enemy figure on a square an army is placed on, or what the item replaces; the bar spells it out once the square is picked.
-                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${
-                      cell.note === undefined
-                        ? ''
-                        : cell.replaces === undefined
-                          ? ', enemy figure there, resolve by hand'
-                          : `, replaces ${cell.replaces.label}`
-                    }`}
+                    aria-label={
+                      pickSquares.describeCell?.(cell) ??
+                      `Place ${pickSquares.itemLabel} on ${cell.label}${
+                        cell.note === undefined
+                          ? ''
+                          : cell.replaces === undefined
+                            ? ', enemy figure there, resolve by hand'
+                            : `, replaces ${cell.replaces.label}`
+                      }`
+                    }
                     aria-pressed={chosen}
                     disabled={busy || readOnly}
                     style={{
@@ -1201,13 +1324,34 @@ export function BoardView({
             <p className="muted">Click a piece on the board.</p>
           ) : (
             <>
-              {moveModeId === selected.id && (
+              {moveModeId === selected.id && selectedMovement === null && (
                 <div className="board-placement-status" role="status" aria-live="polite">
                   <strong>Moving {selected.label}</strong>
                   <span>Tap a destination on the board.</span>
                   <button type="button" className="small" onClick={() => setMoveModeId(null)}>
                     Cancel
                   </button>
+                </div>
+              )}
+              {selectedMovement !== null && (
+                <div className="board-placement-status" role="status" aria-live="polite">
+                  {selectedMovement.squareLocked === true ? (
+                    <span>{selected.label} is locked by Communism this turn and may not leave its square.</span>
+                  ) : selectedMovement.locked ? (
+                    <span>
+                      {selected.label} has no movement left this turn. Undo a move on the board to move it again.
+                      {selectedMovement.explore.length > 0 && ' It can still explore the squares marked Explore.'}
+                    </span>
+                  ) : selectedMovement.remaining === 0 ? (
+                    <span>Travel speed {selectedMovement.speed}. This figure cannot move.</span>
+                  ) : (
+                    <span>
+                      Travel speed {selectedMovement.speed}
+                      {selectedMovement.used > 0 && `, ${selectedMovement.remaining} left`}. Click a yellow square to move.
+                      {selectedMovement.explore.length > 0 &&
+                        ' A square marked Explore is unexplored: it costs 1 movement to uncover.'}
+                    </span>
+                  )}
                 </div>
               )}
               <p style={{ margin: '0 0 0.5rem' }}>
@@ -1218,17 +1362,19 @@ export function BoardView({
                 </span>
               </p>
               <div className="row" style={{ marginBottom: '0.4rem' }}>
-                <button
-                  className="small"
-                  disabled={busy || readOnly}
-                  onClick={() => {
-                    setMoveModeId(selected.id)
-                    setExplicitMoveId(selected.id)
-                    setPendingAssetId(null)
-                  }}
-                >
-                  Move
-                </button>
+                {selectedMovement === null && (
+                  <button
+                    className="small"
+                    disabled={busy || readOnly}
+                    onClick={() => {
+                      setMoveModeId(selected.id)
+                      setExplicitMoveId(selected.id)
+                      setPendingAssetId(null)
+                    }}
+                  >
+                    Move
+                  </button>
+                )}
                 <button
                   className="small"
                   disabled={busy || readOnly}

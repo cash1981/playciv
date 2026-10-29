@@ -3,13 +3,21 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { PlayableCard } from '@civ/engine'
+import {
+  SQUARE_SIZE,
+  createBoard,
+  findBoardAsset,
+  mapTop,
+} from '@civ/engine'
+import type { BoardPiece, PlayableCard } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
+import { MapPickerContext } from './mapPick.js'
+import type { MapPicker } from './mapPick.js'
 import { PlayCardControl, PlayableCardList, timingLabel } from './PlayableCards.js'
 
 beforeEach(() => {
@@ -374,6 +382,474 @@ describe('confirming', () => {
     fireEvent.click(confirmButton())
     await waitFor(() => expect(api.actionWithArgs).toHaveBeenCalled())
     expect(screen.getByRole('form', { name: 'Play Counterfeiters' })).toBeTruthy()
+  })
+})
+
+const testBoard = createBoard()
+const testArmy = findBoardAsset('figures/redarmy')
+if (testArmy === undefined) throw new Error('missing army asset')
+const testFigure: BoardPiece = {
+  id: 'army-galileo',
+  assetId: testArmy.id,
+  path: testArmy.path,
+  label: testArmy.label,
+  category: 'figure',
+  x: Math.round((SQUARE_SIZE - testArmy.width) / 2),
+  y: Math.round(mapTop(testBoard) + (SQUARE_SIZE - testArmy.height) / 2),
+  width: testArmy.width,
+  height: testArmy.height,
+  rotation: 0,
+  placedBy: 'me',
+}
+// Tile backs under the squares the tests use, so they count as explored (fog is not walked onto).
+const tileBack = findBoardAsset('tiles/tileback')
+if (tileBack === undefined) throw new Error('missing tile back asset')
+const testTiles: BoardPiece[] = [0, 4].map((slotRow) => ({
+  id: `tile-${slotRow}`,
+  assetId: tileBack.id,
+  path: tileBack.path,
+  label: tileBack.label,
+  category: 'tile',
+  x: 0,
+  y: mapTop(testBoard) + slotRow * SQUARE_SIZE,
+  width: tileBack.width,
+  height: tileBack.height,
+  rotation: 0,
+  placedBy: 'me',
+}))
+const testView = {
+  rev: 8,
+  activeTurn: { turnNumber: 1 },
+  board: { ...testBoard, pieces: [testFigure, ...testTiles] },
+  communismLocks: [],
+  brandenburgZones: [],
+  you: {
+    playerId: 'me',
+    username: 'Alice',
+    color: 'Red',
+    civilization: null,
+    stats: { mvmt: '2' },
+    items: [],
+    socialPolicies: [],
+    techsChosen: [],
+    playerTurns: [],
+    stackingLimit: 2,
+  },
+  opponents: [],
+} as unknown as PlayerView
+
+describe('Galileo Galilei', () => {
+  const galileo = card({
+    itemId: 'gp-galileo',
+    name: 'Galileo Galilei',
+    kind: 'greatPerson',
+    description:
+      'City Management: You may discard this card to choose a square on the outer edge of the map. Move your figures in that square to any empty square on the outer edge of the map. They cannot move again this turn.',
+    timings: ['CM'],
+    targets: { kind: 'none' },
+    prompt: '',
+    automatic:
+      'moves every figure in the chosen outer-edge square to another outer-edge square and locks them for the turn',
+    discards: true,
+    status: 'ready',
+    reason: 'Can be played in city management, which you are in.',
+  })
+
+  const board = testBoard
+  const view = testView
+
+  it('goes straight from the source pick to the edge pick and asks to confirm', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+
+    fireEvent.click(playButton('Galileo Galilei'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(begin.mock.calls[1]?.[0]).toMatchObject({
+      title: 'the Galileo destination square',
+    })
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/A1 to A3/))
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'gp-galileo',
+      from: { column: 0, row: 0 },
+      to: { column: 0, row: 2 },
+    })
+  })
+
+  it('leaves the card unplayed when the Galileo confirmation is cancelled', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Galileo Galilei'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(send).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Choose destination square' })).toBeTruthy()
+  })
+
+  it('keeps the source button pressable when no figure is on the edge, with a reason', () => {
+    const begin = vi.fn()
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+    const emptyView = {
+      ...view,
+      board: { ...board, pieces: [] },
+    } as unknown as PlayerView
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={emptyView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+
+    fireEvent.click(playButton('Galileo Galilei'))
+    const source = screen.getByRole('button', { name: 'Choose source square' }) as HTMLButtonElement
+    expect(source.disabled).toBe(false)
+    fireEvent.click(source)
+    expect(screen.getByText(/None of your figures is on the map/)).toBeTruthy()
+    expect(begin).not.toHaveBeenCalled()
+  })
+
+  it('cancels an open board pick when the card form closes', async () => {
+    const begin = vi.fn().mockResolvedValue(null)
+    const cancel = vi.fn()
+    const mapPicker: MapPicker = { begin, cancel }
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={galileo} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+
+    fireEvent.click(playButton('Galileo Galilei'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('form', { name: 'Play Galileo Galilei' })).toBeNull()
+  })
+})
+
+describe('movement culture cards', () => {
+  const board = testBoard
+  const figure = testFigure
+  const view = testView
+  const migrants = card({
+    itemId: 'c-migrants',
+    name: 'Migrants',
+    description:
+      'City Management : Switch one of your social policies. / Movement : Move one of your figures up to 2 squares to an empty square.',
+    timings: ['CM', 'MOVEMENT'],
+    targets: { kind: 'none' },
+    prompt: '',
+    automatic: 'moves one of your figures up to 2 squares to an empty square',
+    mapMove: { kind: 'one', allowance: 2 },
+    status: 'ready',
+    reason: 'Can be played in movement, which you are in.',
+  })
+
+  it('picks one figure and an empty destination and sends both', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={migrants} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Migrants'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'c-migrants',
+      from: { column: 0, row: 0 },
+      to: { column: 0, row: 2 },
+      figureId: 'army-galileo',
+    })
+  })
+
+  it('asks which figure to move when the source holds several', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const second = { ...figure, id: 'army-second', x: figure.x + 8 }
+    const twoFiguresView = {
+      ...view,
+      board: { ...board, pieces: [figure, second, ...testTiles] },
+    } as unknown as PlayerView
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 0, row: 0, label: 'A1' })
+      .mockResolvedValueOnce({ column: 0, row: 2, label: 'A3' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={migrants} gameId="g1" view={twoFiguresView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Migrants'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    fireEvent.change(screen.getByLabelText('Figure'), { target: { value: 'army-second' } })
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ figureId: 'army-second' })
+  })
+
+  it('moves every figure of the chosen opponent for a group card', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const blue = findBoardAsset('figures/bluearmy')
+    if (blue === undefined) throw new Error('missing blue army')
+    const blueFigure: BoardPiece = {
+      id: 'blue-army',
+      assetId: blue.id,
+      path: blue.path,
+      label: blue.label,
+      category: 'figure',
+      x: Math.round(2 * SQUARE_SIZE + (SQUARE_SIZE - blue.width) / 2),
+      y: Math.round(mapTop(board) + 2 * SQUARE_SIZE + (SQUARE_SIZE - blue.height) / 2),
+      width: blue.width,
+      height: blue.height,
+      rotation: 0,
+      placedBy: 'bob',
+    }
+    const lost = card({
+      itemId: 'c-lost',
+      name: 'Lost',
+      description:
+        'City Management: Choose a square. Move all figures belonging to another player in that square up to three squares as a group (no diagonals or crossing water). Figures cannot be forced to start a battle.',
+      timings: ['CM'],
+      targets: { kind: 'none' },
+      prompt: '',
+      automatic: 'moves all figures of another player in a square up to 3 squares to an empty square',
+      mapMove: { kind: 'group', allowance: 3 },
+      status: 'ready',
+      reason: 'Can be played in city management, which you are in.',
+    })
+    const groupView = {
+      ...view,
+      board: { ...board, pieces: [blueFigure, ...testTiles] },
+      opponents: [
+        {
+          playerId: 'bob',
+          username: 'Bob',
+          color: 'Blue',
+          civilization: null,
+          revealedTechs: [],
+          stats: { stacking: 2 },
+        },
+      ],
+    } as unknown as PlayerView
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 5, label: 'C6' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={lost} gameId="g1" view={groupView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Lost'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'c-lost',
+      targets: [],
+      from: { column: 2, row: 2 },
+      to: { column: 2, row: 5 },
+    })
+  })
+})
+
+describe('Hannibal', () => {
+  const hannibal = card({
+    itemId: 'gp-hannibal',
+    name: 'Hannibal',
+    kind: 'greatPerson',
+    description:
+      'City Management: You may discard this card to choose a square. Move any or all of your figures in that square to any other square on the map containing at least on of your figures. You may not exceed your stacking limit.',
+    timings: ['CM'],
+    targets: { kind: 'none' },
+    prompt: '',
+    automatic:
+      'moves any or all of your figures from one square to another square with your figures without exceeding your stacking limit',
+    mapMove: { kind: 'hannibal', allowance: 0 },
+    discards: true,
+    status: 'ready',
+    reason: 'Can be played in city management, which you are in.',
+  })
+
+  it('ignores a Galileo-locked figure in the source', async () => {
+    if (testArmy === undefined) throw new Error('missing army')
+    const at = (id: string, column: number, row: number): BoardPiece => ({
+      id,
+      assetId: testArmy.id,
+      path: testArmy.path,
+      label: testArmy.label,
+      category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - testArmy.width) / 2),
+      y: Math.round(mapTop(testBoard) + row * SQUARE_SIZE + (SQUARE_SIZE - testArmy.height) / 2),
+      width: testArmy.width,
+      height: testArmy.height,
+      rotation: 0,
+      placedBy: 'me',
+    })
+    const locked = { ...at('locked', 2, 2), movement: { turn: 1, used: 0, locked: true, reason: 'galileo' as const } }
+    const movable = at('movable', 2, 2)
+    const destination = at('destination', 2, 4)
+    const view = {
+      ...testView,
+      board: { ...testBoard, pieces: [locked, movable, destination, ...testTiles] },
+    } as unknown as PlayerView
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 4, label: 'C5' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={hannibal} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Hannibal'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ figureIds: ['movable'] })
+  })
+
+  it('asks which figures to move when the destination has only some room', async () => {
+    if (testArmy === undefined) throw new Error('missing army')
+    const at = (id: string, column: number, row: number, xOffset = 0): BoardPiece => ({
+      id,
+      assetId: testArmy.id,
+      path: testArmy.path,
+      label: testArmy.label,
+      category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - testArmy.width) / 2) + xOffset,
+      y: Math.round(mapTop(testBoard) + row * SQUARE_SIZE + (SQUARE_SIZE - testArmy.height) / 2),
+      width: testArmy.width,
+      height: testArmy.height,
+      rotation: 0,
+      placedBy: 'me',
+    })
+    const sourceA = at('source-a', 2, 2)
+    const sourceB = at('source-b', 2, 2, 8)
+    const destination = at('destination', 2, 4)
+    const view = {
+      ...testView,
+      board: { ...testBoard, pieces: [sourceA, sourceB, destination, ...testTiles] },
+    } as unknown as PlayerView
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 4, label: 'C5' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={hannibal} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Hannibal'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(screen.getByText(/Figures to move \(up to 1\)/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Move selected figures' }))
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/C3 to C5 with Hannibal/))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({
+      itemId: 'gp-hannibal',
+      from: { column: 2, row: 2 },
+      to: { column: 2, row: 4 },
+      figureIds: ['source-a'],
+    })
+  })
+
+  it('lets the player choose fewer figures even when all source figures fit', async () => {
+    if (testArmy === undefined) throw new Error('missing army')
+    const at = (id: string, column: number, row: number, xOffset = 0): BoardPiece => ({
+      id,
+      assetId: testArmy.id,
+      path: testArmy.path,
+      label: testArmy.label,
+      category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - testArmy.width) / 2) + xOffset,
+      y: Math.round(mapTop(testBoard) + row * SQUARE_SIZE + (SQUARE_SIZE - testArmy.height) / 2),
+      width: testArmy.width,
+      height: testArmy.height,
+      rotation: 0,
+      placedBy: 'me',
+    })
+    const sourceA = at('source-a', 2, 2)
+    const sourceB = at('source-b', 2, 2, 8)
+    const destination = at('destination', 2, 4)
+    const view = {
+      ...testView,
+      board: { ...testBoard, pieces: [sourceA, sourceB, destination, ...testTiles] },
+      you: { ...testView.you, stackingLimit: 3 },
+    } as unknown as PlayerView
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const begin = vi
+      .fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 4, label: 'C5' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={hannibal} gameId="g1" view={view} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Hannibal'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+
+    expect(screen.getByText(/Figures to move \(up to 2\)/)).toBeTruthy()
+    expect(confirm).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Red army 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move selected figures' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ figureIds: ['source-a'] })
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Move 1 figure from C3 to C5 with Hannibal/))
   })
 })
 

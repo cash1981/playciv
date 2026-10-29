@@ -8,6 +8,8 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { findBoardAsset, mapCellOf, mapTop, markPhasesDone, placePiece, unwrap } from '@civ/engine'
+
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
 import { inject } from './helpers.js'
@@ -171,6 +173,11 @@ describe('playing a card through the actions route', () => {
     expect((await send({ itemId: t.itemId, targets: 'nobody' })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: ['a', 'b', 'c', 'd', 'e'] })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [], resource: '' })).status).toBe(400)
+    expect((await send({ itemId: t.itemId, targets: [], from: { column: 0 } })).status).toBe(400)
+    expect((await send({ itemId: t.itemId, targets: [], to: { column: -1, row: 0 } })).status).toBe(400)
+    expect((await send({ itemId: t.itemId, targets: [], to: { column: 0, row: 0, extra: 1 } })).status).toBe(400)
+    expect((await send({ itemId: t.itemId, targets: [], from: { column: 0, row: 0 }, to: 'A1' })).status).toBe(400)
+    expect((await send({ itemId: t.itemId, targets: [], figureId: 'bad id!' })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [], extra: 1 })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [] }, { family: 'x' })).status).toBe(400)
     // A field of the body that no action reads is refused too, not ignored
@@ -182,6 +189,72 @@ describe('playing a card through the actions route', () => {
     expect(empty.status).toBe(400)
     expect(await empty.json()).toMatchObject({ message: 'args must be an object' })
     expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+  })
+
+  it('carries Galileo’s two squares through the route and moves the figures', async () => {
+    const t = await table('Galileo Galilei')
+    const saved = await repo.findGame(t.gameId)
+    if (saved === undefined) throw new Error('missing game')
+    const player = saved.players.find((candidate) => candidate.playerId === t.starterId)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const army = findBoardAsset(`figures/${player.color.toLowerCase()}army`)
+    if (army === undefined) throw new Error('missing army')
+    const square = saved.board.squareSize
+    const opened = unwrap(markPhasesDone(saved, { playerId: t.starterId, turnNumber: 1, upToPhase: 'TRADE' }))
+    // The first slot is explored (a tile back has no terrain): Galileo may not land in fog
+    const explored = unwrap(
+      placePiece(opened, { playerId: t.starterId, assetId: 'tiles/tileback', x: 0, y: mapTop(opened.board) }),
+    )
+    const placed = unwrap(
+      placePiece(explored, {
+        playerId: t.starterId,
+        assetId: army.id,
+        x: Math.round((square - army.width) / 2),
+        y: Math.round(mapTop(opened.board) + (square - army.height) / 2),
+      }),
+    )
+    await repo.saveGame(placed)
+
+    const rev = (await view(t.gameId, t.starter)).rev
+    const response = await post(t.starter, actions(t.gameId), {
+      action: 'playCard',
+      requestId: 'req-galileo',
+      rev,
+      args: {
+        itemId: t.itemId,
+        targets: [],
+        from: { column: 0, row: 0 },
+        to: { column: 0, row: 2 },
+      },
+    })
+    expect(response.status).toBe(200)
+    const stored = await repo.findGame(t.gameId)
+    if (stored === undefined) throw new Error('missing stored game')
+    const moved = stored.board.pieces.find((piece) => piece.category === 'figure')
+    expect(moved?.movement).toMatchObject({ turn: 1, locked: true })
+    expect(moved === undefined ? null : mapCellOf(stored.board, moved)).toEqual({ column: 0, row: 2 })
+  })
+
+  it('validates the squares of Steam Power', async () => {
+    const t = await table('Counterfeiters')
+    const rev = (await view(t.gameId, t.starter)).rev
+    const extra = await post(t.starter, actions(t.gameId), {
+      action: 'steamPower', requestId: 'req-steam-1', rev, args: { from: { column: 0, row: 0 }, to: { column: 1, row: 1 }, figureId: 'x' },
+    })
+    expect(extra.status).toBe(400)
+    expect(await extra.json()).toMatchObject({ message: 'steamPower takes only from and to, not figureId' })
+
+    const missing = await post(t.starter, actions(t.gameId), {
+      action: 'steamPower', requestId: 'req-steam-2', rev, args: { from: { column: 0, row: 0 } },
+    })
+    expect(missing.status).toBe(400)
+    expect(await missing.json()).toMatchObject({ message: 'to is required' })
+
+    const fractional = await post(t.starter, actions(t.gameId), {
+      action: 'steamPower', requestId: 'req-steam-3', rev, args: { from: { column: 0.5, row: 0 }, to: { column: 1, row: 1 } },
+    })
+    expect(fractional.status).toBe(400)
+    expect(await fractional.json()).toMatchObject({ message: 'from needs whole column and row numbers' })
   })
 
   it('refuses args for an action that takes none', async () => {
