@@ -228,6 +228,18 @@ returned units are no longer flagged in battle.
 `civSetup` is server-side like `item`: opponents get the public log form only.
 Tests: `packages/engine/test/undo-civ-reveal.test.ts`.
 
+Arena unit values: the card label shows the unit's tier (printed values plus
+rotation level, `arenaUnitTier`), never damage or hand edits; the ATK/HP fields
+show current values. When a unit is placed or moved onto a front facing a living
+unit, one round is resolved (`resolveArrival`): Artillery trumps Infantry,
+Infantry trumps Mounted, Mounted trumps Artillery; a trumper strikes first and,
+if that is lethal (attack >= opposing HP), takes no damage and the victim is
+flagged `killed`; otherwise both lose the other's attack. The opponent's
+*current* HP takes the damage, so earlier rounds persist. Rotating re-seeds the
+unit to its new tier and re-applies only its opponent's blows. Later rounds and
+corrections stay manual via the ATK/HP fields. Aircraft trump nothing. Tests:
+`arena.test.ts` "face-off on arrival", `ArenaUnitCard.test.tsx`.
+
 Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`,
 `actions/undo.ts`, `state.ts` and arena tests. The earlier auto-discard and automatic-only barbarian plans
 are superseded.

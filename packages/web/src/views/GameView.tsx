@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { arenaUnitTier, isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -1935,13 +1935,15 @@ export function ArenaUnitCard({
 
   // The card's own name/number label is otherwise frozen at the printed
   // values from the moment it was placed — show the live attack/health
-  // instead, so rotating (or editing the stat fields) visibly changes what
-  // the card says it is (issue #71). This must stay a label-only override:
+  // tier instead (printed values + rotation level), so rotating visibly changes
+  // what the card says it is (issue #71) while damage and hand edits only move
+  // the ATK/HP fields below it. This must stay a label-only override:
   // the art itself (`item`) has to stay the pristine snapshot, because
   // `itemImage()` builds the filename from the item's own attack/health —
   // passing a mutated item points it at a card image that does not exist
   // and the art goes blank (issue #71 follow-up).
-  const displayLabel = `${itemType(unit.unit)} ${unit.attack}.${unit.health}`
+  const tier = arenaUnitTier(unit)
+  const displayLabel = `${itemType(unit.unit)} ${tier.attack}.${tier.health}`
 
   // The two sides sit face to face across the arena, like a real tabletop
   // battle — the attacker's row is on top, so its cards are shown upside
