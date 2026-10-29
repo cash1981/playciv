@@ -123,7 +123,7 @@ $wonderLabels = @{
 # "<folder>/<basename>". The white army (barbarians) was once dropped as unused
 # (issue #26); it is back as Russia's extra army (issue #204). The extra coin
 # denominations were dropped 2026-09-23: the palette only needs one single-coin
-# marker (coin1, labelled "Coin"); see docs/agents/tasks/coin-marker-cleanup.md.
+# marker (coin1, labelled "Coin"); see docs/agents/decisions.md ("Coins, wonders and blockade").
 $exclude = @(
     'markers/coin'
     'markers/coin2'

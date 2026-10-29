@@ -3,7 +3,7 @@
  *
  * `/newpassword` and `/verify/{token}` (issue #37) use a signed, expiring link
  * instead of Java's `verify/{playerId}` and its plaintext `Player.newPassword`.
- * See `docs/agents/tasks/issue-37-password-reset.md` and `decisions.md`.
+ * See `docs/agents/decisions.md` ("Accounts, mail and ratings").
  */
 
 import type { App } from '../app.js'

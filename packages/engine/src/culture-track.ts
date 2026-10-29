@@ -1,7 +1,7 @@
 /**
  * The culture track as a ladder of spaces, with what an advance costs and what it
  * rewards. New in this port, no old-system counterpart: the human gave the rules
- * on 2026-10-09 (see `docs/agents/tasks/assisted-play-contract.md`, part 2b).
+ * on 2026-10-09 (see "Assisted play" in `docs/agents/decisions.md`).
  *
  * `board.ts` knows where a marker sits; this file knows what the space means.
  * Pure and read-only, in the same style as `culture-hand.ts`: a revealed tech, a

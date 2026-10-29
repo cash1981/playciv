@@ -763,7 +763,7 @@ describe('discarding', () => {
 
 /**
  * New mechanic, with no Java counterpart — see
- * `docs/agents/tasks/great-person-discard.md`.
+ * `docs/agents/decisions.md` ("Arena and card handling").
  */
 describe('discardRandomGreatPerson', () => {
   /** Puts `count` Great Persons of one type into the player's hand. */

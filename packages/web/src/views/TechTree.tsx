@@ -14,7 +14,7 @@
  *
  * A tech's displayed row can differ from its real `level` (Nikola Tesla), and
  * a Great Person can occupy a row as a blank placement (Sir Isaac Newton) —
- * see `docs/agents/tasks/issue-168-tech-revamp-pyramid-reposition.md`. Both
+ * see `docs/agents/decisions.md` ("Board and manual bookkeeping"). Both
  * are unenforced and unlogged by design; this component only renders the
  * stepper controls when the caller provides the matching `onXSlotChange` prop
  * (only the viewer's own pyramid does).

@@ -20,7 +20,7 @@
  * and {@link socialPolicyCoinSource} are the
  * name → source mapping the engine and the client share, and the three
  * reducers that invalidate a source reset its counter instead of leaving a
- * hidden value behind. See `docs/agents/tasks/issue-158-valid-coins.md`.
+ * hidden value behind. See `docs/agents/decisions.md` ("Coins, wonders and blockade").
  *
  * Issue #241: the Great People counter is derived. It is worked out from the
  * Builder, Merchant and Humanitarian tokens on the board by
@@ -186,7 +186,7 @@ const FLAT_REVEAL_COIN_SOURCES: ReadonlySet<CoinSourceKey> = new Set([
  * refers to public board pieces, Bank/Great Person coins are derived, and
  * Sheet is the catch-all the human asked for. Adam Smith is derived and only
  * appears once his card is revealed and usable (issue #310). The other rows are conditional;
- * see `techCoinSource`, `socialPolicyCoinSource` and `docs/agents/tasks/issue-158-valid-coins.md`.
+ * see `techCoinSource`, `socialPolicyCoinSource` and `docs/agents/decisions.md` ("Coins, wonders and blockade").
  */
 export const ALWAYS_AVAILABLE_COIN_SOURCES: readonly CoinSourceKey[] = [
   'bank',

@@ -5,8 +5,7 @@
  * (`RegisterController.js:37-40`), so a direct POST to `/api/auth/register`
  * skipped it. The server now enforces the same fixed answer: the question is
  * "What is China's starting tech?" and the accepted answer is `writing`,
- * case-insensitive. See `docs/agents/tasks/issue-40-signup-security-question.md`
- * and `decisions.md`.
+ * case-insensitive. See `docs/agents/decisions.md` ("Accounts, mail and ratings").
  */
 
 import type { App } from '../src/app.js'

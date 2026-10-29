@@ -1,7 +1,7 @@
 /**
  * Chat orders (issue #215), slice 1. New in the port, so there is no Java
- * counterpart: the behaviour is the one in `docs/agents/tasks/chat-orders.md`.
- * Since the single chat (`docs/agents/tasks/single-chat.md`) it is the only mode.
+ * counterpart: the behaviour is the one in `docs/agents/decisions.md` ("Timeline and turns").
+ * Since the single chat it is the only mode.
  */
 
 import { describe, expect, it } from 'vitest'

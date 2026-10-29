@@ -4,7 +4,7 @@
  * The shape is hybrid: flat columns for the fields the app queries and indexes,
  * and a JSON payload for the rest of each document. `Repository` always reads
  * and writes a whole `GameState`, so the state itself is not normalised — see
- * `docs/agents/tasks/issue-72-d1.md`.
+ * `docs/agents/decisions.md` ("Saves, migrations and revision chains").
  *
  * D1 has no interactive transactions between `await`s. Everything that needs
  * compare-and-set semantics is therefore one guarded statement, or one

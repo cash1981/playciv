@@ -19,8 +19,9 @@ Argument: a task slug, `next`, `status`, or `finish`.
 - **Status:** report current claims, queue, branch and working-tree status.
 - **Finish:** require the workflow's verification and independent read-only
   review, fix findings and review again. Keep `state.md` bounded to current
-  facts and `decisions.md` to current durable rationale. Retire completed briefs
-  using `docs/history/README.md`; release your claim, commit, push and open a PR
+  facts and `decisions.md` to current durable rationale. After approval, a
+  last commit moves durable content into decisions/limitations and deletes the
+  brief and your task-board block; then push and open a PR
   through the available GitHub tooling. Report the actual PR link and check
   results. The human merges; never merge or force-push `main`.
 

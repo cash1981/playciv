@@ -2,7 +2,7 @@
  * The blockade rule (issue #241): an enemy army or scout standing in a square
  * switches off the building or Great Person token in it, for the owner of the
  * city it belongs to. Base rulebook p. 27 and FAQ 2.0 p. 2 and p. 5; the
- * human's own words are in `docs/agents/tasks/great-person-disable.md`.
+ * human's own words are in `docs/agents/decisions.md` ("Coins, wonders and blockade").
  *
  * The fixture gives every player the same colour, so each test sets colours
  * first: Cash is Red, Karandras Blue and Itchi Green.

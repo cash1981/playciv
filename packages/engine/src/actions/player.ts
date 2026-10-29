@@ -1062,7 +1062,7 @@ export interface DiscardRandomGreatPersonInput {
 
 /**
  * New mechanic, with no old-system counterpart — see
- * `docs/agents/tasks/great-person-discard.md`. It covers the case the human
+ * `docs/agents/decisions.md` ("Arena and card handling"). It covers the case the human
  * described: a player holds two Generals and one is killed, so which card is
  * lost must be random rather than picked.
  *
