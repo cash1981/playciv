@@ -2,7 +2,8 @@
 
 Who is working on what. **Claim before you edit; release when you stop.** Edit
 only your own block. If a live claim lists a path you need, pick other work or
-ask the orchestrator to sequence the tasks. Delete a block when its PR merges.
+ask the orchestrator to sequence the tasks. Delete your block, with the brief,
+in the branch's last commit.
 
 Status: `claimed` · `in progress` · `in review` · `blocked`.
 

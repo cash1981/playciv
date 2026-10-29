@@ -35,4 +35,5 @@ Packages, files and new state, in enough detail for a reviewer to compare.
 
 ## Open questions
 
-Only blocking unknowns. Delete this brief after merge (see `tasks/README.md`).
+Only blocking unknowns. Delete this brief in the branch's last commit, after
+review approves (see `tasks/README.md`).

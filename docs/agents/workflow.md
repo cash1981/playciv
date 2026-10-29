@@ -65,9 +65,10 @@ finding and approves explicitly; a reported blocker is not approval.
 ## 5. Close out
 
 - Update [state](state.md) only when orientation changed; never add a Done
-  ledger or test totals. Put durable rationale in decisions and open gaps in
-  [limitations](limitations.md).
-- Release the claim. Keep the brief while the PR is open; delete it after merge.
+  ledger or test totals.
+- Once review approves, finish in one last commit on the branch: move durable
+  rationale into decisions and open gaps into [limitations](limitations.md),
+  then delete the brief and your task-board block. Nothing is left after merge.
 - Commit, push and open a PR (`gh pr create --body-file <file>`) with problem,
   result, validation and limits. A compare link is not a PR; report blockers.
 - **The human merges.** Never merge or force-push `main`.
