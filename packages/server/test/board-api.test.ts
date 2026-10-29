@@ -274,8 +274,12 @@ describe('history over HTTP', () => {
     const assetId = `figures/${player.color.toLowerCase()}army`
     const top = mapTop(state.board)
     const square = state.board.squareSize
+    // Fog is not walked onto: the first slot needs a tile (a tile back has no terrain)
+    await place(gameId, starter, 'tiles/tileback', 0, top)
     const placed = await place(gameId, starter, assetId, square + 20, top + square + 20)
-    const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
     if (piece === undefined) throw new Error('no piece')
 
     const travelled = await inject(app, {
@@ -302,6 +306,56 @@ describe('history over HTTP', () => {
     })
     expect(again.status).toBe(400)
     expect((await again.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+
+  it('explores the fog next to a figure for 1 movement and lays the next tile there (issue #302)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Explore')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const placed = await place(gameId, starter, assetId, 3 * square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+
+    const explored = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/explore`,
+      headers: bearer(starter),
+      payload: { column: 4, row: 1 },
+    })
+    expect(explored.status).toBe(200)
+    const view = await explored.json() as {
+      board: { pieces: { id: string; category: string; movement?: { used: number; locked: boolean } }[] }
+    }
+    expect(view.board.pieces.filter((candidate) => candidate.category === 'tile')).toHaveLength(2)
+    expect(view.board.pieces.find((candidate) => candidate.id === piece.id)?.movement).toMatchObject({
+      used: 1,
+      locked: false,
+    })
+
+    const noFog = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/explore`,
+      headers: bearer(starter),
+      payload: { column: 4, row: 1 },
+    })
+    expect(noFog.status).toBe(400)
+    expect((await noFog.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
+
+    const bad = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/explore`,
+      headers: bearer(starter),
+      payload: { column: 'x' },
+    })
+    expect(bad.status).toBe(400)
   })
 
   it('keeps a piece moved in a player area at the requested spot (issue #100)', async () => {

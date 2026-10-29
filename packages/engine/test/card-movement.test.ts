@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
+import { bringToFront, placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
@@ -17,6 +17,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
 import { player, withCardInHand } from './assisted-fixture.js'
+import { coverMap } from './cover-map.js'
 import { CASH1981, CHUL, firstCivGame, ITCHI, KARANDRAS1 } from './fixture.js'
 
 const AT = '2026-10-28T12:00:00.000Z'
@@ -48,9 +49,10 @@ function place(
   row: number,
   playerId = CASH1981,
 ): GameState {
+  state = coverMap(state)
   const asset = findBoardAsset(assetId)
   if (asset === undefined) throw new Error(`missing asset ${assetId}`)
-  return unwrap(
+  const placed = unwrap(
     placePiece(state, {
       playerId,
       assetId,
@@ -58,6 +60,9 @@ function place(
       y: Math.round(mapTop(state.board) + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
     }),
   )
+  // A real tile goes above the tile backs that cover the rest of the map
+  const tile = asset.category === 'tile' ? placed.board.pieces.find((piece) => piece.assetId === assetId) : undefined
+  return tile === undefined ? placed : unwrap(bringToFront(placed, { playerId, pieceId: tile.id }))
 }
 
 const figuresIn = (state: GameState, column: number, row: number) =>

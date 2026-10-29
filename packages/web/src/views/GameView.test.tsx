@@ -419,6 +419,7 @@ describe('map pick lifecycle', () => {
         waitingFor: [],
       },
       communismLocks: [],
+      brandenburgZones: [],
       you: {
         playerId: 'p1',
         username: 'viewer',

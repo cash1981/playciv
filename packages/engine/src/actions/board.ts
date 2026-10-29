@@ -56,7 +56,8 @@ import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess } from '../state.js'
 import { communismLocksOf } from '../communism.js'
-import { activeGreatPerson } from '../great-person-effects.js'
+import { brandenburgForbiddenFor } from '../brandenburg.js'
+import { activeGreatPerson, stackingLimitOf } from '../great-person-effects.js'
 import {
   destinationTo,
   figureBelongsTo,
@@ -486,8 +487,16 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
   const movementPlayer = {
     ...player,
     activeGreatPersonNames: activeGreatPerson(state, player, 'Henry Ford') ? ['Henry Ford'] : [],
+    stackingLimit: stackingLimitOf(state, player),
   }
-  const options = figureMovementOptions(state.board, movementPlayer, piece, turnNumber, communismLocksOf(state))
+  const options = figureMovementOptions(
+    state.board,
+    movementPlayer,
+    piece,
+    turnNumber,
+    communismLocksOf(state),
+    brandenburgForbiddenFor(state, input.playerId),
+  )
   if (options === null) {
     return err({
       kind: 'FIGURE_MOVE_ILLEGAL',
@@ -987,6 +996,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'playCard' && effect.galileo?.moves.some((move) => move.historyId === entry.id) === true) {
       return true
     }
+    // Steam Power teleported figures as part of its action: only the vote takes them back
+    if (effect.kind === 'steamPower' && effect.moves.some((move) => move.historyId === entry.id)) return true
     // A movement culture card moved figures as part of the play: the board Undo leaves them to the vote
     if (effect.kind === 'playCard' && effect.cardMove?.moves.some((move) => move.historyId === entry.id) === true) {
       return true

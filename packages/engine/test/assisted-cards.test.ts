@@ -92,6 +92,7 @@ describe('the registry and the tech map', () => {
       'printingPress',
       'rationalismI',
       'rationalismII',
+      'steamPower',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -102,6 +103,7 @@ describe('the registry and the tech map', () => {
     expect(Object.fromEntries(ASSISTED_TECH_ACTIONS)).toEqual({
       Chivalry: 'chivalry',
       Communism: 'communism',
+      'Steam Power': 'steamPower',
       Currency: 'currency',
       'Metal Casting': 'metalCasting',
       Democracy: 'democracy',

@@ -117,6 +117,8 @@ interface Props {
   readonly movementTurn?: number | null
   /** Squares locked by Communism for this turn. */
   readonly movementLocks?: readonly { readonly column: number; readonly row: number }[]
+  /** Squares the viewer's figures may not end a move on: the outskirts of another player's Brandenburg Gate. */
+  readonly movementForbidden?: readonly { readonly column: number; readonly row: number }[]
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -347,6 +349,7 @@ export function BoardView({
   movementPlayer = null,
   movementTurn = null,
   movementLocks = [],
+  movementForbidden = [],
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -528,8 +531,8 @@ export function BoardView({
     (piece: BoardPiece) =>
       movementPlayer === null || movementTurn === null
         ? null
-        : figureMovementOptions(board, movementPlayer, piece, movementTurn, movementLocks),
-    [board, movementLocks, movementPlayer, movementTurn],
+        : figureMovementOptions(board, movementPlayer, piece, movementTurn, movementLocks, movementForbidden),
+    [board, movementForbidden, movementLocks, movementPlayer, movementTurn],
   )
 
   const width = boardWidth(board)
@@ -1196,6 +1199,40 @@ export function BoardView({
                 </button>
               ))}
 
+              {(selectedMovement?.explore ?? []).map((cell) => (
+                <button
+                  key={`explore-${cell.column}-${cell.row}`}
+                  type="button"
+                  className="board-move-cell board-explore-cell"
+                  data-explore-column={cell.column}
+                  data-explore-row={cell.row}
+                  aria-label={`Explore ${cell.label} with ${selected?.label ?? 'figure'} for 1 movement`}
+                  title={`Explore ${cell.label} · 1 movement`}
+                  disabled={busy || readOnly}
+                  style={{
+                    left: cell.column * board.squareSize * zoom,
+                    top: (mapStart + cell.row * board.squareSize) * zoom,
+                    width: board.squareSize * zoom,
+                    height: board.squareSize * zoom,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (selected === null) return
+                    if (
+                      !window.confirm(
+                        `Spend 1 movement to explore ${cell.label}? The next map tile is drawn and placed there.`,
+                      )
+                    ) {
+                      return
+                    }
+                    void run(() => api.exploreSquare(gameId, selected.id, cell.column, cell.row))
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <span aria-hidden="true">Explore</span>
+                </button>
+              ))}
+
               {pickSquares?.cells.map((cell) => {
                 const chosen = pickSquares.selected?.column === cell.column && pickSquares.selected.row === cell.row
                 return (
@@ -1293,12 +1330,15 @@ export function BoardView({
                   ) : selectedMovement.locked ? (
                     <span>
                       {selected.label} has moved this turn. Undo the move on the board to move it again.
+                      {selectedMovement.explore.length > 0 && ' It can still explore the squares marked Explore.'}
                     </span>
                   ) : selectedMovement.remaining === 0 ? (
                     <span>Travel speed {selectedMovement.speed}. This figure cannot move.</span>
                   ) : (
                     <span>
                       Travel speed {selectedMovement.speed}. Click a yellow square to move.
+                      {selectedMovement.explore.length > 0 &&
+                        ' A square marked Explore is unexplored: it costs 1 movement to uncover.'}
                     </span>
                   )}
                 </div>

@@ -17,6 +17,7 @@
 import { useId, useState } from 'react'
 
 import {
+  brandenburgForbiddenCells,
   CARD_TIMING_TEXT,
   GALILEO_NAME,
   cardMoveDestinations,
@@ -104,6 +105,7 @@ export function PlayCardControl({
     card.targets.kind === 'players' && min >= 1 && others.length === 1 && chosen.length === 0
       ? others.map((opponent) => opponent.playerId)
       : chosen
+  const viewerForbidden = brandenburgForbiddenCells(view.brandenburgZones, viewer.playerId)
   const isLockedSquare = (cell: { readonly column: number; readonly row: number }): boolean =>
     view.communismLocks.some((locked) => locked.column === cell.column && locked.row === cell.row)
   const groupHoldersAt = (from: { readonly column: number; readonly row: number }) =>
@@ -146,11 +148,12 @@ export function PlayCardControl({
     hannibalSourceFigures.length > 1
   const destinationCellsFor = (from: { readonly column: number; readonly row: number }) =>
     isGalileo
-      ? galileoDestinations(view.board, from)
+      ? galileoDestinations(view.board, from, viewerForbidden)
       : cardMove?.kind === 'hannibal'
         ? figureSources(view.board, viewer)
             .filter((cell) => cell.column !== from.column || cell.row !== from.row)
             .filter((cell) => figuresAt(view.board, viewer, cell).length < viewer.stackingLimit)
+            .filter((cell) => !viewerForbidden.some((blocked) => blocked.column === cell.column && blocked.row === cell.row))
             .map((cell) => ({ ...cell, label: squareLabel(cell), distance: 0 }))
         : cardMove === null
           ? []
@@ -165,6 +168,9 @@ export function PlayCardControl({
               ? viewer.techsChosen.some((tech) => tech.name === 'Flight' && !tech.hidden)
               : groupHoldersAt(from)[0]?.revealedTechs.some((tech) => tech.name === 'Flight') === true,
             view.communismLocks,
+            cardMove.kind === 'one'
+              ? viewerForbidden
+              : brandenburgForbiddenCells(view.brandenburgZones, groupHoldersAt(from)[0]?.playerId ?? ''),
           )
   const moveDestinationCells = moveFrom === null ? [] : destinationCellsFor(moveFrom)
   const baseValid =

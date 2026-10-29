@@ -530,10 +530,10 @@ turn without a reset action.
   play frees it. Spain's civilization bonus and the tech-listed speed steps stay
   what the player typed.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
-  England crosses but cannot end there. An unknown/facedown tile is not water
-  for this check and can be entered. A square holding any figure is neither a
-  destination nor walked through, so stacking and battle outcomes remain the
-  players' manual work rather than being skipped by a path around them.
+  England crosses but cannot end there. A square under a tile whose terrain is
+  unknown (the tile back) is not water for this check. Stacking, enemy squares
+  and fog are refined by "Stacking, Steam Power, Brandenburg Gate and exploring
+  (#302)" below.
 - **Huts and villages:** a move that reaches a square with a `resources/hut` or
   `resources/village` marker must stop on that square; without a revealed Flight
   the figure cannot continue past it in the same move. A revealed Flight flies
@@ -593,9 +593,9 @@ frees the card.
   undo vote moves every figure back and returns the card to the hand, ready to be
   used on another group. Undo is refused if one of the moved figures has been
   moved again since.
-- **Not yet checked:** Brandenburg Gate's outskirts rule (rule 333) and the
-  interaction with scouts' gathered squares and icon reuse (rules 198, 257, 334,
-  341, 422 to 424) need those systems first.
+- **Follow-ups:** Brandenburg Gate (rule 333) and scouts' gathered squares
+  (rules 198, 257, 334, 341, 422 to 424) are settled in "Stacking, Steam Power,
+  Brandenburg Gate and exploring (#302)" below.
 
 Source: `engine/src/galileo.ts`, `assisted-cards.ts` (`Galileo Galilei`),
 `actions/board.ts` (`moveFigureWithMovementUnchecked`),
@@ -632,8 +632,9 @@ player in one square as a group.
 - **Undo:** the card and all moved figures are one assisted action. The card undo
   vote restores the figures and returns the card to the hand; board Undo is
   blocked for the individual moves and the reverse moves form the new floor.
-- **Not checked:** figures moved by Steam Power (not implemented), Brandenburg
-  Gate, and scout gathered-square/icon reuse (rules 198, 257, 334, 341, 422-424).
+- **Follow-ups:** figures moved by Steam Power are locked like Galileo's (the
+  `steamPower` movement reason), and Brandenburg Gate and the scout rules are in
+  "Stacking, Steam Power, Brandenburg Gate and exploring (#302)" below.
 
 Source: `engine/src/card-movement.ts`, `empty-square.ts`, `movement.ts`
 (`cardMoveDestinations`, `figureSources`, `PieceMovement.reason`),
@@ -661,12 +662,74 @@ tests `card-movement.test.ts`, `PlayableCards.test.tsx`.
   travel, Galileo, the one-figure and group culture cards, and Hannibal all read
   the locks; a locked starting square has no destinations. A figure can be locked
   on water without Sailing, as the lock only prevents leaving.
-- **Not checked:** Steam Power, Brandenburg Gate, and scout/icon follow-ups.
+- **Follow-ups:** Steam Power, Brandenburg Gate and the scout rules are in
+  "Stacking, Steam Power, Brandenburg Gate and exploring (#302)" below.
 
 Source: `engine/src/assisted-communism.ts`, `communism.ts`, `assisted-cards.ts`
 (Hannibal), `movement.ts`, `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
 `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `TechPanel.tsx`,
 tests `hannibal.test.ts`, `communism.test.ts`.
+
+### Stacking, Steam Power, Brandenburg Gate and exploring (#302)
+
+The human's choices for the last slices of #302 (2026-10-29): **battle and loot stay
+manual** ("Stacking only"), and exploring works **from the edge**.
+
+- **Stacking:** normal travel may end on, and cross, a square that holds fewer of the
+  player's own figures than the effective stacking limit (`stackingLimitOf`, Pasteur
+  included). The limit is absolute (rule 50), so a full square is closed to crossing too;
+  it counts one player's own figures only (rule 51). Another player's figure is never an
+  ending square (no battle is started or resolved) and is crossed only with a revealed
+  Flight (rule 52). `MovementPlayer.stackingLimit` defaults to 1, which keeps every
+  occupied square closed as before; the server passes the real value, the web view
+  carries it as `you.stackingLimit`.
+- **Steam Power** (`steamPower`, a City Management assisted action spending a Silk, text
+  read from the card art): all of the player's figures in one square move to any explored
+  water square on the map and are locked for the turn (`movement.reason: 'steamPower'`,
+  which keeps them out of the movement culture cards like Galileo's). A source that is
+  itself water may name itself to lock in place (rule 193+). The group may not exceed the
+  stacking limit there; armies may land on water holding another player's figures and the
+  battle stays manual (the picker notes it), a group with a scout may not. This is a reading of
+  rule 196 that goes beyond "enemy squares stay excluded"; the human should confirm it. Communism-locked
+  sources and Brandenburg outskirts are refused. The moves belong to the action: the board
+  Undo refuses them and the undo vote returns the figures and the Silk.
+- **Brandenburg Gate** (rules 209 to 214, 333): the outskirts of the owner's capital,
+  and the city-states the owner holds, are closed as an *ending* square for every other
+  player's figures in travel, Galileo, Hannibal, Steam Power and the movement culture
+  cards (a group card is judged by the moved figures' owner). Crossing is allowed. The
+  city centre is not outskirts. A disabled wonder, one without an owner, or one blockaded
+  by an enemy figure on its own square has no effect. Without a capital marker (a
+  metropolis has none) the owner's metropolis is the capital, and only without either is every city of the owner guarded. **This reading of the
+  card (capital only) is from rule 210's wording; the human should confirm it.** Not
+  modelled: Communism's Spy exception (rule 214) and the obligation to leave the outskirts.
+  Derived from the board each time and public (`PlayerView.brandenburgZones`).
+- **Exploring:** a square with no tile under it is fog, drawn as the tile back. Fog is not
+  walked onto and is not a Galileo or card destination. A figure on a square next to fog
+  can *explore* it: `exploreSquare` (route `POST .../pieces/:id/explore`, the board shows
+  the squares as blue "Explore" buttons with a confirmation) spends 1 movement, draws the
+  next TILES card and lays it in the slot that covers the clicked square (rotation 0,
+  turned by hand). It neither moves nor locks the figure, so exploring then travelling, or
+  travelling to the edge then exploring, both work within the speed (travel reaches only what
+  is left after the exploring; a Galileo or Steam
+  Power lock forbids it). The tile card goes to the player's hand like any draw, so a board Undo
+  does not return the card: a player could explore, undo and explore again to see more tiles
+  (accepted for now; the draw's log line can be undone by vote). Exploring has no turn check, like
+  travel, and fails without spending movement when the drawn card has no tile artwork. Undo is
+  two board Undo presses: the tile first, then the spent movement; the draw's log line can
+  be undone by vote to return the card. An unlisted engine unit test helper (`coverMap`)
+  lays tile backs so older movement tests do not see fog.
+- **Scout gathered squares** (rules 198, 257, 334, 341, 422 to 424): needs no new code.
+  Gathering reads the square a scout stands on now, so a scout moved in City Management
+  gathers where it ended, and the game keeps no record of an icon being used, so the rule
+  that the same icon may be used twice after such a move is already how it behaves
+  (`assisted-gather.test.ts`). The trade phase is not re-run, as before.
+- **Not done:** automated battle, loot and figure removal when figures meet.
+
+Source: `engine/src/explore.ts`, `actions/explore.ts`, `steam-power.ts`,
+`assisted-steam-power.ts`, `brandenburg.ts`, `movement.ts` (`occupancyOf`), `galileo.ts`,
+`assisted-cards.ts`, `actions/draw.ts` (`drawTileAt`), `server/src/routes/board.ts`,
+`routes/assisted-args.ts`, `web/src/views/BoardView.tsx`, `AssistedActions.tsx`,
+tests `stacking-movement`, `steam-power`, `brandenburg`, `explore`, `assisted-gather`.
 
 ### Turn warning in Your actions (2026-10-24)
 

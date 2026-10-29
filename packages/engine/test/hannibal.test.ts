@@ -13,6 +13,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
 import { player, withCardInHand } from './assisted-fixture.js'
+import { coverMap } from './cover-map.js'
 import { CASH1981, CHUL, firstCivGame, ITCHI, KARANDRAS1 } from './fixture.js'
 
 const AT = '2026-10-28T12:00:00.000Z'
@@ -33,6 +34,7 @@ const cmTurn = (): GameState =>
   unwrap(markPhasesDone(game(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'TRADE' }))
 
 function place(state: GameState, assetId: string, column: number, row: number): GameState {
+  state = coverMap(state)
   const asset = findBoardAsset(assetId)
   if (asset === undefined) throw new Error(`missing asset ${assetId}`)
   return unwrap(

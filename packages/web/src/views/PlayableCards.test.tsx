@@ -401,11 +401,28 @@ const testFigure: BoardPiece = {
   rotation: 0,
   placedBy: 'me',
 }
+// Tile backs under the squares the tests use, so they count as explored (fog is not walked onto).
+const tileBack = findBoardAsset('tiles/tileback')
+if (tileBack === undefined) throw new Error('missing tile back asset')
+const testTiles: BoardPiece[] = [0, 4].map((slotRow) => ({
+  id: `tile-${slotRow}`,
+  assetId: tileBack.id,
+  path: tileBack.path,
+  label: tileBack.label,
+  category: 'tile',
+  x: 0,
+  y: mapTop(testBoard) + slotRow * SQUARE_SIZE,
+  width: tileBack.width,
+  height: tileBack.height,
+  rotation: 0,
+  placedBy: 'me',
+}))
 const testView = {
   rev: 8,
   activeTurn: { turnNumber: 1 },
-  board: { ...testBoard, pieces: [testFigure] },
+  board: { ...testBoard, pieces: [testFigure, ...testTiles] },
   communismLocks: [],
+  brandenburgZones: [],
   you: {
     playerId: 'me',
     username: 'Alice',
@@ -585,7 +602,7 @@ describe('movement culture cards', () => {
     const second = { ...figure, id: 'army-second', x: figure.x + 8 }
     const twoFiguresView = {
       ...view,
-      board: { ...board, pieces: [figure, second] },
+      board: { ...board, pieces: [figure, second, ...testTiles] },
     } as unknown as PlayerView
     const begin = vi
       .fn()
@@ -640,7 +657,7 @@ describe('movement culture cards', () => {
     })
     const groupView = {
       ...view,
-      board: { ...board, pieces: [blueFigure] },
+      board: { ...board, pieces: [blueFigure, ...testTiles] },
       opponents: [
         {
           playerId: 'bob',
@@ -713,7 +730,7 @@ describe('Hannibal', () => {
     const destination = at('destination', 2, 4)
     const view = {
       ...testView,
-      board: { ...testBoard, pieces: [locked, movable, destination] },
+      board: { ...testBoard, pieces: [locked, movable, destination, ...testTiles] },
     } as unknown as PlayerView
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -755,7 +772,7 @@ describe('Hannibal', () => {
     const destination = at('destination', 2, 4)
     const view = {
       ...testView,
-      board: { ...testBoard, pieces: [sourceA, sourceB, destination] },
+      board: { ...testBoard, pieces: [sourceA, sourceB, destination, ...testTiles] },
     } as unknown as PlayerView
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -805,7 +822,7 @@ describe('Hannibal', () => {
     const destination = at('destination', 2, 4)
     const view = {
       ...testView,
-      board: { ...testBoard, pieces: [sourceA, sourceB, destination] },
+      board: { ...testBoard, pieces: [sourceA, sourceB, destination, ...testTiles] },
       you: { ...testView.you, stackingLimit: 3 },
     } as unknown as PlayerView
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)

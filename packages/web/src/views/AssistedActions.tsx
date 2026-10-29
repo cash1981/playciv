@@ -15,7 +15,16 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { isMapCell, itemName, squareLabel } from '@civ/engine'
+import {
+  brandenburgForbiddenCells,
+  isMapCell,
+  itemName,
+  occupancyOf,
+  squareLabel,
+  steamPowerDestinations,
+  steamPowerFiguresAt,
+  steamPowerSources,
+} from '@civ/engine'
 import type { AssistedActionKind, PendingRewardView, TurnPhase } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
@@ -231,6 +240,7 @@ export function AssistedActionButton({
 }: ButtonProps): React.JSX.Element | null {
   const state = view.you?.availableActions?.find((candidate) => candidate.action === action)
   const mapPicker = useMapPicker()
+  const [hint, setHint] = useState<string | null>(null)
   if (view.you === null || state === undefined) return null
 
   const ready = state.status === 'ready'
@@ -284,9 +294,79 @@ export function AssistedActionButton({
     })
   }
 
+  const pressSteamPower = async (): Promise<void> => {
+    if (mapPicker === null || view.you === null) return
+    const viewer = view.you
+    if (used && !window.confirm(usedAgainQuestion(state.label))) return
+    const turnNumber = view.activeTurn?.turnNumber ?? 0
+    const locked = (cell: { column: number; row: number }): boolean =>
+      view.communismLocks.some((square) => square.column === cell.column && square.row === cell.row)
+    const sources = steamPowerSources(view.board, viewer, turnNumber)
+      .filter((cell) => !locked(cell))
+      .map((cell) => ({ ...cell, label: squareLabel(cell) }))
+    if (sources.length === 0) {
+      setHint('None of your figures can be moved: they are on no map square, locked by Communism, or already moved by Galileo or Steam Power.')
+      return
+    }
+    setHint(null)
+    onBeforePress?.()
+    const from = await mapPicker.begin({
+      title: 'the Steam Power source square',
+      cells: sources,
+      describeCell: (cell) => `Move all your figures on ${cell.label} with Steam Power`,
+    })
+    if (from === null) return
+    const figures = steamPowerFiguresAt(view.board, viewer, from, turnNumber)
+    const forbidden = brandenburgForbiddenCells(view.brandenburgZones, viewer.playerId)
+    const destinations = steamPowerDestinations(view.board, viewer, viewer.stackingLimit, figures, from, forbidden)
+    const occupancy = occupancyOf(view.board, viewer)
+    if (destinations.length === 0) {
+      setHint('There is no water square these figures may be moved to.')
+      return
+    }
+    const to = await mapPicker.begin({
+      title: 'the Steam Power water square',
+      cells: destinations.map((cell) => ({
+        ...cell,
+        ...(occupancy.foreign.has(`${cell.column},${cell.row}`)
+          ? { note: 'Another player\'s figure stands here. Armies fight there; settle any battle and loot by hand.' }
+          : {}),
+      })),
+      describeCell: (cell) => `Move your figures to ${cell.label}`,
+    })
+    if (to === null) return
+    const count = `${figures.length} ${figures.length === 1 ? 'figure' : 'figures'}`
+    const sameSquare = to.column === from.column && to.row === from.row
+    if (
+      !window.confirm(
+        sameSquare
+          ? `Lock ${count} on ${squareLabel(from)} with Steam Power (spends a Silk)?`
+          : `Move ${count} from ${squareLabel(from)} to ${squareLabel(to)} with Steam Power (spends a Silk)?`,
+      )
+    ) {
+      return
+    }
+    const source = { column: from.column, row: from.row }
+    const target = { column: to.column, row: to.row }
+    const key = `${gameId}:${playerId}:steamPower:${source.column},${source.row}:${target.column},${target.row}`
+    if (inFlight.has(key)) return
+    void pressOnce(
+      key,
+      run,
+      (requestId) => api.actionWithArgs(gameId, 'steamPower', requestId, rev, { from: source, to: target }, used),
+      view,
+    ).then((done) => {
+      if (done) onDone?.()
+    })
+  }
+
   const press = (): void => {
     if (action === 'communism') {
       void pressCommunism()
+      return
+    }
+    if (action === 'steamPower') {
+      void pressSteamPower()
       return
     }
     let chosen = action
@@ -320,7 +400,7 @@ export function AssistedActionButton({
       <button
         type="button"
         className={className}
-        disabled={busy || readOnly || !pressable || (action === 'communism' && mapPicker === null)}
+        disabled={busy || readOnly || !pressable || ((action === 'communism' || action === 'steamPower') && mapPicker === null)}
         title={shownReason}
         onClick={press}
       >
@@ -335,6 +415,11 @@ export function AssistedActionButton({
       {warning !== undefined && (
         <span role="status" className="assisted-warning">
           {warning}
+        </span>
+      )}
+      {hint !== null && (
+        <span role="status" className="assisted-warning">
+          {hint}
         </span>
       )}
     </span>

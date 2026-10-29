@@ -560,7 +560,7 @@ describe('what is public and what migrates', () => {
     const view = toPlayerView(state, KARANDRAS1)
     expect(Object.keys(view).sort()).toEqual(
       [
-        'active', 'activeTurn', 'assistedActions', 'battle', 'battleSummary', 'battleUndo', 'blockadedPieceIds', 'board', 'communismLocks',
+        'active', 'activeTurn', 'assistedActions', 'battle', 'battleSummary', 'battleUndo', 'blockadedPieceIds', 'board', 'brandenburgZones', 'communismLocks',
         'boardAreas', 'gameType', 'id', 'log', 'name', 'numOfPlayers', 'numberOfDiscardedItems',
         'numberOfItemsInDeck', 'opponents', 'rev', 'techs', 'tradeOffers', 'winner', 'you',
       ].sort(),

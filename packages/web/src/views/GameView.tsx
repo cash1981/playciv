@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -573,6 +573,7 @@ export function GameView({
               : [],
           ),
         }
+  const movementForbidden = you === null ? [] : brandenburgForbiddenCells(displayedView.brandenburgZones, you.playerId)
   const activePlayer = activePlayerOf(displayedView)
   const chatAuthors = chatAuthorsOf(displayedView)
   const buildPlan = buildFlow.plan
@@ -677,6 +678,7 @@ export function GameView({
         movementPlayer={movementPlayer}
         movementTurn={displayedView.activeTurn?.turnNumber ?? null}
         movementLocks={displayedView.communismLocks}
+        movementForbidden={movementForbidden}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />

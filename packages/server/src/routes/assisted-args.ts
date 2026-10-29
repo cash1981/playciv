@@ -13,6 +13,7 @@ import type {
   AssignScoutPayload,
   AssistedPayload,
   CommunismPayload,
+  SteamPowerPayload,
   FoundCityPayload,
   GovernmentPayload,
   FeudalismHarvestPayload,
@@ -113,6 +114,32 @@ function parseCommunism(args: Record<string, unknown>): CommunismPayload | strin
   return { square: { column, row } }
 }
 
+function wholeSquare(value: unknown, name: string): { column: number; row: number } | string {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return `${name} is required`
+  const record = asRecord(value)
+  const extra = extraKeys(record, ['column', 'row'])
+  if (extra.length > 0) return `${name} takes only column and row, not ${extra.join(', ')}`
+  const column = record['column']
+  const row = record['row']
+  if (
+    typeof column !== 'number' || !Number.isInteger(column) || column < 0 || column > 999 ||
+    typeof row !== 'number' || !Number.isInteger(row) || row < 0 || row > 999
+  ) {
+    return `${name} needs whole column and row numbers`
+  }
+  return { column, row }
+}
+
+function parseSteamPower(args: Record<string, unknown>): SteamPowerPayload | string {
+  const extra = extraKeys(args, ['from', 'to'])
+  if (extra.length > 0) return `steamPower takes only from and to, not ${extra.join(', ')}`
+  const from = wholeSquare(args['from'], 'from')
+  if (typeof from === 'string') return from
+  const to = wholeSquare(args['to'], 'to')
+  if (typeof to === 'string') return to
+  return { from, to }
+}
+
 function parseSwitchGovernment(args: Record<string, unknown>): GovernmentPayload | string {
   const extra = extraKeys(args, ['government'])
   if (extra.length > 0) return `switchGovernment takes only government, not ${extra.join(', ')}`
@@ -165,6 +192,7 @@ type Parser = (args: Record<string, unknown>) => AssistedPayload | string
 const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['playCard', parsePlayCard],
   ['communism', parseCommunism],
+  ['steamPower', parseSteamPower],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['feudalismHarvest', parseHarvest],

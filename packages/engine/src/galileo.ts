@@ -20,6 +20,7 @@ import type { Cell } from './blockade.js'
 import { columnLabel, isMapCell } from './board.js'
 import type { Board, BoardPiece } from './board.js'
 import { isEmptySquare } from './empty-square.js'
+import { isExploredCell } from './explore.js'
 import { figureBelongsTo } from './movement.js'
 import type { MovementPlayer } from './movement.js'
 
@@ -64,7 +65,7 @@ export function galileoFiguresAt(
 
 /** Whether `cell` is an edge square with none of the pieces that make a square non-empty. */
 export function galileoDestinationAllowed(board: Board, cell: Cell): boolean {
-  return isOuterEdgeCell(board, cell) && isEmptySquare(board, cell)
+  return isOuterEdgeCell(board, cell) && isExploredCell(board, cell) && isEmptySquare(board, cell)
 }
 
 /** The map squares holding at least one of the player's figures: Galileo's sources. */
@@ -86,8 +87,11 @@ export function galileoSources(board: Board, player: MovementPlayer): readonly C
 export function galileoDestinations(
   board: Board,
   source?: Cell,
+  forbiddenCells: readonly Cell[] = [],
 ): readonly (Cell & { readonly label: string })[] {
+  const forbidden = new Set(forbiddenCells.map(keyOf))
   return outerEdgeCells(board)
+    .filter((cell) => !forbidden.has(keyOf(cell)) || (source !== undefined && keyOf(cell) === keyOf(source)))
     .filter(
       (cell) =>
         galileoDestinationAllowed(board, cell) ||

@@ -21,6 +21,7 @@ import { columnLabel, isMapCell, mapTop, whiteFigureCivilization } from './board
 import { WATER_TECHS } from './build-options.js'
 import { terrainAt } from './terrain.js'
 import { isEmptySquare } from './empty-square.js'
+import { exploreTargetsFrom, isUnexploredCell } from './explore.js'
 
 /**
  * The parts of a player the movement rules read. Narrower than `Playerhand` so
@@ -36,6 +37,11 @@ export interface MovementPlayer {
     readonly hidden: boolean
   }[]
   readonly activeGreatPersonNames?: readonly string[]
+  /**
+   * The effective stacking limit (status number plus a faceup Louis Pasteur). Unknown
+   * counts as 1, which keeps every occupied square closed as it was before stacking.
+   */
+  readonly stackingLimit?: number
   readonly socialPolicies: readonly { readonly name: string; readonly hidden: boolean }[]
   readonly techsChosen: readonly { readonly name: string; readonly hidden: boolean }[]
   readonly government?: string
@@ -60,6 +66,11 @@ export interface FigureMovementOptions {
   /** True when Communism locks the figure's starting square: it may not leave. */
   readonly squareLocked?: boolean
   readonly destinations: readonly MovementDestination[]
+  /**
+   * The unexplored squares next to the figure that it can explore for 1 movement: empty when
+   * it has none left or a card has locked it. Exploring does not move or lock the figure.
+   */
+  readonly explore: readonly MovementDestination[]
 }
 
 /** The turn value bookkeeping for a piece, or `null` when it has none. */
@@ -173,6 +184,26 @@ function pieceSquares(board: Board, wanted: (piece: BoardPiece) => boolean): Rea
 const figureSquares = (board: Board): ReadonlySet<string> =>
   pieceSquares(board, (piece) => piece.category === 'figure')
 
+/** How the figures on the map sit relative to one player: their own per square, and the squares of anyone else's. */
+export interface Occupancy {
+  readonly own: ReadonlyMap<string, number>
+  readonly foreign: ReadonlySet<string>
+}
+
+export function occupancyOf(board: Board, owner: FigureOwner): Occupancy {
+  const own = new Map<string, number>()
+  const foreign = new Set<string>()
+  for (const piece of board.pieces) {
+    if (piece.category !== 'figure') continue
+    const cell = mapCellOf(board, piece)
+    if (cell === null) continue
+    const key = keyOf(cell)
+    if (figureBelongsTo(owner, piece)) own.set(key, (own.get(key) ?? 0) + 1)
+    else foreign.add(key)
+  }
+  return { own, foreign }
+}
+
 /** The resource markers a figure must stop on: it may not walk past a hut or village without Flight. */
 const HUT_AND_VILLAGE_ASSETS: ReadonlySet<string> = new Set(['resources/hut', 'resources/village'])
 
@@ -189,6 +220,7 @@ export function figureMovementOptions(
   piece: BoardPiece,
   turnNumber: number,
   lockedCells: readonly Cell[] = [],
+  forbiddenCells: readonly Cell[] = [],
 ): FigureMovementOptions | null {
   if (!figureBelongsTo(player, piece)) return null
   const start: Cell = {
@@ -203,13 +235,28 @@ export function figureMovementOptions(
   const speed = travelSpeedOf(player, piece, turnNumber)
   const remaining = Math.max(0, speed - used)
   const lockedKeys = new Set(lockedCells.map(keyOf))
+  const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
   const squareLocked = lockedKeys.has(keyOf(start))
-  if (squareLocked) return { speed, used, remaining, locked, squareLocked: true, destinations: [] }
-  if (locked || remaining === 0) return { speed, used, remaining, locked, destinations: [] }
+  // Galileo's and Steam Power's lock means "cannot move again"; a plain travel lock still allows exploring.
+  const cardLocked = saved?.locked === true && saved.reason !== undefined && saved.reason !== 'travel'
+  const explore: MovementDestination[] =
+    remaining >= 1 && !cardLocked
+      ? exploreTargetsFrom(board, start).map((cell) => ({
+          ...cell,
+          label: `${columnLabel(cell.column)}${cell.row + 1}`,
+          distance: 1,
+        }))
+      : []
+  if (squareLocked) return { speed, used, remaining, locked, squareLocked: true, destinations: [], explore }
+  if (locked || remaining === 0) return { speed, used, remaining, locked, destinations: [], explore }
 
   const water = waterRulesOf(player)
   const flight = hasRevealedTech(player, 'Flight')
-  const occupied = figureSquares(board)
+  const occupancy = occupancyOf(board, player)
+  const limit = Math.max(1, player.stackingLimit ?? 1)
+  // Stacking limit is absolute (rule 50): a square already at it cannot be crossed or ended on.
+  // Another player's figures are never ended on here (battle stays manual) and are crossed only with Flight.
+  const hasRoom = (key: string): boolean => (occupancy.own.get(key) ?? 0) < limit
   const mustStop = hutAndVillageSquares(board)
   const distances = new Map<string, number>([[keyOf(start), 0]])
   const queue: Cell[] = [start]
@@ -223,7 +270,13 @@ export function figureMovementOptions(
       const terrain = terrainAt(board, x, y)
       const waterHere = terrain === 'water'
       const mayEndHere = waterHere ? water.end : true
-      if (mayEndHere && !occupied.has(keyOf(cell)) && !(flight && mustStop.has(keyOf(cell)))) {
+      if (
+        mayEndHere &&
+        !occupancy.foreign.has(keyOf(cell)) &&
+        !forbiddenKeys.has(keyOf(cell)) &&
+        hasRoom(keyOf(cell)) &&
+        !(flight && mustStop.has(keyOf(cell)))
+      ) {
         destinations.push({
           column: cell.column,
           row: cell.row,
@@ -232,7 +285,8 @@ export function figureMovementOptions(
         })
       }
     }
-    if (distance >= speed) continue
+    // The allowance left, not the whole speed: exploring spends 1 without locking the figure
+    if (distance >= remaining) continue
     // A figure may enter a Communism-locked square but never leave it.
     if (distance > 0 && lockedKeys.has(keyOf(cell))) continue
     // A hut or village ends the move: the figure may land there but not pass it.
@@ -242,9 +296,12 @@ export function figureMovementOptions(
     for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
       const next = { column: cell.column + dc, row: cell.row + dr }
       if (!isMapCell(board, next.column, next.row)) continue
-      // Another figure's square is not walked through: contact is left to the
-      // player (battle, loot, stacking), instead of silently skipping it.
-      if (occupied.has(keyOf(next))) continue
+      // Another player's figures are crossed only with Flight (rule 52); contact (battle, loot)
+      // is left to the players. A square at the stacking limit cannot be crossed either.
+      if (occupancy.foreign.has(keyOf(next)) && !flight) continue
+      if (!hasRoom(keyOf(next))) continue
+      // Fog is not walked onto: it is explored first, from the square next to it.
+      if (isUnexploredCell(board, next)) continue
       const [x, y] = centreOf(board, next)
       if (terrainAt(board, x, y) === 'water' && !water.cross) continue
       if (distances.has(keyOf(next))) continue
@@ -254,7 +311,7 @@ export function figureMovementOptions(
   }
 
   destinations.sort((a, b) => a.distance - b.distance || a.row - b.row || a.column - b.column)
-  return { speed, used, remaining, locked, destinations }
+  return { speed, used, remaining, locked, destinations, explore }
 }
 
 /** The map cells holding at least one figure of `owner`. */
@@ -277,10 +334,13 @@ export function figuresAt(board: Board, owner: FigureOwner, cell: Cell): readonl
   })
 }
 
-/** A figure moved by Galileo in this City Management may not be moved by the movement cards. */
+/**
+ * A figure moved by Galileo or Steam Power in this City Management may not be moved by the
+ * movement cards (they "cannot move again this turn").
+ */
 export const movedByGalileoThisTurn = (piece: BoardPiece, turnNumber: number): boolean => {
   const movement = movementOf(piece, turnNumber)
-  return movement?.locked === true && movement.reason === 'galileo'
+  return movement?.locked === true && (movement.reason === 'galileo' || movement.reason === 'steamPower')
 }
 
 /** Whether a movement culture card may pick the figure this turn. */
@@ -301,9 +361,11 @@ export function cardMoveDestinations(
   water: WaterAllowed,
   flight: boolean,
   lockedCells: readonly Cell[] = [],
+  forbiddenCells: readonly Cell[] = [],
 ): readonly MovementDestination[] {
   if (!isMapCell(board, from.column, from.row)) return []
   const lockedKeys = new Set(lockedCells.map(keyOf))
+  const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
   if (lockedKeys.has(keyOf(from))) return []
   const occupied = figureSquares(board)
   const mustStop = hutAndVillageSquares(board)
@@ -321,6 +383,7 @@ export function cardMoveDestinations(
       if (
         mayEndHere &&
         !occupied.has(keyOf(cell)) &&
+        !forbiddenKeys.has(keyOf(cell)) &&
         !(flight && mustStop.has(keyOf(cell))) &&
         isEmptySquare(board, cell)
       ) {
@@ -340,6 +403,7 @@ export function cardMoveDestinations(
       const next = { column: cell.column + dc, row: cell.row + dr }
       if (!isMapCell(board, next.column, next.row)) continue
       if (occupied.has(keyOf(next))) continue
+      if (isUnexploredCell(board, next)) continue
       const [x, y] = centreOf(board, next)
       const nextWater = terrainAt(board, x, y) === 'water'
       if (nextWater && !water.cross) continue

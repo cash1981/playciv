@@ -248,6 +248,12 @@ export interface CommunismPayload {
   readonly square: CardSquare
 }
 
+/** What `steamPower` carries: the square whose figures move, and the water square they move to. */
+export interface SteamPowerPayload {
+  readonly from: CardSquare
+  readonly to: CardSquare
+}
+
 /** What `feudalismHarvest` carries: the city whose outskirts are harvested, and the resource. */
 export interface FeudalismHarvestPayload {
   readonly cityPieceId: string
@@ -276,6 +282,7 @@ export type AssistedPayload =
   | GovernmentPayload
   | InvestPayload
   | CommunismPayload
+  | SteamPowerPayload
   | FeudalismHarvestPayload
   | FoundCityPayload
   | AssignScoutPayload

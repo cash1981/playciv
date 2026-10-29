@@ -257,7 +257,7 @@ export function TechPanel({
                 run={run}
                 reasonPlacement="inline"
                 onBeforePress={
-                  assistedAction === 'communism'
+                  assistedAction === 'communism' || assistedAction === 'steamPower'
                     ? () => {
                         setDetailTech(null)
                         setDetailCanRemove(false)

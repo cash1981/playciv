@@ -16,8 +16,10 @@ export * from './board.js'
 export * from './terrain.js'
 export * from './movement.js'
 export * from './galileo.js'
+export * from './steam-power.js'
 export * from './empty-square.js'
 export * from './card-movement.js'
+export * from './brandenburg.js'
 export * from './communism.js'
 export * from './tile-icons.js'
 export * from './migrate.js'
@@ -71,6 +73,7 @@ export type {
   InvestPayload,
   PlayCardPayload,
   StartBuildingProgramPayload,
+  SteamPowerPayload,
   UpgradeBuildingsPayload,
 } from './assisted-core.js'
 export * from './trade-offers.js'
@@ -85,4 +88,6 @@ export * from './actions/undo.js'
 export * from './actions/turn.js'
 export * from './actions/game.js'
 export * from './actions/board.js'
+export * from './actions/explore.js'
+export * from './explore.js'
 export * from './actions/arena.js'

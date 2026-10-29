@@ -714,6 +714,21 @@ describe('BoardView mobile placement', () => {
     const army = findBoardAsset('figures/redarmy')
     if (army === undefined) throw new Error('missing army asset')
     const top = mapTop(createBoard())
+    const back = findBoardAsset('tiles/tileback')
+    if (back === undefined) throw new Error('missing tile back asset')
+    const tileBack: BoardPiece = {
+      id: 'tile-back',
+      assetId: back.id,
+      path: back.path,
+      label: back.label,
+      category: 'tile',
+      x: 0,
+      y: top,
+      width: back.width,
+      height: back.height,
+      rotation: 0,
+      placedBy: 'player-one',
+    }
     const boardPiece: BoardPiece = {
       id: 'army-1',
       assetId: army.id,
@@ -739,7 +754,7 @@ describe('BoardView mobile placement', () => {
     const { container } = render(
       <BoardView
         gameId="game"
-        board={{ ...createBoard(), pieces: [boardPiece] }}
+        board={{ ...createBoard(), pieces: [tileBack, boardPiece] }}
         numOfPlayers={2}
         areas={[]}
         busy={false}
@@ -749,7 +764,7 @@ describe('BoardView mobile placement', () => {
       />,
     )
 
-    const tile = container.querySelector('.board-piece')
+    const tile = container.querySelector('[data-piece-id="army-1"]')
     if (!(tile instanceof HTMLElement)) throw new Error('piece missing')
     const event = new Event('pointerdown', { bubbles: true })
     for (const [name, value] of Object.entries({
@@ -772,6 +787,85 @@ describe('BoardView mobile placement', () => {
     travel.mockRestore()
     cleanup()
   })
+
+  it('offers to explore the fog next to the viewer’s figure for 1 movement (issue #302)', async () => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([])
+    const explore = vi.spyOn(api, 'exploreSquare').mockResolvedValue({} as PlayerView)
+    const army = findBoardAsset('figures/redarmy')
+    if (army === undefined) throw new Error('missing army asset')
+    const top = mapTop(createBoard())
+    const back = findBoardAsset('tiles/tileback')
+    if (back === undefined) throw new Error('missing tile back asset')
+    const tileBack: BoardPiece = {
+      id: 'tile-back',
+      assetId: back.id,
+      path: back.path,
+      label: back.label,
+      category: 'tile',
+      x: 0,
+      y: top,
+      width: back.width,
+      height: back.height,
+      rotation: 0,
+      placedBy: 'player-one',
+    }
+    const boardPiece: BoardPiece = {
+      id: 'army-1',
+      assetId: army.id,
+      path: army.path,
+      label: army.label,
+      category: 'figure',
+      x: 3 * SQUARE_SIZE + (SQUARE_SIZE - army.width) / 2,
+      y: top + SQUARE_SIZE + (SQUARE_SIZE - army.height) / 2,
+      width: army.width,
+      height: army.height,
+      rotation: 0,
+      placedBy: 'player-one',
+    }
+    const movementPlayer: MovementPlayer = {
+      color: 'Red',
+      civilization: null,
+      stats: { mvmt: '2' },
+      items: [],
+      socialPolicies: [],
+      techsChosen: [],
+      playerTurns: [],
+    }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [tileBack, boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        movementPlayer={movementPlayer}
+        movementTurn={1}
+        run={async action => { await action() }}
+      />,
+    )
+
+    const tile = container.querySelector('[data-piece-id="army-1"]')
+    if (!(tile instanceof HTMLElement)) throw new Error('piece missing')
+    const event = new Event('pointerdown', { bubbles: true })
+    for (const [name, value] of Object.entries({
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      button: 0,
+      clientX: 20,
+      clientY: 20,
+    })) Object.defineProperty(event, name, { value })
+    tile.dispatchEvent(event)
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const fog = await screen.findByRole('button', { name: /Explore E2 with Red army for 1 movement/ })
+    fireEvent.click(fog)
+
+    await waitFor(() => expect(explore).toHaveBeenCalledWith('game', 'army-1', 4, 1))
+    explore.mockRestore()
+    cleanup()
+  })
+
 
   it('does not freeform-drag or nudge the viewer’s map figure (issue #302)', async () => {
     vi.spyOn(api, 'boardAssets').mockResolvedValue([])

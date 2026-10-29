@@ -58,6 +58,7 @@ describe('the registry', () => {
       'printingPress',
       'rationalismI',
       'rationalismII',
+      'steamPower',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())

@@ -29,6 +29,7 @@ import {
   isOuterEdgeCell,
 } from './galileo.js'
 import { mapTop } from './board.js'
+import { brandenburgForbiddenFor } from './brandenburg.js'
 import { communismLocksOf } from './communism.js'
 import type { BoardPiece, PieceMovement } from './board.js'
 import {
@@ -488,6 +489,9 @@ function automate(
         if (!galileoDestinationAllowed(state.board, to)) {
           return err(`${squareLabel(to)} is not an empty outer-edge square.`)
         }
+        if (brandenburgForbiddenFor(state, player.playerId).some((cell) => sameCell(cell, to))) {
+          return err(`${squareLabel(to)} is in the outskirts of a Brandenburg Gate; your figures may not end there.`)
+        }
       }
 
       const turnNumber = turnStatus(state).currentTurn
@@ -562,6 +566,9 @@ function automate(
       if (atDestination.length === 0) {
         return err(`${squareLabel(to)} must already contain one of your figures.`)
       }
+      if (brandenburgForbiddenFor(state, player.playerId).some((cell) => sameCell(cell, to))) {
+        return err(`${squareLabel(to)} is in the outskirts of a Brandenburg Gate; your figures may not end there.`)
+      }
       const selected =
         payload?.figureIds === undefined
           ? sourceFigures
@@ -616,6 +623,7 @@ function automate(
         cardWaterRulesOf(player),
         hasFlight(player),
         communismLocksOf(state),
+        brandenburgForbiddenFor(state, player.playerId),
       )
       if (!destinations.some((cell) => sameCell(cell, to))) {
         return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)
@@ -658,6 +666,7 @@ function automate(
         { cross: false, end: false },
         hasFlight(target),
         communismLocksOf(state),
+        brandenburgForbiddenFor(state, target.playerId),
       )
       if (!destinations.some((cell) => sameCell(cell, to))) {
         return err(`${squareLabel(to)} is not an empty square within ${rule.allowance} of ${squareLabel(from)}.`)

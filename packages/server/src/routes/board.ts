@@ -21,6 +21,7 @@ import {
   setWonderOwner,
   takeBackOpenBuild,
   sendToBack,
+  exploreSquare,
   travelFigure,
   undoLastBoardChange,
 } from '@civ/engine'
@@ -114,6 +115,28 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
 
     return applyToGame(context, c, gameId, (state) =>
       travelFigure(state, {
+        playerId: currentPlayer(c).id,
+        pieceId,
+        column,
+        row,
+        at: now(),
+      }),
+    )
+  })
+
+  app.post('/api/games/:gameId/board/pieces/:pieceId/explore', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const pieceId = c.req.param('pieceId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+
+    const column = optionalNumber(body, 'column')
+    const row = optionalNumber(body, 'row')
+    if (column === undefined || row === undefined || !Number.isInteger(column) || !Number.isInteger(row)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'column and row are required whole numbers')
+    }
+
+    return applyToGame(context, c, gameId, (state) =>
+      exploreSquare(state, {
         playerId: currentPlayer(c).id,
         pieceId,
         column,

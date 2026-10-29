@@ -995,6 +995,16 @@ ul.list > li:last-child {
   background: rgba(255, 221, 0, 0.52);
 }
 
+.board-explore-cell {
+  align-items: center;
+  border: 1px dashed rgba(70, 150, 255, 0.95);
+  background: rgba(70, 150, 255, 0.32);
+}
+
+.board-explore-cell:hover {
+  background: rgba(70, 150, 255, 0.5);
+}
+
 .board-move-cell:disabled {
   cursor: default;
   opacity: 0.6;

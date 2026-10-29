@@ -201,8 +201,12 @@ describe('playing a card through the actions route', () => {
     if (army === undefined) throw new Error('missing army')
     const square = saved.board.squareSize
     const opened = unwrap(markPhasesDone(saved, { playerId: t.starterId, turnNumber: 1, upToPhase: 'TRADE' }))
+    // The first slot is explored (a tile back has no terrain): Galileo may not land in fog
+    const explored = unwrap(
+      placePiece(opened, { playerId: t.starterId, assetId: 'tiles/tileback', x: 0, y: mapTop(opened.board) }),
+    )
     const placed = unwrap(
-      placePiece(opened, {
+      placePiece(explored, {
         playerId: t.starterId,
         assetId: army.id,
         x: Math.round((square - army.width) / 2),
@@ -229,6 +233,28 @@ describe('playing a card through the actions route', () => {
     const moved = stored.board.pieces.find((piece) => piece.category === 'figure')
     expect(moved?.movement).toMatchObject({ turn: 1, locked: true })
     expect(moved === undefined ? null : mapCellOf(stored.board, moved)).toEqual({ column: 0, row: 2 })
+  })
+
+  it('validates the squares of Steam Power', async () => {
+    const t = await table('Counterfeiters')
+    const rev = (await view(t.gameId, t.starter)).rev
+    const extra = await post(t.starter, actions(t.gameId), {
+      action: 'steamPower', requestId: 'req-steam-1', rev, args: { from: { column: 0, row: 0 }, to: { column: 1, row: 1 }, figureId: 'x' },
+    })
+    expect(extra.status).toBe(400)
+    expect(await extra.json()).toMatchObject({ message: 'steamPower takes only from and to, not figureId' })
+
+    const missing = await post(t.starter, actions(t.gameId), {
+      action: 'steamPower', requestId: 'req-steam-2', rev, args: { from: { column: 0, row: 0 } },
+    })
+    expect(missing.status).toBe(400)
+    expect(await missing.json()).toMatchObject({ message: 'to is required' })
+
+    const fractional = await post(t.starter, actions(t.gameId), {
+      action: 'steamPower', requestId: 'req-steam-3', rev, args: { from: { column: 0.5, row: 0 }, to: { column: 1, row: 1 } },
+    })
+    expect(fractional.status).toBe(400)
+    expect(await fractional.json()).toMatchObject({ message: 'from needs whole column and row numbers' })
   })
 
   it('refuses args for an action that takes none', async () => {

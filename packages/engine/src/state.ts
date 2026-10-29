@@ -15,6 +15,8 @@ import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
 import { stackingLimitOf } from './great-person-effects.js'
+import { brandenburgZonesOf } from './brandenburg.js'
+import type { BrandenburgZone } from './brandenburg.js'
 import { communismLocksOf } from './communism.js'
 import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
@@ -424,6 +426,7 @@ export type AssistedActionKind =
   | 'devoteToTheArts'
   | 'harvest'
   | 'communism'
+  | 'steamPower'
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
   | `sot:${string}`
 
@@ -684,6 +687,19 @@ export type AssistedEffect =
       readonly kind: 'communism'
       readonly square: { readonly column: number; readonly row: number }
       readonly spent: SpentResource
+    }
+  | {
+      readonly kind: 'steamPower'
+      readonly from: { readonly column: number; readonly row: number }
+      readonly to: { readonly column: number; readonly row: number }
+      readonly spent: SpentResource
+      readonly moves: readonly {
+        readonly pieceId: string
+        readonly from: { readonly x: number; readonly y: number }
+        readonly to: { readonly x: number; readonly y: number }
+        readonly movementFrom: PieceMovement | null
+        readonly historyId: string
+      }[]
     }
   | {
       readonly kind: 'coinPurchase'
@@ -1517,6 +1533,8 @@ export interface PlayerView {
   readonly blockadedPieceIds: readonly string[]
   /** Squares locked by Communism for the current turn, public. */
   readonly communismLocks: readonly { readonly column: number; readonly row: number }[]
+  /** The outskirts each Brandenburg Gate in effect keeps clear of other players' figures, public. */
+  readonly brandenburgZones: readonly BrandenburgZone[]
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
   /** Assisted actions already performed, public summary only. */
   readonly assistedActions: readonly PublicAssistedAction[]
@@ -1630,6 +1648,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     boardAreas: boardAreas(state.board, state.players),
     blockadedPieceIds: blockadedPieceIds(state),
     communismLocks: communismLocksOf(state),
+    brandenburgZones: brandenburgZonesOf(state),
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),

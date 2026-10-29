@@ -23,6 +23,7 @@ import type { GameState, Playerhand } from '../src/state.js'
 import { turnStatus } from '../src/turn.js'
 import { terrainAt } from '../src/terrain.js'
 
+import { coverMap } from './cover-map.js'
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 
 /** The fixture has four Red seats; movement needs a real owner per seat. */
@@ -59,6 +60,7 @@ function place(
   row: number,
   playerId = CASH1981,
 ): GameState {
+  state = coverMap(state)
   const asset = findBoardAsset(assetId)
   if (asset === undefined) throw new Error(`missing asset ${assetId}`)
   return unwrap(

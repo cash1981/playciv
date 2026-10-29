@@ -300,10 +300,10 @@ export interface PieceMovement {
   readonly locked: boolean
   /**
    * What locked it. Normal travel stays usable by the movement culture cards;
-   * Galileo's City Management lock does not (unofficial rule 287). Older saves
+   * Galileo's and Steam Power's City Management lock does not (unofficial rule 287). Older saves
    * and moves that clear the field leave it absent.
    */
-  readonly reason?: 'travel' | 'galileo'
+  readonly reason?: 'travel' | 'galileo' | 'steamPower'
 }
 
 /** A piece lying on the board. */

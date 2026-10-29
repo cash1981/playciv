@@ -950,6 +950,9 @@ export const api = {
   /** Moves a figure by the Movement rules (issue #302) to a map square. */
   travelFigure: (gameId: string, pieceId: string, column: number, row: number) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/travel`, { column, row }),
+  /** A figure spends 1 movement to explore the fog next to it: the next map tile is laid there (issue #302). */
+  exploreSquare: (gameId: string, pieceId: string, column: number, row: number) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/explore`, { column, row }),
   setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null, disable = false) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, disable ? { ownerId, disable } : { ownerId }),
   /** The production typed in for a city; `null` goes back to the estimate. */
