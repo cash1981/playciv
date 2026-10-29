@@ -103,7 +103,7 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   two-player 16×8, three-player pyramid, five-player holed 28×18. Pre-shape
   three-player saves with pieces and five-player saves keep their old rectangle
   so pieces do not move; see [legacy layout limitations](limitations.md#game-behavior).
-- Culture track: 20 positions with freely placed markers.
+- Culture track: 21 positions with freely placed markers.
 - Board undo targets the caller's latest consecutive actions; a new board action
   clears redo. Undoing board edits does not undo game actions.
 - A moved piece keeps the pixel position where it is dropped, including in a
