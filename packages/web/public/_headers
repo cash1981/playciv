@@ -1,0 +1,8 @@
+# Cloudflare static assets (packages/web/dist). Vite gives every file under /assets/ a
+# name made from its content, so a new deploy has new names and these can be cached for
+# good. index.html and version.json keep the host's default (ask the server every time,
+# get a 304 when nothing changed), version.json being how an open tab learns of a deploy.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/version.json
+  Cache-Control: no-store

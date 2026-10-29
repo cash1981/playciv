@@ -1358,3 +1358,16 @@ stored rating.
 Source: `packages/server/src/auth.ts`, `routes/auth.ts`, `notifications.ts`,
 `turn-reminders.ts`, `store/rating.ts`, and their tests. README contains operational
 configuration and migration instructions.
+
+### Caching and new deploys (2026-10-29)
+
+Vite names every file under `/assets/` after its content, so `packages/web/public/_headers` caches them
+for a year (`immutable`); `index.html` keeps the host's default (`max-age=0, must-revalidate`: the
+browser asks, gets a 304 when nothing changed). A tab that stays open across a deploy keeps its old
+JavaScript, so `vite build` writes one build id into the bundle (`__BUILD_ID__`) and into `/version.json`
+(served `no-store`), and `UpdateBanner` offers a reload when the deployed id differs. It checks when the
+tab becomes visible and every 5 minutes, never reloads by itself, and does nothing under `vite dev`.
+The id is the Workers build's commit (`WORKERS_CI_COMMIT_SHA`), else `GITHUB_SHA`, else the build time.
+Not verified on the live site until deployed: that `_headers` is honoured for the Worker's
+`env.ASSETS.fetch` responses. In development the web app imports the engine from `packages/engine/dist`,
+so engine changes need `pnpm --filter @civ/engine build` (or `tsc --watch`) and a page reload.
