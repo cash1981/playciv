@@ -447,6 +447,25 @@ describe('the next wonder is drawn into the market', () => {
     expect(done.board.history.at(-1)?.logLength).toBe(done.log.length)
   })
 
+  it('every build draws the next wonder, the second one too (issue #313)', () => {
+    const first = build(ready(), COLOSSUS, C2)
+    expect(first.log.at(-1)?.publicLog).toBe('System: drew The Great Wall and placed it in the Wonders area')
+    // The city's one wonder is replaced; a second build in the same city that turn needs a yes
+    const second = unwrap(
+      performAssistedAction(first, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-2',
+        at: AT,
+        confirmedRepeat: true,
+        payload: { cityPieceId: cityOf(first).id, item: { kind: 'wonder', assetId: STONEHENGE }, target: C2 },
+      }),
+    )
+    expect(second.log.at(-1)?.publicLog).toBe('System: drew The Oracle and placed it in the Wonders area')
+    expect(marketNames(second)).toEqual(['The Great Wall', 'The Oracle'])
+    expect(deckNames(second).slice(0, 2)).toEqual(['Notre-Dame', 'Big Ben'])
+  })
+
   it('goes on with ancient wonders until four are out, then medieval ones, then modern ones', () => {
     // Four ancient wonders are out, so the medieval ones follow
     const four = ready({
