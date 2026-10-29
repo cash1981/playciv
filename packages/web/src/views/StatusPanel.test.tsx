@@ -361,6 +361,7 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByText('Terrain')).toBeTruthy()
     expect(screen.getByText('Sheet')).toBeTruthy()
     for (const absent of [
+      'Adam Smith',
       'Code of Laws (I)',
       'Pottery (I)',
       'Civil Service (II)',

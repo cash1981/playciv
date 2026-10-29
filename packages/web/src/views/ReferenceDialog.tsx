@@ -37,6 +37,9 @@ export function ReferenceDialog({
   // Kept in a ref so a fresh `onClose` each render cannot re-run the effect and
   // steal focus back to Close while the dialog is open.
   const onCloseRef = useRef(onClose)
+  // The control that had focus when the dialog opened is the one that opened it; a
+  // shared `returnFocusTo` ref can point at another row's button.
+  const openerRef = useRef<Element | null>(typeof document === 'undefined' ? null : document.activeElement)
   onCloseRef.current = onClose
 
   useEffect(() => {
@@ -76,7 +79,14 @@ export function ReferenceDialog({
   // runs on close.
   useEffect(() => {
     const target = returnFocusTo
-    return () => target?.current?.focus({ preventScroll: true })
+    return () => {
+      const opener = openerRef.current
+      const back =
+        opener instanceof HTMLElement && opener.isConnected && opener.matches('button, a, [role="button"]')
+          ? opener
+          : target?.current
+      back?.focus({ preventScroll: true })
+    }
   }, [returnFocusTo])
 
   return (
