@@ -61,11 +61,11 @@ old test counts and past deployment reports do not establish present health.
 - Figure movement (#302): a player's own map army or scout shows yellow destination squares
   within its travel speed (cardinal steps, water by tech, huts/villages stop the move, stacking
   up to the limit, an army may land on another player's figures and stops there, crossing them only with
-  Flight), and one board Undo restores
-  the square and the spent movement. Blue Explore buttons uncover the fog next to a figure for 1
+  Flight), and movement is a pool (move, explore, move again while speed is left; a hut, village or enemy ends
+  it). Board Undo takes moves back one at a time. Blue Explore buttons uncover the fog next to a figure for 1
   movement. Natural Religion, Henry Ford and Captain James Cook feed the speed; Galileo, Steam
   Power (Silk), Hannibal and the culture movement cards use the shared card map picker;
-  Communism locks a square; Brandenburg Gate keeps other players off the capital's outskirts.
+  Communism locks a square; Brandenburg Gate keeps other players out of its holder's city outskirts.
   Automated battle, loot and removal are not built (the human chose to keep them manual).
   See the #302 sections of decisions.
 

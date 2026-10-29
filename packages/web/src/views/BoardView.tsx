@@ -1339,14 +1339,15 @@ export function BoardView({
                     <span>{selected.label} is locked by Communism this turn and may not leave its square.</span>
                   ) : selectedMovement.locked ? (
                     <span>
-                      {selected.label} has moved this turn. Undo the move on the board to move it again.
+                      {selected.label} has no movement left this turn. Undo a move on the board to move it again.
                       {selectedMovement.explore.length > 0 && ' It can still explore the squares marked Explore.'}
                     </span>
                   ) : selectedMovement.remaining === 0 ? (
                     <span>Travel speed {selectedMovement.speed}. This figure cannot move.</span>
                   ) : (
                     <span>
-                      Travel speed {selectedMovement.speed}. Click a yellow square to move.
+                      Travel speed {selectedMovement.speed}
+                      {selectedMovement.used > 0 && `, ${selectedMovement.remaining} left`}. Click a yellow square to move.
                       {selectedMovement.explore.length > 0 &&
                         ' A square marked Explore is unexplored: it costs 1 movement to uncover.'}
                     </span>

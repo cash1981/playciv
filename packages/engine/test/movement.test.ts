@@ -239,17 +239,17 @@ describe('reachable squares', () => {
     expect(options.destinations.some((cell) => cell.column === 3 && cell.row === 1)).toBe(false)
   })
 
-  it('offers no destinations once the figure has moved', () => {
+  it('offers no destinations once the whole speed is spent', () => {
     const state = place(game(), 'figures/redarmy', 1, 1)
     const piece = figure(state)
     const travelled = unwrap(
-      travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 2 }),
+      travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 }),
     )
     const moved = figure(travelled)
     const options = figureMovementOptions(travelled.board, playerOf(travelled), moved, 1)
     if (options === null) throw new Error('expected movement options')
 
-    expect(moved.movement).toMatchObject({ turn: 1, used: 1, locked: true })
+    expect(moved.movement).toMatchObject({ turn: 1, used: 2, locked: true })
     expect(options.locked).toBe(true)
     expect(options.destinations).toHaveLength(0)
   })
@@ -393,13 +393,40 @@ describe('travelFigure', () => {
   it('refuses a second move in the same turn', () => {
     const state = place(game(), 'figures/redarmy', 1, 1)
     const piece = figure(state)
+    // The whole speed of 2 in one move: nothing is left
     const travelled = unwrap(
-      travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 2 }),
+      travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 }),
     )
     const refused = unwrapErr(
-      travelFigure(travelled, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 }),
+      travelFigure(travelled, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 4 }),
     )
     expect(refused.kind).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+
+  it('may move again while speed is left, and is locked once it is spent', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const piece = figure(state)
+    const first = unwrap(travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 2 }))
+    expect(movementOf(figure(first), 1)).toMatchObject({ used: 1, locked: false })
+    const options = figureMovementOptions(first.board, playerOf(first), figure(first), 1)
+    expect(Math.max(...(options?.destinations.map((cell) => cell.distance) ?? [0]))).toBe(1)
+
+    const second = unwrap(travelFigure(first, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 }))
+    expect(movementOf(figure(second), 1)).toMatchObject({ used: 2, locked: true })
+    // Undo takes the moves back one at a time
+    const undone = unwrap(undoLastBoardChange(second, CASH1981))
+    expect(movementOf(figure(undone), 1)).toMatchObject({ used: 1, locked: false })
+  })
+
+  it('ends the movement at once on a hut, with speed left', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'resources/hut', 1, 2)
+    const piece = figure(state)
+    const travelled = unwrap(travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 2 }))
+    expect(movementOf(figure(travelled), 1)).toMatchObject({ used: 1, locked: true })
+    expect(
+      unwrapErr(travelFigure(travelled, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 })).kind,
+    ).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
   it('refuses a square too far away and water without a tech', () => {

@@ -296,7 +296,7 @@ export interface PieceMovement {
   readonly turn: number
   /** Squares used this turn. */
   readonly used: number
-  /** True once the figure has moved this turn (or a card locked it). */
+  /** True once the figure may not move any more this turn: the pool is spent, a move ended on a hut, village or enemy, or a card locked it. */
   readonly locked: boolean
   /**
    * What locked it. Normal travel stays usable by the movement culture cards;

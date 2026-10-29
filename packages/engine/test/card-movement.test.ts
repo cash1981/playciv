@@ -171,13 +171,13 @@ describe('one-figure cards', () => {
     )
     const travelled = figuresIn(withFigure, 2, 3)[0]
     if (travelled === undefined) throw new Error('missing travelled army')
-    expect(travelled.movement).toMatchObject({ locked: true, reason: 'travel' })
+    expect(travelled.movement).toMatchObject({ used: 1, locked: false, reason: 'travel' })
 
     const played = unwrap(
       play(withFigure, itemId, 'Migrants', { column: 2, row: 3 }, { column: 4, row: 3 }, { figureId: army.id }),
     )
     expect(figuresIn(played, 4, 3)).toHaveLength(1)
-    expect(figuresIn(played, 4, 3)[0]?.movement).toMatchObject({ locked: true, reason: 'travel' })
+    expect(figuresIn(played, 4, 3)[0]?.movement).toMatchObject({ used: 1, locked: false, reason: 'travel' })
   })
 
   it('refuses a non-empty destination and a figure locked by Galileo', () => {

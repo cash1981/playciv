@@ -481,7 +481,7 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
   if (saved?.locked === true) {
     return err({
       kind: 'FIGURE_MOVE_ILLEGAL',
-      reason: `${piece.label} has already moved this turn. Undo the move on the board to move it again.`,
+      reason: `${piece.label} has no movement left this turn. Undo a move on the board to move it again.`,
     })
   }
   const movementPlayer = {
@@ -517,7 +517,10 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
     input.row * state.board.squareSize +
     (state.board.squareSize - piece.height) / 2
   const used = (saved?.used ?? 0) + destination.distance
-  const movement: PieceMovement = { turn: turnNumber, used, locked: true, reason: 'travel' }
+  // Movement is a pool: the figure may move again while it has speed left. It is locked once the pool is
+  // spent, or at once when the move ended on a hut, a village or another player's figures.
+  const locked = destination.ends === true || used >= options.speed
+  const movement: PieceMovement = { turn: turnNumber, used, locked, reason: 'travel' }
   const areas = areasFor(state)
   const moved = moveFigureWithMovementUnchecked(state, {
     playerId: input.playerId,

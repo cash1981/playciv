@@ -126,12 +126,35 @@ describe('exploreSquare', () => {
   it('may explore after the figure has travelled to the edge', () => {
     const state = place(withStartTile(game()), 'figures/redarmy', 1, 1)
     const travelled = unwrap(travelFigure(state, { playerId: CASH1981, pieceId: armyOf(state).id, column: 3, row: 1 }))
-    expect(movementOf(armyOf(travelled), 1)).toMatchObject({ used: 2, locked: true })
+    // Speed 3: 2 spent, still free to move or explore
+    expect(movementOf(armyOf(travelled), 1)).toMatchObject({ used: 2, locked: false })
 
     const explored = unwrap(
       exploreSquare(travelled, { playerId: CASH1981, pieceId: armyOf(travelled).id, column: 4, row: 1 }),
     )
-    expect(movementOf(armyOf(explored), 1)).toMatchObject({ used: 3, locked: true })
+    expect(movementOf(armyOf(explored), 1)).toMatchObject({ used: 3, locked: false })
+  })
+
+  it('moves, explores and moves again within the speed, then is locked', () => {
+    const state = place(withStartTile(game()), 'figures/redarmy', 2, 3)
+    const id = armyOf(state).id
+    const moved = unwrap(travelFigure(state, { playerId: CASH1981, pieceId: id, column: 3, row: 3 }))
+    const explored = unwrap(exploreSquare(moved, { playerId: CASH1981, pieceId: id, column: 4, row: 3 }))
+    expect(movementOf(armyOf(explored), 1)).toMatchObject({ used: 2, locked: false })
+
+    const again = unwrap(travelFigure(explored, { playerId: CASH1981, pieceId: id, column: 4, row: 3 }))
+    expect(movementOf(armyOf(again), 1)).toMatchObject({ used: 3, locked: true })
+  })
+
+  it('cannot explore once the movement has ended on a hut', () => {
+    let state = place(withStartTile(game()), 'figures/redarmy', 2, 3)
+    state = place(state, 'resources/hut', 3, 3)
+    const id = armyOf(state).id
+    const ended = unwrap(travelFigure(state, { playerId: CASH1981, pieceId: id, column: 3, row: 3 }))
+    expect(movementOf(armyOf(ended), 1)).toMatchObject({ used: 1, locked: true })
+    expect(
+      unwrapErr(exploreSquare(ended, { playerId: CASH1981, pieceId: id, column: 4, row: 3 })).kind,
+    ).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
   it('needs movement left', () => {

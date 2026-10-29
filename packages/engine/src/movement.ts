@@ -57,6 +57,8 @@ export interface MovementDestination extends Cell {
   readonly distance: number
   /** Another player's figures stand here: moving in ends the move and starts a battle, settled by hand. */
   readonly contact?: boolean
+  /** Landing here ends the figure's movement for the turn: a hut, a village or another player's figures. */
+  readonly ends?: boolean
 }
 
 /** What the board and the movement panel need to know about one figure. */
@@ -239,8 +241,9 @@ export function figureMovementOptions(
   const lockedKeys = new Set(lockedCells.map(keyOf))
   const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
   const squareLocked = lockedKeys.has(keyOf(start))
-  // Galileo's and Steam Power's lock means "cannot move again"; a plain travel lock still allows exploring.
-  const cardLocked = saved?.locked === true && saved.reason !== undefined && saved.reason !== 'travel'
+  // A lock (a move that ended on a hut, village or enemy, a spent allowance, Galileo, Steam Power) means no more
+  // movement this turn, and exploring is movement.
+  const cardLocked = saved?.locked === true
   const explore: MovementDestination[] =
     remaining >= 1 && !cardLocked
       ? exploreTargetsFrom(board, start).map((cell) => ({
@@ -288,6 +291,7 @@ export function figureMovementOptions(
           label: `${columnLabel(cell.column)}${cell.row + 1}`,
           distance,
           ...(occupancy.foreign.has(keyOf(cell)) ? { contact: true } : {}),
+          ...(occupancy.foreign.has(keyOf(cell)) || mustStop.has(keyOf(cell)) ? { ends: true } : {}),
         })
       }
     }

@@ -539,13 +539,15 @@ turn without a reset action.
   the figure cannot continue past it in the same move. A revealed Flight flies
   over the marker, so the squares beyond are reachable, but rule 283 still
   forbids ending the move on the marker square.
-- **Lock and undo:** after any travel the figure is locked for the turn; pressing
-  board Undo restores the square and the lock in one step, exactly the issue's
-  requested redo. A freeform drag of the viewer's own map figure is disabled in
-  the board UI; the general `movePiece` route remains the manual board tool for
-  setups and pieces off the map, so it is not a rules-enforced second path. The
-  `/travel` route also has no phase or turn-holder gate, matching the shared
-  board's "everyone may move everything" behaviour.
+- **Movement is a pool (the human, 2026-10-29, replacing "locked after any travel"):** each
+  travel adds its distance to `movement.used` and the figure may move again while speed is left.
+  It is locked at once when the pool is spent, or when the move ended on a hut, a village or
+  another player's figures (`MovementDestination.ends`), which end movement directly. Pressing
+  board Undo takes the moves back one at a time and restores the spent movement with each. A
+  freeform drag of the viewer's own map figure is disabled in the board UI; the general `movePiece`
+  route remains the manual board tool for setups and pieces off the map, so it is not a
+  rules-enforced second path. The `/travel` route also has no phase or turn-holder gate, matching
+  the shared board's "everyone may move everything" behaviour.
 - **Out of this slice:** the culture cards that move figures (Migrants,
   Colonists, Immigrants, Disoriented, Lost, Out of Position), Hannibal, the
   Communism square lock, and map-tile discovery. They need map-picking
@@ -713,10 +715,9 @@ manual**, and exploring works **from the edge**.
   can *explore* it: `exploreSquare` (route `POST .../pieces/:id/explore`, the board shows
   the squares as blue "Explore" buttons with a confirmation) spends 1 movement, draws the
   next TILES card and lays it in the slot that covers the clicked square (rotation 0,
-  turned by hand). It neither moves nor locks the figure, so exploring then travelling, or
-  travelling to the edge then exploring, both work within the speed (travel reaches only what
-  is left after the exploring; a Galileo or Steam
-  Power lock forbids it). The tile card goes to the player's hand like any draw, so a board Undo
+  turned by hand). It neither moves nor locks the figure, so travel, explore and travel again all work within the
+  speed (speed 4: move 1, explore 1, then 2 more; travel reaches only what is left). Any lock
+  forbids exploring: a move that ended on a hut, village or enemy, a spent pool, Galileo, Steam Power. The tile card goes to the player's hand like any draw, so a board Undo
   does not return the card: a player could explore, undo and explore again to see more tiles
   (accepted for now; the draw's log line can be undone by vote). Exploring has no turn check, like
   travel, and fails without spending movement when the drawn card has no tile artwork. Undo is
