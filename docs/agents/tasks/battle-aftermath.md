@@ -1,6 +1,6 @@
 # Battle aftermath: last arena stays visible, returning a unit undoes its arrival
 
-- **Slug:** `battle-aftermath` · **Branch:** `feat/battle-aftermath` · **Owner:** Claude (Opus 5.5) · **Status:** in progress
+- **Slug:** `battle-aftermath` · **Branch:** `feat/battle-aftermath` · **Owner:** Claude (Opus 5.5) · **Status:** in review
 
 ## Goal
 
@@ -32,15 +32,15 @@ the latest battle; unit names in the end-of-battle log line.
   displaced and the face-off's before/after vitals of both units. Return to
   hand and a move off the front revert them, but only for a unit whose vitals
   still equal what the face-off left. Migration backfills `arrival: null`.
-- Projection: `lastBattle` holds labels, summaries, winner and the arena with
+- Projection: `lastBattle` holds labels, summaries frozen at End battle, winner and the arena with
   every id replaced by a positional one; no `departedUnits`, no card ids.
 - Web: the "Battle ended" banner shows the result and a read-only arena.
 
 ## Claimed paths
 
 - `packages/engine/src/actions/arena.ts`, `battle.ts`, `state.ts`, `migrate.ts`
-- `packages/engine/test/arena.test.ts`
-- `packages/web/src/views/GameView.tsx`, `GameView.test.tsx`, `BattlePanel.test.tsx`
+- `packages/engine/test/arena.test.ts`, `chat-orders-turns.test.ts`
+- `packages/web/src/views/GameView.tsx`, `ItemCard.tsx` and their `*.test.tsx`
 - `docs/agents/decisions.md`
 
 ## Acceptance criteria
@@ -50,5 +50,6 @@ the latest battle; unit names in the end-of-battle log line.
 - [ ] Every viewer sees the final arena and result until a new battle starts
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass
 - [ ] Hidden information: no card id, slot id, battle id or departed unit in
-      any viewer's JSON (arena.test.ts projection test)
+      `lastBattle` for any viewer, and no slot or battle id anywhere in the
+      view (an opponent's battlehand is public by design)
 - [ ] Browser check: end a battle and see the final arena; replay the bug
