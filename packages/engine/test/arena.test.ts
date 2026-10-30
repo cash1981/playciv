@@ -1884,6 +1884,7 @@ describe('ending a battle and the projection', () => {
   function endedBattleWithUnits(): {
     readonly ended: GameState
     readonly arenaIds: readonly string[]
+    readonly cardIds: readonly string[]
     readonly battleId: string
     readonly unitNames: readonly string[]
   } {
@@ -1907,24 +1908,79 @@ describe('ending a battle and the projection', () => {
     return {
       ended,
       arenaIds: battle.arena.map((u) => u.id),
+      cardIds: battle.arena.map((u) => u.unit.id),
       battleId: battle.id,
       unitNames: battle.arena.map((u) => revealAll(u.unit)),
     }
   }
 
-  it('exposes only who ended the battle, never the snapshot, to any viewer', () => {
-    const { ended, arenaIds, battleId } = endedBattleWithUnits()
+  it('shows every viewer the final arena and result, with no id of the battle or its cards', () => {
+    const { ended, arenaIds, cardIds, battleId } = endedBattleWithUnits()
+    const snapshot = ended.endedBattle!.battle
 
     for (const viewer of [CASH1981, KARANDRAS1, ITCHI, 'a-spectator']) {
       const view = toPlayerView(ended, viewer)
       expect(view.battle).toBeNull()
       expect(view.battleUndo).toEqual({ endedBy: CASH1981 })
       expect(Object.keys(view.battleUndo ?? {})).toEqual(['endedBy'])
+
+      const last = view.lastBattle!
+      expect(last.endedBy).toBe(CASH1981)
+      // Only the attacker placed units, so the attacker wins.
+      expect(last.winner).toBe('attacker')
+      expect(last.summary.map((s) => s.side)).toEqual(['attacker', 'defender'])
+      expect(last.arena.map((u) => [u.side, u.position, u.unit.kind, u.attack, u.health, u.killed])).toEqual(
+        snapshot.arena.map((u) => [u.side, u.position, u.unit.kind, u.attack, u.health, u.killed]),
+      )
+      for (const u of last.arena) {
+        expect(u.id).toBe(`${u.side}-${u.position}`)
+        expect(u.unit.id).toBe(u.id)
+        expect(u.unit.itemNumber).toBe(0)
+        expect(u.arrival).toBeNull()
+      }
+
+      const lastJson = JSON.stringify(last)
+      for (const id of [battleId, ...arenaIds, ...cardIds]) expect(lastJson).not.toContain(id)
       const json = JSON.stringify(view)
       expect(json).not.toContain('endedBattle')
       expect(json).not.toContain(battleId)
       for (const id of arenaIds) expect(json).not.toContain(id)
     }
+  })
+
+  it('never shows a unit that was reinforced away', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const [first, second] = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: first!.id, side: 'attacker', position: 0, attack: 1, health: 1,
+    }))
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: state.battle!.arena[0]!.id }))
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: second!.id, side: 'attacker', position: 0, attack: 2, health: 2,
+    }))
+    const departed = state.battle!.departedUnits
+    expect(departed).toHaveLength(1)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+
+    const last = toPlayerView(ended, KARANDRAS1).lastBattle!
+    expect(last.arena).toHaveLength(1)
+    expect(last.arena[0]).toMatchObject({ attack: 2, health: 2 })
+    // The card ids stay out of `lastBattle` only: a battlehand is public anyway.
+    const json = JSON.stringify(toPlayerView(ended, KARANDRAS1))
+    expect(json).not.toContain(departed[0]!.id)
+    expect(JSON.stringify(last)).not.toContain(first!.id)
+  })
+
+  it('has no last battle before one ends, while one runs, after a new one starts or once undone', () => {
+    expect(toPlayerView(firstCivGame(), CASH1981).lastBattle).toBeNull()
+
+    const { ended } = endedBattleWithUnits()
+    const next = unwrap(initiateBattle(ended, { initiatorId: KARANDRAS1, opponentId: ITCHI }))
+    expect(toPlayerView(next, CASH1981).lastBattle).toBeNull()
+
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(toPlayerView(restored, CASH1981).lastBattle).toBeNull()
   })
 
   it('has no battleUndo before a battle is ended, while one is running, or after a new one starts', () => {
