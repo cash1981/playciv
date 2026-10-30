@@ -543,13 +543,25 @@ describe('sending a scout’s square to a city', () => {
       expect(notes).not.toContain('Your capital is not marked on the map')
     })
 
+    it('still offers a second scout on a square to the city it was sent to, and the square once', () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const second = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout').at(-1)
+      const sent = unwrap(assign(state, second?.id ?? '', far(state)?.pieceId ?? ''))
+      // A square is sent once: the unsent scout on it adds nothing for the capital
+      expect(scoutChoices(sent, 'B2')).toEqual([])
+      expect(scoutChoices(sent, 'I9')).toEqual(['wheat'])
+    })
+
     it('does not offer a scout standing on the centre of another of the player\'s cities', () => {
       // A scout on the far city's centre I9 sends nothing; the capital must not take it as unsent
       const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', 8, 8)
+      const centreScout = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout').at(-1)?.id
+      for (const options of cityActionsOf(state, me(state))) {
+        expect(options.harvest.choices.some((choice) => choice.scoutPieceId === centreScout), options.label).toBe(false)
+        expect(options.devoteToTheArts.scouts.some((scout) => scout.pieceId === centreScout), options.label).toBe(false)
+        expect(options.harvest.notes.join(' '), options.label).not.toContain('Your capital is not marked on the map')
+      }
       expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
-      expect(cityActionsOf(state, me(state)).find((options) => options.label.endsWith('B2'))?.harvest.notes.join(' ')).not.toContain(
-        'Your capital is not marked on the map',
-      )
     })
 
     it('offers a scout to every city when no capital is marked on the map, and says why', () => {
