@@ -199,15 +199,19 @@ Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
   or draws automatically.
 - Only the player who ended a battle may undo End battle, until another battle
   begins. Until then every viewer also sees the final arena, read-only, with
-  the result (`lastBattle`), so the player who did not press End battle can see
+  the result as it stood at End battle (`lastBattle`; the totals are frozen,
+  matching the log line), so the player who did not press End battle can see
   how it ended. Its units were face up during the battle; card, slot and battle
   ids and card log numbers are scrubbed because the cards are back in hidden
-  hands. Reinforced-away units are not shown.
+  hands. Reinforced-away units are not shown. A card without a log number
+  (number 0) shows no "#".
 - Taking a unit off its front (return to hand, or a move) undoes what its
-  arrival did: the fallen unit it replaced comes back, and both units of its
-  face-off get their health and kill flag back. A unit edited by hand since
-  (stats, kill toggle, rotate) keeps the edit. This lets a player regret a
-  placement without ending the battle turn.
+  arrival did: the fallen unit it replaced comes back, and the unit itself and
+  the opponent still facing it on that front get their health and kill flag
+  back, so a unit killed on arrival moves away alive. A unit edited by hand
+  since (stats, kill toggle, rotate), moved away, or itself displaced keeps its
+  state: this is an undo of one arrival, not a battle-wide undo stack. It lets
+  a player regret a placement without ending the battle turn.
 
 **Undoing a civilization reveal.** The vote takes back what the reveal handed
 out by itself, recorded as `GameLogEntry.civSetup`:

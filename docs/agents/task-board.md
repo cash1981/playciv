@@ -14,8 +14,8 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Owner:** Claude (Opus 5.5)
 - **Branch:** `feat/battle-aftermath`
 - **Brief:** `docs/agents/tasks/battle-aftermath.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/actions/arena.ts`, `packages/engine/src/battle.ts`, `packages/engine/src/state.ts`, `packages/engine/src/migrate.ts`, `packages/engine/test/arena.test.ts`, `packages/web/src/views/GameView.tsx`, `packages/web/src/views/*.test.tsx`, `docs/agents/decisions.md`
+- **Status:** in review
+- **Claimed paths:** `packages/engine/src/actions/arena.ts`, `packages/engine/src/battle.ts`, `packages/engine/src/state.ts`, `packages/engine/src/migrate.ts`, `packages/engine/test/arena.test.ts`, `packages/engine/test/chat-orders-turns.test.ts`, `packages/web/src/views/GameView.tsx`, `packages/web/src/views/ItemCard.tsx`, `packages/web/src/views/*.test.tsx`, `docs/agents/decisions.md`
 - **Notes:** owns the `PlayerView` shape resource (adds `lastBattle`).
 
 ## Format
