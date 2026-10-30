@@ -724,9 +724,9 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   with a revealed tech; `wonder-data.ts` equals the `Wonders` sheet by test) is
   **enforced like a building** (human, 2026-10-30, replacing "shown, not
   enforced"): rush trade is paid, refunded on undo; hammers from cards and Great
-  Persons count through a hand-set production. Where the sheet and the tech cards
-  (`public/help/Civ_Tech_FF-WW.-2.jpg`) differ, the cards win (human): Angkor Wat
-  is 15 with Philosophy (`SHEET_CORRECTIONS`). Placed in outskirts on any non-water square, empty or
+  Persons count through a hand-set production. Angkor Wat is 15 with Theology
+  (`SHEET_CORRECTIONS` until the sheet is fixed); Philosophy on the tech sheet is
+  from later rules and gives no discount (human, 2026-10-30). Placed in outskirts on any non-water square, empty or
   holding the player's own building/wonder/Great Person, no enemy figure; one per
   city, not counted as the limited building. The market piece moves onto the
   square and gains its owner (two history entries).

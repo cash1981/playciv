@@ -7,9 +7,8 @@
  * specific tech listed on the wonder." The numbers are the `Cost` and `Discount`
  * columns of the Wonders sheet of the game data (`gamedata-faf-waw.json`), read once
  * into this table, and the era is the block of the sheet the wonder is in; the test
- * `wonder-data.test.ts` keeps the two in step. Where the sheet disagrees with the tech
- * cards (the tech reference sheet `public/help/Civ_Tech_FF-WW.-2.jpg`, which names the
- * wonder each tech discounts and its price), the cards win: {@link SHEET_CORRECTIONS}.
+ * `wonder-data.test.ts` keeps the two in step. The one exception is
+ * {@link SHEET_CORRECTIONS}.
  *
  * The abilities are not here: building a wonder places it and names its owner, nothing
  * more (`build-options.ts`). Build checks the cost against the city's production and
@@ -43,7 +42,7 @@ const wonder = (era: WonderEra, cost: number, tech?: string, discountedCost?: nu
  * spreadsheet is.
  */
 export const SHEET_CORRECTIONS: Readonly<Record<string, string>> = {
-  'wonders/angkorwat': 'The sheet has 10 with Theology; the Philosophy tech card has Angkor Wat (15).',
+  'wonders/angkorwat': 'The sheet has 10 with Theology; the human says 15 (the card).',
 }
 
 export const WONDER_DATA: Readonly<Record<string, WonderData>> = {
@@ -56,7 +55,7 @@ export const WONDER_DATA: Readonly<Record<string, WonderData>> = {
   'wonders/hanginggardens': wonder('Ancient', 15, 'Animal Husbandry', 10), // The Hanging Gardens
   'wonders/oracle': wonder('Ancient', 15, 'Code of Laws', 10), // The Oracle
   'wonders/pyramids': wonder('Ancient', 15, 'Pottery', 10), // The Pyramids
-  'wonders/angkorwat': wonder('Medieval', 20, 'Philosophy', 15), // Angkor Wat
+  'wonders/angkorwat': wonder('Medieval', 20, 'Theology', 15), // Angkor Wat
   'wonders/brandenburggate': wonder('Medieval', 15), // Brandenburg Gate
   'wonders/himejisamuraicastle': wonder('Medieval', 20, 'Monarchy', 15), // Himeji Samurai Castle
   "wonders/leonardo'sworkshop": wonder('Medieval', 20, 'Mathematics', 15), // Leonardo's Workshop

@@ -49,24 +49,25 @@ describe('the wonder cost table', () => {
       if (Object.hasOwn(SHEET_CORRECTIONS, assetId)) {
         // A correction differs from the sheet in the discount only, and says why
         expect(data?.discount, row[0]).not.toEqual({ tech: match?.[2], cost: Number(match?.[1]) })
+        expect(data?.discount?.tech, row[0]).toBe(match?.[2])
         continue
       }
       if (discount === '') expect(data?.discount, row[0]).toBeUndefined()
       else expect(data?.discount, row[0]).toEqual({ tech: match?.[2], cost: Number(match?.[1]) })
     }
     expect(Object.keys(SHEET_CORRECTIONS)).toEqual(['wonders/angkorwat'])
-    expect(wonderDataOf('wonders/angkorwat')?.discount).toEqual({ tech: 'Philosophy', cost: 15 })
+    expect(wonderDataOf('wonders/angkorwat')?.discount).toEqual({ tech: 'Theology', cost: 15 })
   })
 
   it('has the discount each tech card names, with its price', () => {
-    // The tech reference sheet (public/help/Civ_Tech_FF-WW.-2.jpg): the wonder a tech unlocks and what it then costs
+    // The tech reference sheet (public/help/Civ_Tech_FF-WW.-2.jpg): the wonder a tech unlocks and what it then costs.
+    // Not Philosophy → Angkor Wat: that is from later rules, and Theology discounts it here (human)
     const techCards: Readonly<Record<string, readonly [string, number]>> = {
       'Animal Husbandry': ['wonders/hanginggardens', 10],
       'Code of Laws': ['wonders/oracle', 10],
       Currency: ['wonders/chichenitza', 10],
       Masonry: ['wonders/greatwall', 10],
       Metalworking: ['wonders/colossus', 10],
-      Philosophy: ['wonders/angkorwat', 15],
       Pottery: ['wonders/pyramids', 10],
       Chivalry: ['wonders/tajmahal', 15],
       Construction: ['wonders/porcelaintower', 15],
@@ -83,8 +84,8 @@ describe('the wonder cost table', () => {
       expect(wonderDataOf(assetId)?.discount, tech).toEqual({ tech, cost })
     }
     const angkor = wonderDataOf('wonders/angkorwat')
-    expect(angkor === undefined ? undefined : wonderCostFor(angkor, new Set(['Philosophy']))).toBe(15)
-    expect(angkor === undefined ? undefined : wonderCostFor(angkor, new Set(['Theology']))).toBe(20)
+    expect(angkor === undefined ? undefined : wonderCostFor(angkor, new Set(['Theology']))).toBe(15)
+    expect(angkor === undefined ? undefined : wonderCostFor(angkor, new Set(['Philosophy']))).toBe(20)
   })
 
   it('has the era of the block of the sheet the wonder is in, nine of each', () => {
