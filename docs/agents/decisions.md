@@ -169,10 +169,13 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   has been spent or giving back would pass the trade track; Wright's undo clamps
   at zero like Marco Polo's.
 - Andrew Carnegie banks `floor(coins / 3)` free advances on the hand
-  (`freeAdvances`, own view only). The Advance and Shakespeare buttons spend one
-  per advance in place of the price, one space at a time, so the usual stops
-  apply: a card choice or Mysticism discard, hand size, the deck. An undone
-  advance returns its free advance; the card cannot be undone once one is spent.
+  (`freeAdvances` for the turn `freeAdvancesTurn`, own view only), never more than
+  the spaces left on the track, and refuses without a leader marker. The Advance
+  and Shakespeare buttons spend one per advance in place of the price, in City
+  Management of that turn only, one space at a time, so the usual stops apply: a
+  card choice or Mysticism discard, hand size, the deck. Unspent advances lapse
+  with the turn. An undone advance returns its free advance; the card cannot be
+  undone once one is spent.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

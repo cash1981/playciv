@@ -19,7 +19,15 @@ import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coi
 import { createPlayerTurn } from './turn.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
-import { drawCandidates, performAdvance, reverseAdvanceEffect, shuffleSheetTwice } from './assisted-culture.js'
+import {
+  drawCandidates,
+  freeAdvancesLeft,
+  performAdvance,
+  reverseAdvanceEffect,
+  shuffleSheetTwice,
+} from './assisted-culture.js'
+import { CULTURE_VICTORY_STEP } from './board.js'
+import { cultureMarkerOf } from './culture-track.js'
 import { squareLabel, unitSheetOf } from './build-options.js'
 import { cardMoveFigureChoices, cardMoveRuleOf, cardMoveSources } from './card-movement.js'
 import {
@@ -387,10 +395,23 @@ function automate(
       return gained(-convert.amount, convert.amount, `, turning ${convert.amount} trade into ${convert.amount} culture`)
     }
     case 'Andrew Carnegie': {
-      const earned = Math.floor(totalCoins(coinSourcesOf(state, player)) / 3)
-      if (earned < 1) return err('You need at least 3 coins to advance with Andrew Carnegie.')
+      const marker = cultureMarkerOf(state, player)
+      if (marker === undefined) return err('Your leader marker is not on the culture track.')
+      const room = CULTURE_VICTORY_STEP - marker.step
+      const earned = Math.min(Math.floor(totalCoins(coinSourcesOf(state, player)) / 3), room - freeAdvancesLeft(state, player))
+      if (earned < 1) {
+        return err(
+          room <= 0 || freeAdvancesLeft(state, player) >= room
+            ? 'There are no culture spaces left to advance onto.'
+            : 'You need at least 3 coins to advance with Andrew Carnegie.',
+        )
+      }
       return ok({
-        state: withPlayerHand(state, { ...player, freeAdvances: player.freeAdvances + earned }),
+        state: withPlayerHand(state, {
+          ...player,
+          freeAdvances: freeAdvancesLeft(state, player) + earned,
+          freeAdvancesTurn: turnStatus(state).currentTurn,
+        }),
         extra: { freeAdvances: earned },
         said: `, earning ${earned} free culture ${earned === 1 ? 'advance' : 'advances'} to make one space at a time`,
       })

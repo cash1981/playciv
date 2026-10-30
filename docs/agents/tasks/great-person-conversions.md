@@ -14,12 +14,12 @@ markers with carnegie." Carnegie: advance one space on the culture track for fre
 **In:** `Playerhand.freeAdvances` banked by the card; the Advance and Shakespeare buttons spend
 one per advance instead of the price; undo of both; tests.
 
-**Out:** expiry of unused advances at turn end (they stay until made).
+**Out:** nothing further.
 
 ## Approach
 
 Playing the card banks `floor(coins / 3)`. `planAdvance` treats a banked advance as free and
-usable in any phase; every existing check (pending card choice, hand size, deck) still applies,
+usable in City Management of the turn they were earned in; every existing check (pending card choice, hand size, deck) still applies,
 so each advance is made one at a time. The effect records `freeAdvance` so an undo gives it back.
 
 ## Acceptance criteria

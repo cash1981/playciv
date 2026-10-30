@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece } from '../src/actions/board.js'
 import { findBoardAsset, mapTop, slotOrigin, SQUARE_SIZE } from '../src/board.js'
+import { chooseTech, revealTech } from '../src/actions/player.js'
+import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
@@ -198,9 +200,13 @@ describe('Andrew Carnegie', () => {
   }
 
   /** The leader on the start space, plenty of culture and trade, `coins` coins and Carnegie in hand. */
-  const carnegieTurn = (coins: number) => {
+  const carnegieTurn = (coins: number, step = 0, mysticism = false) => {
     let state = withCivilization(firstCivGame(), 'Japanese')
-    state = withMarkerAt(state, 0, 'Japanese')
+    if (mysticism) {
+      state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Mysticism' }))
+      state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Mysticism' }))
+    }
+    state = withMarkerAt(state, step, 'Japanese')
     state = openCityManagement(state)
     state = withStats(state, { culture: 100, trade: 25, coinSources: { ...me(state).stats.coinSources, sheet: coins } })
     return withCardInHand(state, 'Andrew Carnegie')
@@ -214,11 +220,13 @@ describe('Andrew Carnegie', () => {
     expect(played.log.at(-1)?.publicLog).toContain('earning 2 free culture advances to make one space at a time')
 
     expect(me(undoByVote(played, 'c-1')).freeAdvances).toBe(0)
-    expect(play(carnegieTurn(2).state, 'c-0', card.itemId).ok).toBe(false)
+    const poor = carnegieTurn(2)
+    expect(JSON.stringify(play(poor.state, 'c-0', poor.itemId))).toContain('at least 3 coins')
   })
 
   it('advances one space at a time for free, with the card choice in between, and gives an advance back on undo', () => {
-    const card = carnegieTurn(6)
+    // Mysticism draws two cards, so the first advance leaves a card choice
+    const card = carnegieTurn(6, 0, true)
     const played = unwrap(play(card.state, 'c-2', card.itemId))
     expect(assistedAvailability(played, CASH1981, 'cultureAdvance').reason).toContain('free with Andrew Carnegie (2 left)')
 
@@ -230,11 +238,11 @@ describe('Andrew Carnegie', () => {
     expect(first.log.find((entry) => entry.assistedActionId === 'a-1')?.publicLog).toContain('for free with Andrew Carnegie')
 
     // The cards the space gave have to be settled before the next advance
-    if (me(first).pendingRewards.length > 0) {
-      expect(assistedAvailability(first, CASH1981, 'cultureAdvance').status).toBe('unavailable')
-      expect(press(first, 'a-blocked').ok).toBe(false)
-    }
-    const settled = me(first).pendingRewards.length > 0 ? choose(first, 'r-1') : first
+    expect(me(first).pendingRewards).toHaveLength(1)
+    expect(assistedAvailability(first, CASH1981, 'cultureAdvance').status).toBe('unavailable')
+    expect(press(first, 'a-blocked').ok).toBe(false)
+    expect(me(first).freeAdvances).toBe(1)
+    const settled = choose(first, 'r-1')
     const second = unwrap(press(settled, 'a-2'))
     expect(cultureMarkerLevelOf(second, CASH1981)).toBe(2)
     expect(me(second).freeAdvances).toBe(0)
@@ -248,6 +256,27 @@ describe('Andrew Carnegie', () => {
     expect(me(undone).freeAdvances).toBe(1)
     expect(me(undone).stats.culture).toBe(100)
     expect(() => undoByVote(first, 'c-2')).toThrow(/ASSISTED_UNDO_BLOCKED.*already been made/)
+  })
+
+  it('is spent in City Management of the turn it was earned in, and no more are banked than spaces remain', () => {
+    const card = carnegieTurn(30, 20)
+    const played = unwrap(play(card.state, 'c-5', card.itemId))
+    // One space is left on the track, so only one advance is earned from ten
+    expect(me(played).freeAdvances).toBe(1)
+    expect(played.log.at(-1)?.publicLog).toContain('earning 1 free culture advance ')
+
+    // Another turn, or City Management closed: nothing is free any more
+    const closed = unwrap(markPhasesDone(played, { playerId: CASH1981, turnNumber: 1, upToPhase: 'CM' }))
+    expect(assistedAvailability(closed, CASH1981, 'cultureAdvance').status).toBe('wrong-phase')
+    const stale = { ...played, players: played.players.map((hand) => (hand.playerId === CASH1981 ? { ...hand, freeAdvancesTurn: 0 } : hand)) }
+    expect(assistedAvailability(stale, CASH1981, 'cultureAdvance').reason).not.toContain('Carnegie')
+  })
+
+  it('refuses without a leader marker on the culture track', () => {
+    let state = withCivilization(firstCivGame(), 'Japanese')
+    state = withStats(openCityManagement(state), { coinSources: { ...me(state).stats.coinSources, sheet: 6 } })
+    const card = withCardInHand(state, 'Andrew Carnegie')
+    expect(JSON.stringify(play(card.state, 'c-6', card.itemId))).toContain('not on the culture track')
   })
 
   it('can skip occupied spaces with Shakespeare while it spends the free advance', () => {

@@ -46,6 +46,7 @@ import {
   cultureSpaceAt,
   rewardDrawCount,
 } from './culture-track.js'
+import { turnStatus } from './turn.js'
 import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } from './culture-track.js'
 import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
@@ -89,8 +90,12 @@ function describeCost(cost: CultureAdvanceCost): string {
 }
 
 /** What an advance costs while Andrew Carnegie's free advances last. */
-const carnegieCost = (player: Playerhand): string =>
-  `free with Andrew Carnegie (${player.freeAdvances} left)`
+const carnegieCost = (state: GameState, player: Playerhand): string =>
+  `free with Andrew Carnegie (${freeAdvancesLeft(state, player)} left)`
+
+/** The free advances Andrew Carnegie earned this turn and the player has not made. */
+export const freeAdvancesLeft = (state: GameState, player: Playerhand): number =>
+  player.freeAdvancesTurn === turnStatus(state).currentTurn ? player.freeAdvances : 0
 
 /** The deck a space draws from: its level's culture deck, or the Great Person deck. */
 function rewardSheet(space: CultureSpace): SheetName {
@@ -156,9 +161,9 @@ function planAdvance(
   player: Playerhand,
   options: AdvanceOptions = {},
 ): Result<AdvancePlan, BlockedAvailability> {
-  // Andrew Carnegie's banked advances are made at once, in any phase, and cost nothing
-  const carnegie = options.free !== true && player.freeAdvances > 0
-  if (options.free !== true && !carnegie && openCityManagementTurn(state, player) === undefined) {
+  // Andrew Carnegie's advances of this turn cost nothing; City Management has to be open all the same
+  const carnegie = options.free !== true && freeAdvancesLeft(state, player) > 0
+  if (options.free !== true && openCityManagementTurn(state, player) === undefined) {
     return err(blocked('wrong-phase', PHASE_REASON))
   }
   const marker = cultureMarkerOf(state, player)
@@ -191,7 +196,7 @@ function planAdvance(
   }
 
   const cost = options.free === true || carnegie ? { culture: 0, trade: 0 } : cultureAdvanceCost(state, player, to.step)
-  const where = `Advance to ${describeSpace(to)}: ${carnegie ? carnegieCost(player) : describeCost(cost)}.`
+  const where = `Advance to ${describeSpace(to)}: ${carnegie ? carnegieCost(state, player) : describeCost(cost)}.`
   if (livePendingRewards(player).length > 0) {
     return err(blocked('unavailable', `${where} Choose the card to keep from your last advance first.`))
   }
@@ -899,7 +904,7 @@ export const cultureAdvance: AssistedActionDefinition = {
     const warning = plan.value.to.kind === 'event' ? cultureHandWarning(state, player, 1) : undefined
     return {
       status: 'ready',
-      reason: `Advance to ${describeSpace(plan.value.to)}: ${plan.value.carnegie ? carnegieCost(player) : describeCost(plan.value.cost)}.`,
+      reason: `Advance to ${describeSpace(plan.value.to)}: ${plan.value.carnegie ? carnegieCost(state, player) : describeCost(plan.value.cost)}.`,
       ...(warning === undefined ? {} : { warning }),
     }
   },
@@ -939,7 +944,7 @@ export const cultureAdvanceSkip: AssistedActionDefinition = {
     const warning = plan.value.to.kind === 'event' ? cultureHandWarning(state, player, 1) : undefined
     return {
       status: 'ready',
-      reason: `Skip to ${describeSpace(plan.value.to)}: ${plan.value.carnegie ? carnegieCost(player) : describeCost(plan.value.cost)}.`,
+      reason: `Skip to ${describeSpace(plan.value.to)}: ${plan.value.carnegie ? carnegieCost(state, player) : describeCost(plan.value.cost)}.`,
       ...(warning === undefined ? {} : { warning }),
     }
   },

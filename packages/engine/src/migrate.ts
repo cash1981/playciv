@@ -69,12 +69,12 @@ type MaybeOlder = Omit<
  *  pyramid placements, or its own `socialPolicies` array existed. */
 type MaybeOlderPlayerhand = Omit<
   Playerhand,
-  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'curieSubstitute'
+  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'freeAdvancesTurn' | 'curieSubstitute'
 > &
   Partial<
     Pick<
       Playerhand,
-      'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'curieSubstitute'
+      'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'freeAdvancesTurn' | 'curieSubstitute'
     >
   >
 
@@ -130,6 +130,7 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   archimedesCulture: player.archimedesCulture ?? {},
   wonderDiscount: player.wonderDiscount ?? 0,
   freeAdvances: player.freeAdvances ?? 0,
+  freeAdvancesTurn: player.freeAdvancesTurn ?? 0,
   curieSubstitute: player.curieSubstitute ?? null,
 })
 

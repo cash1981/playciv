@@ -131,6 +131,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     archimedesCulture: {},
     wonderDiscount: 0,
     freeAdvances: 0,
+    freeAdvancesTurn: 0,
     curieSubstitute: null,
   }
 }

@@ -221,9 +221,12 @@ export interface Playerhand {
   readonly wonderDiscount: number
   /**
    * Free culture advances Andrew Carnegie granted that the player has not made yet. The Advance
-   * and Shakespeare buttons spend one per advance instead of the price. Own view only.
+   * and Shakespeare buttons spend one per advance instead of the price, in City Management of
+   * the turn `freeAdvancesTurn` only: from another turn they are ignored. Own view only.
    */
   readonly freeAdvances: number
+  /** The turn the free advances were earned in, 0 when there are none. */
+  readonly freeAdvancesTurn: number
   /**
    * The resource Marie Curie lets the next Uranium spend use instead, or `null`.
    * Own view only, like the rest of the hand.
