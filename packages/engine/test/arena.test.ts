@@ -1359,6 +1359,76 @@ describe('taking back an arrival', () => {
     expect(next.battle!.departedUnits).toEqual([])
   })
 
+  /** A battle between Cash (attacker) and Karandras (defender), all infantry. */
+  function battle(cashUnits: number, karUnits: number): GameState {
+    let state = withBattlehand(CASH1981, cashUnits)
+    state = addBattlehand(state, KARANDRAS1, karUnits)
+    return unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+  }
+
+  /** Places the first free battlehand unit; returns the new state and its slot id. */
+  function placeNext(
+    state: GameState, playerId: string, side: 'attacker' | 'defender', position: number, attack: number, health: number,
+  ): readonly [GameState, string] {
+    const unit = findPlayer(state, playerId)!.battlehand.find((u) => !u.inBattle)!
+    const next = unwrap(placeUnitInArena(state, { playerId, unitId: unit.id, side, position, attack, health }))
+    return [next, next.battle!.arena[next.battle!.arena.length - 1]!.id]
+  }
+
+  const unitIn = (state: GameState, id: string) => state.battle!.arena.find((u) => u.id === id)
+
+  it('leaves the opponent hurt once it has moved off that front', () => {
+    let state = battle(1, 1)
+    let defender: string, attacker: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 2, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 3, 5)
+    expect(unitIn(state, defender)!.health).toBe(2)
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 1 }))
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: attacker }))
+    expect(unitIn(state, defender)).toMatchObject({ position: 1, health: 2 })
+  })
+
+  it('keeps a hand edit of the moving unit itself', () => {
+    let state = battle(1, 1)
+    let attacker: string
+    ;[state] = placeNext(state, KARANDRAS1, 'defender', 0, 2, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 3, 5)
+    expect(unitIn(state, attacker)!.health).toBe(3)
+    state = unwrap(setArenaUnitStat(state, { playerId: CASH1981, arenaUnitId: attacker, key: 'health', value: 1 }))
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker, position: 1 }))
+    expect(unitIn(state, attacker)).toMatchObject({ position: 1, health: 1 })
+  })
+
+  it('a unit killed on arrival comes back alive when it is moved away', () => {
+    let state = battle(1, 1)
+    let defender: string, attacker: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    expect(unitIn(state, attacker)).toMatchObject({ health: 0, killed: true })
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker, position: 1 }))
+    expect(unitIn(state, attacker)).toMatchObject({ position: 1, health: 2, killed: false })
+    expect(unitIn(state, defender)).toMatchObject({ health: 5, killed: false })
+  })
+
+  it('steps back through chained reinforcements one at a time', () => {
+    let state = battle(2, 1)
+    let defender: string, first: string, second: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 10)
+    ;[state, first] = placeNext(state, CASH1981, 'attacker', 0, 1, 1)
+    ;[state, second] = placeNext(state, CASH1981, 'attacker', 0, 2, 3)
+    expect(unitIn(state, defender)!.health).toBe(7)
+    expect(unitIn(state, first)).toBeUndefined()
+
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: second }))
+    expect(unitIn(state, defender)!.health).toBe(9)
+    expect(unitIn(state, first)).toMatchObject({ killed: true })
+
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: first }))
+    expect(unitIn(state, defender)!.health).toBe(10)
+    expect(state.battle!.arena).toHaveLength(1)
+    expect(state.battle!.departedUnits).toEqual([])
+  })
+
   it('an arena saved before arrivals were recorded loads with nothing to take back', () => {
     const { state } = reinforcedAndTrumped()
     const strip = (u: Record<string, unknown>) => {
@@ -1970,6 +2040,24 @@ describe('ending a battle and the projection', () => {
     const json = JSON.stringify(toPlayerView(ended, KARANDRAS1))
     expect(json).not.toContain(departed[0]!.id)
     expect(JSON.stringify(last)).not.toContain(first!.id)
+  })
+
+  it('shows the result as it stood at End battle, not as the game stands now', () => {
+    const { ended } = endedBattleWithUnits()
+    const cash = findPlayer(ended, CASH1981)!
+    const before = toPlayerView(ended, KARANDRAS1).lastBattle!
+    // Anything the live totals depend on may change afterwards; a rename shows it.
+    const renamed = withPlayer(ended, { ...cash, username: 'someone-else' })
+    expect(toPlayerView(renamed, KARANDRAS1).lastBattle!.summary).toEqual(before.summary)
+    expect(before.summary.find((s) => s.side === 'attacker')!.label).toBe(cash.username)
+  })
+
+  it('derives the result for a battle ended before results were kept', () => {
+    const { ended } = endedBattleWithUnits()
+    const old = { ...ended, endedBattle: { ...ended.endedBattle!, summary: undefined } } as unknown as GameState
+    const migrated = migrateGameState(old)
+    expect(migrated.endedBattle!.summary).toBeNull()
+    expect(toPlayerView(migrated, KARANDRAS1).lastBattle!.winner).toBe('attacker')
   })
 
   it('has no last battle before one ends, while one runs, after a new one starts or once undone', () => {

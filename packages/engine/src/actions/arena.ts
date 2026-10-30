@@ -1018,7 +1018,7 @@ export function endBattleAction(
   return ok({
     ...nextState,
     battle: null,
-    endedBattle: { battle, endedBy: input.playerId },
+    endedBattle: { battle, endedBy: input.playerId, summary: summaries },
   })
 }
 

@@ -1051,6 +1051,12 @@ export interface EndedBattle {
   readonly battle: Battle
   /** The player who pressed End battle, and the only one who may undo it. */
   readonly endedBy: string
+  /**
+   * Per-side totals as they stood at End battle, the ones its log line
+   * reports. Frozen because the combat bonus follows the board, which keeps
+   * changing. Null for a battle ended before they were kept.
+   */
+  readonly summary: readonly BattleSideSummary[] | null
 }
 
 // ---------------------------------------------------------------------------
@@ -1580,7 +1586,7 @@ export interface PlayerView {
  */
 export interface LastBattleView {
   readonly endedBy: string
-  /** Per-side totals at the end, with the combat bonus as it stands now. */
+  /** Per-side totals at End battle, the same the log line gives. */
   readonly summary: readonly BattleSideSummary[]
   /** The side the end-of-battle rule names the winner; a draw goes to the defender. */
   readonly winner: BattleSideId | null
@@ -1601,7 +1607,7 @@ export function battleWinner(summaries: readonly BattleSideSummary[]): BattleSid
 function lastBattleOf(state: GameState): LastBattleView | null {
   const ended = state.endedBattle
   if (ended === null || state.battle !== null) return null
-  const summary = summariesOf(state, ended.battle)
+  const summary = ended.summary ?? summariesOf(state, ended.battle)
   return {
     endedBy: ended.endedBy,
     summary,
