@@ -178,6 +178,11 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   mixed with another grant. An undone advance returns its free advance to the
   bank of its own turn only; the card cannot be undone once one is spent.
   Einstein's form offers only as much culture as the trade track has room for.
+- A Great Person that is kept after use (its text does not say to discard it) is
+  used once: while its play is applied and the card is faceup the hand shows it as
+  "In effect" with no Use button, and a second play is refused. William Shakespeare
+  is in effect as soon as he is faceup, because his skip is a choice of the advance
+  buttons. Undoing the play makes the Use button return.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

@@ -124,6 +124,31 @@ describe('Frank Lloyd Wright', () => {
   })
 })
 
+describe('a Great Person that is kept after use', () => {
+  const listed = (state: GameState, itemId: string) => playableCardsOf(state, me(state)).find((entry) => entry.itemId === itemId)
+
+  it('is in effect once used, cannot be used again, and is ready again after an undo', () => {
+    const card = withCardInHand(openCityManagement(firstCivGame()), 'Archimedes')
+    expect(listed(card.state, card.itemId)?.inEffect).toBe(false)
+    const played = unwrap(play(card.state, 'k-1', card.itemId))
+    expect(listed(played, card.itemId)).toMatchObject({ inEffect: true, status: 'used' })
+    expect(play(played, 'k-2', card.itemId).ok).toBe(false)
+    expect(listed(undoByVote(played, 'k-1'), card.itemId)?.inEffect).toBe(false)
+  })
+
+  it('has William Shakespeare in effect as soon as he is faceup, since his skip is on the advance', () => {
+    const card = withCardInHand(openCityManagement(firstCivGame()), 'William Shakespeare')
+    expect(listed(card.state, card.itemId)?.inEffect).toBe(false)
+    const faceup = {
+      ...card.state,
+      players: card.state.players.map((hand) =>
+        hand.playerId === CASH1981 ? { ...hand, items: hand.items.map((item) => ({ ...item, hidden: false })) } : hand,
+      ),
+    }
+    expect(listed(faceup, card.itemId)).toMatchObject({ inEffect: true, status: 'used' })
+  })
+})
+
 describe('Albert Einstein', () => {
   const einstein = (stats: { readonly trade: number; readonly culture: number }) =>
     withCardInHand(openCityManagement(withStats(firstCivGame(), stats)), 'Albert Einstein')

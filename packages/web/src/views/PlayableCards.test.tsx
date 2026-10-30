@@ -34,6 +34,7 @@ const card = (overrides: Partial<PlayableCard> = {}): PlayableCard => ({
   name: 'Counterfeiters',
   kind: 'culture',
   description: 'Start of Turn: Choose another player. That player must discard one coin token of your choice.',
+  inEffect: false,
   timings: ['SOT'],
   targets: { kind: 'players', min: 1, max: 1 },
   prompt: 'Which player discards a coin token?',
@@ -84,6 +85,22 @@ const playButton = (name = 'Counterfeiters', verb = 'Play'): HTMLButtonElement =
   screen.getByRole('button', { name: `${verb} ${name}` }) as HTMLButtonElement
 const confirmButton = (): HTMLButtonElement =>
   screen.getByRole('button', { name: /^Confirm/ }) as HTMLButtonElement
+
+describe('a used Great Person', () => {
+  it('shows as in effect with no button', () => {
+    render(
+      <PlayCardControl
+        card={card({ kind: 'greatPerson', discards: false, status: 'used', inEffect: true, reason: 'Used.' })}
+        gameId="g1"
+        view={viewWith([])}
+        busy={false}
+        run={vi.fn() as unknown as Run}
+      />,
+    )
+    expect(screen.getByText('In effect')).toBeTruthy()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+})
 
 describe('the Play button', () => {
   it('is enabled for a card that is ready, and opens a form that names what the game does', () => {

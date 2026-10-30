@@ -259,6 +259,11 @@ export interface PlayableCard {
   readonly kind: 'culture' | 'greatPerson'
   /** The card's own effect text. */
   readonly description: string
+  /**
+   * A Great Person that is kept after use and has been used: it stays faceup and its effect
+   * stands, so there is nothing to press again. The status is then `used`.
+   */
+  readonly inEffect: boolean
   readonly timings: readonly CardTiming[]
   readonly targets: CardTargets
   readonly prompt: string

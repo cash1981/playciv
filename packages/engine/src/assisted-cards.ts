@@ -139,6 +139,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       name,
       kind,
       description: item.description,
+      inEffect: false,
       timings: passiveText === undefined ? timings : (['ANY'] as const),
       targets: rule.targets,
       prompt: rule.prompt,
@@ -182,6 +183,33 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
           ...base,
           status: 'unavailable',
           reason: `${name} is one of the cards you are choosing between. Choose the card to keep first.`,
+        },
+      ]
+    }
+    // A kept Great Person is used once: the faceup card stays and its effect stands. Shakespeare has no
+    // button effect at all, his skip is a choice of the advance, so showing him faceup is using him.
+    const usedAlready =
+      kind === 'greatPerson' &&
+      !base.discards &&
+      !item.hidden &&
+      (name === 'William Shakespeare' ||
+        state.assistedActions.some(
+          (record) =>
+            record.status === 'applied' &&
+            record.playerId === player.playerId &&
+            record.effect.kind === 'playCard' &&
+            record.effect.item.id === item.id,
+        ))
+    if (usedAlready) {
+      return [
+        {
+          ...base,
+          inEffect: true,
+          status: 'used',
+          reason:
+            name === 'William Shakespeare'
+              ? 'William Shakespeare is faceup. Skip occupied spaces with the advance buttons on the culture track.'
+              : `${name} has been used and stays faceup.`,
         },
       ]
     }

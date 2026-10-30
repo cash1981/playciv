@@ -93,6 +93,16 @@ export function PlayCardControl({
   const viewer = view.you
 
   const ready = card.status === 'ready'
+  // A kept Great Person that has been used stays faceup: it is shown as in effect, with no button
+  if (card.inEffect) {
+    return (
+      <div className="play-card">
+        <span className="tag revealed" title={card.reason}>
+          In effect
+        </span>
+      </div>
+    )
+  }
   const others = view.opponents
   const { min, max } = targetLimit(card)
   const needsResource = card.resources.length > 0
