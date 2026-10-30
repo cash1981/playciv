@@ -344,9 +344,9 @@ export function capitalOf(state: GameState, player: Playerhand): BoardPiece | un
  * Where each of the player's scouts on the map sends its square this turn: the city they chose,
  * and for a scout they did not send anywhere, the capital. An English army sent to a city is
  * kept too, but never goes to the capital on its own. Without a capital on the map a scout that
- * was not sent has no destination. A scout on a
- * city's own centre square sends nothing by default (the centre is not a square to gather), and
- * a square is sent once: a second scout on it, or one already sent from it, adds nothing.
+ * was not sent has no destination. A scout on a city's own centre square sends nothing by
+ * default (the centre is not a square to gather), and a square is sent once: a second scout on
+ * it, or one already sent from it, adds nothing.
  */
 export function scoutDestinationsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
   const chosen = scoutAssignmentsOf(state, player)

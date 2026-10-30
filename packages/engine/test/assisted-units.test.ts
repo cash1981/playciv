@@ -565,11 +565,18 @@ describe('the squares of a figure', () => {
       const options = buildOptionsOf(state, me(state))
       const ofCity = (pieceId: string | undefined) => options.find((city) => city.cityPieceId === pieceId)
       expect(cellsOf(ofCity(capital?.id)?.choices.find((choice) => choice.item.kind === 'army')?.squares)).toContainEqual([3, 3])
+      expect(buildSquareRefusal(state, me(state), capital?.id ?? '', ARMY, D4)).toBeUndefined()
       const other = options.find((city) => city.cityPieceId !== capital?.id)
       expect(cellsOf(other?.choices.find((choice) => choice.item.kind === 'army')?.squares)).not.toContainEqual([3, 3])
+      expect(buildSquareRefusal(state, me(state), other?.cityPieceId ?? '', ARMY, D4)).toBe('D4 is not in the outskirts of that city.')
       // An unsent scout goes to the metropolis too
       const scouted = put(state, CASH1981, 'figures/redscout', 0, 3)
       expect(scoutDestinationsOf(scouted, me(scouted))).toMatchObject([{ cityPieceId: capital?.id, chosen: false }])
+    })
+
+    it('prefers a capital marker to a metropolis when both are on the map', () => {
+      const state = put(put(withAmerica(game()), CASH1981, 'cities/redmetropolis2', 8, 8), CASH1981, 'cities/redcapital2', 1, 1)
+      expect(capitalOf(state, me(state))?.assetId).toBe('cities/redcapital2')
     })
 
     it('still keeps buildings off', () => {

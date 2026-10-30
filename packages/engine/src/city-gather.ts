@@ -8,7 +8,7 @@
  * markers (`wonder-data.ts`, `great-person-data.ts`). The player's social policy
  * Urban Development adds culture to a city with two different buildings or wonders in its
  * outskirts. A scout gathers for the city it was sent to in the Start of Turn, else for the
- * capital (`scoutDestinationsOf`); without a capital marker it is offered to every city.
+ * capital (`scoutDestinationsOf`); without a capital on the map it is offered to every city.
  *
  * Pure: the phase and the supply of tokens are decided by the caller, not here.
  */
@@ -260,7 +260,7 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   const scouts: ScoutSquare[] = []
   const scoutChoices: HarvestChoiceView[] = []
   // A scout gathers for the city it was sent to in the Start of Turn, and for the capital when it was
-  // not sent (base rules p. 26). Without a capital marker it is offered to every city.
+  // not sent (base rules p. 26). Without a capital on the map it is offered to every city.
   let sentHere = false
   let defaultHere = false
   let unsent = false
