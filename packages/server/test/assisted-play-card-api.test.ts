@@ -178,6 +178,16 @@ describe('playing a card through the actions route', () => {
     expect((await send({ itemId: t.itemId, targets: [], to: { column: 0, row: 0, extra: 1 } })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [], from: { column: 0, row: 0 }, to: 'A1' })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [], figureId: 'bad id!' })).status).toBe(400)
+    for (const convert of [
+      'trade',
+      { from: 'gold', amount: 1 },
+      { from: 'trade', amount: 0 },
+      { from: 'trade', amount: 1.5 },
+      { from: 'trade', amount: 1000 },
+      { from: 'trade', amount: 1, extra: true },
+    ]) {
+      expect((await send({ itemId: t.itemId, targets: [], convert })).status).toBe(400)
+    }
     expect((await send({ itemId: t.itemId, targets: [], extra: 1 })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [] }, { family: 'x' })).status).toBe(400)
     // A field of the body that no action reads is refused too, not ignored

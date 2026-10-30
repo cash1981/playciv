@@ -272,6 +272,27 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], substitute: 'Wheat' })
   })
 
+  it('asks Albert Einstein which way and how much to turn, and sends it', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const einstein = card({
+      name: 'Albert Einstein',
+      timings: ['CM'],
+      targets: { kind: 'none' },
+      prompt: '',
+      conversion: { trade: 6, culture: 2 },
+    })
+    renderControl(viewWith([einstein]), einstein)
+    fireEvent.click(playButton('Albert Einstein'))
+    expect(confirmButton().disabled).toBe(true)
+    const amount = screen.getByRole('spinbutton', { name: 'Amount to turn' })
+    fireEvent.change(amount, { target: { value: '7' } })
+    expect(confirmButton().disabled).toBe(true)
+    fireEvent.change(amount, { target: { value: '4' } })
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], convert: { from: 'trade', amount: 4 } })
+  })
+
   it('closes the form on Cancel without sending anything', () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     renderControl(viewWith([card()]), card())

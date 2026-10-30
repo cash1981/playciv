@@ -641,7 +641,7 @@ export type AssistedEffect =
       readonly resource: string | null
       /** The card's name as the line printed it. */
       readonly name: string
-      /** What the game did for the card besides logging it: trade and culture gained, as actually added. */
+      /** What the game did for the card besides logging it: trade and culture gained, as actually added. Negative for what Albert Einstein spent. */
       readonly gain?: { readonly trade: number; readonly culture: number }
       /** A unit card the game drew into the hand for the card, so an undo can put it back. */
       readonly drew?: { readonly itemId: string; readonly sheetName: SheetName }

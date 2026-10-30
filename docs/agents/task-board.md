@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### great-person-conversions
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/great-person-conversions`
+- **Brief:** `docs/agents/tasks/great-person-conversions.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/assisted-cards.ts`, `packages/engine/src/card-timing.ts`, `packages/engine/src/assisted-core.ts`, `packages/engine/src/state.ts` (effect type only), `packages/server/src/routes/assisted-args.ts`, `packages/web/src/views/PlayableCards.tsx`, tests for these
+- **Notes:** none
 
 ## Format
 

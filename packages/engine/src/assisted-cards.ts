@@ -58,7 +58,7 @@ import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
 import type { AssistedEffect, GameState, Playerhand } from './state.js'
-import { withPlayer } from './state.js'
+import { buildingCountOf, withPlayer } from './state.js'
 import type { PlayCardPayload } from './assisted-core.js'
 import type { TechGrant } from './state.js'
 import { startPlayerOf, turnStatus } from './turn.js'
@@ -155,6 +155,13 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
               label: findCoinSource(source.key)?.label ?? source.key,
             }))
           : [],
+      conversion:
+        name === 'Albert Einstein'
+          ? {
+              trade: player.stats.trade,
+              culture: player.stats.culture,
+            }
+          : null,
       substituteResources:
         name === 'Marie Curie'
           ? ['Iron', 'Wheat', 'Spy', 'Silk', 'Incense']
@@ -349,6 +356,33 @@ function automate(
     case 'St. Francis of Assisi': {
       const armies = unbuiltArmies(state, player)
       return gained(0, armies * 3, `, gaining ${armies * 3} culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
+    }
+    case 'Frank Lloyd Wright': {
+      const buildings = buildingCountOf(state, player.playerId)
+      const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + buildings) - player.stats.trade)
+      return gained(
+        trade,
+        buildings,
+        `, gaining ${trade} trade and ${buildings} culture for ${buildings} ${buildings === 1 ? 'building' : 'buildings'}`,
+      )
+    }
+    case 'Albert Einstein': {
+      const convert = payload?.convert
+      if (convert === undefined || (convert.from !== 'trade' && convert.from !== 'culture')) {
+        return err('Choose whether to turn trade into culture or culture into trade, and how much.')
+      }
+      const held = convert.from === 'trade' ? player.stats.trade : player.stats.culture
+      if (!Number.isInteger(convert.amount) || convert.amount < 1 || convert.amount > held) {
+        return err(`Choose a whole amount from 1 to ${held} of your ${convert.from}.`)
+      }
+      if (convert.from === 'culture') {
+        const room = tradeCeilingOf(player.civilization?.name) - player.stats.trade
+        if (convert.amount > room) {
+          return err(`Your trade track has room for only ${Math.max(0, room)} more trade.`)
+        }
+        return gained(convert.amount, -convert.amount, `, turning ${convert.amount} culture into ${convert.amount} trade`)
+      }
+      return gained(-convert.amount, convert.amount, `, turning ${convert.amount} trade into ${convert.amount} culture`)
     }
     case 'Orville Wright': {
       const sheetName = unitSheetOf('aircraft')

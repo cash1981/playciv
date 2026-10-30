@@ -179,7 +179,6 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Jim Henson', none],
   ['St. Francis of Assisi', none],
   ['A. P. Giannini', none],
-  ['Andrew Carnegie', none],
   ['Captain James Cook', none],
   ["Lorenzo de' Medici", none],
   ['Albert Einstein', none],
@@ -207,6 +206,8 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Khalid ibn al-Walid', 'moves the start player marker to your area, so the next turn passes clockwise from you'],
   ['Michelangelo', 'takes 5 production off your next wonder'],
   ['Thomas Edison', 'grants a free research of a tech another player has revealed'],
+  ['Frank Lloyd Wright', 'gains trade and culture equal to the buildings in your cities'],
+  ['Albert Einstein', 'turns the trade or the unspent culture you choose into the same amount of the other'],
   ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],
   ['Captain James Cook', 'doubles your travel speed until the end of the turn'],
@@ -274,6 +275,8 @@ export interface PlayableCard {
   readonly discards: boolean
   /** Coin tokens the card can move (Mother Teresa), empty for every other card. */
   readonly coinSources: readonly { readonly key: string; readonly label: string; readonly coins: number }[]
+  /** The most Albert Einstein can turn each way now, or null for every other card. */
+  readonly conversion?: { readonly trade: number; readonly culture: number } | null
   /** Resources the card can substitute for Uranium (Marie Curie), empty for every other card. */
   readonly substituteResources: readonly string[]
   readonly status: PlayableCardStatus
