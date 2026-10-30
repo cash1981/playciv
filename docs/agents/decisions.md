@@ -178,6 +178,9 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   `BattleSideSummary.cityDefence`, public). End battle removes the fortification
   whoever won (human) as the ender's board change; Undo end battle puts it back
   (`EndedBattle.fortification`). The +3 hand size is out of scope.
+- Fortification and caravan markers are read from the board, so ones placed by
+  hand on a centre in existing games take effect too. An undo puts a used-up
+  marker back only while its city has no other one (`cityMarkerMayReturn`).
 
 Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
 `city-defence.ts`, `actions/arena.ts` and related tests (`disband`).

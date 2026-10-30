@@ -27,7 +27,7 @@
 
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
 import { drawWonderToBoard } from './actions/draw.js'
-import { CARAVAN_ASSET_ID, cityMarkerOf } from './disband.js'
+import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
   PHASE_REASON,
   READY,
@@ -511,7 +511,10 @@ function reservedUndoBlock(state: GameState, ownerId: string, effect: ReplacedEf
   return inArea ? undefined : `The ${name} has left your player area. Move it back first.`
 }
 
-/** Puts back the markers a build used up: the Building Program marker, then the caravan. */
+/**
+ * Puts back the markers a build used up: the Building Program marker, then the caravan,
+ * unless the city has received another fortification or caravan since (one per city).
+ */
 function markersBack(
   state: GameState,
   player: Playerhand,
@@ -522,7 +525,9 @@ function markersBack(
   at: string | null,
 ): GameState {
   const withMarker = effect.marker === null ? state : placeBack(state, player, effect.marker.piece, at)
-  return effect.caravan === undefined ? withMarker : placeBack(withMarker, player, effect.caravan.piece, at)
+  return effect.caravan === undefined || !cityMarkerMayReturn(withMarker.board, effect.caravan.piece)
+    ? withMarker
+    : placeBack(withMarker, player, effect.caravan.piece, at)
 }
 
 /** Puts back what a build replaced: a removed piece exactly as it was, or a Great Person on the square it stood on. */
@@ -909,8 +914,8 @@ const build: AssistedActionDefinition = {
     }
     // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
     let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
-    const onCentre = city.caravan && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece) : undefined
-    const caravanPiece = onCentre?.assetId === CARAVAN_ASSET_ID ? onCentre : undefined
+    const caravanPiece =
+      city.caravan && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
     if (caravanPiece !== undefined) {
       const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
       const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
@@ -1072,7 +1077,11 @@ const build: AssistedActionDefinition = {
     }
     const markerText =
       (effect.marker === null ? '' : ' and the Building Program marker was put back') +
-      (effect.caravan === undefined ? '' : ' and the caravan was put back')
+      (effect.caravan === undefined
+        ? ''
+        : cityMarkerMayReturn(state.board, effect.caravan.piece)
+          ? ' and the caravan was put back'
+          : ' (the caravan stays off: the city has another marker now)')
     const tradeText = effect.trade > 0 ? `, ${effect.trade} trade returned` : ''
     const freeUnit = militaryTraditionUndoBlock(state, record)
     if (freeUnit !== undefined) return err(refused(freeUnit))

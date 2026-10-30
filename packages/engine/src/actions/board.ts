@@ -518,14 +518,14 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
       reason: `That square is not a legal destination for ${piece.label} this turn.`,
     })
   }
-  const offer =
-    input.disband === true && destination.contact !== true
-      ? disbandOfferAt(state.board, player.color, piece, destination)
-      : undefined
-  if (input.disband === true && offer === undefined) {
+  const offer = input.disband === true ? disbandOfferAt(state.board, player.color, piece, destination) : undefined
+  if (input.disband === true && (offer === undefined || destination.contact === true)) {
     return err({
       kind: 'FIGURE_MOVE_ILLEGAL',
-      reason: `${piece.label} can only be disbanded on a centre square of one of your own cities.`,
+      reason:
+        offer === undefined
+          ? `${piece.label} can only be disbanded on a centre square of one of your own cities.`
+          : `Another player's figures stand on ${destination.label}: settle the battle before disbanding there.`,
     })
   }
 

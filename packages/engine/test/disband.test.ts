@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { endBattleAction, initiateBattle, undoEndBattle } from '../src/actions/arena.js'
-import { placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
+import { placePiece, redoLastBoardChange, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
 import { SQUARE_SIZE, applyChange, findBoardAsset, mapTop, piecesAtStep, revertChange } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
 import { cityCenterCells } from '../src/blockade.js'
@@ -148,6 +148,17 @@ describe('disbanding by travel', () => {
     expect(twice.board.pieces).toEqual(before.board.pieces)
   })
 
+  it('board Redo brings the disband back exactly', () => {
+    const after = unwrap(travel(scene(), 'figures/redscout', 3, 3, true))
+    const redone = unwrap(redoLastBoardChange(unwrap(undoLastBoardChange(after, CASH1981)), CASH1981))
+    expect(redone.board.pieces).toEqual(after.board.pieces)
+  })
+
+  it('refuses to disband onto a centre where another player\'s figures stand', () => {
+    const state = place(scene(), 'figures/bluearmy', 3, 3, KARANDRAS1)
+    expect(describeError(unwrapErr(travel(state, 'figures/redarmy', 3, 3, true)))).toMatch(/settle the battle before disbanding/)
+  })
+
   it('the disband change applies and reverts exactly, so replay sees the same board', () => {
     const before = scene()
     const after = unwrap(travel(before, 'figures/redscout', 3, 3, true))
@@ -219,12 +230,22 @@ describe('the defended city', () => {
 
     const back = unwrap(undoEndBattle(ended, { playerId: KARANDRAS1 }))
     expect(piecesOf(back, FORTIFICATION_ASSET_ID)).toEqual([fortification])
+    expect(back.log.at(-1)?.publicLog).toMatch(/undoes ending the battle and puts the fortification back$/)
     expect(back.battle).not.toBeNull()
 
     // A board Undo that already put it back is not doubled by the battle undo
     const boardUndone = unwrap(undoLastBoardChange(ended, KARANDRAS1))
     const both = unwrap(undoEndBattle(boardUndone, { playerId: KARANDRAS1 }))
     expect(piecesOf(both, FORTIFICATION_ASSET_ID)).toHaveLength(1)
+  })
+
+  it('undoing the end leaves the old fortification off when the city was fortified again since', () => {
+    const state = attacked('cities/redcity2', (s) => place(s, FORTIFICATION_ASSET_ID, 3, 3))
+    const ended = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    const refortified = place(ended, FORTIFICATION_ASSET_ID, 3, 3)
+    const back = unwrap(undoEndBattle(refortified, { playerId: KARANDRAS1 }))
+    expect(piecesOf(back, FORTIFICATION_ASSET_ID)).toHaveLength(1)
+    expect(back.log.at(-1)?.publicLog).toMatch(/undoes ending the battle$/)
   })
 
   it('a battle that is not for a fortified city removes no marker', () => {

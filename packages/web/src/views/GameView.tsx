@@ -1821,11 +1821,6 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
   )
 }
 
-/**
- * How far the HP typed into the unit fields is from what the server has, for
- * the living units of one side. Added to the server's total so the summary
- * follows the typing (issue #216). A killed unit never counts.
- */
 /** "Defending City D4: +8 (Defending a city +6, Fortification +2)", and what ending the battle does to a fortification. */
 function cityDefenceText(defence: CityDefence): string {
   const parts = defence.parts.map((part) => `${part.label} +${part.amount}`).join(', ')
@@ -1835,6 +1830,11 @@ function cityDefenceText(defence: CityDefence): string {
   )
 }
 
+/**
+ * How far the HP typed into the unit fields is from what the server has, for
+ * the living units of one side. Added to the server's total so the summary
+ * follows the typing (issue #216). A killed unit never counts.
+ */
 function draftHealthDelta(
   arena: readonly ArenaUnit[],
   side: BattleSideId,

@@ -74,8 +74,7 @@ export function cityDefenceOf(state: GameState, battle: Battle): CityDefence | n
   ]
   if (isWalled(city)) parts.push({ label: 'City Walls', amount: WALLS_BONUS })
   if (isMetropolis(city)) parts.push({ label: 'Metropolis', amount: METROPOLIS_BONUS })
-  const marker = cityMarkerOf(state.board, city)
-  const fortification = marker?.assetId === FORTIFICATION_ASSET_ID ? marker : undefined
+  const fortification = cityMarkerOf(state.board, city, FORTIFICATION_ASSET_ID)
   if (fortification !== undefined) parts.push({ label: 'Fortification', amount: FORTIFICATION_BONUS })
   return {
     cityPieceId: city.id,

@@ -1629,3 +1629,15 @@ describe('replacing a limited building with another (base rules p. 16 to 17)', (
     expect(me(undone).stats.trade).toBe(99)
   })
 })
+
+describe('a caravan and the take-back by hand', () => {
+  it('removing the new building before End turn puts the caravan back', () => {
+    const before = put(ready(['Writing']), CASH1981, 'markers/caravan', 1, 1)
+    const caravan = piecesOf(before, 'markers/caravan')[0] as BoardPiece
+    const done = build(before, LIBRARY, C2)
+    const library = piecesOf(done, LIBRARY)[0] as BoardPiece
+    const result = takeBackOpenBuild(done, { playerId: CASH1981, pieceId: library.id, at: AT })
+    if (result === undefined) throw new Error('the Library is not an open build')
+    expect(piecesOf(unwrap(result), 'markers/caravan')).toEqual([caravan])
+  })
+})

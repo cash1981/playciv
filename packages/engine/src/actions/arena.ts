@@ -22,6 +22,7 @@ import type { ArenaUnit, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
+import { cityMarkerMayReturn } from '../disband.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -978,6 +979,8 @@ export function endBattleAction(
 
 export interface UndoEndBattleInput {
   readonly playerId: string
+  /** ISO timestamp for the board history entry that puts a fortification back. */
+  readonly at?: string
 }
 
 /** Sets `inBattle` on an arena unit's source card, if the card is still there. */
@@ -1048,16 +1051,20 @@ export function undoEndBattle(
     nextState = lockArenaUnitCard(nextState, arenaUnit, ownerSide)
   }
 
-  // The fortification the end removed comes back, unless a board Undo already put it back
-  if (ended.fortification !== undefined) {
-    nextState = placeBack(nextState, player, ended.fortification, null)
-  }
+  // The fortification the end removed comes back, unless a board Undo already put it back or the
+  // city has received another marker since (one per city)
+  const fortification = ended.fortification
+  const restoring =
+    fortification !== undefined &&
+    !nextState.board.pieces.some((piece) => piece.id === fortification.id) &&
+    cityMarkerMayReturn(nextState.board, fortification)
+  if (restoring) nextState = placeBack(nextState, player, fortification, input.at ?? null)
 
   nextState = appendPublicLog(
     nextState,
     player.username,
     player.playerId,
-    'undoes ending the battle',
+    restoring ? 'undoes ending the battle and puts the fortification back' : 'undoes ending the battle',
   )
 
   return ok({ ...nextState, battle, endedBattle: null })

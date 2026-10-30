@@ -471,7 +471,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     const estimate = outskirtsTotal + modifierTotal
     const buildingProgram = buildingProgramCells.some((marker) => centers.some((centre) => sameCell(centre, marker)))
     const override = piece.productionOverride ?? null
-    const caravan = cityMarkerOf(board, piece)?.assetId === CARAVAN_ASSET_ID
+    const caravan = cityMarkerOf(board, piece, CARAVAN_ASSET_ID) !== undefined
 
     const notes = [
       'Not a complete count: the map data does not hold every icon, and one-turn effects such as event cards are not counted.',

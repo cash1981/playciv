@@ -52,12 +52,13 @@ export const disbandMarkerOf = (kind: 'army' | 'scout'): DisbandMarkerKind =>
 
 /**
  * The fortification or caravan marker on a centre square of the city, if there is
- * one. A metropolis has two centre squares and a marker on either counts.
+ * one; only that kind when `assetId` is given. A metropolis has two centre squares
+ * and a marker on either counts.
  */
-export function cityMarkerOf(board: Board, city: BoardPiece): BoardPiece | undefined {
+export function cityMarkerOf(board: Board, city: BoardPiece, assetId?: string): BoardPiece | undefined {
   const centres = new Set((cityCenterCells(board, city) ?? []).map(keyOf))
   return board.pieces.find((piece) => {
-    if (!isCityMarker(piece)) return false
+    if (assetId === undefined ? !isCityMarker(piece) : piece.assetId !== assetId) return false
     const cell = mapCellOf(board, piece)
     return cell !== null && centres.has(keyOf(cell))
   })
@@ -71,6 +72,23 @@ export function cityCentredAt(board: Board, colour: string, cell: Cell): BoardPi
       pieceColorOf(piece) === colour &&
       (cityCenterCells(board, piece) ?? []).some((centre) => centre.column === cell.column && centre.row === cell.row),
   )
+}
+
+/**
+ * Whether a used-up fortification or caravan may go back where it stood: not when the
+ * city whose centre it was on has received another marker since (one per city). An
+ * undo then leaves it off the board.
+ */
+export function cityMarkerMayReturn(board: Board, marker: BoardPiece): boolean {
+  const cell = mapCellOf(board, marker)
+  if (cell === null) return true
+  const city = board.pieces.find(
+    (piece) =>
+      piece.category === 'city' &&
+      (cityCenterCells(board, piece) ?? []).some((centre) => centre.column === cell.column && centre.row === cell.row),
+  )
+  const existing = city === undefined ? undefined : cityMarkerOf(board, city)
+  return existing === undefined || existing.id === marker.id
 }
 
 /** What disbanding a figure on a square would do. */
