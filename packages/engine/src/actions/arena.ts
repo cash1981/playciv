@@ -581,6 +581,15 @@ export function moveArenaUnit(
   // Leaving a front takes back what arriving there did, the same as
   // returning the unit to hand; the new front then gets its own arrival.
   let { arena, departedUnits } = undoArrival(battle.arena, battle.departedUnits, unit)
+  // Moving away invalidates older opponent restoration, even if it later returns.
+  const invalidateOpponent = (u: ArenaUnit): ArenaUnit => {
+    const arrival = u.arrival
+    return arrival?.faceOff?.opponentId === unit.id
+      ? { ...u, arrival: { ...arrival, faceOff: { ...arrival.faceOff, opponentId: null } } }
+      : u
+  }
+  arena = arena.map(invalidateOpponent)
+  departedUnits = departedUnits.map(invalidateOpponent)
   if (fallenUnit !== undefined) {
     arena = arena.filter((u) => u.id !== fallenUnit.id)
     departedUnits = [...departedUnits, fallenUnit]

@@ -1388,6 +1388,51 @@ describe('taking back an arrival', () => {
     expect(unitIn(state, defender)).toMatchObject({ position: 1, health: 2 })
   })
 
+  it.each(['return', 'move'] as const)('leaves the opponent hurt after a round trip when undoing by %s', (action) => {
+    let state = battle(1, 1)
+    let defender: string, attacker: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    expect(unitIn(state, attacker)).toMatchObject({ health: 0, killed: true })
+    expect(unitIn(state, defender)).toMatchObject({ health: 4, killed: false })
+    const before = state
+    const snapshot = JSON.stringify(before)
+
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 1 }))
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 0 }))
+    expect(unitIn(state, defender)).toMatchObject({ position: 0, health: 4, killed: false })
+    state = action === 'return'
+      ? unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: attacker }))
+      : unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker, position: 1 }))
+
+    expect(unitIn(state, defender)).toMatchObject({ position: 0, health: 4, killed: false })
+    if (action === 'return') {
+      expect(unitIn(state, attacker)).toBeUndefined()
+    } else {
+      expect(unitIn(state, attacker)).toMatchObject({ position: 1, health: 2, killed: false })
+    }
+    expect(JSON.stringify(before)).toBe(snapshot)
+  })
+
+  it('invalidates displaced units’ opponent restoration after a round trip too', () => {
+    let state = battle(2, 1)
+    let defender: string, first: string, second: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 5)
+    ;[state, first] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    ;[state, second] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    expect(unitIn(state, defender)).toMatchObject({ health: 3, killed: false })
+    expect(state.battle!.departedUnits.map((u) => u.id)).toEqual([first])
+
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 1 }))
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 0 }))
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: second }))
+    expect(unitIn(state, first)).toMatchObject({ health: 0, killed: true })
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: first }))
+
+    expect(unitIn(state, defender)).toMatchObject({ position: 0, health: 3, killed: false })
+    expect(state.battle!.departedUnits).toEqual([])
+  })
+
   it('keeps a hand edit of the moving unit itself', () => {
     let state = battle(1, 1)
     let attacker: string

@@ -109,7 +109,8 @@ export interface ArenaArrival {
  * toggle is the player's own, and is never overwritten.
  */
 export interface ArenaFaceOff {
-  readonly opponentId: string
+  /** Null once the opponent has moved, invalidating its restoration. */
+  readonly opponentId: string | null
   readonly opponentBefore: ArenaVitals
   readonly opponentAfter: ArenaVitals
   readonly selfBefore: ArenaVitals

@@ -209,7 +209,8 @@ Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
   arrival did: the fallen unit it replaced comes back, and the unit itself and
   the opponent still facing it on that front get their health and kill flag
   back, so a unit killed on arrival moves away alive. A unit edited by hand
-  since (stats, kill toggle, rotate), moved away, or itself displaced keeps its
+  since (stats, kill toggle, rotate), moved away (even if it returned to the
+  same front), or itself displaced keeps its
   state: this is an undo of one arrival, not a battle-wide undo stack. It lets
   a player regret a placement without ending the battle turn.
 
