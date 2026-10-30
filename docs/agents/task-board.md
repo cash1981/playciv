@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### great-person-humanitarians
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/great-person-humanitarians`
+- **Brief:** `docs/agents/tasks/great-person-humanitarians.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/assisted-cards.ts`, `packages/web/src/views/PlayableCards.tsx`
+- **Notes:** stacked on `feat/great-person-conversions`
 
 ## Format
 

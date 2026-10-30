@@ -323,6 +323,20 @@ const STAT_GAINS: readonly StatGainSpec[] = [
       }
     },
   },
+  {
+    kind: kindOf('henson'),
+    label: 'Jim Henson',
+    group: PEOPLE,
+    usageKey: 'person:henson',
+    block: personBlock('Jim Henson'),
+    gain(_state, player) {
+      return {
+        trade: player.hensonWounds,
+        culture: player.hensonWounds,
+        text: `culture and trade equal to the wound markers on Jim Henson (${player.hensonWounds})`,
+      }
+    },
+  },
 ]
 
 // ---------------------------------------------------------------------------

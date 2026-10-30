@@ -227,6 +227,8 @@ export interface Playerhand {
   readonly freeAdvances: number
   /** The turn the free advances were earned in, 0 when there are none. */
   readonly freeAdvancesTurn: number
+  /** The wound markers Jim Henson has collected, one for each wonder built while he was faceup. */
+  readonly hensonWounds: number
   /**
    * The resource Marie Curie lets the next Uranium spend use instead, or `null`.
    * Own view only, like the rest of the hand.
@@ -665,6 +667,13 @@ export type AssistedEffect =
       readonly coin?: { readonly source: string; readonly targetId: string }
       /** The free culture advance the card gave (Mother Teresa). */
       readonly advance?: CultureAdvanceEffect
+      /** The Harbors Jacques Cousteau built, to be taken off again by an undo. */
+      readonly harbors?: readonly {
+        readonly pieceId: string
+        readonly historyId: string
+        readonly cityPieceId: string
+        readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      }[]
       /** The free culture advances the card banked for the Advance buttons (Andrew Carnegie). */
       readonly freeAdvances?: number
       /** The Uranium substitution the card armed (Marie Curie), or `null` when it was not armed. */
@@ -777,6 +786,8 @@ export type AssistedEffect =
       readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
       /** Production taken off by Michelangelo, so an undo arms it again. */
       readonly wonderDiscount?: number
+      /** Jim Henson took a wound marker for this wonder, so an undo takes it off again. */
+      readonly hensonWound?: true
     }
   | {
       readonly kind: 'build'

@@ -624,6 +624,36 @@ export function buildSquareRefusal(
   return problem === undefined ? undefined : describeProblem(cell, problem)
 }
 
+/**
+ * The empty squares in the outskirts of one of the player's cities where a building of the
+ * given asset may stand, without asking whether the player has unlocked it or what it costs
+ * (Jacques Cousteau's free Harbors). A square holding a building or wonder to be replaced is left out.
+ */
+export function freeBuildingSquaresOf(
+  state: GameState,
+  player: Playerhand,
+  cityPieceId: string,
+  assetId: string,
+): readonly BuildSquare[] {
+  if (player.color === null) return []
+  const footprint = cityFootprintsOf(state, player.color.toLowerCase()).find(
+    (candidate) => candidate.piece.id === cityPieceId,
+  )
+  if (footprint === undefined) return []
+  const item = { kind: 'building', assetId } as const
+  const scene = sceneOf(state)
+  const outskirts = mapOutskirts(state.board, footprint)
+  const { squares } = placedSquaresOf(
+    scene,
+    footprint,
+    placementRulesOf(item),
+    outskirts,
+    player.playerId,
+    onlyReplacingOf(scene, outskirts, item),
+  )
+  return squares.filter((square) => square.replaces === undefined)
+}
+
 // ---------------------------------------------------------------------------
 // The options
 // ---------------------------------------------------------------------------

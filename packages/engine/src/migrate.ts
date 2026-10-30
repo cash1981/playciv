@@ -69,12 +69,12 @@ type MaybeOlder = Omit<
  *  pyramid placements, or its own `socialPolicies` array existed. */
 type MaybeOlderPlayerhand = Omit<
   Playerhand,
-  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'freeAdvancesTurn' | 'curieSubstitute'
+  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'freeAdvancesTurn' | 'hensonWounds' | 'curieSubstitute'
 > &
   Partial<
     Pick<
       Playerhand,
-      'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'freeAdvancesTurn' | 'curieSubstitute'
+      'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns' | 'archimedesCulture' | 'wonderDiscount' | 'freeAdvances' | 'freeAdvancesTurn' | 'hensonWounds' | 'curieSubstitute'
     >
   >
 
@@ -131,6 +131,7 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   wonderDiscount: player.wonderDiscount ?? 0,
   freeAdvances: player.freeAdvances ?? 0,
   freeAdvancesTurn: player.freeAdvancesTurn ?? 0,
+  hensonWounds: player.hensonWounds ?? 0,
   curieSubstitute: player.curieSubstitute ?? null,
 })
 

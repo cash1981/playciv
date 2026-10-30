@@ -37,8 +37,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'from', 'to', 'figureId', 'figureIds'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, from, to, figureId and figureIds, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'from', 'to', 'figureId', 'figureIds'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, harbors, from, to, figureId and figureIds, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -73,6 +73,27 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     }
     convert = { from: record['from'], amount: record['amount'] }
   }
+  const harborsValue = args['harbors']
+  let harbors: readonly { readonly cityPieceId: string; readonly column: number; readonly row: number }[] | undefined
+  if (harborsValue !== undefined) {
+    const bad = 'harbors must be a list of at most 3 squares, each with cityPieceId, column and row'
+    if (!Array.isArray(harborsValue) || harborsValue.length > 3) return bad
+    const parsed: { cityPieceId: string; column: number; row: number }[] = []
+    for (const entry of harborsValue) {
+      const record = typeof entry === 'object' && entry !== null && !Array.isArray(entry) ? asRecord(entry) : undefined
+      if (
+        record === undefined ||
+        extraKeys(record, ['cityPieceId', 'column', 'row']).length > 0 ||
+        !isId(record['cityPieceId']) ||
+        typeof record['column'] !== 'number' || !Number.isInteger(record['column']) || record['column'] < 0 || record['column'] > 999 ||
+        typeof record['row'] !== 'number' || !Number.isInteger(record['row']) || record['row'] < 0 || record['row'] > 999
+      ) {
+        return bad
+      }
+      parsed.push({ cityPieceId: record['cityPieceId'], column: record['column'], row: record['row'] })
+    }
+    harbors = parsed
+  }
   const figureId = args['figureId']
   if (figureId !== undefined && !isId(figureId)) return 'figureId must be a piece id'
   const figureIds = args['figureIds']
@@ -106,6 +127,7 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     ...(coinSource === undefined ? {} : { coinSource }),
     ...(substitute === undefined ? {} : { substitute }),
     ...(convert === undefined ? {} : { convert }),
+    ...(harbors === undefined ? {} : { harbors }),
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
     ...(figureId === undefined ? {} : { figureId }),

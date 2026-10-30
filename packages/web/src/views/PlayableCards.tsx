@@ -63,6 +63,9 @@ interface ControlProps {
   readonly run: Run
 }
 
+const harborKeyOf = (choice: { readonly cityPieceId: string; readonly column: number; readonly row: number }): string =>
+  `${choice.cityPieceId}:${choice.column},${choice.row}`
+
 /**
  * The Play button of one card, with its form while it is open. Disabled, with the
  * reason as text, when the card cannot be played now.
@@ -82,6 +85,7 @@ export function PlayCardControl({
   const [substitute, setSubstitute] = useState('')
   const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
   const [convertAmount, setConvertAmount] = useState('')
+  const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
   const [moveFrom, setMoveFrom] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveTo, setMoveTo] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveHint, setMoveHint] = useState<string | null>(null)
@@ -112,6 +116,8 @@ export function PlayCardControl({
   const convertHeld = conversion === null ? 0 : conversion[convertFrom]
   const convertWhole = Number(convertAmount)
   const convertValid = conversion === null || (Number.isInteger(convertWhole) && convertWhole >= 1 && convertWhole <= convertHeld)
+  const harborChoices = card.harbors ?? null
+  const harborsValid = harborChoices === null || (harborKeys.length >= 1 && harborKeys.length <= 3)
   const isGalileo = card.name === GALILEO_NAME
   const cardMove = card.mapMove ?? null
   const isMapMove = isGalileo || cardMove !== null
@@ -198,7 +204,8 @@ export function PlayCardControl({
     (!needsResource || resource !== '') &&
     (!needsCoin || coinSource !== '') &&
     (!needsSubstitute || substitute !== '') &&
-    convertValid
+    convertValid &&
+    harborsValid
   const valid = baseValid
   const disabled = busy || readOnly
 
@@ -231,7 +238,7 @@ export function PlayCardControl({
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...harborKeys].sort().join('|')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -243,6 +250,13 @@ export function PlayCardControl({
           ...(needsCoin ? { coinSource } : {}),
           ...(needsSubstitute ? { substitute } : {}),
           ...(conversion === null ? {} : { convert: { from: convertFrom, amount: convertWhole } }),
+          ...(harborChoices === null
+            ? {}
+            : {
+                harbors: harborChoices
+                  .filter((choice) => harborKeys.includes(harborKeyOf(choice)))
+                  .map((choice) => ({ cityPieceId: choice.cityPieceId, column: choice.column, row: choice.row })),
+              }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
           ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
@@ -644,6 +658,31 @@ export function PlayCardControl({
                 onChange={(event) => setConvertAmount(event.target.value)}
               />
             </label>
+          )}
+          {harborChoices !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Where do the free Harbors go? (up to 3)</legend>
+              {harborChoices.length === 0 && (
+                <p className="muted">No water square in the outskirts of your cities can take a Harbor.</p>
+              )}
+              {harborChoices.map((choice) => {
+                const key = harborKeyOf(choice)
+                const checked = harborKeys.includes(key)
+                return (
+                  <label key={key} className="play-card-target">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled || (!checked && harborKeys.length >= 3)}
+                      onChange={() =>
+                        setHarborKeys(checked ? harborKeys.filter((other) => other !== key) : [...harborKeys, key])
+                      }
+                    />{' '}
+                    {choice.label} ({choice.cityLabel})
+                  </label>
+                )
+              })}
+            </fieldset>
           )}
           <p className="muted play-card-note">
             The game logs this and {card.discards ? 'discards the card' : 'turns the card faceup'}.{' '}

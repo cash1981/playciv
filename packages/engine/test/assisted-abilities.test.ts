@@ -220,6 +220,13 @@ describe("Lorenzo de' Medici and Alan Turing", () => {
     expect(me(less).stats).toMatchObject({ trade: 2, culture: 2 })
   })
 
+  it('Jim Henson gives culture and trade equal to his wound markers', () => {
+    const base = withPerson(sotTurn({ culture: 0, trade: 0 }), 'Jim Henson')
+    const wounded = { ...base, players: base.players.map((hand) => (hand.playerId === CASH1981 ? { ...hand, hensonWounds: 3 } : hand)) }
+    expect(me(unwrap(act(wounded, 'sot:henson'))).stats).toMatchObject({ trade: 3, culture: 3 })
+    expect(playableCardsOf(wounded, me(wounded)).map((card) => card.name)).not.toContain('Jim Henson')
+  })
+
   it('cannot be used while every Scientist figure of the player is blockaded', () => {
     const state = withPerson(sotTurn(), 'Alan Turing')
     const token = put(state, CASH1981, 'great people/scientist', 6, 6)

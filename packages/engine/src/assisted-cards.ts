@@ -17,18 +17,21 @@ import { tradeCeilingOf } from './limits.js'
 import { investableCoinsOf } from './sot.js'
 import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
-import { moveFigureWithMovementUnchecked, placeStartMarker } from './actions/board.js'
+import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import {
+  countLinesIn,
   drawCandidates,
   freeAdvancesLeft,
   performAdvance,
   reverseAdvanceEffect,
   shuffleSheetTwice,
 } from './assisted-culture.js'
-import { CULTURE_VICTORY_STEP } from './board.js'
+import { CULTURE_VICTORY_STEP, findBoardAsset, remainingBoardAssetCount } from './board.js'
 import { cultureMarkerOf } from './culture-track.js'
-import { squareLabel, unitSheetOf } from './build-options.js'
+import { buildSquareRefusal, freeBuildingSquaresOf, squareCentre, squareLabel, unitSheetOf } from './build-options.js'
+import { cityFootprintsOf, mapCellOf } from './blockade.js'
+import { cityLabelOf } from './disband.js'
 import { cardMoveFigureChoices, cardMoveRuleOf, cardMoveSources } from './card-movement.js'
 import {
   GALILEO_NAME,
@@ -59,7 +62,7 @@ import {
   discardsWhenUsed,
   timingsOf,
 } from './card-timing.js'
-import type { CardTiming, PlayableCard } from './card-timing.js'
+import type { CardTiming, HarborChoice, PlayableCard } from './card-timing.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import { itemName } from './item.js'
@@ -172,6 +175,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
               culture: Math.max(0, Math.min(player.stats.culture, tradeCeilingOf(player.civilization?.name) - player.stats.trade)),
             }
           : null,
+      harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
       substituteResources:
         name === 'Marie Curie'
           ? ['Iron', 'Wheat', 'Spy', 'Silk', 'Incense']
@@ -256,6 +260,26 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
   })
 }
 
+const HARBOR = 'buildings/harbor'
+
+/** Every empty square where Jacques Cousteau can put a Harbor, with the city it belongs to. */
+function harborChoicesOf(state: GameState, player: Playerhand): readonly HarborChoice[] {
+  if (player.color === null) return []
+  const choices: HarborChoice[] = []
+  for (const footprint of cityFootprintsOf(state, player.color.toLowerCase())) {
+    for (const square of freeBuildingSquaresOf(state, player, footprint.piece.id, HARBOR)) {
+      choices.push({
+        cityPieceId: footprint.piece.id,
+        cityLabel: cityLabelOf(state.board, footprint.piece),
+        column: square.column,
+        row: square.row,
+        label: square.label,
+      })
+    }
+  }
+  return choices
+}
+
 const joinNames = (names: readonly string[]): string =>
   names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
 
@@ -273,6 +297,7 @@ interface Automated {
     | 'coin'
     | 'advance'
     | 'freeAdvances'
+    | 'harbors'
     | 'curieSubstitute'
     | 'usedAction'
     | 'galileo'
@@ -447,6 +472,59 @@ function automate(
         }),
         extra: { freeAdvances: earned },
         said: `, earning ${earned} free culture ${earned === 1 ? 'advance' : 'advances'} to make one space at a time`,
+      })
+    }
+    case 'Jacques Cousteau': {
+      const chosen = payload?.harbors ?? []
+      if (chosen.length < 1 || chosen.length > 3) return err('Choose from 1 to 3 squares for the Harbors.')
+      let working = state
+      const built: { pieceId: string; historyId: string; cityPieceId: string; square: { column: number; row: number; label: string } }[] = []
+      for (const [index, target] of chosen.entries()) {
+        const where = squareLabel(target)
+        if (chosen.findIndex((other) => other.column === target.column && other.row === target.row) !== index) {
+          return err(`${where} is chosen twice.`)
+        }
+        const holder = playerOf(working, player.playerId) ?? player
+        const legal = freeBuildingSquaresOf(working, holder, target.cityPieceId, HARBOR).find(
+          (square) => square.column === target.column && square.row === target.row,
+        )
+        if (legal === undefined) {
+          const why = buildSquareRefusal(working, holder, target.cityPieceId, { kind: 'building', assetId: HARBOR }, target)
+          return err(`${why ?? `${where} cannot take a Harbor: it is empty water in the outskirts of one of your cities that has no Harbor yet.`}`)
+        }
+        const asset = findBoardAsset(HARBOR)
+        if (asset === undefined) return err('The Harbor has no artwork to put on the board.')
+        if ((remainingBoardAssetCount(asset, working.board.pieces, working.numOfPlayers) ?? Infinity) <= 0) {
+          return err('There is no Harbor left in the supply.')
+        }
+        const centre = squareCentre(working.board, target)
+        const placed = placeUnchecked(working, {
+          playerId: player.playerId,
+          assetId: HARBOR,
+          x: centre.x - asset.width / 2,
+          y: centre.y - asset.height / 2,
+          ...(at === undefined ? {} : { at }),
+        })
+        const entry = placed?.board.history.at(-1)
+        if (placed === undefined || entry === undefined || entry.change.kind !== 'place') {
+          return err(`The Harbor could not be placed on ${where}.`)
+        }
+        const landed = mapCellOf(placed.board, entry.change.piece)
+        if (landed === null || landed.column !== target.column || landed.row !== target.row) {
+          return err(`The Harbor could not be placed on ${where}.`)
+        }
+        working = placed
+        built.push({
+          pieceId: entry.change.piece.id,
+          historyId: entry.id,
+          cityPieceId: target.cityPieceId,
+          square: { column: target.column, row: target.row, label: where },
+        })
+      }
+      return ok({
+        state: working,
+        extra: { harbors: built },
+        said: `, building ${built.length === 1 ? 'a Harbor' : `${built.length} Harbors`} for free on ${joinNames(built.map((harbor) => harbor.square.label))}`,
       })
     }
     case 'Orville Wright': {
@@ -918,7 +996,7 @@ export const playCard: AssistedActionDefinition = {
       assistedActionId: context.requestId,
     })
     return ok({
-      state: logged,
+      state: countLinesIn(logged, (automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId)),
       effect: {
         kind: 'playCard',
         item,
@@ -970,6 +1048,20 @@ export const playCard: AssistedActionDefinition = {
       (player.freeAdvancesTurn !== record.turnNumber || player.freeAdvances !== effect.freeAdvances)
     ) {
       return blockedBy(`Some of the free advances from ${effect.name} have already been made. Undo those advances first.`)
+    }
+    const missingHarbor = effect.harbors?.find(
+      (harbor) => !state.board.pieces.some((piece) => piece.id === harbor.pieceId),
+    )
+    if (missingHarbor !== undefined) {
+      return blockedBy(`The Harbor on ${missingHarbor.square.label} is no longer on the board, so ${effect.name} cannot be undone.`)
+    }
+    const movedHarbor = effect.harbors?.find((harbor) => {
+      const piece = state.board.pieces.find((candidate) => candidate.id === harbor.pieceId)
+      const cell = piece === undefined ? null : mapCellOf(state.board, piece)
+      return cell === null || cell.column !== harbor.square.column || cell.row !== harbor.square.row
+    })
+    if (movedHarbor !== undefined) {
+      return blockedBy(`The Harbor has left ${movedHarbor.square.label}. Move it back first.`)
     }
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
       return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
@@ -1031,6 +1123,15 @@ export const playCard: AssistedActionDefinition = {
       const previous = state.players.find((candidate) => candidate.playerId === effect.starter?.from)
       if (previous === undefined) return blockedBy('The previous start player has left the game.')
       current = { ...placeStartMarker(current, previous, player.playerId, at ?? undefined), startPlayerId: previous.playerId }
+    }
+    for (const harbor of [...(effect.harbors ?? [])].reverse()) {
+      const removed = removePiece(current, {
+        playerId: player.playerId,
+        pieceId: harbor.pieceId,
+        ...(at === null || at === undefined ? {} : { at }),
+      })
+      if (!removed.ok) return blockedBy(`The Harbor on ${harbor.square.label} could not be taken off the board.`)
+      current = removed.value
     }
     if (effect.advance !== undefined) {
       const reversed = reverseAdvanceEffect(current, player, record, effect.advance, at)

@@ -209,6 +209,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Thomas Edison', 'grants a free research of a tech another player has revealed'],
   ['Frank Lloyd Wright', 'gains trade and culture equal to the buildings in your cities'],
   ['Andrew Carnegie', 'earns one free culture advance for every 3 coins you have, made one space at a time with the Advance buttons'],
+  ['Jacques Cousteau', 'builds up to 3 Harbors in your cities for free, on the squares you choose'],
   ['Albert Einstein', 'turns the trade or the unspent culture you choose into the same amount of the other'],
   ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],
@@ -240,7 +241,7 @@ export const cardPlayRuleOf = (name: string): CardPlayRule => PLAY_RULES.get(nam
  * so the list of cards to play leaves them out: playing one there would log it without
  * the gain the button gives.
  */
-export const CARDS_WITH_OWN_BUTTON: ReadonlySet<string> = new Set(["Lorenzo de' Medici", 'Alan Turing'])
+export const CARDS_WITH_OWN_BUTTON: ReadonlySet<string> = new Set(["Lorenzo de' Medici", 'Alan Turing', 'Jim Henson'])
 
 /** Whether using a Great Person card discards it: its text says "discard this card". */
 export const discardsWhenUsed = (description: string | null | undefined): boolean =>
@@ -248,6 +249,15 @@ export const discardsWhenUsed = (description: string | null | undefined): boolea
 
 /** Why a card cannot be played now, or that it can. */
 export type PlayableCardStatus = 'ready' | 'wrong-phase' | 'unavailable' | 'used'
+
+/** A square in the outskirts of one of the player's cities where Jacques Cousteau can build a free Harbor. */
+export interface HarborChoice {
+  readonly cityPieceId: string
+  readonly cityLabel: string
+  readonly column: number
+  readonly row: number
+  readonly label: string
+}
 
 /**
  * One card of the viewer's hand that can be played at some time, with whether it
@@ -284,6 +294,8 @@ export interface PlayableCard {
   readonly coinSources: readonly { readonly key: string; readonly label: string; readonly coins: number }[]
   /** The most Albert Einstein can turn each way now, or null for every other card. */
   readonly conversion?: { readonly trade: number; readonly culture: number } | null
+  /** The squares Jacques Cousteau can put a free Harbor on, null for every other card. */
+  readonly harbors?: readonly HarborChoice[] | null
   /** Resources the card can substitute for Uranium (Marie Curie), empty for every other card. */
   readonly substituteResources: readonly string[]
   readonly status: PlayableCardStatus

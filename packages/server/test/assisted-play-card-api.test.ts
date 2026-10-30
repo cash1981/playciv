@@ -188,6 +188,18 @@ describe('playing a card through the actions route', () => {
     ]) {
       expect((await send({ itemId: t.itemId, targets: [], convert })).status).toBe(400)
     }
+    const spot = { cityPieceId: 'city-1', column: 1, row: 1 }
+    for (const harbors of [
+      'C1',
+      [spot, spot, spot, spot],
+      [{ ...spot, extra: 1 }],
+      [{ column: 1, row: 1 }],
+      [{ ...spot, column: -1 }],
+      [{ ...spot, row: 1.5 }],
+      [null],
+    ]) {
+      expect((await send({ itemId: t.itemId, targets: [], harbors })).status).toBe(400)
+    }
     expect((await send({ itemId: t.itemId, targets: [], extra: 1 })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [] }, { family: 'x' })).status).toBe(400)
     // A field of the body that no action reads is refused too, not ignored
