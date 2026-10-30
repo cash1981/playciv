@@ -159,10 +159,11 @@ describe('Albert Einstein', () => {
 
     // The trade was spent since: the undo cannot take back what is gone
     const spent = withStats(played, { trade: 1 })
-    expect(() => undoByVote(spent, 'e-5')).toThrow()
+    expect(() => undoByVote(spent, 'e-5')).toThrow(/ASSISTED_UNDO_BLOCKED.*already spent/)
     // Trade then turned into culture, and later filled to the ceiling: giving it back would pass the track
-    const toCulture = unwrap(play(einstein({ trade: 8, culture: 0 }).state, 'e-6', card.itemId, { from: 'trade', amount: 5 }))
-    expect(() => undoByVote(withStats(toCulture, { trade: 27 }), 'e-6')).toThrow()
+    const second = einstein({ trade: 8, culture: 0 })
+    const toCulture = unwrap(play(second.state, 'e-6', second.itemId, { from: 'trade', amount: 5 }))
+    expect(() => undoByVote(withStats(toCulture, { trade: 27 }), 'e-6')).toThrow(/ASSISTED_UNDO_BLOCKED.*trade track/)
   })
 
   it('refuses a missing choice, more than you hold, and a fraction, keeping the card', () => {
