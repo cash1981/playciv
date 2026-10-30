@@ -374,7 +374,9 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   (see Assisted build). With no capital on the map an unsent scout goes nowhere
   and is offered to every city, with a note. With a capital, a scout that sends
   nothing (a second one on a square, or one on a city centre) is offered to no
-  city. An English army is only sent by hand.
+  city. A square goes to one city only (human, #319): sending a square another
+  scout already sends is refused, and in older data the earlier send keeps it.
+  An English army is only sent by hand.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan
   Turing (counts Russia's white army in the supply, human) add their numbers;

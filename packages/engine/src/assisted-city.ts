@@ -32,7 +32,7 @@ import { cityLimitOf, foundCityCheck, foundingFiguresOf, isOwnFigure, ownCityPie
 import { cityProductionsOf } from './city-production.js'
 import { err, ok } from './result.js'
 import { appendLog } from './log.js'
-import { SOT_PHASE_REASON, capitalOf, openStartOfTurn, scoutDestinationsOf } from './sot.js'
+import { SOT_PHASE_REASON, capitalOf, openStartOfTurn, scoutAssignmentsOf, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand, ScoutView } from './state.js'
 import { terrainAt } from './terrain.js'
 
@@ -314,6 +314,14 @@ export const assignScout: AssistedActionDefinition = {
       cityLabel = city.label
     }
     const square = squareLabel(cell)
+    // A square goes to one city only (human, #319)
+    const other = scoutAssignmentsOf(state, player).find(
+      (assignment) => assignment.scoutPieceId !== scout.id && assignment.column === cell.column && assignment.row === cell.row,
+    )
+    if (payload.cityPieceId !== null && other !== undefined) {
+      const to = cityProductionsOf(state, player).find((candidate) => candidate.pieceId === other.cityPieceId)?.label ?? 'a city'
+      return fail(`Another scout already sends ${square} to ${to}. A square goes to one city only.`)
+    }
     const logged = appendLog(state, {
       username: player.username,
       playerId: player.playerId,

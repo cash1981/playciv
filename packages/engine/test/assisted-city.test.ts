@@ -20,6 +20,7 @@ import { movePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
+import { describeError } from '../src/errors.js'
 import { SQUARE_SIZE } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
 import { scoutViewsOf } from '../src/assisted-city.js'
@@ -550,6 +551,40 @@ describe('sending a scout’s square to a city', () => {
       // A square is sent once: the unsent scout on it adds nothing for the capital
       expect(scoutChoices(sent, 'B2')).toEqual([])
       expect(scoutChoices(sent, 'I9')).toEqual(['wheat'])
+    })
+
+    it('sends a square to one city only, refusing a second scout on it', () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const [first, second] = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout')
+      const sent = unwrap(assign(state, first?.id ?? '', far(state)?.pieceId ?? ''))
+      for (const city of [near(sent), far(sent)]) {
+        const refused = assign(sent, second?.id ?? '', city?.pieceId ?? '', 'req-2')
+        expect(describeError(unwrapErr(refused)), city?.label).toBe(
+          'Another scout already sends D4 to City I9. A square goes to one city only.',
+        )
+      }
+      // Once the first stops sending, the second may
+      const stopped = unwrap(assign(sent, first?.id ?? '', null, 'req-3'))
+      const resent = unwrap(assign(stopped, second?.id ?? '', near(stopped)?.pieceId ?? '', 'req-4'))
+      expect(scoutAssignmentsOf(resent, me(resent))).toMatchObject([{ scoutPieceId: second?.id, cityPieceId: near(resent)?.pieceId }])
+    })
+
+    it('keeps the first of two scouts sending one square in older data', () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const [first, second] = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout')
+      const sent = unwrap(assign(state, first?.id ?? '', far(state)?.pieceId ?? ''))
+      const record = sent.assistedActions.at(-1)
+      if (record?.effect.kind !== 'assignScout') throw new Error('no assignScout record')
+      const both: GameState = {
+        ...sent,
+        assistedActions: [
+          ...sent.assistedActions,
+          { ...record, id: `${record.id}-2`, effect: { ...record.effect, scoutPieceId: second?.id ?? '', cityPieceId: near(sent)?.pieceId ?? '' } },
+        ],
+      }
+      expect(scoutAssignmentsOf(both, me(both))).toMatchObject([{ scoutPieceId: first?.id, cityPieceId: far(sent)?.pieceId }])
+      expect(scoutChoices(both, 'B2')).toEqual([])
+      expect(scoutChoices(both, 'I9')).toEqual(['wheat'])
     })
 
     it('does not offer a scout standing on the centre of another of the player\'s cities', () => {

@@ -297,6 +297,8 @@ export interface ScoutAssignment {
  * cover them. The latest applied record of a scout wins, and a record that was undone does
  * not count, so undoing a change brings back the one before it. A choice holds only while the
  * scout still stands on the square it was declared for and the city marker is still on the board.
+ * A square goes to one city only (human, #319): of two scouts sending the same square, the one
+ * sent first keeps it; `assignScout` refuses the second, so only older data has both.
  * A scout without a choice goes to the capital: see `scoutDestinationsOf`.
  */
 export function scoutAssignmentsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
@@ -307,6 +309,8 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
     if (record.playerId !== player.playerId || record.turnNumber !== turn) continue
     const effect = record.effect
     if (effect.kind !== 'assignScout') continue
+    // Delete first so the map keeps the scouts in the order of their latest choice
+    latest.delete(effect.scoutPieceId)
     latest.set(
       effect.scoutPieceId,
       effect.cityPieceId === null
@@ -320,12 +324,17 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
           },
     )
   }
+  const sent = new Set<string>()
   return [...latest.values()].filter((assignment): assignment is ScoutAssignment => {
     if (assignment === null) return false
     const scout = state.board.pieces.find((piece) => piece.id === assignment.scoutPieceId)
     const at = scout === undefined ? null : mapCellOf(state.board, scout)
     const city = state.board.pieces.find((piece) => piece.id === assignment.cityPieceId && piece.category === 'city')
-    return at !== null && at.column === assignment.column && at.row === assignment.row && city !== undefined
+    if (at === null || at.column !== assignment.column || at.row !== assignment.row || city === undefined) return false
+    const key = `${at.column}:${at.row}`
+    if (sent.has(key)) return false
+    sent.add(key)
+    return true
   })
 }
 
