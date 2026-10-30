@@ -569,22 +569,37 @@ describe('sending a scout’s square to a city', () => {
       expect(scoutAssignmentsOf(resent, me(resent))).toMatchObject([{ scoutPieceId: second?.id, cityPieceId: near(resent)?.pieceId }])
     })
 
-    it('keeps the first of two scouts sending one square in older data', () => {
+    const twoScouts = () => {
       const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
       const [first, second] = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout')
-      const sent = unwrap(assign(state, first?.id ?? '', far(state)?.pieceId ?? ''))
-      const record = sent.assistedActions.at(-1)
-      if (record?.effect.kind !== 'assignScout') throw new Error('no assignScout record')
-      const both: GameState = {
-        ...sent,
-        assistedActions: [
-          ...sent.assistedActions,
-          { ...record, id: `${record.id}-2`, effect: { ...record.effect, scoutPieceId: second?.id ?? '', cityPieceId: near(sent)?.pieceId ?? '' } },
-        ],
-      }
-      expect(scoutAssignmentsOf(both, me(both))).toMatchObject([{ scoutPieceId: first?.id, cityPieceId: far(sent)?.pieceId }])
-      expect(scoutChoices(both, 'B2')).toEqual([])
-      expect(scoutChoices(both, 'I9')).toEqual(['wheat'])
+      if (first === undefined || second === undefined) throw new Error('two scouts expected')
+      return { state, first, second }
+    }
+
+    it('gives the square to the latest send when an undo vote brings an older one back', () => {
+      const { state, first, second } = twoScouts()
+      let next = unwrap(assign(state, first.id, far(state)?.pieceId ?? '', 'req-1'))
+      next = unwrap(assign(next, first.id, null, 'req-2'))
+      next = unwrap(assign(next, second.id, near(next)?.pieceId ?? '', 'req-3'))
+      // Undoing the stop brings back the first scout's older send to I9
+      next = undoByVote(next, 'req-2')
+      expect(scoutAssignmentsOf(next, me(next))).toMatchObject([{ scoutPieceId: second.id, cityPieceId: near(next)?.pieceId }])
+      expect(scoutChoices(next, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(next, 'I9')).toEqual([])
+      // And the first scout cannot take it while the second sends it
+      expect(describeError(unwrapErr(assign(next, first.id, far(next)?.pieceId ?? '', 'req-4')))).toBe(
+        'Another scout already sends D4 to Capital B2. A square goes to one city only.',
+      )
+    })
+
+    it('gives the square to the latest send when a scout comes back to its square, and frees it while away', () => {
+      const { state, first, second } = twoScouts()
+      const sent = unwrap(assign(state, first.id, far(state)?.pieceId ?? '', 'req-1'))
+      const away = unwrap(movePiece(sent, { playerId: CASH1981, pieceId: first.id, x: first.x + SQUARE_SIZE, y: first.y, snap: false }))
+      const taken = unwrap(assign(away, second.id, near(away)?.pieceId ?? '', 'req-2'))
+      const back = unwrap(movePiece(taken, { playerId: CASH1981, pieceId: first.id, x: first.x, y: first.y, snap: false }))
+      expect(scoutAssignmentsOf(back, me(back))).toMatchObject([{ scoutPieceId: second.id, cityPieceId: near(back)?.pieceId }])
+      expect(scoutChoices(back, 'I9')).toEqual([])
     })
 
     it('does not offer a scout standing on the centre of another of the player\'s cities', () => {
