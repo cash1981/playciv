@@ -1039,6 +1039,8 @@ const build: AssistedActionDefinition = {
     }
     const markerText = effect.marker === null ? '' : ' and the Building Program marker was put back'
     const tradeText = effect.trade > 0 ? `, ${effect.trade} trade returned` : ''
+    const freeUnit = militaryTraditionUndoBlock(state, record)
+    if (freeUnit !== undefined) return err(refused(freeUnit))
 
     if ('card' in effect) {
       // Everything is checked before anything is changed, so a refusal leaves the game as it was.
@@ -1707,6 +1709,7 @@ const upgradeBuildings: AssistedActionDefinition = {
 
 import { communism } from './assisted-communism.js'
 import { steamPower } from './assisted-steam-power.js'
+import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 
 /** Every assisted action, in the order the projection lists them. */
 export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
@@ -1719,6 +1722,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   cultureAdvanceSkip,
   chooseReward,
   build,
+  ...MILITARY_TRADITION_ACTIONS,
   startBuildingProgram,
   devoteToTheArts,
   harvest,
@@ -2047,6 +2051,8 @@ export function takeBackOpenBuild(
   if (record.effect.kind === 'build' && 'reserved' in record.effect && reservedUndoBlock(state, record.playerId, record.effect) !== undefined) {
     return undefined
   }
+  // Military Tradition gave a free unit for this army: the army is removed as any other, and the unit stays
+  if (militaryTraditionUndoBlock(state, record) !== undefined) return undefined
   const reversed = reverseAssistedAction(state, record.id, input.at, true)
   if (!reversed.ok) return reversed
 

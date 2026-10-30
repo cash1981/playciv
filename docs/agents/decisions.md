@@ -342,6 +342,11 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   level); Rationalism spends 6 or 11 trade for a level I or II `TechGrant`, spent
   when the tech is revealed in Start of Turn. Learning is not researching: no
   coins keep trade.
+- **Military Tradition** (#311, City Management): once an army figure has been
+  built with Build this turn, one button per unit type draws a free unit card of
+  that type (aircraft need Flight), once per turn whatever the type. An army put
+  on the map by hand does not count. The army build's vote undo is refused while
+  the free unit stands on it, and its take-back is a plain removal.
 - **Mysticism's** extra card applies to every culture card draw (advance,
   Patronage, Cristo Redentor) (human).
 - **Government:** one change per Start of Turn. A government whose tech was

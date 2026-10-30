@@ -22,7 +22,7 @@ import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
 import { tradeEstimateOf } from './trade-estimate.js'
 import type { TradeEstimate } from './trade-estimate.js'
-import type { PlacedBuildItem, UnitBuildItem, WallsBuildItem } from './build-item.js'
+import type { PlacedBuildItem, UnitBuildItem, UnitType, WallsBuildItem } from './build-item.js'
 import type { CityBuildOptions } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
@@ -427,6 +427,8 @@ export type AssistedActionKind =
   | 'harvest'
   | 'communism'
   | 'steamPower'
+  // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
+  | `militaryTradition:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
   | `sot:${string}`
 
@@ -687,6 +689,12 @@ export type AssistedEffect =
       readonly kind: 'communism'
       readonly square: { readonly column: number; readonly row: number }
       readonly spent: SpentResource
+    }
+  | {
+      readonly kind: 'militaryTradition'
+      readonly unitType: UnitType
+      /** The card drawn and its deck; an undo puts it back and shuffles that deck. Never projected. */
+      readonly card: { readonly itemId: string; readonly sheetName: SheetName }
     }
   | {
       readonly kind: 'steamPower'
