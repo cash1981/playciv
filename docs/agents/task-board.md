@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### build-costs
+
+- **Owner:** Claude (Opus 5.5)
+- **Branch:** `fix/build-costs`
+- **Brief:** `docs/agents/tasks/build-costs.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/build-options.ts`, `packages/engine/src/wonder-data.ts`, `packages/engine/src/actions/player.ts`, `packages/web/src/views/BuildPicker*`, `docs/agents/decisions.md`
+- **Notes:** —
 
 ## Format
 
