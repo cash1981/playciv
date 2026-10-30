@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### battle-aftermath
-
-- **Owner:** Claude (Opus 5.5)
-- **Branch:** `feat/battle-aftermath`
-- **Brief:** `docs/agents/tasks/battle-aftermath.md`
-- **Status:** in review
-- **Claimed paths:** `packages/engine/src/actions/arena.ts`, `packages/engine/src/battle.ts`, `packages/engine/src/state.ts`, `packages/engine/src/migrate.ts`, `packages/engine/test/arena.test.ts`, `packages/engine/test/chat-orders-turns.test.ts`, `packages/web/src/views/GameView.tsx`, `packages/web/src/views/ItemCard.tsx`, `packages/web/src/views/*.test.tsx`, `docs/agents/decisions.md`
-- **Notes:** owns the `PlayerView` shape resource (adds `lastBattle`).
+_None._
 
 ## Format
 
@@ -40,7 +33,7 @@ Rewritten wholesale, so only one task may own each at a time. Claim by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | battle-aftermath |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
 | `packages/web/src/lib/api.ts` | free |
 
 ## Queue
