@@ -133,6 +133,7 @@ function options(overrides: Partial<CityBuildOptions> = {}): CityBuildOptions {
     reason: 'Ready to build.',
     production: 4,
     productionSource: 'estimate',
+    caravan: false,
     choices: [LIBRARY, HARBOR],
     unavailable: [
       { assetId: 'buildings/market', item: { kind: 'building', assetId: 'buildings/market' }, label: 'Market', reason: 'Needs the Currency tech.' },
@@ -150,6 +151,7 @@ function cityProduction(overrides: Partial<CityProduction> = {}): CityProduction
     outskirtsDetail: [],
     modifiers: [],
     buildingProgram: false,
+    caravan: false,
     estimate: 4,
     withBuildingProgram: null,
     override: null,
@@ -231,6 +233,11 @@ describe('BuildPicker', () => {
   ] as const)('says where the production figure comes from: %s', (source, line) => {
     renderPicker(options({ productionSource: source }))
     expect(screen.getByText(line)).toBeTruthy()
+  })
+
+  it('says a caravan is counted and that the build uses it up', () => {
+    renderPicker(options({ production: 6, caravan: true }))
+    expect(screen.getByText('Production 6, estimate, including 2 from the caravan, which this build uses up.')).toBeTruthy()
   })
 
   it('keeps the reasons for the other buildings in a popup behind Why not the others', () => {

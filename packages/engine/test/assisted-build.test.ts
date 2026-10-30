@@ -671,6 +671,23 @@ describe('the production a city builds with', () => {
     expect(set.productionSource).toBe('override')
   })
 
+  it('a caravan on the city adds 2 to whatever production is used, and the Building Program does not double it (F&F p. 7)', () => {
+    const caravan = put(ready(), CASH1981, 'markers/caravan', 1, 1)
+    expect(optionsOf(caravan)).toMatchObject({ production: 7, productionSource: 'estimate', caravan: true })
+    expect(optionsOf(put(caravan, CASH1981, 'markers/Building Program', 1, 1))).toMatchObject({ production: 12, productionSource: 'building-program' })
+    expect(optionsOf(withOverride(caravan, 2))).toMatchObject({ production: 4, productionSource: 'override' })
+    expect(optionsOf(ready()).caravan).toBe(false)
+    // A fortification adds no production, and a caravan beside the city is not the city's
+    expect(optionsOf(put(ready(), CASH1981, 'markers/fortification', 1, 1)).production).toBe(5)
+    expect(optionsOf(put(ready(), CASH1981, 'markers/caravan', 2, 1)).production).toBe(5)
+  })
+
+  it('the reason for a missing production says the caravan is counted', () => {
+    expect(reasonFor(optionsOf(put(ready(['Printing Press'], 0), CASH1981, 'markers/caravan', 1, 1)), UNIVERSITY)).toMatch(
+      /has 7 \(the estimate, plus 2 from the caravan\)/,
+    )
+  })
+
   it('a marker on another square is not the city\'s Building Program', () => {
     const beside = put(ready(), CASH1981, 'markers/Building Program', 2, 1)
     expect(optionsOf(beside).productionSource).toBe('estimate')
@@ -1075,6 +1092,29 @@ describe('the board Undo', () => {
     expect(done.board.history.at(-1)?.change.kind).toBe('place')
     expect(unwrapErr(undoLastBoardChange(done, CASH1981))).toEqual({ kind: 'BOARD_UNDO_ASSISTED' })
     expect(JSON.stringify(done)).toBe(snapshot)
+  })
+
+  it('a build uses up the caravan, even when the city needed none of it, and the undo vote puts it back', () => {
+    const before = put(put(ready(['Writing']), CASH1981, 'markers/Building Program', 1, 1), CASH1981, 'markers/caravan', 1, 1)
+    const caravan = piecesOf(before, 'markers/caravan')[0] as BoardPiece
+    const done = build(before, LIBRARY, C2)
+
+    expect(piecesOf(done, 'markers/caravan')).toEqual([])
+    expect(done.log.at(-1)?.publicLog).toBe(
+      'cash1981 built a Library in City B2 on square C2, using up the Building Program marker, using up the caravan (+2 production)',
+    )
+    const removal = done.board.history.at(-1)
+    expect(removal?.change).toMatchObject({ kind: 'remove', piece: { id: caravan.id } })
+    const effect = done.assistedActions[0]?.effect
+    expect(effect?.kind === 'build' && effect.caravan).toEqual({ piece: caravan, historyId: removal?.id })
+    // Only the vote takes it back, with the build
+    expect(unwrapErr(undoLastBoardChange(done, CASH1981))).toEqual({ kind: 'BOARD_UNDO_ASSISTED' })
+
+    const undone = undoByVote(done, 'req-1')
+    expect(piecesOf(undone, 'markers/caravan')).toEqual([caravan])
+    expect(piecesOf(undone, 'markers/Building Program')).toHaveLength(1)
+    expect(piecesOf(undone, LIBRARY)).toEqual([])
+    expect(undone.log.at(-1)?.publicLog).toMatch(/the Building Program marker was put back and the caravan was put back$/)
   })
 
   it('refuses to take back the marker removal alone', () => {

@@ -2217,8 +2217,14 @@ ul.history > li {
 
 .battle-summary-side {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.7rem;
   align-items: center;
+}
+
+.battle-city-defence {
+  color: var(--muted);
+  font-size: 0.9em;
 }
 
 .arena-frame {

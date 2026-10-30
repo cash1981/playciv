@@ -206,3 +206,17 @@ describe('a second action of the same city', () => {
     expect(describeError(unwrapErr(result))).not.toContain('already acted')
   })
 })
+
+describe('a caravan (Fame and Fortune p. 7)', () => {
+  const caravans = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId === 'markers/caravan')
+
+  it('Devote to the Arts and Harvest keep it; a Build uses it up', () => {
+    let state = put(scene(), 'markers/caravan', 1, 1)
+    state = unwrap(act(state, 'devoteToTheArts', 'a-1'))
+    state = unwrap(act(state, 'harvest', 'a-2', true))
+    expect(caravans(state)).toHaveLength(1)
+    state = unwrap(act(state, 'build', 'a-3', true))
+    expect(caravans(state)).toEqual([])
+    expect(lastLine(state)).toContain('using up the caravan (+2 production)')
+  })
+})

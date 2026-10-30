@@ -1065,7 +1065,9 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         ('replaced' in effect && effect.replaced?.historyId === entry.id) ||
         ('reserved' in effect && effect.reserved?.historyId === entry.id) ||
         ('walls' in effect && effect.walls.historyId === entry.id) ||
-        effect.marker?.historyId === entry.id
+        effect.marker?.historyId === entry.id ||
+        // and the caravan it used up
+        effect.caravan?.historyId === entry.id
       )
     }
     // Khalid moved the start player marker: stepping that back alone would undo only half the card

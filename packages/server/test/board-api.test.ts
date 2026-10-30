@@ -308,6 +308,36 @@ describe('history over HTTP', () => {
     expect((await again.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
+  it('disbands a figure that travels onto its own city centre when asked (F&F p. 7)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Disband')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const colour = player.color.toLowerCase()
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    await place(gameId, starter, `cities/${colour}city2`, 3 * square + 10, top + square + 10)
+    const placed = await place(gameId, starter, `figures/${colour}scout`, square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === `figures/${colour}scout`,
+    )
+    if (piece === undefined) throw new Error('no piece')
+
+    const disbanded = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+      headers: bearer(starter),
+      payload: { column: 3, row: 1, disband: true },
+    })
+    expect(disbanded.status).toBe(200)
+    const view = await disbanded.json() as { board: { pieces: { id: string; assetId: string }[]; history: { description: string }[] } }
+    expect(view.board.pieces.some((candidate) => candidate.id === piece.id)).toBe(false)
+    expect(view.board.pieces.filter((candidate) => candidate.assetId === 'markers/caravan')).toHaveLength(1)
+    expect(view.board.history.at(-1)?.description).toMatch(/disbanded .+ sending a caravan to the city/)
+  })
+
   it('explores the fog next to a figure for 1 movement and lays the next tile there (issue #302)', async () => {
     const { gameId, starter, starterName } = await startedGame('Explore')
     const state = await repo.findGame(gameId)

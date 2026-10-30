@@ -30,6 +30,7 @@ function city(overrides: Partial<CityProduction> = {}): CityProduction {
       { label: 'Chichen Itza', amount: 0, applied: false, note: 'Blockaded, so its +3 is switched off.' },
     ],
     buildingProgram: false,
+    caravan: false,
     estimate: 9,
     withBuildingProgram: null,
     override: null,

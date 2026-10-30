@@ -1145,6 +1145,7 @@ const cityOf = (overrides: Partial<CityProduction> = {}): CityProduction => ({
   outskirtsDetail: [],
   modifiers: [],
   buildingProgram: true,
+  caravan: false,
   estimate: 4,
   withBuildingProgram: 8,
   override: null,
@@ -1161,6 +1162,7 @@ const buildOptionsOf = (overrides: Partial<CityBuildOptions> = {}): CityBuildOpt
   reason: 'Ready to build.',
   production: 4,
   productionSource: 'estimate',
+  caravan: false,
   choices: [
     {
       assetId: 'buildings/library',

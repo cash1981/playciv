@@ -58,6 +58,29 @@ describe('BattlePanel summary bar', () => {
     expect(bar?.textContent).not.toMatch(/ATK/)
   })
 
+  it('shows what the defended city adds, and that ending the battle removes its fortification', () => {
+    const summaryView = {
+      ...view,
+      battleSummary: [
+        {
+          side: 'defender', kind: 'player', playerId: 'me', label: 'Me',
+          unitCount: 1, totalAttack: 1, totalHealth: 3, combatBonus: 8,
+          cityDefence: {
+            cityPieceId: 'city', cityLabel: 'City D4', total: 8, fortificationPieceId: 'fort',
+            parts: [{ label: 'Defending a city', amount: 6 }, { label: 'Fortification', amount: 2 }],
+          },
+        },
+      ],
+    } as unknown as PlayerView
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
+    fireEvent.click(getByText('Battle'))
+
+    expect(getByText('HP 3 (+8)')).toBeTruthy()
+    expect(
+      getByText('Defending City D4: +8 (Defending a city +6, Fortification +2). Ending the battle removes the fortification.'),
+    ).toBeTruthy()
+  })
+
   it('shows a positive combat bonus next to HP, not ATK', () => {
     const summaryView = {
       ...view,

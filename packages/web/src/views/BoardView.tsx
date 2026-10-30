@@ -41,6 +41,8 @@ import {
   compareWonderNames,
   cultureCellCenter,
   cultureTrackHeight,
+  CARAVAN_ASSET_ID,
+  disbandOfferAt,
   figureMovementOptions,
   findBoardAsset,
   locationOf,
@@ -1198,9 +1200,23 @@ export function BoardView({
                     ) {
                       return
                     }
+                    // Fame and Fortune p. 7: arriving on a centre of an own city, the figure may be disbanded there
+                    const offer = cell.contact === true ? undefined : disbandOfferAt(board, viewerColor, selected, cell)
+                    const disband =
+                      offer !== undefined &&
+                      window.confirm(
+                        offer.existing === undefined
+                          ? `Disband ${selected.label} in ${offer.cityLabel} for a ${offer.marker} marker? ` +
+                              (offer.marker === 'caravan'
+                                ? 'The caravan adds 2 production to the next Build there. '
+                                : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
+                              'OK disbands it; Cancel just moves it there.'
+                          : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
+                              'Disband it anyway? OK disbands it; Cancel just moves it there.',
+                      )
                     setMoveModeId(null)
                     void run(() =>
-                      api.travelFigure(gameId, selected.id, cell.column, cell.row),
+                      api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
                     )
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
