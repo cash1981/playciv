@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### great-person-conversions
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/great-person-conversions`
-- **Brief:** `docs/agents/tasks/great-person-conversions.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/assisted-cards.ts`, `assisted-culture.ts`, `card-timing.ts`, `state.ts` (hand field and effects), `create-game.ts`, `actions/game.ts`, `migrate.ts`, tests for these
-- **Notes:** adds Andrew Carnegie (PR #325 follow-up)
+_None._
 
 ## Format
 
