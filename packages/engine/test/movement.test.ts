@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
+import { movePiece, placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
 import {
   SQUARE_SIZE,
   findBoardAsset,
@@ -13,6 +13,7 @@ import {
   type BoardPiece,
 } from '../src/board.js'
 import {
+  arrangeWithinSquare,
   figureMovementOptions,
   movementOf,
   movementTotal,
@@ -467,5 +468,41 @@ describe('travelFigure', () => {
     const options = figureMovementOptions(undone.board, playerOf(undone), back, 1)
     expect(options?.destinations.length).toBeGreaterThan(0)
     expect(turnStatus(undone).currentTurn).toBe(1)
+  })
+})
+
+describe('arranging a figure in its own square', () => {
+  it('allows a spot whose centre stays in the square and refuses one in the next', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const piece = figure(state)
+    const right = piece.x + Math.floor((SQUARE_SIZE - piece.width) / 2)
+
+    expect(arrangeWithinSquare(state.board, piece, right, piece.y)).toEqual([right, piece.y])
+    expect(arrangeWithinSquare(state.board, piece, piece.x + SQUARE_SIZE, piece.y)).toBeUndefined()
+    expect(arrangeWithinSquare(state.board, { ...piece, y: 0 }, piece.x, 0)).toBeUndefined()
+    // An even-width figure just inside the edge rounds onto it, so its centre would be in the next square
+    const even = { ...piece, width: 34 }
+    expect(arrangeWithinSquare(state.board, even, 2 * SQUARE_SIZE - 17 - 0.3, piece.y)).toBeUndefined()
+    expect(arrangeWithinSquare(state.board, even, 2 * SQUARE_SIZE - 17 - 0.7, piece.y)).toEqual([
+      2 * SQUARE_SIZE - 18,
+      piece.y,
+    ])
+  })
+
+  it('keeps the spent movement, so a shifted figure may still travel what is left', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const piece = figure(state)
+    const travelled = unwrap(travelFigure(state, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 2 }))
+    const moved = figure(travelled)
+    const spot = arrangeWithinSquare(travelled.board, moved, moved.x + 10, moved.y)
+    if (spot === undefined) throw new Error('expected a spot in the square')
+    const shifted = unwrap(
+      movePiece(travelled, { playerId: CASH1981, pieceId: piece.id, x: spot[0], y: spot[1], snap: false }),
+    )
+
+    expect(figure(shifted).x).toBe(moved.x + 10)
+    expect(movementOf(figure(shifted), 1)).toEqual(movementOf(moved, 1))
+    const again = unwrap(travelFigure(shifted, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 }))
+    expect(movementOf(figure(again), 1)).toMatchObject({ used: 2, locked: true })
   })
 })

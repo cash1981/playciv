@@ -33,6 +33,7 @@ import {
   TILE_SQUARES,
   WONDERS_AREA_ID,
   areaBandTop,
+  arrangeWithinSquare,
   boardHeight,
   boardUndoBlocked,
   boardWidth,
@@ -608,11 +609,17 @@ export function BoardView({
 
       const piece = pieces.find((candidate) => candidate.id === selectedId)
       if (piece === undefined) return
-      // A map figure moves by the Movement rules, not by pixel nudges (issue #302).
-      if (movementOptionsFor(piece) !== null) return
 
       event.preventDefault()
       const step = NUDGE_STEP_PX / zoom
+      // A map figure moves to another square by the Movement rules (issue #302); a nudge only arranges
+      // it inside its own square, which spends no movement.
+      if (movementOptionsFor(piece) !== null) {
+        const spot = arrangeWithinSquare(board, piece, piece.x + dx * step, piece.y + dy * step)
+        if (spot === undefined || (spot[0] === piece.x && spot[1] === piece.y)) return
+        void run(() => api.movePiece(gameId, piece.id, spot[0], spot[1], false))
+        return
+      }
       const [x, y] = clampToBoard(board, piece.x + dx * step, piece.y + dy * step, piece.width, piece.height)
       // A nudge already at the board's edge should not fire a request, the
       // same as the drag path's own no-op-click guard (`onPiecePointerUp`).
@@ -824,8 +831,8 @@ export function BoardView({
     }
     if (event.button !== 0) return
     setSelectedId(piece.id)
-    // The viewer's own map figure moves through the highlighted squares, not
-    // through a freeform drag or the Move button (issue #302).
+    // The viewer's own map figure moves to another square through the highlighted
+    // squares, not the Move button (issue #302); a drag only arranges it in its own square.
     const movementPiece = movementOptionsFor(piece) !== null
     if (event.pointerType !== 'mouse' && selectedId !== piece.id) {
       // The first touch marks the piece and, for anything but a map tile, arms
@@ -842,7 +849,6 @@ export function BoardView({
     if (movementPiece) {
       setMoveModeId(null)
       setExplicitMoveId(null)
-      return
     }
     const previous = event.pointerType === 'mouse' && tileTapsSurface(piece) && selectedId !== null
       ? { id: selectedId, armed: moveModeId === selectedId }
@@ -914,12 +920,18 @@ export function BoardView({
         }
         return
       }
-      setMoveModeId(piece !== undefined && isMapTile(piece) ? null : drag.id)
+      setMoveModeId(piece !== undefined && (isMapTile(piece) || movementOptionsFor(piece) !== null) ? null : drag.id)
       return
     }
     // The drag itself already moved the piece; disarm so an unrelated later
     // tap on the board does not move it a second time.
     setMoveModeId(null)
+    if (piece !== undefined && movementOptionsFor(piece) !== null) {
+      // Arranged inside its own square, with no movement spent; a drop in another square springs back.
+      const spot = arrangeWithinSquare(board, piece, drag.x, drag.y)
+      if (spot !== undefined) void run(() => api.movePiece(gameId, piece.id, spot[0], spot[1], false))
+      return
+    }
     // Cancelled, the piece springs back: the board is unchanged and the drag is already cleared.
     if (piece !== undefined && !terrainAllows(piece.assetId, drag.x + piece.width / 2, drag.y + piece.height / 2, piece)) return
     void run(() => api.movePiece(gameId, drag.id, drag.x, drag.y))
@@ -1352,6 +1364,7 @@ export function BoardView({
                         ' A square marked Explore is unexplored: it costs 1 movement to uncover.'}
                     </span>
                   )}
+                  <span className="muted">Drag it or use the arrow keys to shift it inside its square, at no movement cost.</span>
                 </div>
               )}
               <p style={{ margin: '0 0 0.5rem' }}>
