@@ -965,7 +965,7 @@ describe('BoardView mobile placement', () => {
 
 
 
-  it('does not freeform-drag or nudge the viewer’s map figure (issue #302)', async () => {
+  it('arranges the viewer’s map figure only inside its own square (issue #302)', async () => {
     vi.spyOn(api, 'boardAssets').mockResolvedValue([])
     const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
     const army = findBoardAsset('figures/redarmy')
@@ -1006,25 +1006,79 @@ describe('BoardView mobile placement', () => {
       />,
     )
     const tile = container.querySelector('.board-piece')
-    if (!(tile instanceof HTMLElement)) throw new Error('piece missing')
-    const pointer = (type: 'pointerdown' | 'pointermove' | 'pointerup', clientX: number, clientY: number) => {
+    const surface = container.querySelector('.board-surface')
+    if (!(tile instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board elements missing')
+    const dispatch = (
+      target: HTMLElement,
+      pointerType: 'mouse' | 'touch',
+      type: 'pointerdown' | 'pointermove' | 'pointerup',
+      clientX: number,
+      clientY: number,
+    ) => {
       const event = new Event(type, { bubbles: true })
       for (const [name, value] of Object.entries({
         pointerId: 1,
-        pointerType: 'mouse',
+        pointerType,
         isPrimary: true,
         button: 0,
         clientX,
         clientY,
       })) Object.defineProperty(event, name, { value })
-      tile.dispatchEvent(event)
+      target.dispatchEvent(event)
     }
-    pointer('pointerdown', 20, 20)
-    pointer('pointermove', 120, 120)
-    pointer('pointerup', 120, 120)
-    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    const pointer = (type: 'pointerdown' | 'pointermove' | 'pointerup', clientX: number, clientY: number) =>
+      dispatch(tile, 'mouse', type, clientX, clientY)
 
+    // A click or a first touch only selects: a later tap elsewhere on the board must not move it freely
+    for (const pointerType of ['mouse', 'touch'] as const) {
+      dispatch(tile, pointerType, 'pointerdown', 20, 20)
+      dispatch(tile, pointerType, 'pointerup', 20, 20)
+      await act(async () => {})
+      dispatch(surface, pointerType, 'pointerdown', 400, 400)
+      dispatch(surface, pointerType, 'pointerup', 400, 400)
+      await act(async () => {})
+    }
     expect(movePiece).not.toHaveBeenCalled()
+
+    // With the figure selected, a touch drag arranges it inside its square
+    dispatch(tile, 'touch', 'pointerdown', 20, 20)
+    dispatch(tile, 'touch', 'pointerup', 20, 20)
+    await act(async () => {})
+    dispatch(tile, 'touch', 'pointerdown', 20, 20)
+    dispatch(tile, 'touch', 'pointermove', 30, 20)
+    dispatch(tile, 'touch', 'pointerup', 30, 20)
+    await waitFor(() =>
+      expect(movePiece).toHaveBeenCalledWith('game', 'army-2', expect.any(Number), Math.round(boardPiece.y), false),
+    )
+    movePiece.mockClear()
+    // Mouse paths below start unselected
+    dispatch(surface, 'mouse', 'pointerdown', 400, 400)
+    dispatch(surface, 'mouse', 'pointerup', 400, 400)
+
+    // A drop in another square springs back: travel goes through the highlighted squares
+    pointer('pointerdown', 20, 20)
+    pointer('pointermove', 400, 20)
+    pointer('pointerup', 400, 20)
+    expect(movePiece).not.toHaveBeenCalled()
+
+    // A short drag to the right stays in the square: a plain move, no movement spent
+    pointer('pointerdown', 20, 20)
+    pointer('pointermove', 30, 20)
+    pointer('pointerup', 30, 20)
+    await waitFor(() =>
+      expect(movePiece).toHaveBeenCalledWith('game', 'army-2', expect.any(Number), Math.round(boardPiece.y), false),
+    )
+    const dragged = movePiece.mock.calls[0]?.[2]
+    expect(dragged).toBeGreaterThan(boardPiece.x)
+    // Only the centre has to stay in the square
+    expect(dragged).toBeLessThan(boardPiece.x + SQUARE_SIZE / 2)
+
+    movePiece.mockClear()
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    await waitFor(() =>
+      expect(movePiece).toHaveBeenCalledWith('game', 'army-2', expect.any(Number), Math.round(boardPiece.y), false),
+    )
+    expect(movePiece.mock.calls[0]?.[2]).toBeGreaterThan(boardPiece.x)
     movePiece.mockRestore()
     cleanup()
   })

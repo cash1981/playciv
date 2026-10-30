@@ -483,8 +483,11 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   see more tiles is accepted for now (the draw line can be undone by vote).
   Test helper `coverMap` lays tile backs so older tests see no fog.
 - **No gates:** `/travel` and explore have no phase or turn-holder check, matching
-  the shared board. Freeform drag of one's own map figure is disabled in the UI;
-  `movePiece` remains the manual tool for setups and off-map pieces.
+  the shared board. One's own map figure may be dragged or arrow-nudged only
+  inside its own square (`arrangeWithinSquare`, centre stays in the square) to
+  arrange a stack (human): a plain `movePiece` that keeps the spent movement
+  and spends none; a drop in another square springs back. `movePiece` remains the
+  manual tool for setups and off-map pieces.
 - **Scout gathered squares** (rules 198, 257, 334, 341, 422–424): gathering reads
   the scout's current square and no icon use is recorded, so a scout moved in City
   Management gathers where it ended. The trade phase is not re-run.

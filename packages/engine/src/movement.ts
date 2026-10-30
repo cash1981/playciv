@@ -454,3 +454,24 @@ export function destinationTo(
     (candidate) => candidate.column === cell.column && candidate.row === cell.row,
   )
 }
+
+/**
+ * Where a figure may be laid when it is shifted inside its own square, so a stack is easier to read:
+ * its top-left corner for the wanted spot, or `undefined` when the piece is not on the map or the
+ * spot would put its centre in another square. A shift like this is not travel and spends no
+ * movement; leaving the square goes through `travelFigure`.
+ */
+export function arrangeWithinSquare(
+  board: Board,
+  piece: BoardPiece,
+  x: number,
+  y: number,
+): readonly [x: number, y: number] | undefined {
+  const from = mapCellOf(board, piece)
+  if (from === null) return undefined
+  // Checked after rounding, as stored: a raw spot just inside the edge may round into the next square
+  const spot = [Math.round(x), Math.round(y)] as const
+  const to = mapCellOf(board, { ...piece, x: spot[0], y: spot[1] })
+  if (to === null || to.column !== from.column || to.row !== from.row) return undefined
+  return spot
+}
