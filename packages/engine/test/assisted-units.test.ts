@@ -49,6 +49,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { SheetName } from '../src/sheet-name.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
+import { capitalOf, scoutDestinationsOf } from '../src/sot.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -542,6 +543,33 @@ describe('the squares of a figure', () => {
       // Held in the outskirts of a plain city it stays a city-state square
       const plain = held(ready(), C2)
       expect(buildSquareRefusal(plain, me(plain), cityOf(plain).id, ARMY, C2)).toBe('C2 is a city-state square.')
+    })
+
+    it('belongs to a capital grown into a metropolis, which only the capital can become', () => {
+      // A metropolis on B2 and C2, lying flat; D4 (forest) is outside its ten outskirts squares
+      const D4 = { column: 3, row: 3 }
+      const asset = findBoardAsset('cities/redmetropolis2')
+      if (asset === undefined) throw new Error('no metropolis asset')
+      const metropolis = unwrap(
+        placePiece(withAmerica(game()), {
+          playerId: CASH1981,
+          assetId: 'cities/redmetropolis2',
+          x: 2 * SQUARE_SIZE - asset.width / 2,
+          y: mapTop(withAmerica(game()).board) + 1.5 * SQUARE_SIZE - asset.height / 2,
+          rotation: 0,
+        }),
+      )
+      const state = held(withStats(openTurn(put(metropolis, CASH1981, 'cities/redcity2', 8, 8)), { trade: 3 }), D4)
+      const capital = capitalOf(state, me(state))
+      expect(capital?.assetId).toBe('cities/redmetropolis2')
+      const options = buildOptionsOf(state, me(state))
+      const ofCity = (pieceId: string | undefined) => options.find((city) => city.cityPieceId === pieceId)
+      expect(cellsOf(ofCity(capital?.id)?.choices.find((choice) => choice.item.kind === 'army')?.squares)).toContainEqual([3, 3])
+      const other = options.find((city) => city.cityPieceId !== capital?.id)
+      expect(cellsOf(other?.choices.find((choice) => choice.item.kind === 'army')?.squares)).not.toContainEqual([3, 3])
+      // An unsent scout goes to the metropolis too
+      const scouted = put(state, CASH1981, 'figures/redscout', 0, 3)
+      expect(scoutDestinationsOf(scouted, me(scouted))).toMatchObject([{ cityPieceId: capital?.id, chosen: false }])
     })
 
     it('still keeps buildings off', () => {

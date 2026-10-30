@@ -329,18 +329,22 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
   })
 }
 
-/** The player's capital: the city marker that says so, on the map. A capital grown into a metropolis has none. */
+/**
+ * The player's capital on the map: the capital marker, or the metropolis, which only the
+ * capital can grow into (human, #319).
+ */
 export function capitalOf(state: GameState, player: Playerhand): BoardPiece | undefined {
   const colour = player.color?.toLowerCase()
   if (colour === undefined) return undefined
-  return cityFootprintsOf(state, colour).find((footprint) => footprint.piece.assetId.includes('capital'))?.piece
+  const pieces = cityFootprintsOf(state, colour).map((footprint) => footprint.piece)
+  return pieces.find((piece) => piece.assetId.includes('capital')) ?? pieces.find((piece) => piece.assetId.includes('metropolis'))
 }
 
 /**
  * Where each of the player's scouts on the map sends its square this turn: the city they chose,
  * and for a scout they did not send anywhere, the capital. An English army sent to a city is
- * kept too, but never goes to the capital on its own. Without a capital marker (a capital that
- * grew into a metropolis has none) a scout that was not sent has no destination. A scout on a
+ * kept too, but never goes to the capital on its own. Without a capital on the map a scout that
+ * was not sent has no destination. A scout on a
  * city's own centre square sends nothing by default (the centre is not a square to gather), and
  * a square is sent once: a second scout on it, or one already sent from it, adds nothing.
  */

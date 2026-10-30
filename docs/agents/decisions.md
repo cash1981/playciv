@@ -370,9 +370,9 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   turn, to the capital when not sent. The square counts for that city's
   production and trade, and its culture/resource icons are offered only to that
   city's Devote and Harvest; coin icons stay manual. The square leaves the city it
-  lies in when sent elsewhere (also by the default). A capital grown into a
-  metropolis has no capital marker: an unsent scout then goes nowhere and is
-  offered to every city, with a note. An English army is only sent by hand.
+  lies in when sent elsewhere (also by the default). The metropolis is the capital
+  (see Assisted build). With no capital on the map an unsent scout goes nowhere
+  and is offered to every city, with a note. An English army is only sent by hand.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan
   Turing (counts Russia's white army in the supply, human) add their numbers;
@@ -784,8 +784,10 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   (`cityStateHolderColour`, as for Brandenburg Gate; army or scout) is part of
   their capital's outskirts, so the capital may build a figure on it wherever it
   lies, under the same stacking, water and blockade rules. Other cities and
-  buildings and wonders still may not. Known gap: as for scouts, a capital grown
-  into a metropolis is no longer recognised as the capital, so it gets none.
+  buildings and wonders still may not.
+- **The metropolis is the capital** (human, #319): only the capital can grow into
+  a metropolis, so `capitalOf` falls back to the metropolis when no capital marker
+  is on the map. This applies to held city-states and to unsent scouts.
 - A unit card is drawn like Draw (reshuffling discards when empty) hidden into the
   hand; the public line names only the type and no item line is written. Undo
   returns it and reshuffles that unit deck so the next card is unknown (human); a

@@ -53,6 +53,7 @@ import { BUILDING_TERRAIN, CATEGORY_TERRAIN, describeAllowed, terrainAt } from '
 import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
 import { stackingLimitOf } from './great-person-effects.js'
+import { capitalOf } from './sot.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
@@ -477,13 +478,13 @@ function mapOutskirts(board: Board, footprint: CityFootprintView): readonly Cell
 }
 
 /**
- * The squares of the city-states the player holds when the city is their capital, else none.
- * A held city-state is part of the capital's outskirts (W&W p. 9, issue #319), so a figure
- * may be built there; buildings and wonders still may not. Holding is `cityStateHolderColour`,
- * as for Brandenburg Gate. A capital grown into a metropolis is no longer marked as one.
+ * The squares of the city-states the player holds when the city is their capital (a metropolis
+ * counts), else none. A held city-state is part of the capital's outskirts (W&W p. 9, issue
+ * #319), so a figure may be built there; buildings and wonders still may not. Holding is
+ * `cityStateHolderColour`, as for Brandenburg Gate.
  */
-function heldCityStatesOf(scene: Scene, footprint: CityFootprintView, colour: string): readonly Cell[] {
-  if (!footprint.piece.assetId.includes('capital')) return []
+function heldCityStatesOf(scene: Scene, player: Playerhand, footprint: CityFootprintView, colour: string): readonly Cell[] {
+  if (capitalOf(scene.state, player)?.id !== footprint.piece.id) return []
   const cells: Cell[] = []
   for (const piece of scene.state.board.pieces) {
     if (piece.category !== 'citystate') continue
@@ -494,9 +495,14 @@ function heldCityStatesOf(scene: Scene, footprint: CityFootprintView, colour: st
 }
 
 /** Where a city may put a figure: its outskirts on the map and the city-states held by a capital, in reading order. */
-function figureSquaresOf(scene: Scene, footprint: CityFootprintView, colour: string): { readonly cells: readonly Cell[]; readonly held: ReadonlySet<string> } {
+function figureSquaresOf(
+  scene: Scene,
+  player: Playerhand,
+  footprint: CityFootprintView,
+  colour: string,
+): { readonly cells: readonly Cell[]; readonly held: ReadonlySet<string> } {
   const outskirts = mapOutskirts(scene.state.board, footprint)
-  const held = heldCityStatesOf(scene, footprint, colour)
+  const held = heldCityStatesOf(scene, player, footprint, colour)
   const known = new Set(outskirts.map(keyOf))
   const cells = [...outskirts, ...held.filter((cell) => !known.has(keyOf(cell)))]
     .sort((a, b) => a.row - b.row || a.column - b.column)
@@ -594,7 +600,7 @@ export function buildSquareRefusal(
   const square = plain(cell.column) && plain(cell.row) ? squareLabel(cell) : 'That square'
   if (!isMapCell(state.board, cell.column, cell.row)) return `${square} is not on the map.`
   const scene = sceneOf(state)
-  const figure = item.kind === 'army' || item.kind === 'scout' ? figureSquaresOf(scene, footprint, player.color.toLowerCase()) : undefined
+  const figure = item.kind === 'army' || item.kind === 'scout' ? figureSquaresOf(scene, player, footprint, player.color.toLowerCase()) : undefined
   const inOutskirts = (figure?.cells ?? footprint.outskirts).some((candidate) => keyOf(candidate) === keyOf(cell))
   if (!inOutskirts) return `${square} is not in the outskirts of that city.`
   if (item.kind === 'building' || item.kind === 'wonder') {
@@ -1002,7 +1008,7 @@ function optionsForCity(
   }
 
   // Army and scout figures: put on a square of the outskirts like a building
-  const figureSquares = player.color === null ? undefined : figureSquaresOf(scene, footprint, player.color.toLowerCase())
+  const figureSquares = player.color === null ? undefined : figureSquaresOf(scene, player, footprint, player.color.toLowerCase())
   for (const kind of ['army', 'scout'] as const) {
     const item: BuildItem = { kind }
     const label = kind === 'army' ? 'Army figure' : 'Scout figure'

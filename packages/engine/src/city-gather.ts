@@ -298,7 +298,7 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
     scoutNotes.push('A scout you did not send anywhere gathers for your capital and for no other city. Send it to another city in the Start of Turn to change that.')
   }
   if (unsent) {
-    scoutNotes.push('Your capital is not marked on the map (a metropolis has no capital marker), so a scout you did not send is offered to every city. Send it to a city in the Start of Turn so the game tracks it.')
+    scoutNotes.push('Your capital is not marked on the map, so a scout you did not send is offered to every city. Send it to a city in the Start of Turn so the game tracks it.')
   }
   if (scouts.length > 0) notes.push(...scoutNotes)
 
