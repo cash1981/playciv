@@ -31,6 +31,7 @@ function arenaUnit(overrides: Partial<ArenaUnit> = {}): ArenaUnit {
     placedBy: 'player-cash1981',
     rotation: 0,
     killed: false,
+    arrival: null,
     ...overrides,
   }
 }

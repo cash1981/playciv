@@ -187,8 +187,16 @@ related tests.
 - Standalone barbarian drawing is supported; initiation reuses the prepared hand
   or draws automatically.
 - Only the player who ended a battle may undo End battle, until another battle
-  begins. The projection exposes only `battleUndo.endedBy`, never the stored
-  private unit identities.
+  begins. Until then every viewer also sees the final arena, read-only, with
+  the result (`lastBattle`), so the player who did not press End battle can see
+  how it ended. Its units were face up during the battle; card, slot and battle
+  ids and card log numbers are scrubbed because the cards are back in hidden
+  hands. Reinforced-away units are not shown.
+- Taking a unit off its front (return to hand, or a move) undoes what its
+  arrival did: the fallen unit it replaced comes back, and both units of its
+  face-off get their health and kill flag back. A unit edited by hand since
+  (stats, kill toggle, rotate) keeps the edit. This lets a player regret a
+  placement without ending the battle turn.
 
 **Undoing a civilization reveal.** The vote takes back what the reveal handed
 out by itself, recorded as `GameLogEntry.civSetup`:
