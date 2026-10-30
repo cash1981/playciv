@@ -198,8 +198,21 @@ Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
 - Standalone barbarian drawing is supported; initiation reuses the prepared hand
   or draws automatically.
 - Only the player who ended a battle may undo End battle, until another battle
-  begins. The projection exposes only `battleUndo.endedBy`, never the stored
-  private unit identities.
+  begins. Until then every viewer also sees the final arena, read-only, with
+  the result as it stood at End battle (`lastBattle`; the totals are frozen,
+  matching the log line), so the player who did not press End battle can see
+  how it ended. Its units were face up during the battle; card, slot and battle
+  ids and card log numbers are scrubbed because the cards are back in hidden
+  hands. Reinforced-away units are not shown. A card without a log number
+  (number 0) shows no "#".
+- Taking a unit off its front (return to hand, or a move) undoes what its
+  arrival did: the fallen unit it replaced comes back, and the unit itself and
+  the opponent still facing it on that front get their health and kill flag
+  back, so a unit killed on arrival moves away alive. A unit edited by hand
+  since (stats, kill toggle, rotate), moved away (even if it returned to the
+  same front), or itself displaced keeps its
+  state: this is an undo of one arrival, not a battle-wide undo stack. It lets
+  a player regret a placement without ending the battle turn.
 
 **Undoing a civilization reveal.** The vote takes back what the reveal handed
 out by itself, recorded as `GameLogEntry.civSetup`:

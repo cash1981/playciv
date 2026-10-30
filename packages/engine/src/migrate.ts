@@ -141,9 +141,12 @@ type MaybeOlderBoard = Omit<
     Pick<Board, 'areaRows' | 'history' | 'redo' | 'slots' | 'slotStep' | 'startSlots'>
   >
 
-/** An arena unit from before rotation or the undoable kill (issue #71) existed. */
-type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation' | 'killed'> &
-  Partial<Pick<ArenaUnit, 'rotation' | 'killed'>>
+/**
+ * An arena unit from before rotation, the undoable kill (issue #71) or the
+ * undoable arrival existed.
+ */
+type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation' | 'killed' | 'arrival'> &
+  Partial<Pick<ArenaUnit, 'rotation' | 'killed' | 'arrival'>>
 
 /** A battle from before reinforcement tracked what it displaced (issue #75). */
 type MaybeOlderBattle = Omit<Battle, 'departedUnits'> & Partial<Pick<Battle, 'departedUnits'>>
@@ -211,17 +214,21 @@ function playedTurn(players: readonly Playerhand[]): number {
 }
 
 /** Backfills what a saved battle lacks: rotation, the undoable kill, departed units. */
+function migrateArenaUnit(unit: MaybeOlderArenaUnit): ArenaUnit {
+  return {
+    ...unit,
+    rotation: unit.rotation ?? 0,
+    killed: unit.killed ?? false,
+    // Placed before arrivals were recorded: there is nothing to take back.
+    arrival: unit.arrival ?? null,
+  }
+}
+
 function migrateBattle(battle: MaybeOlderBattle): Battle {
   return {
     ...battle,
-    arena: battle.arena.map(
-      (unit: MaybeOlderArenaUnit): ArenaUnit => ({
-        ...unit,
-        rotation: unit.rotation ?? 0,
-        killed: unit.killed ?? false,
-      }),
-    ),
-    departedUnits: battle.departedUnits ?? [],
+    arena: battle.arena.map(migrateArenaUnit),
+    departedUnits: (battle.departedUnits ?? []).map(migrateArenaUnit),
   }
 }
 
@@ -345,7 +352,12 @@ export function migrateGameState(state: GameState): GameState {
     endedBattle:
       older.endedBattle === null || older.endedBattle === undefined
         ? null
-        : { ...older.endedBattle, battle: migrateBattle(older.endedBattle.battle as MaybeOlderBattle) },
+        : {
+            ...older.endedBattle,
+            battle: migrateBattle(older.endedBattle.battle as MaybeOlderBattle),
+            // Ended before the result was kept: the view derives it instead.
+            summary: older.endedBattle.summary ?? null,
+          },
     rev: older.rev ?? 0,
     chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
     startPlayerId: older.startPlayerId ?? null,

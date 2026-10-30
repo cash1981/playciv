@@ -40,7 +40,7 @@ import {
   turnStatus,
 } from './turn.js'
 import type { Undo } from './undo.js'
-import type { Battle, BattleSideSummary } from './battle.js'
+import type { ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import { livePendingRewards } from './assisted-culture.js'
@@ -1038,7 +1038,8 @@ export interface GameState {
    * The battle most recently ended with "End battle", kept so the player who
    * ended it can undo an accidental press. `null` when there is nothing to
    * undo. Cleared when a new battle is initiated; no other action expires it.
-   * Never sent to a client: the view only carries `endedBy` (`battleUndo`).
+   * Never sent to a client as is: the view carries `endedBy` (`battleUndo`)
+   * and a copy with every id scrubbed (`lastBattle`).
    */
   readonly endedBattle: EndedBattle | null
   /**
@@ -1055,6 +1056,12 @@ export interface EndedBattle {
   readonly battle: Battle
   /** The player who pressed End battle, and the only one who may undo it. */
   readonly endedBy: string
+  /**
+   * Per-side totals as they stood at End battle, the ones its log line
+   * reports. Frozen because the combat bonus follows the board, which keeps
+   * changing. Null for a battle ended before they were kept.
+   */
+  readonly summary: readonly BattleSideSummary[] | null
   /** The fortification marker the end removed (Fame and Fortune p. 7), exactly as it stood, so an undo puts it back. */
   readonly fortification?: BoardPiece
 }
@@ -1560,11 +1567,14 @@ export interface PlayerView {
    * hidden-info rules (the hand, private techs).
    */
   readonly battle: Battle | null
-  /**
-   * Set while the ended battle can still be undone. Only who ended it is
-   * exposed; the arena snapshot itself stays in the game state.
-   */
+  /** Set while the ended battle can still be undone, by `endedBy` alone. */
   readonly battleUndo: { readonly endedBy: string } | null
+  /**
+   * The battle most recently ended, as it stood when it ended, so everyone
+   * can still see how it finished. Null while a battle is active, before any
+   * battle has ended, and once a new battle starts or the ended one is undone.
+   */
+  readonly lastBattle: LastBattleView | null
   /**
    * Per-side totals derived from the arena. Empty when no battle is active.
    * Derived rather than stored so it cannot drift out of step.
@@ -1574,10 +1584,54 @@ export interface PlayerView {
   readonly rev: number
 }
 
+/**
+ * The final arena of an ended battle, public to every viewer. Its units were
+ * face up in the arena while the battle ran; what is new is that their cards
+ * are now back in hidden hands. So no id survives: card, slot and battle ids
+ * and the card's log number would let a viewer follow those cards in the hand
+ * and the log. Departed units were never shown and are left out.
+ */
+export interface LastBattleView {
+  readonly endedBy: string
+  /** Per-side totals at End battle, the same the log line gives. */
+  readonly summary: readonly BattleSideSummary[]
+  /** The side the end-of-battle rule names the winner; a draw goes to the defender. */
+  readonly winner: BattleSideId | null
+  /** Every unit has `id` and `unit.id` set to `<side>-<position>`, `itemNumber` 0 and no arrival. */
+  readonly arena: readonly ArenaUnit[]
+}
+
+/** The winner by remaining HP plus combat bonus; a draw goes to the defender. */
+export function battleWinner(summaries: readonly BattleSideSummary[]): BattleSideSummary | null {
+  const attacker = summaries.find((s) => s.side === 'attacker')
+  const defender = summaries.find((s) => s.side === 'defender')
+  if (attacker === undefined || defender === undefined) return null
+  return attacker.totalHealth + attacker.combatBonus > defender.totalHealth + defender.combatBonus
+    ? attacker
+    : defender
+}
+
+function lastBattleOf(state: GameState): LastBattleView | null {
+  const ended = state.endedBattle
+  if (ended === null || state.battle !== null) return null
+  const summary = ended.summary ?? summariesOf(state, ended.battle)
+  return {
+    endedBy: ended.endedBy,
+    summary,
+    winner: battleWinner(summary)?.side ?? null,
+    arena: ended.battle.arena.map((u): ArenaUnit => {
+      const id = `${u.side}-${u.position}`
+      return { ...u, id, unit: { ...u.unit, id, itemNumber: 0 }, arrival: null }
+    }),
+  }
+}
+
 /** Derived per-side totals for the active battle. Exported for `endBattleAction`'s winner check. */
 export function battleSummaries(state: GameState): readonly BattleSideSummary[] {
-  const { battle } = state
-  if (battle === null) return []
+  return state.battle === null ? [] : summariesOf(state, state.battle)
+}
+
+function summariesOf(state: GameState, battle: Battle): readonly BattleSideSummary[] {
 
   const sides = [
     { sideId: 'attacker' as const, side: battle.attacker },
@@ -1674,6 +1728,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     tradeOffers: publicTradeOffers(state),
     battle: state.battle,
     battleUndo: state.endedBattle === null ? null : { endedBy: state.endedBattle.endedBy },
+    lastBattle: lastBattleOf(state),
     battleSummary: battleSummaries(state),
     rev: state.rev,
   }

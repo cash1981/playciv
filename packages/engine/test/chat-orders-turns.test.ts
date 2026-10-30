@@ -561,7 +561,7 @@ describe('what is public and what migrates', () => {
     expect(Object.keys(view).sort()).toEqual(
       [
         'active', 'activeTurn', 'assistedActions', 'battle', 'battleSummary', 'battleUndo', 'blockadedPieceIds', 'board', 'brandenburgZones', 'communismLocks',
-        'boardAreas', 'gameType', 'id', 'log', 'name', 'numOfPlayers', 'numberOfDiscardedItems',
+        'boardAreas', 'gameType', 'id', 'lastBattle', 'log', 'name', 'numOfPlayers', 'numberOfDiscardedItems',
         'numberOfItemsInDeck', 'opponents', 'rev', 'techs', 'tradeOffers', 'winner', 'you',
       ].sort(),
     )

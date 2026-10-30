@@ -1685,6 +1685,58 @@ describe('the ended-battle banner', () => {
     expect((getByText('Undo') as HTMLButtonElement).disabled).toBe(true)
   })
 
+  describe('the final arena', () => {
+    const finalUnit = (side: 'attacker' | 'defender', health: number, killed: boolean) => ({
+      id: `${side}-0`, side, position: 0, attack: 2, health, placedBy: side === 'attacker' ? 'me' : 'other',
+      rotation: 0, killed, arrival: null,
+      unit: {
+        kind: 'infantry', sheetName: 'INFANTRY', id: `${side}-0`, itemNumber: 0, description: null,
+        used: false, hidden: false, ownerId: null, attack: 2, health: 3, level: 0, killed: false, inBattle: false,
+      },
+    })
+    const withLastBattle = (youId: string | null): PlayerView => ({
+      ...endedView(youId, { endedBy: 'me' }),
+      lastBattle: {
+        endedBy: 'me',
+        winner: 'defender',
+        summary: [
+          { side: 'attacker', kind: 'player', playerId: 'me', label: 'Shervin', unitCount: 0, totalHealth: 0, totalAttack: 0, combatBonus: 0 },
+          { side: 'defender', kind: 'player', playerId: 'other', label: 'Karandras1', unitCount: 1, totalHealth: 2, totalAttack: 2, combatBonus: 1 },
+        ],
+        arena: [finalUnit('attacker', 0, true), finalUnit('defender', 2, false)],
+      },
+    }) as unknown as PlayerView
+
+    it('shows the other player how the battle ended, with nothing to change', () => {
+      const { container, queryByText } = renderPanel(withLastBattle('other'))
+      expect(container.querySelector('.battle-ended-banner')?.textContent).toContain('Karandras1 won with 3 HP vs 0 HP')
+      const arena = container.querySelector('.ended-battle-arena')
+      expect(arena).not.toBeNull()
+      expect(arena!.textContent).toContain('Karandras1 (won)')
+      // The scrubbed log number is not shown as "#0".
+      expect(arena!.textContent).not.toContain('#0')
+      expect(arena!.querySelectorAll('.arena-slot')).not.toHaveLength(0)
+      expect(arena!.querySelectorAll('input:not([disabled])')).toHaveLength(0)
+      expect(arena!.querySelectorAll('button:not([disabled])')).toHaveLength(0)
+      expect(arena!.querySelector('[draggable="true"]')).toBeNull()
+      expect(queryByText('Undo')).toBeNull()
+    })
+
+    it('can be hidden and shown again', () => {
+      const { container, getByText } = renderPanel(withLastBattle(null))
+      fireEvent.click(getByText('Hide final arena'))
+      expect(container.querySelector('.ended-battle-arena')).toBeNull()
+      fireEvent.click(getByText('Show final arena'))
+      expect(container.querySelector('.ended-battle-arena')).not.toBeNull()
+    })
+
+    it('is absent when the view has no last battle', () => {
+      const { container, queryByText } = renderPanel(endedView('me'))
+      expect(container.querySelector('.ended-battle-arena')).toBeNull()
+      expect(queryByText('Hide final arena')).toBeNull()
+    })
+  })
+
   it('disables active-battle actions in a read-only view', () => {
     const battleView = {
       ...endedView('me', null),
@@ -1730,6 +1782,7 @@ describe('the ended-battle banner', () => {
       placedBy: 'me',
       rotation: 0,
       killed: false,
+      arrival: null,
     } as const
     const { container } = render(
       <ArenaUnitCard

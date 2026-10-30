@@ -1244,6 +1244,255 @@ describe('face-off on arrival', () => {
   })
 })
 
+describe('taking back an arrival', () => {
+  type Kind = 'infantry' | 'artillery' | 'mounted'
+
+  /**
+   * The reported game: Karandras's infantry kills Cash's infantry on front 0,
+   * then Cash reinforces with artillery, which trumps and kills it.
+   */
+  function reinforcedAndTrumped(): {
+    readonly state: GameState
+    readonly fallenId: string
+    readonly opponentId: string
+    readonly reinforcementId: string
+    readonly reinforcementCardId: string
+  } {
+    let state = withBattlehand(CASH1981, 2)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const place = (playerId: string, index: number, kind: Kind, side: 'attacker' | 'defender', attack: number, health: number) => {
+      const player = findPlayer(state, playerId)!
+      const unit = player.battlehand[index]!
+      state = withPlayer(state, {
+        ...player,
+        battlehand: player.battlehand.map((u) => (u.id === unit.id ? ({ ...u, kind } as typeof u) : u)),
+      })
+      state = unwrap(placeUnitInArena(state, { playerId, unitId: unit.id, side, position: 0, attack, health }))
+      return { slotId: state.battle!.arena[state.battle!.arena.length - 1]!.id, cardId: unit.id }
+    }
+    const fallen = place(CASH1981, 0, 'infantry', 'attacker', 1, 1)
+    const opponent = place(KARANDRAS1, 0, 'infantry', 'defender', 2, 3)
+    // Infantry against infantry: both strike. Cash's unit falls, 2 HP remain.
+    expect(state.battle!.arena.find((u) => u.id === fallen.slotId)).toMatchObject({ killed: true })
+    expect(state.battle!.arena.find((u) => u.id === opponent.slotId)).toMatchObject({ health: 2, killed: false })
+
+    const reinforcement = place(CASH1981, 1, 'artillery', 'attacker', 4, 3)
+    // Artillery trumps infantry and 4 ≥ 2: the opponent dies before striking back.
+    expect(state.battle!.arena.find((u) => u.id === opponent.slotId)).toMatchObject({ health: 0, killed: true })
+    expect(state.battle!.arena.some((u) => u.id === fallen.slotId)).toBe(false)
+    return {
+      state,
+      fallenId: fallen.slotId,
+      opponentId: opponent.slotId,
+      reinforcementId: reinforcement.slotId,
+      reinforcementCardId: reinforcement.cardId,
+    }
+  }
+
+  it('returning the reinforcement brings back the fallen unit and the unit it killed', () => {
+    const { state, fallenId, opponentId, reinforcementId, reinforcementCardId } = reinforcedAndTrumped()
+    const next = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: reinforcementId }))
+
+    const arena = next.battle!.arena
+    expect(arena.map((u) => u.id).sort()).toEqual([fallenId, opponentId].sort())
+    expect(arena.find((u) => u.id === fallenId)).toMatchObject({ position: 0, killed: true })
+    expect(arena.find((u) => u.id === opponentId)).toMatchObject({ health: 2, killed: false })
+    expect(next.battle!.departedUnits).toEqual([])
+    expect(findPlayer(next, CASH1981)!.battlehand.find((u) => u.id === reinforcementCardId)!.inBattle).toBe(false)
+  })
+
+  it('moving the reinforcement to another front takes its arrival back too', () => {
+    const { state, fallenId, opponentId, reinforcementId } = reinforcedAndTrumped()
+    const next = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: reinforcementId, position: 1 }))
+
+    const arena = next.battle!.arena
+    expect(arena.find((u) => u.id === fallenId)).toMatchObject({ position: 0, killed: true })
+    expect(arena.find((u) => u.id === opponentId)).toMatchObject({ health: 2, killed: false })
+    // Front 1 is open: the reinforcement stands there unhurt, with nothing to take back.
+    expect(arena.find((u) => u.id === reinforcementId)).toMatchObject({ position: 1, health: 3, arrival: null })
+    expect(next.battle!.departedUnits).toEqual([])
+  })
+
+  it('restores the unit’s own HP when it leaves a front where it was hurt', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const cashUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const karUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(placeUnitInArena(state, {
+      playerId: KARANDRAS1, unitId: karUnit.id, side: 'defender', position: 0, attack: 3, health: 4,
+    }))
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: cashUnit.id, side: 'attacker', position: 0, attack: 2, health: 4,
+    }))
+    const mover = state.battle!.arena.find((u) => u.side === 'attacker')!
+    expect(mover.health).toBe(1)
+
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: mover.id, position: 1 }))
+    const arena = state.battle!.arena
+    expect(arena.find((u) => u.side === 'attacker')).toMatchObject({ position: 1, health: 4 })
+    expect(arena.find((u) => u.side === 'defender')).toMatchObject({ health: 4 })
+  })
+
+  it('keeps a hand edit made after the face-off', () => {
+    const { state, fallenId, opponentId, reinforcementId } = reinforcedAndTrumped()
+    // The opponent's kill is undone by hand, then its HP set: both are newer decisions.
+    let edited = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: opponentId }))
+    edited = unwrap(setArenaUnitStat(edited, { playerId: KARANDRAS1, arenaUnitId: opponentId, key: 'health', value: 1 }))
+    const next = unwrap(returnArenaUnitToHand(edited, { playerId: CASH1981, arenaUnitId: reinforcementId }))
+
+    expect(next.battle!.arena.find((u) => u.id === opponentId)).toMatchObject({ health: 1, killed: false })
+    expect(next.battle!.arena.find((u) => u.id === fallenId)).toMatchObject({ killed: true })
+  })
+
+  it('returning a unit that displaced nothing and fought nobody changes nothing else', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: unit.id, side: 'attacker', position: 0, attack: 3, health: 4,
+    }))
+    expect(state.battle!.arena[0]!.arrival).toBeNull()
+    const next = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: state.battle!.arena[0]!.id }))
+    expect(next.battle!.arena).toEqual([])
+    expect(next.battle!.departedUnits).toEqual([])
+  })
+
+  /** A battle between Cash (attacker) and Karandras (defender), all infantry. */
+  function battle(cashUnits: number, karUnits: number): GameState {
+    let state = withBattlehand(CASH1981, cashUnits)
+    state = addBattlehand(state, KARANDRAS1, karUnits)
+    return unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+  }
+
+  /** Places the first free battlehand unit; returns the new state and its slot id. */
+  function placeNext(
+    state: GameState, playerId: string, side: 'attacker' | 'defender', position: number, attack: number, health: number,
+  ): readonly [GameState, string] {
+    const unit = findPlayer(state, playerId)!.battlehand.find((u) => !u.inBattle)!
+    const next = unwrap(placeUnitInArena(state, { playerId, unitId: unit.id, side, position, attack, health }))
+    return [next, next.battle!.arena[next.battle!.arena.length - 1]!.id]
+  }
+
+  const unitIn = (state: GameState, id: string) => state.battle!.arena.find((u) => u.id === id)
+
+  it('leaves the opponent hurt once it has moved off that front', () => {
+    let state = battle(1, 1)
+    let defender: string, attacker: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 2, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 3, 5)
+    expect(unitIn(state, defender)!.health).toBe(2)
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 1 }))
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: attacker }))
+    expect(unitIn(state, defender)).toMatchObject({ position: 1, health: 2 })
+  })
+
+  it.each(['return', 'move'] as const)('leaves the opponent hurt after a round trip when undoing by %s', (action) => {
+    let state = battle(1, 1)
+    let defender: string, attacker: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    expect(unitIn(state, attacker)).toMatchObject({ health: 0, killed: true })
+    expect(unitIn(state, defender)).toMatchObject({ health: 4, killed: false })
+    const before = state
+    const snapshot = JSON.stringify(before)
+
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 1 }))
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 0 }))
+    expect(unitIn(state, defender)).toMatchObject({ position: 0, health: 4, killed: false })
+    state = action === 'return'
+      ? unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: attacker }))
+      : unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker, position: 1 }))
+
+    expect(unitIn(state, defender)).toMatchObject({ position: 0, health: 4, killed: false })
+    if (action === 'return') {
+      expect(unitIn(state, attacker)).toBeUndefined()
+    } else {
+      expect(unitIn(state, attacker)).toMatchObject({ position: 1, health: 2, killed: false })
+    }
+    expect(JSON.stringify(before)).toBe(snapshot)
+  })
+
+  it('invalidates displaced units’ opponent restoration after a round trip too', () => {
+    let state = battle(2, 1)
+    let defender: string, first: string, second: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 5)
+    ;[state, first] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    ;[state, second] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    expect(unitIn(state, defender)).toMatchObject({ health: 3, killed: false })
+    expect(state.battle!.departedUnits.map((u) => u.id)).toEqual([first])
+
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 1 }))
+    state = unwrap(moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: defender, position: 0 }))
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: second }))
+    expect(unitIn(state, first)).toMatchObject({ health: 0, killed: true })
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: first }))
+
+    expect(unitIn(state, defender)).toMatchObject({ position: 0, health: 3, killed: false })
+    expect(state.battle!.departedUnits).toEqual([])
+  })
+
+  it('keeps a hand edit of the moving unit itself', () => {
+    let state = battle(1, 1)
+    let attacker: string
+    ;[state] = placeNext(state, KARANDRAS1, 'defender', 0, 2, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 3, 5)
+    expect(unitIn(state, attacker)!.health).toBe(3)
+    state = unwrap(setArenaUnitStat(state, { playerId: CASH1981, arenaUnitId: attacker, key: 'health', value: 1 }))
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker, position: 1 }))
+    expect(unitIn(state, attacker)).toMatchObject({ position: 1, health: 1 })
+  })
+
+  it('a unit killed on arrival comes back alive when it is moved away', () => {
+    let state = battle(1, 1)
+    let defender: string, attacker: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 5)
+    ;[state, attacker] = placeNext(state, CASH1981, 'attacker', 0, 1, 2)
+    expect(unitIn(state, attacker)).toMatchObject({ health: 0, killed: true })
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: attacker, position: 1 }))
+    expect(unitIn(state, attacker)).toMatchObject({ position: 1, health: 2, killed: false })
+    expect(unitIn(state, defender)).toMatchObject({ health: 5, killed: false })
+  })
+
+  it('steps back through chained reinforcements one at a time', () => {
+    let state = battle(2, 1)
+    let defender: string, first: string, second: string
+    ;[state, defender] = placeNext(state, KARANDRAS1, 'defender', 0, 5, 10)
+    ;[state, first] = placeNext(state, CASH1981, 'attacker', 0, 1, 1)
+    ;[state, second] = placeNext(state, CASH1981, 'attacker', 0, 2, 3)
+    expect(unitIn(state, defender)!.health).toBe(7)
+    expect(unitIn(state, first)).toBeUndefined()
+
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: second }))
+    expect(unitIn(state, defender)!.health).toBe(9)
+    expect(unitIn(state, first)).toMatchObject({ killed: true })
+
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: first }))
+    expect(unitIn(state, defender)!.health).toBe(10)
+    expect(state.battle!.arena).toHaveLength(1)
+    expect(state.battle!.departedUnits).toEqual([])
+  })
+
+  it('an arena saved before arrivals were recorded loads with nothing to take back', () => {
+    const { state } = reinforcedAndTrumped()
+    const strip = (u: Record<string, unknown>) => {
+      const { arrival: _arrival, ...rest } = u
+      return rest
+    }
+    const old = {
+      ...state,
+      battle: {
+        ...state.battle!,
+        arena: state.battle!.arena.map((u) => strip(u as unknown as Record<string, unknown>)),
+        departedUnits: state.battle!.departedUnits.map((u) => strip(u as unknown as Record<string, unknown>)),
+      },
+    } as unknown as GameState
+    const migrated = migrateGameState(old)
+    expect([...migrated.battle!.arena, ...migrated.battle!.departedUnits].every((u) => u.arrival === null)).toBe(true)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // endBattleTurn
 // ---------------------------------------------------------------------------
@@ -1750,6 +1999,7 @@ describe('ending a battle and the projection', () => {
   function endedBattleWithUnits(): {
     readonly ended: GameState
     readonly arenaIds: readonly string[]
+    readonly cardIds: readonly string[]
     readonly battleId: string
     readonly unitNames: readonly string[]
   } {
@@ -1773,24 +2023,97 @@ describe('ending a battle and the projection', () => {
     return {
       ended,
       arenaIds: battle.arena.map((u) => u.id),
+      cardIds: battle.arena.map((u) => u.unit.id),
       battleId: battle.id,
       unitNames: battle.arena.map((u) => revealAll(u.unit)),
     }
   }
 
-  it('exposes only who ended the battle, never the snapshot, to any viewer', () => {
-    const { ended, arenaIds, battleId } = endedBattleWithUnits()
+  it('shows every viewer the final arena and result, with no id of the battle or its cards', () => {
+    const { ended, arenaIds, cardIds, battleId } = endedBattleWithUnits()
+    const snapshot = ended.endedBattle!.battle
 
     for (const viewer of [CASH1981, KARANDRAS1, ITCHI, 'a-spectator']) {
       const view = toPlayerView(ended, viewer)
       expect(view.battle).toBeNull()
       expect(view.battleUndo).toEqual({ endedBy: CASH1981 })
       expect(Object.keys(view.battleUndo ?? {})).toEqual(['endedBy'])
+
+      const last = view.lastBattle!
+      expect(last.endedBy).toBe(CASH1981)
+      // Only the attacker placed units, so the attacker wins.
+      expect(last.winner).toBe('attacker')
+      expect(last.summary.map((s) => s.side)).toEqual(['attacker', 'defender'])
+      expect(last.arena.map((u) => [u.side, u.position, u.unit.kind, u.attack, u.health, u.killed])).toEqual(
+        snapshot.arena.map((u) => [u.side, u.position, u.unit.kind, u.attack, u.health, u.killed]),
+      )
+      for (const u of last.arena) {
+        expect(u.id).toBe(`${u.side}-${u.position}`)
+        expect(u.unit.id).toBe(u.id)
+        expect(u.unit.itemNumber).toBe(0)
+        expect(u.arrival).toBeNull()
+      }
+
+      const lastJson = JSON.stringify(last)
+      for (const id of [battleId, ...arenaIds, ...cardIds]) expect(lastJson).not.toContain(id)
       const json = JSON.stringify(view)
       expect(json).not.toContain('endedBattle')
       expect(json).not.toContain(battleId)
       for (const id of arenaIds) expect(json).not.toContain(id)
     }
+  })
+
+  it('never shows a unit that was reinforced away', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const [first, second] = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: first!.id, side: 'attacker', position: 0, attack: 1, health: 1,
+    }))
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: state.battle!.arena[0]!.id }))
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: second!.id, side: 'attacker', position: 0, attack: 2, health: 2,
+    }))
+    const departed = state.battle!.departedUnits
+    expect(departed).toHaveLength(1)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+
+    const last = toPlayerView(ended, KARANDRAS1).lastBattle!
+    expect(last.arena).toHaveLength(1)
+    expect(last.arena[0]).toMatchObject({ attack: 2, health: 2 })
+    // The card ids stay out of `lastBattle` only: a battlehand is public anyway.
+    const json = JSON.stringify(toPlayerView(ended, KARANDRAS1))
+    expect(json).not.toContain(departed[0]!.id)
+    expect(JSON.stringify(last)).not.toContain(first!.id)
+  })
+
+  it('shows the result as it stood at End battle, not as the game stands now', () => {
+    const { ended } = endedBattleWithUnits()
+    const cash = findPlayer(ended, CASH1981)!
+    const before = toPlayerView(ended, KARANDRAS1).lastBattle!
+    // Anything the live totals depend on may change afterwards; a rename shows it.
+    const renamed = withPlayer(ended, { ...cash, username: 'someone-else' })
+    expect(toPlayerView(renamed, KARANDRAS1).lastBattle!.summary).toEqual(before.summary)
+    expect(before.summary.find((s) => s.side === 'attacker')!.label).toBe(cash.username)
+  })
+
+  it('derives the result for a battle ended before results were kept', () => {
+    const { ended } = endedBattleWithUnits()
+    const old = { ...ended, endedBattle: { ...ended.endedBattle!, summary: undefined } } as unknown as GameState
+    const migrated = migrateGameState(old)
+    expect(migrated.endedBattle!.summary).toBeNull()
+    expect(toPlayerView(migrated, KARANDRAS1).lastBattle!.winner).toBe('attacker')
+  })
+
+  it('has no last battle before one ends, while one runs, after a new one starts or once undone', () => {
+    expect(toPlayerView(firstCivGame(), CASH1981).lastBattle).toBeNull()
+
+    const { ended } = endedBattleWithUnits()
+    const next = unwrap(initiateBattle(ended, { initiatorId: KARANDRAS1, opponentId: ITCHI }))
+    expect(toPlayerView(next, CASH1981).lastBattle).toBeNull()
+
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(toPlayerView(restored, CASH1981).lastBattle).toBeNull()
   })
 
   it('has no battleUndo before a battle is ended, while one is running, or after a new one starts', () => {

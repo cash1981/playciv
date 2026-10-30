@@ -17,8 +17,8 @@ import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
-import { battleSummaries, findPlayer, withPlayer } from '../state.js'
-import type { ArenaUnit, BattleSide, BattleSideId } from '../battle.js'
+import { battleSummaries, battleWinner, findPlayer, withPlayer } from '../state.js'
+import type { ArenaFaceOff, ArenaUnit, ArenaVitals, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
@@ -284,18 +284,92 @@ function withDamage(unit: ArenaUnit, damage: number): ArenaUnit {
  * values it came in with; the opponent's current health is what takes the
  * damage, so a survivor of an earlier round stays hurt. A killed unit is
  * flagged `killed` (still undoable by hand).
+ *
+ * Records on the arrival what it displaced and what the face-off changed, so
+ * `undoArrival` can take it all back.
  */
-function resolveArrival(arena: readonly ArenaUnit[], arrivalId: string): readonly ArenaUnit[] {
+function resolveArrival(
+  arena: readonly ArenaUnit[],
+  arrivalId: string,
+  displacedId: string | null,
+): readonly ArenaUnit[] {
   const arrival = arena.find((u) => u.id === arrivalId)
-  if (arrival === undefined || arrival.killed) return arena
-  const opponent = arena.find(
-    (u) => u.side !== arrival.side && u.position === arrival.position && !u.killed,
-  )
-  if (opponent === undefined) return arena
+  if (arrival === undefined) return arena
+  const opponent = arrival.killed
+    ? undefined
+    : arena.find((u) => u.side !== arrival.side && u.position === arrival.position && !u.killed)
+  if (opponent === undefined) {
+    const record = displacedId === null ? null : { displacedId, faceOff: null }
+    return arena.map((u) => (u.id === arrival.id ? { ...u, arrival: record } : u))
+  }
   const { toA, toB } = faceOffDamage(arrival, opponent)
+  const self = withDamage(arrival, toA)
+  const hit = withDamage(opponent, toB)
+  const faceOff: ArenaFaceOff = {
+    opponentId: opponent.id,
+    opponentBefore: vitalsOf(opponent),
+    opponentAfter: vitalsOf(hit),
+    selfBefore: vitalsOf(arrival),
+    selfAfter: vitalsOf(self),
+  }
   return arena.map((u) =>
-    u.id === arrival.id ? withDamage(u, toA) : u.id === opponent.id ? withDamage(u, toB) : u,
+    u.id === arrival.id ? { ...self, arrival: { displacedId, faceOff } } : u.id === opponent.id ? hit : u,
   )
+}
+
+function vitalsOf(unit: ArenaUnit): ArenaVitals {
+  return { health: unit.health, killed: unit.killed }
+}
+
+function hasVitals(unit: ArenaUnit, vitals: ArenaVitals): boolean {
+  return unit.health === vitals.health && unit.killed === vitals.killed
+}
+
+/**
+ * Takes back what a unit's latest arrival did, before it leaves its front:
+ * the fallen unit it displaced returns from `departedUnits`, and both units
+ * of its face-off get their earlier health and kill flag back.
+ *
+ * A unit is restored only while it still has exactly what the face-off left
+ * it with (and the opponent still faces this front): a later hand edit, kill
+ * toggle or face-off is a newer decision and stays. The displaced unit comes
+ * back only to an empty front.
+ */
+function undoArrival(
+  arena: readonly ArenaUnit[],
+  departedUnits: readonly ArenaUnit[],
+  unit: ArenaUnit,
+): { readonly arena: readonly ArenaUnit[]; readonly departedUnits: readonly ArenaUnit[] } {
+  const record = unit.arrival
+  if (record === null) return { arena, departedUnits }
+
+  const faceOff = record.faceOff
+  let nextArena = arena.map((u): ArenaUnit => {
+    if (u.id === unit.id) {
+      const restored = faceOff !== null && hasVitals(u, faceOff.selfAfter) ? faceOff.selfBefore : vitalsOf(u)
+      return { ...u, ...restored, arrival: null }
+    }
+    if (
+      faceOff !== null &&
+      u.id === faceOff.opponentId &&
+      u.position === unit.position &&
+      hasVitals(u, faceOff.opponentAfter)
+    ) {
+      return { ...u, ...faceOff.opponentBefore }
+    }
+    return u
+  })
+
+  let nextDeparted = departedUnits
+  const displaced = departedUnits.find((u) => u.id === record.displacedId)
+  if (
+    displaced !== undefined &&
+    !nextArena.some((u) => u.id !== unit.id && u.side === displaced.side && u.position === displaced.position)
+  ) {
+    nextArena = [...nextArena, displaced]
+    nextDeparted = departedUnits.filter((u) => u.id !== displaced.id)
+  }
+  return { arena: nextArena, departedUnits: nextDeparted }
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +498,7 @@ export function placeUnitInArena(
     placedBy: input.playerId,
     rotation: 0,
     killed: false,
+    arrival: null,
   }
 
   nextState = appendPublicLog(
@@ -437,7 +512,7 @@ export function placeUnitInArena(
     ...nextState,
     battle: {
       ...battle,
-      arena: resolveArrival([...arena, arenaUnit], arenaUnitId),
+      arena: resolveArrival([...arena, arenaUnit], arenaUnitId, fallenUnit?.id ?? null),
       departedUnits,
     },
   })
@@ -494,8 +569,6 @@ export function moveArenaUnit(
   }
   const fallenUnit = atTarget.find((u) => u.killed)
 
-  const updatedUnit: ArenaUnit = { ...unit, position: input.position }
-
   const movePrefix = `${player.username} moves ${revealAll(unit.unit)} to`
   const nextState = appendRollingArenaLog(
     state,
@@ -505,8 +578,18 @@ export function moveArenaUnit(
     (previous) => previous.startsWith(movePrefix),
   )
 
-  let arena = battle.arena
-  let departedUnits = battle.departedUnits
+  // Leaving a front takes back what arriving there did, the same as
+  // returning the unit to hand; the new front then gets its own arrival.
+  let { arena, departedUnits } = undoArrival(battle.arena, battle.departedUnits, unit)
+  // Moving away invalidates older opponent restoration, even if it later returns.
+  const invalidateOpponent = (u: ArenaUnit): ArenaUnit => {
+    const arrival = u.arrival
+    return arrival?.faceOff?.opponentId === unit.id
+      ? { ...u, arrival: { ...arrival, faceOff: { ...arrival.faceOff, opponentId: null } } }
+      : u
+  }
+  arena = arena.map(invalidateOpponent)
+  departedUnits = departedUnits.map(invalidateOpponent)
   if (fallenUnit !== undefined) {
     arena = arena.filter((u) => u.id !== fallenUnit.id)
     departedUnits = [...departedUnits, fallenUnit]
@@ -517,8 +600,9 @@ export function moveArenaUnit(
     battle: {
       ...battle,
       arena: resolveArrival(
-        arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
+        arena.map((u) => (u.id === input.arenaUnitId ? { ...u, position: input.position } : u)),
         input.arenaUnitId,
+        fallenUnit?.id ?? null,
       ),
       departedUnits,
     },
@@ -539,7 +623,9 @@ export interface ReturnArenaUnitToHandInput {
  * entirely (issue #71: the "x" button). Clears `inBattle` on the source card
  * so it is playable again, and drops the arena entry. Same side restriction
  * as `moveArenaUnit`. Works on a killed unit too: that simply undoes both the
- * kill and the placement in one step.
+ * kill and the placement in one step. What its arrival did is taken back too
+ * (`undoArrival`): the fallen unit it replaced returns, and the unit it fought
+ * gets its health back.
  */
 export function returnArenaUnitToHand(
   state: GameState,
@@ -587,11 +673,13 @@ export function returnArenaUnitToHand(
     `returns ${revealAll(arenaUnit.unit)} to hand`,
   )
 
+  const undone = undoArrival(battle.arena, battle.departedUnits, arenaUnit)
   return ok({
     ...nextState,
     battle: {
       ...battle,
-      arena: battle.arena.filter((u) => u.id !== input.arenaUnitId),
+      arena: undone.arena.filter((u) => u.id !== input.arenaUnitId),
+      departedUnits: undone.departedUnits,
     },
   })
 }
@@ -917,17 +1005,17 @@ export function endBattleAction(
   // Winner: whichever side's remaining HP plus its combat bonus (the derived
   // `combatBonusOf`, issue #197, always 0 for barbarians) is higher; a draw
   // goes to the defender, per the human's explicit tie-break rule.
-  const [attackerSummary, defenderSummary] = battleSummaries(state)
+  const summaries = battleSummaries(state)
+  const winner = battleWinner(summaries)
+  const loser = summaries.find((s) => s !== winner)
   const outcome =
-    attackerSummary === undefined || defenderSummary === undefined
+    winner === null || loser === undefined
       ? null
-      : (() => {
-          const attackerScore = attackerSummary.totalHealth + attackerSummary.combatBonus
-          const defenderScore = defenderSummary.totalHealth + defenderSummary.combatBonus
-          return attackerScore > defenderScore
-            ? { winner: attackerSummary, winnerScore: attackerScore, loserScore: defenderScore }
-            : { winner: defenderSummary, winnerScore: defenderScore, loserScore: attackerScore }
-        })()
+      : {
+          winner,
+          winnerScore: winner.totalHealth + winner.combatBonus,
+          loserScore: loser.totalHealth + loser.combatBonus,
+        }
 
   nextState = appendPublicLog(
     nextState,
@@ -939,7 +1027,7 @@ export function endBattleAction(
   )
 
   // A fortification is used up by the battle for its city, whoever won (Fame and Fortune p. 7, the human)
-  const defence = defenderSummary?.cityDefence ?? null
+  const defence = summaries.find((s) => s.side === 'defender')?.cityDefence ?? null
   const fortification =
     defence?.fortificationPieceId == null
       ? undefined
@@ -960,14 +1048,16 @@ export function endBattleAction(
     }
   }
 
-  // Keep the battle as it stood so its ender can undo an accidental press. The
-  // log line above carries no unit names, and the snapshot never reaches a view.
+  // Keep the battle as it stood so its ender can undo an accidental press and
+  // everyone can still see how it ended (`lastBattle`, ids scrubbed). The log
+  // line above carries no unit names.
   return ok({
     ...nextState,
     battle: null,
     endedBattle: {
       battle,
       endedBy: input.playerId,
+      summary: summaries,
       ...(fortification === undefined ? {} : { fortification }),
     },
   })
