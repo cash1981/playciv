@@ -379,7 +379,8 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   scout moved back brings an older one back), the latest send keeps the square.
   A scout on a centre of the player's own city never sends its square (human,
   #319), with or without a capital, and neither does an English army: the send
-  is refused, the panel says why, and an older send lapses.
+  is refused, the panel offers none (and says why for a scout), and an older
+  send lapses.
   An English army is only sent by hand.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan
