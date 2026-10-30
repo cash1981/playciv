@@ -23,6 +23,14 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - **Game-chat permissions:** `POST /api/games/:gameId/chat` checks login and
   game locking, not membership, so a non-member can post although the UI hides
   the composer. Whether that is intended is undecided.
+- **Ending on an own city centre:** F&F p. 7 lets figures cross friendly
+  centres "as long as they don't end their movement there"; travel still lets a
+  figure that is not disbanded stop there (the #319 centre-scout rule assumes
+  it). Ask the human before forbidding it.
+- **Who opens the arena:** the defended city is found from the battle's
+  attacker (the initiator) standing on the defender's city. If the city's owner
+  initiates against the army in their city, no city bonus is counted and the
+  fortification stays. Ask the human whether to look both ways.
 - **Arena edits:** `runBattleAction` in `GameView.tsx` returns early while busy,
   so a debounced stat save can be dropped (found by inspection, not reproduced).
 - **Revealed feed:** the history fetch is capped at 100 items; there is no full

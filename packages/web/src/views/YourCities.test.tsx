@@ -36,6 +36,7 @@ function city(overrides: Partial<CityProduction> = {}): CityProduction {
     outskirtsDetail: [],
     modifiers: [],
     buildingProgram: false,
+    caravan: false,
     estimate: 4,
     withBuildingProgram: null,
     override: null,
@@ -55,6 +56,7 @@ const buildOptions = (cityPieceId: string, label: string): CityBuildOptions => (
   reason: 'Ready to build.',
   production: 4,
   productionSource: 'estimate',
+  caravan: false,
   choices: [],
   unavailable: [],
 })

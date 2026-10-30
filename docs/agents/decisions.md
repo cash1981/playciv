@@ -170,9 +170,20 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   is not regained by returning. "First" is derived by replaying `board.history`
   (`cityStateHolderColour`) because stacking order changes; nothing is stored, so
   undo follows. The +1 culture half is not derived.
+- **Defended city** (base p. 23, F&F p. 7 and 9; human 2026-10-30): a battle is
+  for a city when one of the attacker's armies stands on a centre of one of the
+  defender's cities (a battle has no square of its own). The defender's combat
+  bonus then adds +6 city or +12 capital (a metropolis is the capital), +4
+  walled, +2 metropolis, +2 fortification (`cityDefenceOf`,
+  `BattleSideSummary.cityDefence`, public). End battle removes the fortification
+  whoever won (human) as the ender's board change; Undo end battle puts it back
+  (`EndedBattle.fortification`). The +3 hand size is out of scope.
+- Fortification and caravan markers are read from the board, so ones placed by
+  hand on a centre in existing games take effect too. An undo puts a used-up
+  marker back only while its city has no other one (`cityMarkerMayReturn`).
 
-Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts` and
-related tests.
+Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
+`city-defence.ts`, `actions/arena.ts` and related tests (`disband`).
 
 ## Arena and card handling
 
@@ -503,10 +514,18 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   unowned or blockaded on its own square: no effect. Not modelled: the Spy
   exception (rule 214) and the obligation to leave. Derived and public
   (`PlayerView.brandenburgZones`).
+- **Disbanding** (F&F p. 7–8, human 2026-10-30): travel only (not cards or
+  drag) onto a centre of an own city asks first; `travelFigure({ disband: true })`
+  then removes the army or scout (back to supply) and puts a fortification
+  (army) or caravan (scout) on that square, in one `disband` board change after
+  the move: board Undo gives the figure back, then the move. One marker per
+  city of either kind; a later disband only removes the figure. The shared pool
+  of 15 markers is not limited. Effects: City production (caravan) and Coins,
+  wonders and blockade (fortification).
 - **Not done:** automated battle, loot and figure removal.
 
 Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`), `actions/board.ts`
-(`travelFigure`), `explore.ts`, `actions/explore.ts`, `actions/draw.ts`
+(`travelFigure`), `disband.ts`, `explore.ts`, `actions/explore.ts`, `actions/draw.ts`
 (`drawTileAt`), `communism.ts`, `assisted-communism.ts`, `brandenburg.ts`,
 `server/src/routes/board.ts`, `web/src/views/BoardView.tsx`; tests `movement`,
 `stacking-movement`, `explore`, `communism`, `brandenburg`, `assisted-gather`.
@@ -721,6 +740,10 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   ruling found, not handled.
 - A Building Program marker on the centre is used up by any build and restored by
   undo. Production used: hand-set, then doubled, then estimate.
+- **Caravan** (F&F p. 7, human 2026-10-30): a caravan marker on a centre adds 2
+  to the production used (hand-set, doubled or estimate; never doubled), and
+  every Build in the city uses it up, needed or not (`effect.caravan`, restored
+  by the undo vote, board Undo refused). Devote and Harvest keep it.
 - One action per city per turn (p. 15, human): Build, Start Building Program,
   Devote and Harvest count; Upgrade does not. A second asks and sends
   `confirmedRepeat`; without it the engine refuses (`used`, 409) after all other
@@ -781,8 +804,9 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   restores the old piece even if another was placed there by hand since.
 - **City Walls** (p. 17, Masonry, 7 production): a centre building with no square
   (`placement: 'none'`) that flips the city marker to its walled asset via the
-  `flip` board change (same id and centre), one per city. The defensive +4 is not
-  counted. No take-back by removal; the vote undo flips back.
+  `flip` board change (same id and centre), one per city. Its +4 counts in a
+  battle for the city (see Coins, wonders and blockade). No take-back by
+  removal; the vote undo flips back.
 - **Figures and units** (p. 15–17): army 4, scout 6; units by type level
   (`stats.infantry/artillery/mounted`, clamped 1–4): 5, 7, 9, 11; Aircraft 12 with
   revealed Flight. Figure squares: outskirts, never centre or city-state (except

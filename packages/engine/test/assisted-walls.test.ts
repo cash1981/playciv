@@ -364,3 +364,19 @@ describe('replaying the board history with the marker turned over', () => {
     expect(revertChange(done.board.pieces, change).find((piece) => piece.category === 'city')).toEqual(cityOf(before))
   })
 })
+
+describe('City Walls with a caravan (Fame and Fortune p. 7)', () => {
+  const caravans = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId === 'markers/caravan')
+
+  it('use it up although the city marker is turned over, and the undo vote puts it back', () => {
+    const before = put(ready(), 'markers/caravan', 1, 1)
+    const caravan = caravans(before)[0]
+    expect(optionsOf(before).caravan).toBe(true)
+    const done = build(before)
+    expect(cityOf(done).assetId).toBe('cities/redcitywalled2')
+    expect(caravans(done)).toEqual([])
+    const undone = undoByVote(done, 'req-1')
+    expect(cityOf(undone).assetId).toBe('cities/redcity2')
+    expect(caravans(undone)).toEqual([caravan])
+  })
+})

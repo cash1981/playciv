@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
-import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, SheetName } from '@civ/engine'
+import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { confirmationText } from '../lib/confirmation.js'
@@ -1752,6 +1752,11 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                   <strong>{s.label}</strong>
                   <span>{s.unitCount} unit{s.unitCount !== 1 ? 's' : ''}</span>
                   <span>HP {s.totalHealth + draftHealthDelta(battle?.arena ?? [], s.side, healthDrafts)}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
+                  {s.cityDefence != null && (
+                    <span className="battle-city-defence">
+                      {cityDefenceText(s.cityDefence)}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -1813,6 +1818,15 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         </div>
       )}
     </CollapsiblePanel>
+  )
+}
+
+/** "Defending City D4: +8 (Defending a city +6, Fortification +2)", and what ending the battle does to a fortification. */
+function cityDefenceText(defence: CityDefence): string {
+  const parts = defence.parts.map((part) => `${part.label} +${part.amount}`).join(', ')
+  return (
+    `Defending ${defence.cityLabel}: +${defence.total} (${parts}).` +
+    (defence.fortificationPieceId !== null ? ' Ending the battle removes the fortification.' : '')
   )
 }
 

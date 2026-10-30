@@ -206,3 +206,51 @@ describe('a second action of the same city', () => {
     expect(describeError(unwrapErr(result))).not.toContain('already acted')
   })
 })
+
+describe('a caravan (Fame and Fortune p. 7)', () => {
+  const caravans = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId === 'markers/caravan')
+
+  it('Devote to the Arts and Harvest keep it; a Build uses it up', () => {
+    let state = put(scene(), 'markers/caravan', 1, 1)
+    state = unwrap(act(state, 'devoteToTheArts', 'a-1'))
+    state = unwrap(act(state, 'harvest', 'a-2', true))
+    expect(caravans(state)).toHaveLength(1)
+    state = unwrap(act(state, 'build', 'a-3', true))
+    expect(caravans(state)).toEqual([])
+    expect(lastLine(state)).toContain('using up the caravan (+2 production)')
+  })
+})
+
+describe('a caravan with a unit build and the undo (Fame and Fortune p. 7)', () => {
+  const caravans = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId === 'markers/caravan')
+  const unitBuild = (state: GameState, requestId: string) =>
+    performAssistedAction(state, {
+      playerId: CASH1981,
+      action: 'build',
+      requestId,
+      at: AT,
+      payload: { cityPieceId: cityId(state), item: { kind: 'unit', unitType: 'infantry' } },
+    })
+  const undoByVote = (state: GameState, requestId: string): GameState => {
+    const logId = state.log.find((entry) => entry.assistedActionId === requestId)?.id ?? ''
+    let next = unwrap(initiateUndo(state, { logId, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI, CHUL]) next = unwrap(vote(next, { logId, playerId, vote: true, at: AT }))
+    return next
+  }
+
+  it('a unit build uses it up and the undo vote puts it back', () => {
+    const before = put(scene(), 'markers/caravan', 1, 1)
+    const done = unwrap(unitBuild(before, 'u-1'))
+    expect(caravans(done)).toEqual([])
+    expect(caravans(undoByVote(done, 'u-1'))).toEqual(caravans(before))
+  })
+
+  it('the undo leaves it off when the city has received another marker since: one per city', () => {
+    const done = unwrap(unitBuild(put(scene(), 'markers/caravan', 1, 1), 'u-1'))
+    const fortified = put(done, 'markers/fortification', 1, 1)
+    const undone = undoByVote(fortified, 'u-1')
+    expect(caravans(undone)).toEqual([])
+    expect(undone.board.pieces.filter((piece) => piece.assetId === 'markers/fortification')).toHaveLength(1)
+    expect(undone.log.at(-1)?.publicLog).toContain('the caravan stays off: the city has another marker now')
+  })
+})

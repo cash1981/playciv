@@ -782,8 +782,84 @@ describe('BoardView mobile placement', () => {
     fireEvent.click(squares[0] as HTMLElement)
 
     await waitFor(() =>
-      expect(travel).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number)),
+      expect(travel).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false),
     )
+    travel.mockRestore()
+    cleanup()
+  })
+
+  it.each([
+    [true, true],
+    [false, false],
+  ])('asks before an army enters its own city centre and sends the answer (F&F p. 7): OK %s', async (answer, disband) => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([])
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(answer)
+    const top = mapTop(createBoard())
+    const at = (assetId: string, id: string, column: number, row: number): BoardPiece => {
+      const asset = findBoardAsset(assetId)
+      if (asset === undefined) throw new Error(`missing ${assetId}`)
+      return {
+        id,
+        assetId,
+        path: asset.path,
+        label: asset.label,
+        category: asset.category,
+        x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
+        y: top + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+        width: asset.width,
+        height: asset.height,
+        rotation: 0,
+        placedBy: 'player-one',
+      }
+    }
+    const back = findBoardAsset('tiles/tileback')
+    if (back === undefined) throw new Error('missing tile back asset')
+    const tileBack = { ...at('tiles/tileback', 'tile-back', 0, 0), x: 0, y: top }
+    const city = at('cities/redcity2', 'city-1', 1, 2)
+    const army = at('figures/redarmy', 'army-1', 1, 1)
+    const movementPlayer: MovementPlayer = {
+      color: 'Red',
+      civilization: null,
+      stats: { mvmt: '2' },
+      items: [],
+      socialPolicies: [],
+      techsChosen: [],
+      playerTurns: [],
+    }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [tileBack, city, army] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        viewerColor="Red"
+        movementPlayer={movementPlayer}
+        movementTurn={1}
+        run={async action => { await action() }}
+      />,
+    )
+
+    const tile = container.querySelector('[data-piece-id="army-1"]')
+    if (!(tile instanceof HTMLElement)) throw new Error('piece missing')
+    const event = new Event('pointerdown', { bubbles: true })
+    for (const [name, value] of Object.entries({
+      pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, clientX: 20, clientY: 20,
+    })) Object.defineProperty(event, name, { value })
+    tile.dispatchEvent(event)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Move Red army to B3/ }))
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/^Disband Red army in City B3 for a fortification marker\?/))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 1, 2, disband))
+
+    // Elsewhere nothing is asked
+    confirm.mockClear()
+    tile.dispatchEvent(event)
+    fireEvent.click(await screen.findByRole('button', { name: /Move Red army to A2/ }))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 0, 1, false))
+    expect(confirm).not.toHaveBeenCalled()
+    confirm.mockRestore()
     travel.mockRestore()
     cleanup()
   })
@@ -957,7 +1033,7 @@ describe('BoardView mobile placement', () => {
     fireEvent.click(target)
 
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('starts a battle'))
-    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false))
     travel.mockRestore()
     confirm.mockRestore()
     cleanup()

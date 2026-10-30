@@ -27,6 +27,7 @@
 
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
 import { drawWonderToBoard } from './actions/draw.js'
+import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
   PHASE_REASON,
   READY,
@@ -510,6 +511,25 @@ function reservedUndoBlock(state: GameState, ownerId: string, effect: ReplacedEf
   return inArea ? undefined : `The ${name} has left your player area. Move it back first.`
 }
 
+/**
+ * Puts back the markers a build used up: the Building Program marker, then the caravan,
+ * unless the city has received another fortification or caravan since (one per city).
+ */
+function markersBack(
+  state: GameState,
+  player: Playerhand,
+  effect: {
+    readonly marker: { readonly piece: BoardPiece } | null
+    readonly caravan?: { readonly piece: BoardPiece }
+  },
+  at: string | null,
+): GameState {
+  const withMarker = effect.marker === null ? state : placeBack(state, player, effect.marker.piece, at)
+  return effect.caravan === undefined || !cityMarkerMayReturn(withMarker.board, effect.caravan.piece)
+    ? withMarker
+    : placeBack(withMarker, player, effect.caravan.piece, at)
+}
+
 /** Puts back what a build replaced: a removed piece exactly as it was, or a Great Person on the square it stood on. */
 function putReplacedBack(state: GameState, player: Playerhand, effect: ReplacedEffect, at: string | null): GameState {
   if (effect.replaced !== undefined) return placeBack(state, player, effect.replaced.piece, at)
@@ -892,6 +912,19 @@ const build: AssistedActionDefinition = {
       board = removed.value
       removal = { piece: marker, historyId: removedEntry.id }
     }
+    // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
+    let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
+    const caravanPiece =
+      city.caravan && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
+    if (caravanPiece !== undefined) {
+      const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
+      const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
+      if (!removed.ok || removedEntry === undefined) {
+        return err(failed('The caravan could not be taken off the board.'))
+      }
+      board = removed.value
+      caravan = { piece: caravanPiece, historyId: removedEntry.id }
+    }
 
     const paying = playerOf(board, player.playerId) ?? player
     // Michelangelo's discount is one-shot and is used up by this wonder build.
@@ -925,6 +958,7 @@ const build: AssistedActionDefinition = {
         `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
         (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
         (removal === null ? '' : ', using up the Building Program marker') +
+        (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
         again.note,
       privateLog: '',
       createdAt: context.at ?? null,
@@ -948,6 +982,7 @@ const build: AssistedActionDefinition = {
       made.kind === 'walls' ? made.historyId : undefined,
       replaced?.historyId,
       removal?.historyId,
+      caravan?.historyId,
     ])
 
     if (made.kind === 'card') {
@@ -964,6 +999,7 @@ const build: AssistedActionDefinition = {
           },
           trade: choice.tradeToPay,
           marker: removal,
+          ...(caravan === undefined ? {} : { caravan }),
         },
         logId,
       })
@@ -979,6 +1015,7 @@ const build: AssistedActionDefinition = {
           walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
           trade: choice.tradeToPay,
           marker: removal,
+          ...(caravan === undefined ? {} : { caravan }),
         },
         logId,
       })
@@ -1018,6 +1055,7 @@ const build: AssistedActionDefinition = {
             : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
         trade: choice.tradeToPay,
         marker: removal,
+        ...(caravan === undefined ? {} : { caravan }),
         ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
       },
       logId,
@@ -1037,7 +1075,13 @@ const build: AssistedActionDefinition = {
       ...player,
       stats: { ...player.stats, trade: player.stats.trade + effect.trade },
     }
-    const markerText = effect.marker === null ? '' : ' and the Building Program marker was put back'
+    const markerText =
+      (effect.marker === null ? '' : ' and the Building Program marker was put back') +
+      (effect.caravan === undefined
+        ? ''
+        : cityMarkerMayReturn(state.board, effect.caravan.piece)
+          ? ' and the caravan was put back'
+          : ' (the caravan stays off: the city has another marker now)')
     const tradeText = effect.trade > 0 ? `, ${effect.trade} trade returned` : ''
     const freeUnit = militaryTraditionUndoBlock(state, record)
     if (freeUnit !== undefined) return err(refused(freeUnit))
@@ -1057,7 +1101,7 @@ const build: AssistedActionDefinition = {
       }
       const restored = shuffleSheetTwice(returned, effect.card.sheetName)
       const withMarker =
-        effect.marker === null ? restored : placeBack(restored, refunded, effect.marker.piece, at)
+        markersBack(restored, refunded, effect, at)
       return ok({
         state: withMarker,
         text:
@@ -1081,7 +1125,7 @@ const build: AssistedActionDefinition = {
         ...(at === null ? {} : { at }),
       })
       if (flipped === undefined) return err(refused('The city marker could not be turned back.'))
-      const withMarker = effect.marker === null ? flipped : placeBack(flipped, refunded, effect.marker.piece, at)
+      const withMarker = markersBack(flipped, refunded, effect, at)
       return ok({
         state: withMarker,
         text:
@@ -1151,7 +1195,7 @@ const build: AssistedActionDefinition = {
       if (returned === undefined) return err(refused(`${subject} could not be put back in the market.`))
       // What the wonder replaced stands again, exactly as it was, and then the Building Program marker
       const withOld = putReplacedBack(returned, refunded, effect, at)
-      const withMarker = effect.marker === null ? withOld : placeBack(withOld, refunded, effect.marker.piece, at)
+      const withMarker = markersBack(withOld, refunded, effect, at)
       const restoredPlayer = playerOf(withMarker, record.playerId) ?? refunded
       const restored =
         effect.wonderDiscount === undefined
@@ -1178,7 +1222,7 @@ const build: AssistedActionDefinition = {
     })
     if (!removed.ok) return err(refused(`The ${label} could not be taken off the board.`))
     const withOld = putReplacedBack(removed.value, refunded, effect, at)
-    const raw = effect.marker === null ? withOld : placeBack(withOld, refunded, effect.marker.piece, at)
+    const raw = markersBack(withOld, refunded, effect, at)
     const restoredPlayer = playerOf(raw, record.playerId) ?? refunded
     const restored =
       effect.wonderDiscount === undefined

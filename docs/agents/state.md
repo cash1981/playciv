@@ -36,8 +36,10 @@ deployment reports do not establish present health.
   a player who researched, and city trade is collected once when Trade starts.
 - Figure movement (#302): enforced speed, water, stacking and stops; movement is
   a pool shared with exploring; card map picker for Galileo, Steam Power,
-  Hannibal and movement culture cards; Communism and Brandenburg Gate. Battle,
-  loot and removal stay manual by the human's choice.
+  Hannibal and movement culture cards; Communism and Brandenburg Gate.
+  Disbanding on an own city centre leaves a caravan or fortification (F&F), and
+  a battle for a city counts its defence bonus. Battle resolution, loot and
+  removal stay manual by the human's choice.
 
 The matching topics in [decisions.md](decisions.md) give the rules and
 reasons; [limitations.md](limitations.md) lists known gaps.

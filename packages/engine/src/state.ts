@@ -14,6 +14,7 @@ import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './b
 import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
+import { cityDefenceOf } from './city-defence.js'
 import { stackingLimitOf } from './great-person-effects.js'
 import { brandenburgZonesOf } from './brandenburg.js'
 import type { BrandenburgZone } from './brandenburg.js'
@@ -760,6 +761,8 @@ export type AssistedEffect =
       readonly trade: number
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+      /** The caravan the build used up (Fame and Fortune p. 7), as `marker` is kept. Absent without one. */
+      readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
       /** Production taken off by Michelangelo, so an undo arms it again. */
       readonly wonderDiscount?: number
     }
@@ -779,6 +782,7 @@ export type AssistedEffect =
       }
       readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+      readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
     }
   | {
       readonly kind: 'build'
@@ -794,6 +798,7 @@ export type AssistedEffect =
       }
       readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+      readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
     }
   | {
       readonly kind: 'startBuildingProgram'
@@ -1050,6 +1055,8 @@ export interface EndedBattle {
   readonly battle: Battle
   /** The player who pressed End battle, and the only one who may undo it. */
   readonly endedBy: string
+  /** The fortification marker the end removed (Fame and Fortune p. 7), exactly as it stood, so an undo puts it back. */
+  readonly fortification?: BoardPiece
 }
 
 // ---------------------------------------------------------------------------
@@ -1577,6 +1584,7 @@ export function battleSummaries(state: GameState): readonly BattleSideSummary[] 
     { sideId: 'defender' as const, side: battle.defender },
   ]
 
+  const cityDefence = cityDefenceOf(state, battle)
   return sides.map(({ sideId, side }) => {
     // A killed unit stays in the arena until the battle ends (issue #71, so a
     // kill can be undone) but should not count toward the living totals.
@@ -1586,8 +1594,9 @@ export function battleSummaries(state: GameState): readonly BattleSideSummary[] 
       side.kind === 'barbarians'
         ? 'Barbarians'
         : (player?.username ?? side.playerId)
+    const defence = sideId === 'defender' ? cityDefence : null
     const combatBonus =
-      side.kind === 'player' && player !== undefined ? combatBonusOf(state, player) : 0
+      (side.kind === 'player' && player !== undefined ? combatBonusOf(state, player) : 0) + (defence?.total ?? 0)
     return {
       side: sideId,
       kind: side.kind,
@@ -1597,6 +1606,7 @@ export function battleSummaries(state: GameState): readonly BattleSideSummary[] 
       totalHealth: units.reduce((sum, u) => sum + u.health, 0),
       totalAttack: units.reduce((sum, u) => sum + u.attack, 0),
       combatBonus,
+      cityDefence: defence,
     }
   })
 }

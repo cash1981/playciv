@@ -26,6 +26,7 @@ const city: CityProduction = {
   outskirtsDetail: [],
   modifiers: [],
   buildingProgram: false,
+  caravan: false,
   estimate: 4,
   withBuildingProgram: null,
   override: null,

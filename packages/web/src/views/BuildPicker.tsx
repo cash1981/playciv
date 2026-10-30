@@ -154,8 +154,9 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
       <h5 className="build-picker-title">Build in {city.label}</h5>
       <p className="build-picker-production">
         {city.productionSource === 'override'
-          ? `Production override: ${city.production}.`
-          : `Production ${city.production}, ${SOURCE_TEXT[city.productionSource]}.`}
+          ? `Production override: ${city.production}`
+          : `Production ${city.production}, ${SOURCE_TEXT[city.productionSource]}`}
+        {city.caravan ? ', including 2 from the caravan, which this build uses up.' : '.'}
       </p>
 
       {/* Plain text: the bar above the board is the live region that announces these. */}
