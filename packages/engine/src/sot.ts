@@ -291,6 +291,13 @@ export interface ScoutAssignment {
   readonly chosen: boolean
 }
 
+/** The centre squares of the player's own cities, as "column:row". A scout there never sends its square (human, #319). */
+export function ownCityCentreKeys(state: GameState, player: Playerhand): ReadonlySet<string> {
+  const colour = player.color?.toLowerCase()
+  if (colour === undefined) return new Set()
+  return new Set(cityFootprintsOf(state, colour).flatMap((footprint) => footprint.centers.map((centre) => `${centre.column}:${centre.row}`)))
+}
+
 /**
  * The cities the player chose for their scouts this turn. They are not stored on their own:
  * each is a record of the `assignScout` action, so the log, the undo vote and a retry already
@@ -300,7 +307,8 @@ export interface ScoutAssignment {
  * A square goes to one city only (human, #319): of two scouts sending the same square, the
  * latest send keeps it. `assignScout` refuses a send while another covers the square, so the
  * latest was legal when made; an older one can come back by an undo vote or by a scout
- * returning to its square, and then loses.
+ * returning to its square, and then loses. A scout on a centre of the player's own city sends
+ * nothing, chosen or not.
  * A scout without a choice goes to the capital: see `scoutDestinationsOf`.
  */
 export function scoutAssignmentsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
@@ -326,8 +334,9 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
           },
     )
   }
+  const centres = ownCityCentreKeys(state, player)
   const holding = [...latest.values()].filter((assignment): assignment is ScoutAssignment => {
-    if (assignment === null) return false
+    if (assignment === null || centres.has(`${assignment.column}:${assignment.row}`)) return false
     const scout = state.board.pieces.find((piece) => piece.id === assignment.scoutPieceId)
     const at = scout === undefined ? null : mapCellOf(state.board, scout)
     const city = state.board.pieces.find((piece) => piece.id === assignment.cityPieceId && piece.category === 'city')
@@ -363,10 +372,7 @@ export function scoutDestinationsOf(state: GameState, player: Playerhand): reado
   const colour = player.color?.toLowerCase()
   if (capital === undefined || colour === undefined) return chosen
   const sent = new Set(chosen.map((assignment) => assignment.scoutPieceId))
-  const taken = new Set(chosen.map((assignment) => `${assignment.column}:${assignment.row}`))
-  for (const footprint of cityFootprintsOf(state, colour)) {
-    for (const centre of footprint.centers) taken.add(`${centre.column}:${centre.row}`)
-  }
+  const taken = new Set([...chosen.map((assignment) => `${assignment.column}:${assignment.row}`), ...ownCityCentreKeys(state, player)])
   const defaults = figuresOnMap(state, player, 'scout').flatMap((scout): readonly ScoutAssignment[] => {
     const at = mapCellOf(state.board, scout)
     if (sent.has(scout.id) || at === null) return []

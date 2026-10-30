@@ -1385,7 +1385,7 @@ export interface ScoutView {
   readonly assignedTo: string | null
   /** Whether `assignedTo` is the capital because no city was chosen. */
   readonly assignedByDefault: boolean
-  /** Whether it can send its square at all: a scout always, an army only for the English. */
+  /** Whether it can send its square at all: a scout, or an English army, not on a centre of the player's own city. */
   readonly canSend: boolean
   /** Whether it can found a city where it stands, and every reason it cannot. */
   readonly found: {

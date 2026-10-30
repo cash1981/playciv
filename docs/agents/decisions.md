@@ -377,6 +377,8 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   city. A square goes to one city only (human, #319): sending a square another
   scout already sends is refused. Where two sends meet anyway (an undo vote or a
   scout moved back brings an older one back), the latest send keeps the square.
+  A scout on a centre of the player's own city never sends its square (human,
+  #319): the send is refused, the panel offers none, and an older send lapses.
   An English army is only sent by hand.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan

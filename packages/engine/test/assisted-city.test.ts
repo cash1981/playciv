@@ -602,6 +602,27 @@ describe('sending a scout’s square to a city', () => {
       expect(scoutChoices(back, 'I9')).toEqual([])
     })
 
+    it('never sends the square of a scout on a centre of the player\'s own city', () => {
+      // I9 is the far city's centre
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', 8, 8)
+      const centreScout = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout').at(-1)
+      for (const city of [near(state), far(state)]) {
+        expect(describeError(unwrapErr(assign(state, centreScout?.id ?? '', city?.pieceId ?? ''))), city?.label).toBe(
+          'I9 is the centre of your city, and a scout there sends no square.',
+        )
+      }
+      expect(scoutViewsOf(state, me(state)).find((view) => view.pieceId === centreScout?.id)).toMatchObject({ canSend: false, assignedTo: null })
+      expect(scoutViewsOf(state, me(state)).find((view) => view.pieceId !== centreScout?.id)).toMatchObject({ canSend: true })
+    })
+
+    it('drops a send made before the scout\'s square became a city centre', () => {
+      // The scout on D4 is sent to the capital, then a city is put on its square
+      const state = twoCities(WHEAT_D4)
+      const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
+      const covered = put(sent, CASH1981, 'cities/redcity2', WHEAT_D4.column, WHEAT_D4.row)
+      expect(scoutAssignmentsOf(covered, me(covered))).toEqual([])
+    })
+
     it('does not offer a scout standing on the centre of another of the player\'s cities', () => {
       // A scout on the far city's centre I9 sends nothing; the capital must not take it as unsent
       const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', 8, 8)
