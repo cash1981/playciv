@@ -496,6 +496,60 @@ describe('the squares of a figure', () => {
     expect(buildSquareRefusal(crowded, me(crowded), cityOf(crowded).id, ARMY, C2)).toBe('C2 is a city-state square.')
   })
 
+  describe('a city-state the player holds (issue #319)', () => {
+    /** D1, grassland, outside the outskirts of B2. */
+    const D1 = { column: 3, row: 0 }
+    const capital = (): GameState =>
+      withStats(openTurn(put(withAmerica(game()), CASH1981, 'cities/redcapital2', 1, 1)), { trade: 3 })
+    const held = (state: GameState, at: Cell = D1, figure = 'figures/redarmy', playerId = CASH1981): GameState =>
+      put(put(state, KARANDRAS1, 'city-states/cs1', at.column, at.row), playerId, figure, at.column, at.row)
+
+    it('is a square for the capital to put a figure on, wherever it lies', () => {
+      const state = held(capital())
+      const options = optionsOf(state)
+      for (const item of [ARMY, SCOUT]) {
+        expect(cellsOf(choiceOf(options, item)?.squares), item.kind).toContainEqual([3, 0])
+        expect(buildSquareRefusal(state, me(state), cityOf(state).id, item, D1), item.kind).toBeUndefined()
+      }
+      const done = build(state, ARMY, D1)
+      expect(piecesOf(done, 'figures/redarmy').filter((piece) => mapCellOf(done.board, piece)?.column === 3)).toHaveLength(2)
+      expect(lastLine(done)).toBe('cash1981 built an army in Capital B2 on square D1')
+    })
+
+    it('is held by a scout as well, and inside the outskirts too', () => {
+      const state = held(capital(), C2, 'figures/redscout')
+      expect(cellsOf(choiceOf(optionsOf(state), ARMY)?.squares)).toContainEqual([2, 1])
+    })
+
+    it('counts its figures towards the stacking limit', () => {
+      const state = put(held(capital()), CASH1981, 'figures/redarmy', D1.column, D1.row)
+      expect(cellsOf(choiceOf(optionsOf(state), ARMY)?.squares)).not.toContainEqual([3, 0])
+      expect(buildSquareRefusal(state, me(state), cityOf(state).id, ARMY, D1)).toBe(
+        'D1 already holds 2 of your figures, which is your stacking limit of 2.',
+      )
+    })
+
+    it('is not a square when another player holds it, nobody does, or the city is not the capital', () => {
+      const states = [
+        held(capital(), D1, 'figures/bluearmy', KARANDRAS1),
+        put(capital(), KARANDRAS1, 'city-states/cs1', D1.column, D1.row),
+        held(withStats(ready(), { trade: 3 })),
+      ]
+      for (const state of states) {
+        expect(cellsOf(choiceOf(optionsOf(state), ARMY)?.squares)).not.toContainEqual([3, 0])
+        expect(buildSquareRefusal(state, me(state), cityOf(state).id, ARMY, D1)).toBe('D1 is not in the outskirts of that city.')
+      }
+      // Held in the outskirts of a plain city it stays a city-state square
+      const plain = held(ready(), C2)
+      expect(buildSquareRefusal(plain, me(plain), cityOf(plain).id, ARMY, C2)).toBe('C2 is a city-state square.')
+    })
+
+    it('still keeps buildings off', () => {
+      const state = held(learn(capital(), 'Writing'), C2)
+      expect(buildOptionsOf(state, me(state))[0]?.choices.find((choice) => choice.item.kind === 'building')).toBeUndefined()
+    })
+  })
+
   it('a building, a wonder or a great person does not keep a figure off', () => {
     const base = ready()
     for (const assetId of ['buildings/granary', 'wonders/pyramids', 'great people/scientist']) {

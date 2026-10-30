@@ -773,12 +773,19 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   counted. No take-back by removal; the vote undo flips back.
 - **Figures and units** (p. 15–17): army 4, scout 6; units by type level
   (`stats.infantry/artillery/mounted`, clamped 1–4): 5, 7, 9, 11; Aircraft 12 with
-  revealed Flight. Figure squares: outskirts, never centre or city-state, water
+  revealed Flight. Figure squares: outskirts, never centre or city-state (except
+  below), water
   only with Sailing/Steam Power/Flight, below `stats.stacking` (read-only, default
   2), supply 6 armies and 2 scouts per colour. A scout is not offered a blockaded
   square; an army is, with a note that the outcome is manual. Hut/village squares
   are never offered (human; inert in practice since cities cannot be founded next
   to them).
+- **Held city-states** (W&W p. 9, human, #319): a city-state the player holds
+  (`cityStateHolderColour`, as for Brandenburg Gate; army or scout) is part of
+  their capital's outskirts, so the capital may build a figure on it wherever it
+  lies, under the same stacking, water and blockade rules. Other cities and
+  buildings and wonders still may not. Known gap: as for scouts, a capital grown
+  into a metropolis is no longer recognised as the capital, so it gets none.
 - A unit card is drawn like Draw (reshuffling discards when empty) hidden into the
   hand; the public line names only the type and no item line is written. Undo
   returns it and reshuffles that unit deck so the next card is unknown (human); a
