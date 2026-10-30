@@ -291,12 +291,24 @@ export interface ScoutAssignment {
   readonly chosen: boolean
 }
 
+/** The centre squares of the player's own cities, as "column:row". A scout there never sends its square (human, #319). */
+export function ownCityCentreKeys(state: GameState, player: Playerhand): ReadonlySet<string> {
+  const colour = player.color?.toLowerCase()
+  if (colour === undefined) return new Set()
+  return new Set(cityFootprintsOf(state, colour).flatMap((footprint) => footprint.centers.map((centre) => `${centre.column}:${centre.row}`)))
+}
+
 /**
  * The cities the player chose for their scouts this turn. They are not stored on their own:
  * each is a record of the `assignScout` action, so the log, the undo vote and a retry already
  * cover them. The latest applied record of a scout wins, and a record that was undone does
  * not count, so undoing a change brings back the one before it. A choice holds only while the
  * scout still stands on the square it was declared for and the city marker is still on the board.
+ * A square goes to one city only (human, #319): of two scouts sending the same square, the
+ * latest send keeps it. `assignScout` refuses a send while another covers the square, so the
+ * latest was legal when made; an older one can come back by an undo vote or by a scout
+ * returning to its square, and then loses. A scout on a centre of the player's own city sends
+ * nothing, chosen or not.
  * A scout without a choice goes to the capital: see `scoutDestinationsOf`.
  */
 export function scoutAssignmentsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
@@ -307,6 +319,8 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
     if (record.playerId !== player.playerId || record.turnNumber !== turn) continue
     const effect = record.effect
     if (effect.kind !== 'assignScout') continue
+    // Delete first so the map keeps the scouts in the order of their latest choice
+    latest.delete(effect.scoutPieceId)
     latest.set(
       effect.scoutPieceId,
       effect.cityPieceId === null
@@ -320,29 +334,37 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
           },
     )
   }
-  return [...latest.values()].filter((assignment): assignment is ScoutAssignment => {
-    if (assignment === null) return false
+  const centres = ownCityCentreKeys(state, player)
+  const holding = [...latest.values()].filter((assignment): assignment is ScoutAssignment => {
+    if (assignment === null || centres.has(`${assignment.column}:${assignment.row}`)) return false
     const scout = state.board.pieces.find((piece) => piece.id === assignment.scoutPieceId)
     const at = scout === undefined ? null : mapCellOf(state.board, scout)
     const city = state.board.pieces.find((piece) => piece.id === assignment.cityPieceId && piece.category === 'city')
     return at !== null && at.column === assignment.column && at.row === assignment.row && city !== undefined
   })
+  // The last send of each square, in record order, is the one that counts
+  const winner = new Map(holding.map((assignment) => [`${assignment.column}:${assignment.row}`, assignment.scoutPieceId]))
+  return holding.filter((assignment) => winner.get(`${assignment.column}:${assignment.row}`) === assignment.scoutPieceId)
 }
 
-/** The player's capital: the city marker that says so, on the map. A capital grown into a metropolis has none. */
+/**
+ * The player's capital on the map: the capital marker, or the metropolis, which only the
+ * capital can grow into (human, #319).
+ */
 export function capitalOf(state: GameState, player: Playerhand): BoardPiece | undefined {
   const colour = player.color?.toLowerCase()
   if (colour === undefined) return undefined
-  return cityFootprintsOf(state, colour).find((footprint) => footprint.piece.assetId.includes('capital'))?.piece
+  const pieces = cityFootprintsOf(state, colour).map((footprint) => footprint.piece)
+  return pieces.find((piece) => piece.assetId.includes('capital')) ?? pieces.find((piece) => piece.assetId.includes('metropolis'))
 }
 
 /**
  * Where each of the player's scouts on the map sends its square this turn: the city they chose,
  * and for a scout they did not send anywhere, the capital. An English army sent to a city is
- * kept too, but never goes to the capital on its own. Without a capital marker (a capital that
- * grew into a metropolis has none) a scout that was not sent has no destination. A scout on a
- * city's own centre square sends nothing by default (the centre is not a square to gather), and
- * a square is sent once: a second scout on it, or one already sent from it, adds nothing.
+ * kept too, but never goes to the capital on its own. Without a capital on the map a scout that
+ * was not sent has no destination. A scout on a city's own centre square sends nothing by
+ * default (the centre is not a square to gather), and a square is sent once: a second scout on
+ * it, or one already sent from it, adds nothing.
  */
 export function scoutDestinationsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
   const chosen = scoutAssignmentsOf(state, player)
@@ -350,10 +372,7 @@ export function scoutDestinationsOf(state: GameState, player: Playerhand): reado
   const colour = player.color?.toLowerCase()
   if (capital === undefined || colour === undefined) return chosen
   const sent = new Set(chosen.map((assignment) => assignment.scoutPieceId))
-  const taken = new Set(chosen.map((assignment) => `${assignment.column}:${assignment.row}`))
-  for (const footprint of cityFootprintsOf(state, colour)) {
-    for (const centre of footprint.centers) taken.add(`${centre.column}:${centre.row}`)
-  }
+  const taken = new Set([...chosen.map((assignment) => `${assignment.column}:${assignment.row}`), ...ownCityCentreKeys(state, player)])
   const defaults = figuresOnMap(state, player, 'scout').flatMap((scout): readonly ScoutAssignment[] => {
     const at = mapCellOf(state.board, scout)
     if (sent.has(scout.id) || at === null) return []

@@ -23,7 +23,7 @@
 import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
-import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
+import { cityFootprintsOf, cityStateHolderColour, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import {
   BUILDABLE_BUILDINGS,
@@ -53,6 +53,7 @@ import { BUILDING_TERRAIN, CATEGORY_TERRAIN, describeAllowed, terrainAt } from '
 import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
 import { stackingLimitOf } from './great-person-effects.js'
+import { capitalOf } from './sot.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
@@ -440,10 +441,11 @@ function figureSquareProblem(
   footprint: CityFootprintView,
   rules: FigureRules,
   cell: Cell,
+  held: ReadonlySet<string>,
 ): SquareProblem | undefined {
   const key = keyOf(cell)
   if (scene.centres.has(key)) return { kind: 'centre' }
-  if (scene.cityStates.has(key)) return { kind: 'city-state' }
+  if (scene.cityStates.has(key) && !held.has(key)) return { kind: 'city-state' }
   // Base rules p. 15, 19: scouts cannot enter such a square. What an army does there is not in the rulebook, so Build leaves it to the player
   const marker = scene.markers.get(key)
   if (marker !== undefined) return { kind: 'marker', marker }
@@ -473,6 +475,38 @@ function mapOutskirts(board: Board, footprint: CityFootprintView): readonly Cell
   return footprint.outskirts
     .filter((cell) => isMapCell(board, cell.column, cell.row))
     .sort((a, b) => a.row - b.row || a.column - b.column)
+}
+
+/**
+ * The squares of the city-states the player holds when the city is their capital (a metropolis
+ * counts), else none. A held city-state is part of the capital's outskirts (W&W p. 9, issue
+ * #319), so a figure may be built there; buildings and wonders still may not. Holding is
+ * `cityStateHolderColour`, as for Brandenburg Gate.
+ */
+function heldCityStatesOf(scene: Scene, player: Playerhand, footprint: CityFootprintView, colour: string): readonly Cell[] {
+  if (capitalOf(scene.state, player)?.id !== footprint.piece.id) return []
+  const cells: Cell[] = []
+  for (const piece of scene.state.board.pieces) {
+    if (piece.category !== 'citystate') continue
+    const cell = mapCellOf(scene.state.board, piece)
+    if (cell !== null && cityStateHolderColour(scene.state, piece) === colour) cells.push(cell)
+  }
+  return cells
+}
+
+/** Where a city may put a figure: its outskirts on the map and the city-states held by a capital, in reading order. */
+function figureSquaresOf(
+  scene: Scene,
+  player: Playerhand,
+  footprint: CityFootprintView,
+  colour: string,
+): { readonly cells: readonly Cell[]; readonly held: ReadonlySet<string> } {
+  const outskirts = mapOutskirts(scene.state.board, footprint)
+  const held = heldCityStatesOf(scene, player, footprint, colour)
+  const known = new Set(outskirts.map(keyOf))
+  const cells = [...outskirts, ...held.filter((cell) => !known.has(keyOf(cell)))]
+    .sort((a, b) => a.row - b.row || a.column - b.column)
+  return { cells, held: new Set(held.map(keyOf)) }
 }
 
 const WATER_TECH_TEXT = 'a revealed Sailing, Steam Power or Flight'
@@ -565,10 +599,10 @@ export function buildSquareRefusal(
   const plain = (value: number): boolean => Number.isInteger(value) && value >= 0 && value < 1000
   const square = plain(cell.column) && plain(cell.row) ? squareLabel(cell) : 'That square'
   if (!isMapCell(state.board, cell.column, cell.row)) return `${square} is not on the map.`
-  if (!footprint.outskirts.some((candidate) => keyOf(candidate) === keyOf(cell))) {
-    return `${square} is not in the outskirts of that city.`
-  }
   const scene = sceneOf(state)
+  const figure = item.kind === 'army' || item.kind === 'scout' ? figureSquaresOf(scene, player, footprint, player.color.toLowerCase()) : undefined
+  const inOutskirts = (figure?.cells ?? footprint.outskirts).some((candidate) => keyOf(candidate) === keyOf(cell))
+  if (!inOutskirts) return `${square} is not in the outskirts of that city.`
   if (item.kind === 'building' || item.kind === 'wonder') {
     const { problems } = placedSquaresOf(
       scene,
@@ -583,7 +617,7 @@ export function buildSquareRefusal(
   }
   const rules = figureRulesOf(state, player, item.kind, techViewOf(player))
   if (rules === undefined) return undefined
-  const problem = figureSquareProblem(scene, footprint, rules, cell)
+  const problem = figureSquareProblem(scene, footprint, rules, cell, figure?.held ?? new Set())
   return problem === undefined ? undefined : describeProblem(cell, problem)
 }
 
@@ -974,6 +1008,7 @@ function optionsForCity(
   }
 
   // Army and scout figures: put on a square of the outskirts like a building
+  const figureSquares = player.color === null ? undefined : figureSquaresOf(scene, player, footprint, player.color.toLowerCase())
   for (const kind of ['army', 'scout'] as const) {
     const item: BuildItem = { kind }
     const label = kind === 'army' ? 'Army figure' : 'Scout figure'
@@ -996,8 +1031,9 @@ function optionsForCity(
 
     const squares: BuildSquare[] = []
     const problems: SquareProblem[] = []
-    for (const cell of outskirts) {
-      const problem = figureSquareProblem(scene, footprint, rules, cell)
+    const { cells, held } = figureSquares ?? { cells: [], held: new Set<string>() }
+    for (const cell of cells) {
+      const problem = figureSquareProblem(scene, footprint, rules, cell, held)
       if (problem !== undefined) {
         problems.push(problem)
         continue

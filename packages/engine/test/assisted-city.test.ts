@@ -16,11 +16,12 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { movePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { movePiece, placePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
-import { SQUARE_SIZE } from '../src/board.js'
+import { describeError } from '../src/errors.js'
+import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
 import { scoutViewsOf } from '../src/assisted-city.js'
 import { cityActionsOf } from '../src/city-actions.js'
@@ -533,6 +534,149 @@ describe('sending a scout’s square to a city', () => {
       const stopped = unwrap(assign(again, scoutOf(again).id, null, 'req-4'))
       expect(scoutChoices(stopped, 'B2')).toEqual(['wheat'])
       expect(scoutChoices(stopped, 'I9')).toEqual([])
+    })
+
+    it('offers a square once although two unsent scouts stand on it, and to the capital only', () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(state, 'I9')).toEqual([])
+      const notes = cityActionsOf(state, me(state)).map((options) => options.harvest.notes.join(' ')).join(' ')
+      expect(notes).not.toContain('Your capital is not marked on the map')
+    })
+
+    it('still offers a second scout on a square to the city it was sent to, and the square once', () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const second = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout').at(-1)
+      const sent = unwrap(assign(state, second?.id ?? '', far(state)?.pieceId ?? ''))
+      // A square is sent once: the unsent scout on it adds nothing for the capital
+      expect(scoutChoices(sent, 'B2')).toEqual([])
+      expect(scoutChoices(sent, 'I9')).toEqual(['wheat'])
+    })
+
+    it('sends a square to one city only, refusing a second scout on it', () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const [first, second] = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout')
+      const sent = unwrap(assign(state, first?.id ?? '', far(state)?.pieceId ?? ''))
+      for (const city of [near(sent), far(sent)]) {
+        const refused = assign(sent, second?.id ?? '', city?.pieceId ?? '', 'req-2')
+        expect(describeError(unwrapErr(refused)), city?.label).toBe(
+          'Another scout already sends D4 to City I9. A square goes to one city only.',
+        )
+      }
+      // Once the first stops sending, the second may
+      const stopped = unwrap(assign(sent, first?.id ?? '', null, 'req-3'))
+      const resent = unwrap(assign(stopped, second?.id ?? '', near(stopped)?.pieceId ?? '', 'req-4'))
+      expect(scoutAssignmentsOf(resent, me(resent))).toMatchObject([{ scoutPieceId: second?.id, cityPieceId: near(resent)?.pieceId }])
+    })
+
+    const twoScouts = () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const [first, second] = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout')
+      if (first === undefined || second === undefined) throw new Error('two scouts expected')
+      return { state, first, second }
+    }
+
+    it('gives the square to the latest send when an undo vote brings an older one back', () => {
+      const { state, first, second } = twoScouts()
+      let next = unwrap(assign(state, first.id, far(state)?.pieceId ?? '', 'req-1'))
+      next = unwrap(assign(next, first.id, null, 'req-2'))
+      next = unwrap(assign(next, second.id, near(next)?.pieceId ?? '', 'req-3'))
+      // Undoing the stop brings back the first scout's older send to I9
+      next = undoByVote(next, 'req-2')
+      expect(scoutAssignmentsOf(next, me(next))).toMatchObject([{ scoutPieceId: second.id, cityPieceId: near(next)?.pieceId }])
+      expect(scoutChoices(next, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(next, 'I9')).toEqual([])
+      // And the first scout cannot take it while the second sends it
+      expect(describeError(unwrapErr(assign(next, first.id, far(next)?.pieceId ?? '', 'req-4')))).toBe(
+        'Another scout already sends D4 to Capital B2. A square goes to one city only.',
+      )
+    })
+
+    it('gives the square to the latest send when a scout comes back to its square, and frees it while away', () => {
+      const { state, first, second } = twoScouts()
+      const sent = unwrap(assign(state, first.id, far(state)?.pieceId ?? '', 'req-1'))
+      const away = unwrap(movePiece(sent, { playerId: CASH1981, pieceId: first.id, x: first.x + SQUARE_SIZE, y: first.y, snap: false }))
+      const taken = unwrap(assign(away, second.id, near(away)?.pieceId ?? '', 'req-2'))
+      const back = unwrap(movePiece(taken, { playerId: CASH1981, pieceId: first.id, x: first.x, y: first.y, snap: false }))
+      expect(scoutAssignmentsOf(back, me(back))).toMatchObject([{ scoutPieceId: second.id, cityPieceId: near(back)?.pieceId }])
+      expect(scoutChoices(back, 'I9')).toEqual([])
+    })
+
+    it('never sends the square of a scout on a centre of the player\'s own city', () => {
+      // I9 is the far city's centre
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', 8, 8)
+      const centreScout = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout').at(-1)
+      for (const city of [near(state), far(state)]) {
+        expect(describeError(unwrapErr(assign(state, centreScout?.id ?? '', city?.pieceId ?? ''))), city?.label).toBe(
+          'I9 is the centre of your city, and a scout there sends no square.',
+        )
+      }
+      expect(scoutViewsOf(state, me(state)).find((view) => view.pieceId === centreScout?.id)).toMatchObject({ canSend: false, assignedTo: null })
+      expect(scoutViewsOf(state, me(state)).find((view) => view.pieceId !== centreScout?.id)).toMatchObject({ canSend: true })
+    })
+
+    it('never gathers from a scout on a city centre when no capital is on the map', () => {
+      let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
+      state = put(state, CASH1981, 'cities/redcity2', 1, 1)
+      state = put(state, CASH1981, 'cities/redcity2', WHEAT_D4.column, WHEAT_D4.row)
+      state = put(state, CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const centreScout = scoutOf(state).id
+      for (const options of cityActionsOf(state, me(state))) {
+        expect(options.harvest.choices.some((choice) => choice.scoutPieceId === centreScout), options.label).toBe(false)
+        expect(options.devoteToTheArts.scouts.some((scout) => scout.pieceId === centreScout), options.label).toBe(false)
+      }
+    })
+
+    it('treats both centres of a metropolis as centres', () => {
+      let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
+      // Lying flat with its image centre between B2 and C2
+      const asset = findBoardAsset('cities/redmetropolis2')
+      if (asset === undefined) throw new Error('no metropolis asset')
+      state = unwrap(
+        placePiece(state, {
+          playerId: CASH1981,
+          assetId: asset.id,
+          x: 2 * SQUARE_SIZE - asset.width / 2,
+          y: mapTop(state.board) + 1.5 * SQUARE_SIZE - asset.height / 2,
+        }),
+      )
+      state = put(state, CASH1981, 'cities/redcity2', 8, 8)
+      for (const column of [1, 2]) {
+        const placed = put(state, CASH1981, 'figures/redscout', column, 1)
+        const view = scoutViewsOf(placed, me(placed))[0]
+        expect(view, `column ${column}`).toMatchObject({ canSend: false, assignedTo: null })
+      }
+    })
+
+    it('never sends the square of an English army on a city centre', () => {
+      let english = withAmerica(sotTurn({ civ: 'England' }))
+      english = put(english, CASH1981, 'cities/redcapital2', 1, 1)
+      english = put(english, CASH1981, 'figures/redarmy', 1, 1)
+      const army = english.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+      expect(scoutViewsOf(english, me(english)).find((view) => view.pieceId === army?.id)).toMatchObject({ canSend: false })
+      expect(describeError(unwrapErr(assign(english, army?.id ?? '', near(english)?.pieceId ?? '')))).toBe(
+        'B2 is the centre of your city, and a scout there sends no square.',
+      )
+    })
+
+    it('drops a send made before the scout\'s square became a city centre', () => {
+      // The scout on D4 is sent to the capital, then a city is put on its square
+      const state = twoCities(WHEAT_D4)
+      const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
+      const covered = put(sent, CASH1981, 'cities/redcity2', WHEAT_D4.column, WHEAT_D4.row)
+      expect(scoutAssignmentsOf(covered, me(covered))).toEqual([])
+    })
+
+    it('does not offer a scout standing on the centre of another of the player\'s cities', () => {
+      // A scout on the far city's centre I9 sends nothing; the capital must not take it as unsent
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', 8, 8)
+      const centreScout = state.board.pieces.filter((piece) => piece.assetId === 'figures/redscout').at(-1)?.id
+      for (const options of cityActionsOf(state, me(state))) {
+        expect(options.harvest.choices.some((choice) => choice.scoutPieceId === centreScout), options.label).toBe(false)
+        expect(options.devoteToTheArts.scouts.some((scout) => scout.pieceId === centreScout), options.label).toBe(false)
+        expect(options.harvest.notes.join(' '), options.label).not.toContain('Your capital is not marked on the map')
+      }
+      expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
     })
 
     it('offers a scout to every city when no capital is marked on the map, and says why', () => {

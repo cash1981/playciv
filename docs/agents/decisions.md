@@ -370,9 +370,18 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   turn, to the capital when not sent. The square counts for that city's
   production and trade, and its culture/resource icons are offered only to that
   city's Devote and Harvest; coin icons stay manual. The square leaves the city it
-  lies in when sent elsewhere (also by the default). A capital grown into a
-  metropolis has no capital marker: an unsent scout then goes nowhere and is
-  offered to every city, with a note. An English army is only sent by hand.
+  lies in when sent elsewhere (also by the default). The metropolis is the capital
+  (see Assisted build). With no capital on the map an unsent scout goes nowhere
+  and is offered to every city, with a note. With a capital, a scout that sends
+  nothing (a second one on a square, or one on a city centre) is offered to no
+  city. A square goes to one city only (human, #319): sending a square another
+  scout already sends is refused. Where two sends meet anyway (an undo vote or a
+  scout moved back brings an older one back), the latest send keeps the square.
+  A scout on a centre of the player's own city never sends its square (human,
+  #319), with or without a capital, and neither does an English army: the send
+  is refused, the panel offers none (and says why for a scout), and an older
+  send lapses.
+  An English army is only sent by hand.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan
   Turing (counts Russia's white army in the supply, human) add their numbers;
@@ -773,12 +782,21 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   counted. No take-back by removal; the vote undo flips back.
 - **Figures and units** (p. 15–17): army 4, scout 6; units by type level
   (`stats.infantry/artillery/mounted`, clamped 1–4): 5, 7, 9, 11; Aircraft 12 with
-  revealed Flight. Figure squares: outskirts, never centre or city-state, water
+  revealed Flight. Figure squares: outskirts, never centre or city-state (except
+  below), water
   only with Sailing/Steam Power/Flight, below `stats.stacking` (read-only, default
   2), supply 6 armies and 2 scouts per colour. A scout is not offered a blockaded
   square; an army is, with a note that the outcome is manual. Hut/village squares
   are never offered (human; inert in practice since cities cannot be founded next
   to them).
+- **Held city-states** (W&W p. 9, human, #319): a city-state the player holds
+  (`cityStateHolderColour`, as for Brandenburg Gate; army or scout) is part of
+  their capital's outskirts, so the capital may build a figure on it wherever it
+  lies, under the same stacking, water and blockade rules. Other cities and
+  buildings and wonders still may not.
+- **The metropolis is the capital** (human, #319): only the capital can grow into
+  a metropolis, so `capitalOf` falls back to the metropolis when no capital marker
+  is on the map. This applies to held city-states and to unsent scouts.
 - A unit card is drawn like Draw (reshuffling discards when empty) hidden into the
   hand; the public line names only the type and no item line is written. Undo
   returns it and reshuffles that unit deck so the next card is unknown (human); a

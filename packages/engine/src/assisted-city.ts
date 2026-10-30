@@ -32,7 +32,7 @@ import { cityLimitOf, foundCityCheck, foundingFiguresOf, isOwnFigure, ownCityPie
 import { cityProductionsOf } from './city-production.js'
 import { err, ok } from './result.js'
 import { appendLog } from './log.js'
-import { SOT_PHASE_REASON, capitalOf, openStartOfTurn, scoutDestinationsOf } from './sot.js'
+import { SOT_PHASE_REASON, capitalOf, openStartOfTurn, ownCityCentreKeys, scoutAssignmentsOf, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand, ScoutView } from './state.js'
 import { terrainAt } from './terrain.js'
 
@@ -314,6 +314,18 @@ export const assignScout: AssistedActionDefinition = {
       cityLabel = city.label
     }
     const square = squareLabel(cell)
+    // A city centre is never sent (human, #319)
+    if (payload.cityPieceId !== null && ownCityCentreKeys(state, player).has(`${cell.column}:${cell.row}`)) {
+      return fail(`${square} is the centre of your city, and a scout there sends no square.`)
+    }
+    // A square goes to one city only (human, #319)
+    const other = scoutAssignmentsOf(state, player).find(
+      (assignment) => assignment.scoutPieceId !== scout.id && assignment.column === cell.column && assignment.row === cell.row,
+    )
+    if (payload.cityPieceId !== null && other !== undefined) {
+      const to = cityProductionsOf(state, player).find((candidate) => candidate.pieceId === other.cityPieceId)?.label ?? 'a city'
+      return fail(`Another scout already sends ${square} to ${to}. A square goes to one city only.`)
+    }
     const logged = appendLog(state, {
       username: player.username,
       playerId: player.playerId,
@@ -366,6 +378,7 @@ export function scoutViewsOf(state: GameState, player: Playerhand): readonly Sco
   const founding = new Set(foundingFiguresOf(state, player).map((piece) => piece.id))
   const gathering = new Set(gatheringFiguresOf(state, player).map((piece) => piece.id))
   const stopped = romansAdvanceStop(state, player)
+  const centres = ownCityCentreKeys(state, player)
   const figures = state.board.pieces.filter((piece) => founding.has(piece.id) || gathering.has(piece.id))
   return figures.flatMap((piece): readonly ScoutView[] => {
     const cell = mapCellOf(state.board, piece)
@@ -383,7 +396,7 @@ export function scoutViewsOf(state: GameState, player: Playerhand): readonly Sco
         figure: piece.assetId.endsWith('army') ? 'army' : 'scout',
         assignedTo: destinations.get(piece.id)?.cityPieceId ?? null,
         assignedByDefault: destinations.get(piece.id)?.chosen === false,
-        canSend: gathering.has(piece.id),
+        canSend: gathering.has(piece.id) && !centres.has(`${cell.column}:${cell.row}`),
         found: {
           ok: founding.has(piece.id) && check.ok && stopped === undefined,
           reasons: founding.has(piece.id)

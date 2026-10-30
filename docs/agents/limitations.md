@@ -16,6 +16,8 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   three-ancient/one-medieval deal. Deliberately forward-only (`migrate.ts`).
 - **Zulu starting units:** `actions/player.ts` deals four artillery; the
   printed/legacy rule may be three. Ask the human before changing it.
+- **A square another scout sends:** the Start of Turn panel still offers the
+  second scout's city choice; choosing a city is refused with a reason (#319).
 - **Scout-held Bank coins:** board derivation does not model scout transfers;
   the Sheet is the manual correction.
 - **Game-chat permissions:** `POST /api/games/:gameId/chat` checks login and

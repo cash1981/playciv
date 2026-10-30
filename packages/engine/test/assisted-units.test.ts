@@ -49,6 +49,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { SheetName } from '../src/sheet-name.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
+import { capitalOf, scoutDestinationsOf } from '../src/sot.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -494,6 +495,94 @@ describe('the squares of a figure', () => {
     const crowded = put(ready(), KARANDRAS1, 'city-states/cs1', C2.column, C2.row)
     expect(cellsOf(choiceOf(optionsOf(crowded), ARMY)?.squares)).not.toContainEqual([2, 1])
     expect(buildSquareRefusal(crowded, me(crowded), cityOf(crowded).id, ARMY, C2)).toBe('C2 is a city-state square.')
+  })
+
+  describe('a city-state the player holds (issue #319)', () => {
+    /** D1, grassland, outside the outskirts of B2. */
+    const D1 = { column: 3, row: 0 }
+    const capital = (): GameState =>
+      withStats(openTurn(put(withAmerica(game()), CASH1981, 'cities/redcapital2', 1, 1)), { trade: 3 })
+    const held = (state: GameState, at: Cell = D1, figure = 'figures/redarmy', playerId = CASH1981): GameState =>
+      put(put(state, KARANDRAS1, 'city-states/cs1', at.column, at.row), playerId, figure, at.column, at.row)
+
+    it('is a square for the capital to put a figure on, wherever it lies', () => {
+      const state = held(capital())
+      const options = optionsOf(state)
+      for (const item of [ARMY, SCOUT]) {
+        expect(cellsOf(choiceOf(options, item)?.squares), item.kind).toContainEqual([3, 0])
+        expect(buildSquareRefusal(state, me(state), cityOf(state).id, item, D1), item.kind).toBeUndefined()
+      }
+      const done = build(state, ARMY, D1)
+      expect(piecesOf(done, 'figures/redarmy').filter((piece) => mapCellOf(done.board, piece)?.column === 3)).toHaveLength(2)
+      expect(lastLine(done)).toBe('cash1981 built an army in Capital B2 on square D1')
+    })
+
+    it('is held by a scout as well, and inside the outskirts too', () => {
+      const state = held(capital(), C2, 'figures/redscout')
+      expect(cellsOf(choiceOf(optionsOf(state), ARMY)?.squares)).toContainEqual([2, 1])
+    })
+
+    it('counts its figures towards the stacking limit', () => {
+      const state = put(held(capital()), CASH1981, 'figures/redarmy', D1.column, D1.row)
+      expect(cellsOf(choiceOf(optionsOf(state), ARMY)?.squares)).not.toContainEqual([3, 0])
+      expect(buildSquareRefusal(state, me(state), cityOf(state).id, ARMY, D1)).toBe(
+        'D1 already holds 2 of your figures, which is your stacking limit of 2.',
+      )
+    })
+
+    it('is not a square when another player holds it, nobody does, or the city is not the capital', () => {
+      const states = [
+        held(capital(), D1, 'figures/bluearmy', KARANDRAS1),
+        put(capital(), KARANDRAS1, 'city-states/cs1', D1.column, D1.row),
+        held(withStats(ready(), { trade: 3 })),
+      ]
+      for (const state of states) {
+        expect(cellsOf(choiceOf(optionsOf(state), ARMY)?.squares)).not.toContainEqual([3, 0])
+        expect(buildSquareRefusal(state, me(state), cityOf(state).id, ARMY, D1)).toBe('D1 is not in the outskirts of that city.')
+      }
+      // Held in the outskirts of a plain city it stays a city-state square
+      const plain = held(ready(), C2)
+      expect(buildSquareRefusal(plain, me(plain), cityOf(plain).id, ARMY, C2)).toBe('C2 is a city-state square.')
+    })
+
+    it('belongs to a capital grown into a metropolis, which only the capital can become', () => {
+      // A metropolis on B2 and C2, lying flat; D4 (forest) is outside its ten outskirts squares
+      const D4 = { column: 3, row: 3 }
+      const asset = findBoardAsset('cities/redmetropolis2')
+      if (asset === undefined) throw new Error('no metropolis asset')
+      const metropolis = unwrap(
+        placePiece(withAmerica(game()), {
+          playerId: CASH1981,
+          assetId: 'cities/redmetropolis2',
+          x: 2 * SQUARE_SIZE - asset.width / 2,
+          y: mapTop(withAmerica(game()).board) + 1.5 * SQUARE_SIZE - asset.height / 2,
+          rotation: 0,
+        }),
+      )
+      const state = held(withStats(openTurn(put(metropolis, CASH1981, 'cities/redcity2', 8, 8)), { trade: 3 }), D4)
+      const capital = capitalOf(state, me(state))
+      expect(capital?.assetId).toBe('cities/redmetropolis2')
+      const options = buildOptionsOf(state, me(state))
+      const ofCity = (pieceId: string | undefined) => options.find((city) => city.cityPieceId === pieceId)
+      expect(cellsOf(ofCity(capital?.id)?.choices.find((choice) => choice.item.kind === 'army')?.squares)).toContainEqual([3, 3])
+      expect(buildSquareRefusal(state, me(state), capital?.id ?? '', ARMY, D4)).toBeUndefined()
+      const other = options.find((city) => city.cityPieceId !== capital?.id)
+      expect(cellsOf(other?.choices.find((choice) => choice.item.kind === 'army')?.squares)).not.toContainEqual([3, 3])
+      expect(buildSquareRefusal(state, me(state), other?.cityPieceId ?? '', ARMY, D4)).toBe('D4 is not in the outskirts of that city.')
+      // An unsent scout goes to the metropolis too
+      const scouted = put(state, CASH1981, 'figures/redscout', 0, 3)
+      expect(scoutDestinationsOf(scouted, me(scouted))).toMatchObject([{ cityPieceId: capital?.id, chosen: false }])
+    })
+
+    it('prefers a capital marker to a metropolis when both are on the map', () => {
+      const state = put(put(withAmerica(game()), CASH1981, 'cities/redmetropolis2', 8, 8), CASH1981, 'cities/redcapital2', 1, 1)
+      expect(capitalOf(state, me(state))?.assetId).toBe('cities/redcapital2')
+    })
+
+    it('still keeps buildings off', () => {
+      const state = held(learn(capital(), 'Writing'), C2)
+      expect(buildOptionsOf(state, me(state))[0]?.choices.find((choice) => choice.item.kind === 'building')).toBeUndefined()
+    })
   })
 
   it('a building, a wonder or a great person does not keep a figure off', () => {

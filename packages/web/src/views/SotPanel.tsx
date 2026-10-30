@@ -396,8 +396,8 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
           <p>
             You have {cityLimit.have} of the {cityLimit.max} cities you may have (a third city needs Irrigation). A new
             city replaces the scout that stands where it goes. A scout sends its square to one city for the whole turn,
-            and the city gets that square&apos;s production. A scout you do not send goes to your capital. A scout
-            placed this turn gathers from next turn.
+            and the city gets that square&apos;s production. A scout you do not send goes to your capital. A scout on
+            the centre of one of your cities sends no square. A scout placed this turn gathers from next turn.
           </p>
           <p>
             A scout gathers for its city alone. Its square counts for the city&apos;s production, and its culture and
@@ -420,6 +420,7 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
               {scout.figure === 'army' ? 'Army' : 'Scout'} on {scout.square}
             </strong>{' '}
             <span className="muted">({terrainWords(scout.terrain)})</span>
+            {!scout.canSend && scout.figure === 'scout' && <span className="muted"> sends no square: it stands on a city centre</span>}
             {scout.canSend && (
               <SendSquare
                 scoutId={scout.pieceId}

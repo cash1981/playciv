@@ -500,7 +500,7 @@ describe('scouts and cities', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ scoutPieceId: 's1', cityPieceId: 'c2' })
   })
 
-  it('offers No city only when there is no capital to go to', () => {
+  it('offers No city for a scout that sends nothing', () => {
     renderChoices(viewOf(sotWith({ scouts: [scout({ assignedTo: null })] as never })))
     const select = screen.getByRole('combobox', { name: /Send the square of E5 to/ })
     expect(within(select).getByRole('option', { name: 'No city' })).toBeTruthy()
@@ -529,6 +529,12 @@ describe('scouts and cities', () => {
   it('offers no sending for a figure that cannot gather', () => {
     renderChoices(viewOf(sotWith({ scouts: [scout({ figure: 'army', canSend: false })] as never })))
     expect(screen.getByText('Army on E5')).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: /Send the square/ })).toBeNull()
+  })
+
+  it('says why a scout on a city centre has no sending', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout({ canSend: false })] as never })))
+    expect(screen.getByText(/sends no square: it stands on a city centre/)).toBeTruthy()
     expect(screen.queryByRole('combobox', { name: /Send the square/ })).toBeNull()
   })
 
