@@ -188,8 +188,8 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   and undoing the build takes it off. His Start of Turn button gives the same
   amount of culture and trade; he has no Play button. Jacques Cousteau builds 1 to
   3 Harbors for free in Start of Turn: the player picks squares from the engine's
-  list (empty water squares in the outskirts of their cities, one Harbor a city,
-  no unlock or production needed; a replacement is not offered), the card is
+  list (empty water squares in the outskirts of their cities, no unlock or
+  production needed, no limit of one a city since the card does not name one; a replacement is not offered), the card is
   discarded, and one undo removes the Harbors again.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.

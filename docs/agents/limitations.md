@@ -57,3 +57,5 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Some card images exceed 1 MB.
 - Asset regeneration needs untracked source material. Check that local Military
   Science artwork is the intended replacement before running the generator.
+
+- Jim Henson's wound markers are kept on the hand (`hensonWounds`), not on the card: if the card changes hands or is discarded and drawn again, the count stays with the player. Wonders put on the board by hand add no wound.

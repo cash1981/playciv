@@ -268,6 +268,8 @@ function harborChoicesOf(state: GameState, player: Playerhand): readonly HarborC
   const choices: HarborChoice[] = []
   for (const footprint of cityFootprintsOf(state, player.color.toLowerCase())) {
     for (const square of freeBuildingSquaresOf(state, player, footprint.piece.id, HARBOR)) {
+      // A square in the outskirts of two cities is listed once, under the first
+      if (choices.some((choice) => choice.column === square.column && choice.row === square.row)) continue
       choices.push({
         cityPieceId: footprint.piece.id,
         cityLabel: cityLabelOf(state.board, footprint.piece),
@@ -480,6 +482,9 @@ function automate(
       let working = state
       const built: { pieceId: string; historyId: string; cityPieceId: string; square: { column: number; row: number; label: string } }[] = []
       for (const [index, target] of chosen.entries()) {
+        if (!Number.isInteger(target.column) || !Number.isInteger(target.row) || target.column < 0 || target.row < 0 || target.column > 999 || target.row > 999) {
+          return err('Choose squares on the map.')
+        }
         const where = squareLabel(target)
         if (chosen.findIndex((other) => other.column === target.column && other.row === target.row) !== index) {
           return err(`${where} is chosen twice.`)
@@ -490,7 +495,7 @@ function automate(
         )
         if (legal === undefined) {
           const why = buildSquareRefusal(working, holder, target.cityPieceId, { kind: 'building', assetId: HARBOR }, target)
-          return err(`${why ?? `${where} cannot take a Harbor: it is empty water in the outskirts of one of your cities that has no Harbor yet.`}`)
+          return err(`${why ?? `${where} cannot take a Harbor: it must be an empty water square in the outskirts of one of your cities.`}`)
         }
         const asset = findBoardAsset(HARBOR)
         if (asset === undefined) return err('The Harbor has no artwork to put on the board.')

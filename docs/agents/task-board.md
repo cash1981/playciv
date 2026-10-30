@@ -15,7 +15,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Branch:** `feat/great-person-humanitarians`
 - **Brief:** `docs/agents/tasks/great-person-humanitarians.md`
 - **Status:** in progress
-- **Claimed paths:** `packages/engine/src/assisted-cards.ts`, `packages/web/src/views/PlayableCards.tsx`
+- **Claimed paths:** `packages/engine/src/` (`assisted-cards.ts`, `assisted.ts`, `build-options.ts`, `state.ts`, `card-timing.ts`, `assisted-abilities.ts`, `assisted-core.ts`, `migrate.ts`, `create-game.ts`, `actions/game.ts`), `packages/server/src/routes/assisted-args.ts`, `packages/web/src/views/PlayableCards.tsx`, `docs/agents/`
 - **Notes:** stacked on `feat/great-person-conversions`
 
 ## Format
