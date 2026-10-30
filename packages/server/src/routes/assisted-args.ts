@@ -37,8 +37,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'from', 'to', 'figureId', 'figureIds'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, from, to, figureId and figureIds, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'from', 'to', 'figureId', 'figureIds'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, from, to, figureId and figureIds, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -55,6 +55,23 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   const substitute = args['substitute']
   if (substitute !== undefined && (typeof substitute !== 'string' || substitute.length === 0 || substitute.length > 20)) {
     return 'substitute must be a short text'
+  }
+  const convertValue = args['convert']
+  let convert: { readonly from: 'trade' | 'culture'; readonly amount: number } | undefined
+  if (convertValue !== undefined) {
+    const record = typeof convertValue === 'object' && convertValue !== null && !Array.isArray(convertValue) ? asRecord(convertValue) : undefined
+    if (
+      record === undefined ||
+      extraKeys(record, ['from', 'amount']).length > 0 ||
+      (record['from'] !== 'trade' && record['from'] !== 'culture') ||
+      typeof record['amount'] !== 'number' ||
+      !Number.isInteger(record['amount']) ||
+      record['amount'] < 1 ||
+      record['amount'] > 999
+    ) {
+      return 'convert needs from (trade or culture) and a whole amount from 1 to 999'
+    }
+    convert = { from: record['from'], amount: record['amount'] }
   }
   const figureId = args['figureId']
   if (figureId !== undefined && !isId(figureId)) return 'figureId must be a piece id'
@@ -88,6 +105,7 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     ...(resource === undefined ? {} : { resource }),
     ...(coinSource === undefined ? {} : { coinSource }),
     ...(substitute === undefined ? {} : { substitute }),
+    ...(convert === undefined ? {} : { convert }),
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
     ...(figureId === undefined ? {} : { figureId }),

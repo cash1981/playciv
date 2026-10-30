@@ -15,11 +15,19 @@
 
 import { tradeCeilingOf } from './limits.js'
 import { investableCoinsOf } from './sot.js'
-import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
+import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
-import { drawCandidates, performAdvance, reverseAdvanceEffect, shuffleSheetTwice } from './assisted-culture.js'
+import {
+  drawCandidates,
+  freeAdvancesLeft,
+  performAdvance,
+  reverseAdvanceEffect,
+  shuffleSheetTwice,
+} from './assisted-culture.js'
+import { CULTURE_VICTORY_STEP } from './board.js'
+import { cultureMarkerOf } from './culture-track.js'
 import { squareLabel, unitSheetOf } from './build-options.js'
 import { cardMoveFigureChoices, cardMoveRuleOf, cardMoveSources } from './card-movement.js'
 import {
@@ -39,7 +47,7 @@ import {
   figuresAt,
 } from './movement.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
-import { revealedTechNamesOfOthers, stackingLimitOf } from './great-person-effects.js'
+import { buildingsInCitiesOf, revealedTechNamesOfOthers, stackingLimitOf } from './great-person-effects.js'
 import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
@@ -131,6 +139,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       name,
       kind,
       description: item.description,
+      inEffect: false,
       timings: passiveText === undefined ? timings : (['ANY'] as const),
       targets: rule.targets,
       prompt: rule.prompt,
@@ -155,6 +164,14 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
               label: findCoinSource(source.key)?.label ?? source.key,
             }))
           : [],
+      conversion:
+        name === 'Albert Einstein'
+          ? {
+              trade: player.stats.trade,
+              // Only as much culture as the trade track has room for: more would be refused
+              culture: Math.max(0, Math.min(player.stats.culture, tradeCeilingOf(player.civilization?.name) - player.stats.trade)),
+            }
+          : null,
       substituteResources:
         name === 'Marie Curie'
           ? ['Iron', 'Wheat', 'Spy', 'Silk', 'Incense']
@@ -166,6 +183,33 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
           ...base,
           status: 'unavailable',
           reason: `${name} is one of the cards you are choosing between. Choose the card to keep first.`,
+        },
+      ]
+    }
+    // A kept Great Person is used once: the faceup card stays and its effect stands. Shakespeare has no
+    // button effect at all, his skip is a choice of the advance, so showing him faceup is using him.
+    const usedAlready =
+      kind === 'greatPerson' &&
+      !base.discards &&
+      !item.hidden &&
+      (name === 'William Shakespeare' ||
+        state.assistedActions.some(
+          (record) =>
+            record.status === 'applied' &&
+            record.playerId === player.playerId &&
+            record.effect.kind === 'playCard' &&
+            record.effect.item.id === item.id,
+        ))
+    if (usedAlready) {
+      return [
+        {
+          ...base,
+          inEffect: true,
+          status: 'used',
+          reason:
+            name === 'William Shakespeare'
+              ? 'William Shakespeare is faceup. Skip occupied spaces with the advance buttons on the culture track.'
+              : `${name} has been used and stays faceup.`,
         },
       ]
     }
@@ -228,6 +272,7 @@ interface Automated {
     | 'wonderDiscount'
     | 'coin'
     | 'advance'
+    | 'freeAdvances'
     | 'curieSubstitute'
     | 'usedAction'
     | 'galileo'
@@ -349,6 +394,60 @@ function automate(
     case 'St. Francis of Assisi': {
       const armies = unbuiltArmies(state, player)
       return gained(0, armies * 3, `, gaining ${armies * 3} culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
+    }
+    case 'Frank Lloyd Wright': {
+      const buildings = buildingsInCitiesOf(state, player)
+      const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + buildings) - player.stats.trade)
+      return gained(
+        trade,
+        buildings,
+        `, gaining ${trade} trade and ${buildings} culture for ${buildings} ${buildings === 1 ? 'building' : 'buildings'}`,
+      )
+    }
+    case 'Albert Einstein': {
+      const convert = payload?.convert
+      if (convert === undefined || (convert.from !== 'trade' && convert.from !== 'culture')) {
+        return err('Choose whether to turn trade into culture or culture into trade, and how much.')
+      }
+      const held = convert.from === 'trade' ? player.stats.trade : player.stats.culture
+      if (held < 1) return err(`You have no ${convert.from} to turn.`)
+      if (!Number.isInteger(convert.amount) || convert.amount < 1 || convert.amount > held) {
+        return err(`Choose a whole amount from 1 to ${held} of your ${convert.from}.`)
+      }
+      if (convert.from === 'culture') {
+        const room = tradeCeilingOf(player.civilization?.name) - player.stats.trade
+        if (convert.amount > room) {
+          return err(`Your trade track has room for only ${Math.max(0, room)} more trade.`)
+        }
+        return gained(convert.amount, -convert.amount, `, turning ${convert.amount} culture into ${convert.amount} trade`)
+      }
+      return gained(-convert.amount, convert.amount, `, turning ${convert.amount} trade into ${convert.amount} culture`)
+    }
+    case 'Andrew Carnegie': {
+      const marker = cultureMarkerOf(state, player)
+      if (marker === undefined) return err('Your leader marker is not on the culture track.')
+      // One grant a turn, so an undo of it can tell that none of the bank is anyone else's
+      if (player.freeAdvancesTurn === turnStatus(state).currentTurn) {
+        return err('Andrew Carnegie has already given free advances this turn.')
+      }
+      const room = CULTURE_VICTORY_STEP - marker.step
+      const earned = Math.min(Math.floor(totalCoins(coinSourcesOf(state, player)) / 3), room - freeAdvancesLeft(state, player))
+      if (earned < 1) {
+        return err(
+          room <= 0 || freeAdvancesLeft(state, player) >= room
+            ? 'There are no culture spaces left to advance onto.'
+            : 'You need at least 3 coins to advance with Andrew Carnegie.',
+        )
+      }
+      return ok({
+        state: withPlayerHand(state, {
+          ...player,
+          freeAdvances: freeAdvancesLeft(state, player) + earned,
+          freeAdvancesTurn: turnStatus(state).currentTurn,
+        }),
+        extra: { freeAdvances: earned },
+        said: `, earning ${earned} free culture ${earned === 1 ? 'advance' : 'advances'} to make one space at a time`,
+      })
     }
     case 'Orville Wright': {
       const sheetName = unitSheetOf('aircraft')
@@ -866,6 +965,12 @@ export const playCard: AssistedActionDefinition = {
     if (effect.wonderDiscount !== undefined && player.wonderDiscount < effect.wonderDiscount) {
       return blockedBy(`The ${effect.wonderDiscount}-production discount from ${effect.name} has already been used.`)
     }
+    if (
+      effect.freeAdvances !== undefined &&
+      (player.freeAdvancesTurn !== record.turnNumber || player.freeAdvances !== effect.freeAdvances)
+    ) {
+      return blockedBy(`Some of the free advances from ${effect.name} have already been made. Undo those advances first.`)
+    }
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
       return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
     }
@@ -907,6 +1012,19 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${coinTarget?.username ?? 'The other player'} no longer has the coin ${effect.name} gave them.`)
     }
 
+    // Einstein's gain is negative on the side he spent, so the undo gives that back: it has to fit
+    // the track and the other side has to still hold what he gave, or the undo would invent resources
+    if (effect.gain !== undefined && effect.name === 'Albert Einstein') {
+      const trade = player.stats.trade - effect.gain.trade
+      const culture = player.stats.culture - effect.gain.culture
+      if (trade < 0 || culture < 0) {
+        return blockedBy(`${player.username} has already spent what ${effect.name} gave, so it cannot be undone.`)
+      }
+      if (trade > tradeCeilingOf(player.civilization?.name)) {
+        return blockedBy(`Giving the trade back would pass the end of ${player.username}'s trade track, so ${effect.name} cannot be undone.`)
+      }
+    }
+
     let current: GameState = state
     let hand: Playerhand = player
     if (effect.starter !== undefined) {
@@ -946,6 +1064,10 @@ export const playCard: AssistedActionDefinition = {
     }
     if (effect.curieSubstitute !== undefined) {
       hand = { ...hand, curieSubstitute: null }
+    }
+    if (effect.freeAdvances !== undefined) {
+      // The whole bank is this grant's: it is the only one of its turn and none of it is spent
+      hand = { ...hand, freeAdvances: 0, freeAdvancesTurn: 0 }
     }
     if (effect.galileo !== undefined) {
       for (const move of [...effect.galileo.moves].reverse()) {

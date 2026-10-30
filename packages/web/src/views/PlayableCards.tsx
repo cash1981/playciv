@@ -80,6 +80,8 @@ export function PlayCardControl({
   const [resource, setResource] = useState('')
   const [coinSource, setCoinSource] = useState('')
   const [substitute, setSubstitute] = useState('')
+  const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
+  const [convertAmount, setConvertAmount] = useState('')
   const [moveFrom, setMoveFrom] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveTo, setMoveTo] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveHint, setMoveHint] = useState<string | null>(null)
@@ -91,11 +93,25 @@ export function PlayCardControl({
   const viewer = view.you
 
   const ready = card.status === 'ready'
+  // A kept Great Person that has been used stays faceup: it is shown as in effect, with no button
+  if (card.inEffect) {
+    return (
+      <div className="play-card">
+        <span className="tag revealed" title={card.reason}>
+          In effect
+        </span>
+      </div>
+    )
+  }
   const others = view.opponents
   const { min, max } = targetLimit(card)
   const needsResource = card.resources.length > 0
   const needsCoin = card.coinSources.length > 0
   const needsSubstitute = card.substituteResources.length > 0
+  const conversion = card.conversion ?? null
+  const convertHeld = conversion === null ? 0 : conversion[convertFrom]
+  const convertWhole = Number(convertAmount)
+  const convertValid = conversion === null || (Number.isInteger(convertWhole) && convertWhole >= 1 && convertWhole <= convertHeld)
   const isGalileo = card.name === GALILEO_NAME
   const cardMove = card.mapMove ?? null
   const isMapMove = isGalileo || cardMove !== null
@@ -181,7 +197,8 @@ export function PlayCardControl({
     effective.length <= max &&
     (!needsResource || resource !== '') &&
     (!needsCoin || coinSource !== '') &&
-    (!needsSubstitute || substitute !== '')
+    (!needsSubstitute || substitute !== '') &&
+    convertValid
   const valid = baseValid
   const disabled = busy || readOnly
 
@@ -214,7 +231,7 @@ export function PlayCardControl({
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -225,6 +242,7 @@ export function PlayCardControl({
           ...(needsResource ? { resource } : {}),
           ...(needsCoin ? { coinSource } : {}),
           ...(needsSubstitute ? { substitute } : {}),
+          ...(conversion === null ? {} : { convert: { from: convertFrom, amount: convertWhole } }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
           ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
@@ -603,6 +621,28 @@ export function PlayCardControl({
                   </option>
                 ))}
               </select>
+            </label>
+          )}
+          {conversion !== null && (
+            <label className="play-card-resource">
+              Turn{' '}
+              <select
+                value={convertFrom}
+                disabled={disabled}
+                onChange={(event) => setConvertFrom(event.target.value === 'culture' ? 'culture' : 'trade')}
+              >
+                <option value="trade">trade into culture ({conversion.trade})</option>
+                <option value="culture">culture into trade ({conversion.culture})</option>
+              </select>{' '}
+              <input
+                type="number"
+                min={1}
+                max={convertHeld}
+                value={convertAmount}
+                disabled={disabled}
+                aria-label="Amount to turn"
+                onChange={(event) => setConvertAmount(event.target.value)}
+              />
             </label>
           )}
           <p className="muted play-card-note">

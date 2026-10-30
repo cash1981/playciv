@@ -215,6 +215,8 @@ export interface PlayCardPayload {
   readonly resource?: string
   /** Mother Teresa: the coin counter to give from. */
   readonly coinSource?: string
+  /** Albert Einstein: what to spend, and how much of it, to gain the same amount of the other. */
+  readonly convert?: { readonly from: 'trade' | 'culture'; readonly amount: number }
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
   /** The map square whose figures move (Galileo and the movement culture cards). */

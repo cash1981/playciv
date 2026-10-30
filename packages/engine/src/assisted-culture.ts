@@ -46,6 +46,7 @@ import {
   cultureSpaceAt,
   rewardDrawCount,
 } from './culture-track.js'
+import { turnStatus } from './turn.js'
 import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } from './culture-track.js'
 import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
@@ -87,6 +88,14 @@ function describeCost(cost: CultureAdvanceCost): string {
   ]
   return parts.length === 0 ? 'nothing' : parts.join(' and ')
 }
+
+/** What an advance costs while Andrew Carnegie's free advances last. */
+const carnegieCost = (state: GameState, player: Playerhand): string =>
+  `free with Andrew Carnegie (${freeAdvancesLeft(state, player)} left)`
+
+/** The free advances Andrew Carnegie earned this turn and the player has not made. */
+export const freeAdvancesLeft = (state: GameState, player: Playerhand): number =>
+  player.freeAdvancesTurn === turnStatus(state).currentTurn ? player.freeAdvances : 0
 
 /** The deck a space draws from: its level's culture deck, or the Great Person deck. */
 function rewardSheet(space: CultureSpace): SheetName {
@@ -137,6 +146,8 @@ interface AdvancePlan {
   readonly cost: CultureAdvanceCost
   readonly count: number
   readonly sheetName: SheetName
+  /** The advance spends one of Andrew Carnegie's free advances. */
+  readonly carnegie: boolean
 }
 
 /**
@@ -150,6 +161,8 @@ function planAdvance(
   player: Playerhand,
   options: AdvanceOptions = {},
 ): Result<AdvancePlan, BlockedAvailability> {
+  // Andrew Carnegie's advances of this turn cost nothing; City Management has to be open all the same
+  const carnegie = options.free !== true && freeAdvancesLeft(state, player) > 0
   if (options.free !== true && openCityManagementTurn(state, player) === undefined) {
     return err(blocked('wrong-phase', PHASE_REASON))
   }
@@ -182,8 +195,8 @@ function planAdvance(
     )
   }
 
-  const cost = options.free === true ? { culture: 0, trade: 0 } : cultureAdvanceCost(state, player, to.step)
-  const where = `Advance to ${describeSpace(to)}: ${describeCost(cost)}.`
+  const cost = options.free === true || carnegie ? { culture: 0, trade: 0 } : cultureAdvanceCost(state, player, to.step)
+  const where = `Advance to ${describeSpace(to)}: ${carnegie ? carnegieCost(state, player) : describeCost(cost)}.`
   if (livePendingRewards(player).length > 0) {
     return err(blocked('unavailable', `${where} Choose the card to keep from your last advance first.`))
   }
@@ -212,7 +225,7 @@ function planAdvance(
     return err(blocked('unavailable', `${where} There are no ${SHEET_LABEL[sheetName]} cards left to draw.`))
   }
 
-  return ok({ marker, to, cost, count: rewardDrawCount(state, player, to.kind), sheetName })
+  return ok({ marker, to, cost, count: rewardDrawCount(state, player, to.kind), sheetName, carnegie })
 }
 
 /**
@@ -631,7 +644,7 @@ export function performAdvance(
 ): Result<{ readonly state: GameState; readonly effect: CultureAdvanceEffect; readonly logId: string }, EngineError> {
   const plan = planAdvance(state, player, options)
   if (!plan.ok) return err(rejected('cultureAdvance', plan.error))
-  const { marker, to, cost, count, sheetName } = plan.value
+  const { marker, to, cost, count, sheetName, carnegie } = plan.value
   const failed = (reason: string): EngineError =>
     rejected('cultureAdvance', blocked('unavailable', reason))
   const at = context.at === undefined ? {} : { at: context.at }
@@ -667,9 +680,10 @@ export function performAdvance(
         culture: paying.stats.culture - cost.culture,
         trade: paying.stats.trade - cost.trade,
       },
+      ...(carnegie ? { freeAdvances: paying.freeAdvances - 1 } : {}),
     })
   }
-  const prefix = `${player.username} advanced${options.free === true ? ' for free' : ''} on the culture track to space ${to.step} and `
+  const prefix = `${player.username} advanced${options.free === true || carnegie ? ' for free' : ''}${carnegie ? ' with Andrew Carnegie' : ''} on the culture track to space ${to.step} and `
 
   let paid: GameState
   let publicText: string
@@ -775,6 +789,7 @@ export function performAdvance(
       markerFrom: { x: marker.piece.x, y: marker.piece.y },
       markerTo: { x: placed.x, y: placed.y },
       historyId: move.id,
+      ...(carnegie ? { freeAdvance: true as const } : {}),
       reward: to.kind,
       level: to.level,
       sheetName,
@@ -833,6 +848,10 @@ export function reverseAdvanceEffect(
       culture: player.stats.culture + effect.culture,
       trade: player.stats.trade + effect.trade,
     },
+    // Given back only to the bank of the turn it was spent in: an earlier turn's credit has expired
+    ...(effect.freeAdvance === true && player.freeAdvancesTurn === record.turnNumber
+      ? { freeAdvances: player.freeAdvances + 1 }
+      : {}),
   }
   const restored = restoreDrawnCards(
     withPlayerHand(state, paidBack),
@@ -865,7 +884,7 @@ export function reverseAdvanceEffect(
     state: movedBack,
     text:
       `${player.username}'s culture advance was undone: the leader marker is back on space ${effect.fromStep}, ` +
-      `${describeCost(effect)} returned and the drawn cards were put back in the deck` +
+      `${effect.freeAdvance === true ? 'the free advance' : describeCost(effect)} returned and the drawn cards were put back in the deck` +
       removedMarkerText(greatPersonMarker),
   })
 }
@@ -888,7 +907,7 @@ export const cultureAdvance: AssistedActionDefinition = {
     const warning = plan.value.to.kind === 'event' ? cultureHandWarning(state, player, 1) : undefined
     return {
       status: 'ready',
-      reason: `Advance to ${describeSpace(plan.value.to)}: ${describeCost(plan.value.cost)}.`,
+      reason: `Advance to ${describeSpace(plan.value.to)}: ${plan.value.carnegie ? carnegieCost(state, player) : describeCost(plan.value.cost)}.`,
       ...(warning === undefined ? {} : { warning }),
     }
   },
@@ -928,7 +947,7 @@ export const cultureAdvanceSkip: AssistedActionDefinition = {
     const warning = plan.value.to.kind === 'event' ? cultureHandWarning(state, player, 1) : undefined
     return {
       status: 'ready',
-      reason: `Skip to ${describeSpace(plan.value.to)}: ${describeCost(plan.value.cost)}.`,
+      reason: `Skip to ${describeSpace(plan.value.to)}: ${plan.value.carnegie ? carnegieCost(state, player) : describeCost(plan.value.cost)}.`,
       ...(warning === undefined ? {} : { warning }),
     }
   },

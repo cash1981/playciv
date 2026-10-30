@@ -196,11 +196,11 @@ describe('playing a card', () => {
     expect(kept.log.at(-1)?.publicLog).toBe('cash1981 used William Shakespeare (any time)')
   })
 
-  it('can be played again with a new request id, since a card is its own use', () => {
+  it('cannot be used twice: a kept Great Person stays faceup and in effect', () => {
     const shakespeare = withCardInHand(startOfTurn(), 'William Shakespeare')
     const first = unwrap(play(shakespeare.state, 'req-1', shakespeare.itemId))
-    const second = unwrap(play(first, 'req-2', shakespeare.itemId))
-    expect(second.assistedActions).toHaveLength(2)
+    expect(play(first, 'req-2', shakespeare.itemId).ok).toBe(false)
+    expect(first.assistedActions).toHaveLength(1)
   })
 
   it('does the same once for the same request id, the way a retry sends it', () => {

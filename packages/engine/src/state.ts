@@ -220,6 +220,14 @@ export interface Playerhand {
    */
   readonly wonderDiscount: number
   /**
+   * Free culture advances Andrew Carnegie granted that the player has not made yet. The Advance
+   * and Shakespeare buttons spend one per advance instead of the price, in City Management of
+   * the turn `freeAdvancesTurn` only: from another turn they are ignored. Own view only.
+   */
+  readonly freeAdvances: number
+  /** The turn the free advances were earned in, 0 when there are none. */
+  readonly freeAdvancesTurn: number
+  /**
    * The resource Marie Curie lets the next Uranium spend use instead, or `null`.
    * Own view only, like the rest of the hand.
    */
@@ -486,6 +494,8 @@ export interface CultureAdvanceEffect {
   readonly markerFrom: { readonly x: number; readonly y: number }
   readonly markerTo: { readonly x: number; readonly y: number }
   readonly historyId: string
+  /** The advance spent one of Andrew Carnegie's free advances instead of paying, so an undo gives it back. */
+  readonly freeAdvance?: true
   readonly reward: CultureSpaceKind
   readonly level: CultureLevel
   readonly sheetName: SheetName
@@ -641,7 +651,7 @@ export type AssistedEffect =
       readonly resource: string | null
       /** The card's name as the line printed it. */
       readonly name: string
-      /** What the game did for the card besides logging it: trade and culture gained, as actually added. */
+      /** What the game did for the card besides logging it: trade and culture gained, as actually added. Negative for what Albert Einstein spent. */
       readonly gain?: { readonly trade: number; readonly culture: number }
       /** A unit card the game drew into the hand for the card, so an undo can put it back. */
       readonly drew?: { readonly itemId: string; readonly sheetName: SheetName }
@@ -655,6 +665,8 @@ export type AssistedEffect =
       readonly coin?: { readonly source: string; readonly targetId: string }
       /** The free culture advance the card gave (Mother Teresa). */
       readonly advance?: CultureAdvanceEffect
+      /** The free culture advances the card banked for the Advance buttons (Andrew Carnegie). */
+      readonly freeAdvances?: number
       /** The Uranium substitution the card armed (Marie Curie), or `null` when it was not armed. */
       readonly curieSubstitute?: string
       /** A once-per-turn marker the card wrote (Captain James Cook), so an undo frees it. */

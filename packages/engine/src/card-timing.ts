@@ -207,6 +207,9 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Khalid ibn al-Walid', 'moves the start player marker to your area, so the next turn passes clockwise from you'],
   ['Michelangelo', 'takes 5 production off your next wonder'],
   ['Thomas Edison', 'grants a free research of a tech another player has revealed'],
+  ['Frank Lloyd Wright', 'gains trade and culture equal to the buildings in your cities'],
+  ['Andrew Carnegie', 'earns one free culture advance for every 3 coins you have, made one space at a time with the Advance buttons'],
+  ['Albert Einstein', 'turns the trade or the unspent culture you choose into the same amount of the other'],
   ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],
   ['Captain James Cook', 'doubles your travel speed until the end of the turn'],
@@ -256,6 +259,11 @@ export interface PlayableCard {
   readonly kind: 'culture' | 'greatPerson'
   /** The card's own effect text. */
   readonly description: string
+  /**
+   * A Great Person that is kept after use and has been used: it stays faceup and its effect
+   * stands, so there is nothing to press again. The status is then `used`.
+   */
+  readonly inEffect: boolean
   readonly timings: readonly CardTiming[]
   readonly targets: CardTargets
   readonly prompt: string
@@ -274,6 +282,8 @@ export interface PlayableCard {
   readonly discards: boolean
   /** Coin tokens the card can move (Mother Teresa), empty for every other card. */
   readonly coinSources: readonly { readonly key: string; readonly label: string; readonly coins: number }[]
+  /** The most Albert Einstein can turn each way now, or null for every other card. */
+  readonly conversion?: { readonly trade: number; readonly culture: number } | null
   /** Resources the card can substitute for Uranium (Marie Curie), empty for every other card. */
   readonly substituteResources: readonly string[]
   readonly status: PlayableCardStatus
