@@ -8,15 +8,15 @@ import { describe, expect, it } from 'vitest'
 import { placePiece } from '../src/actions/board.js'
 import { findBoardAsset, mapTop, slotOrigin, SQUARE_SIZE } from '../src/board.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
-import { performAssistedAction } from '../src/assisted.js'
+import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
-import { toPlayerView } from '../src/state.js'
+import { cultureMarkerLevelOf, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 import { unwrap } from '../src/result.js'
 
 import { withCardInHand } from './assisted-fixture.js'
-import { openCityManagement, withCivilization, withStats } from './culture-advance-fixture.js'
+import { openCityManagement, withCivilization, withMarkerAt, withStats } from './culture-advance-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-10-30T10:00:00.000Z'
@@ -181,5 +181,108 @@ describe('Albert Einstein', () => {
     const other = playableCardsOf(card.state, findPlayer(card.state, KARANDRAS1) as Playerhand)
     expect(other.some((entry) => entry.name === 'Albert Einstein')).toBe(false)
     expect(JSON.stringify(toPlayerView(card.state, KARANDRAS1))).not.toContain(card.itemId)
+  })
+})
+
+describe('Andrew Carnegie', () => {
+  const press = (state: GameState, requestId: string, action: 'cultureAdvance' | 'cultureAdvanceSkip' = 'cultureAdvance') =>
+    performAssistedAction(state, { playerId: CASH1981, action, requestId, at: AT })
+
+  const choose = (state: GameState, requestId: string) => {
+    const reward = me(state).pendingRewards[0]
+    const itemId = reward?.candidateIds[0]
+    if (reward === undefined || itemId === undefined) throw new Error('no card choice waiting')
+    return unwrap(
+      performAssistedAction(state, { playerId: CASH1981, action: 'chooseReward', requestId, at: AT, payload: { rewardId: reward.id, itemId } }),
+    )
+  }
+
+  /** The leader on the start space, plenty of culture and trade, `coins` coins and Carnegie in hand. */
+  const carnegieTurn = (coins: number) => {
+    let state = withCivilization(firstCivGame(), 'Japanese')
+    state = withMarkerAt(state, 0, 'Japanese')
+    state = openCityManagement(state)
+    state = withStats(state, { culture: 100, trade: 25, coinSources: { ...me(state).stats.coinSources, sheet: coins } })
+    return withCardInHand(state, 'Andrew Carnegie')
+  }
+
+  it('earns one free advance for every 3 coins and undoes it', () => {
+    const card = carnegieTurn(7)
+    const played = unwrap(play(card.state, 'c-1', card.itemId))
+    expect(me(played).freeAdvances).toBe(2)
+    expect(me(played).stats.culture).toBe(100)
+    expect(played.log.at(-1)?.publicLog).toContain('earning 2 free culture advances to make one space at a time')
+
+    expect(me(undoByVote(played, 'c-1')).freeAdvances).toBe(0)
+    expect(play(carnegieTurn(2).state, 'c-0', card.itemId).ok).toBe(false)
+  })
+
+  it('advances one space at a time for free, with the card choice in between, and gives an advance back on undo', () => {
+    const card = carnegieTurn(6)
+    const played = unwrap(play(card.state, 'c-2', card.itemId))
+    expect(assistedAvailability(played, CASH1981, 'cultureAdvance').reason).toContain('free with Andrew Carnegie (2 left)')
+
+    const first = unwrap(press(played, 'a-1'))
+    expect(cultureMarkerLevelOf(first, CASH1981)).toBe(1)
+    expect(me(first).stats.culture).toBe(100)
+    expect(me(first).stats.trade).toBe(25)
+    expect(me(first).freeAdvances).toBe(1)
+    expect(first.log.find((entry) => entry.assistedActionId === 'a-1')?.publicLog).toContain('for free with Andrew Carnegie')
+
+    // The cards the space gave have to be settled before the next advance
+    if (me(first).pendingRewards.length > 0) {
+      expect(assistedAvailability(first, CASH1981, 'cultureAdvance').status).toBe('unavailable')
+      expect(press(first, 'a-blocked').ok).toBe(false)
+    }
+    const settled = me(first).pendingRewards.length > 0 ? choose(first, 'r-1') : first
+    const second = unwrap(press(settled, 'a-2'))
+    expect(cultureMarkerLevelOf(second, CASH1981)).toBe(2)
+    expect(me(second).freeAdvances).toBe(0)
+    expect(me(second).stats.culture).toBe(100)
+
+    // With none left the advance costs what it costs again
+    expect(assistedAvailability(second, CASH1981, 'cultureAdvance').reason).not.toContain('Carnegie')
+
+    // An undone advance gives its free advance back, and the card cannot be undone while one is spent
+    const undone = undoByVote(second, 'a-2')
+    expect(me(undone).freeAdvances).toBe(1)
+    expect(me(undone).stats.culture).toBe(100)
+    expect(() => undoByVote(first, 'c-2')).toThrow(/ASSISTED_UNDO_BLOCKED.*already been made/)
+  })
+
+  it('can skip occupied spaces with Shakespeare while it spends the free advance', () => {
+    let state = withCivilization(firstCivGame(), 'Japanese')
+    state = withCivilization(state, 'Americans', KARANDRAS1)
+    state = withMarkerAt(state, 0, 'Japanese')
+    state = withMarkerAt(state, 1, 'Americans', KARANDRAS1)
+    state = openCityManagement(state)
+    state = withStats(state, { culture: 100, trade: 25, coinSources: { ...me(state).stats.coinSources, sheet: 3 } })
+    const carnegie = withCardInHand(state, 'Andrew Carnegie')
+    const shakespeare = withCardInHand(carnegie.state, 'William Shakespeare')
+    const ready = {
+      ...shakespeare.state,
+      players: shakespeare.state.players.map((candidate) =>
+        candidate.playerId === CASH1981
+          ? { ...candidate, items: candidate.items.map((item) => (item.id === shakespeare.itemId ? { ...item, hidden: false } : item)) }
+          : candidate,
+      ),
+    }
+    const played = unwrap(play(ready, 'c-3', carnegie.itemId))
+    const skipped = unwrap(press(played, 'skip-1', 'cultureAdvanceSkip'))
+    expect(cultureMarkerLevelOf(skipped, CASH1981)).toBe(2)
+    expect(me(skipped).freeAdvances).toBe(0)
+    expect(me(skipped).stats.culture).toBe(100)
+
+    const undone = undoByVote(skipped, 'skip-1')
+    expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(0)
+    expect(me(undone).freeAdvances).toBe(1)
+  })
+
+  it('keeps the banked advances out of every other view', () => {
+    const card = carnegieTurn(3)
+    const played = unwrap(play(card.state, 'c-4', card.itemId))
+    const other = toPlayerView(played, KARANDRAS1)
+    expect(JSON.stringify(other.opponents.find((entry) => entry.playerId === CASH1981))).not.toContain('freeAdvances')
+    expect(JSON.stringify(toPlayerView(played, 'spectator'))).not.toContain('freeAdvances')
   })
 })

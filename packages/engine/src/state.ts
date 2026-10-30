@@ -220,6 +220,11 @@ export interface Playerhand {
    */
   readonly wonderDiscount: number
   /**
+   * Free culture advances Andrew Carnegie granted that the player has not made yet. The Advance
+   * and Shakespeare buttons spend one per advance instead of the price. Own view only.
+   */
+  readonly freeAdvances: number
+  /**
    * The resource Marie Curie lets the next Uranium spend use instead, or `null`.
    * Own view only, like the rest of the hand.
    */
@@ -486,6 +491,8 @@ export interface CultureAdvanceEffect {
   readonly markerFrom: { readonly x: number; readonly y: number }
   readonly markerTo: { readonly x: number; readonly y: number }
   readonly historyId: string
+  /** The advance spent one of Andrew Carnegie's free advances instead of paying, so an undo gives it back. */
+  readonly freeAdvance?: true
   readonly reward: CultureSpaceKind
   readonly level: CultureLevel
   readonly sheetName: SheetName
@@ -655,6 +662,8 @@ export type AssistedEffect =
       readonly coin?: { readonly source: string; readonly targetId: string }
       /** The free culture advance the card gave (Mother Teresa). */
       readonly advance?: CultureAdvanceEffect
+      /** The free culture advances the card banked for the Advance buttons (Andrew Carnegie). */
+      readonly freeAdvances?: number
       /** The Uranium substitution the card armed (Marie Curie), or `null` when it was not armed. */
       readonly curieSubstitute?: string
       /** A once-per-turn marker the card wrote (Captain James Cook), so an undo frees it. */

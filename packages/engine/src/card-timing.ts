@@ -208,6 +208,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Michelangelo', 'takes 5 production off your next wonder'],
   ['Thomas Edison', 'grants a free research of a tech another player has revealed'],
   ['Frank Lloyd Wright', 'gains trade and culture equal to the buildings in your cities'],
+  ['Andrew Carnegie', 'earns one free culture advance for every 3 coins you have, made one space at a time with the Advance buttons'],
   ['Albert Einstein', 'turns the trade or the unspent culture you choose into the same amount of the other'],
   ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],

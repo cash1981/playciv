@@ -31,7 +31,7 @@ deployment reports do not establish present health.
   open phase. Used policies and wonders are disabled; a repeat of a Great Person
   or culture card asks first.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
-  Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright and Einstein
+  Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein and Carnegie
   apply through the engine.
 - Trade: free-text trade offers (#265); trade resets to coins at turn start for
   a player who researched, and city trade is collected once when Trade starts.

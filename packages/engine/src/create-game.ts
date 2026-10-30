@@ -130,6 +130,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     researchTurns: {},
     archimedesCulture: {},
     wonderDiscount: 0,
+    freeAdvances: 0,
     curieSubstitute: null,
   }
 }

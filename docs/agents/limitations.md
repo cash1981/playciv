@@ -16,10 +16,9 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   three-ancient/one-medieval deal. Deliberately forward-only (`migrate.ts`).
 - **Zulu starting units:** `actions/player.ts` deals four artillery; the
   printed/legacy rule may be three. Ask the human before changing it.
-- **Andrew Carnegie is not automated (#301):** "one free advance per 3 coins"
-  needs several advances in one action, but each culture space leaves a card
-  choice that blocks the next advance and a reward is tied to one advance per
-  action record. It needs a pending-free-advances counter on the player.
+- **Carnegie's free advances do not expire:** unspent advances stay on the hand
+  until made, rather than ending with the City Management phase, and the Advance
+  buttons spend them in any phase.
 - **A square another scout sends:** the Start of Turn panel still offers the
   second scout's city choice; choosing a city is refused with a reason (#319).
 - **Scout-held Bank coins:** board derivation does not model scout transfers;

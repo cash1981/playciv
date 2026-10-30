@@ -15,7 +15,7 @@
 
 import { tradeCeilingOf } from './limits.js'
 import { investableCoinsOf } from './sot.js'
-import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
+import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
@@ -235,6 +235,7 @@ interface Automated {
     | 'wonderDiscount'
     | 'coin'
     | 'advance'
+    | 'freeAdvances'
     | 'curieSubstitute'
     | 'usedAction'
     | 'galileo'
@@ -384,6 +385,15 @@ function automate(
         return gained(convert.amount, -convert.amount, `, turning ${convert.amount} culture into ${convert.amount} trade`)
       }
       return gained(-convert.amount, convert.amount, `, turning ${convert.amount} trade into ${convert.amount} culture`)
+    }
+    case 'Andrew Carnegie': {
+      const earned = Math.floor(totalCoins(coinSourcesOf(state, player)) / 3)
+      if (earned < 1) return err('You need at least 3 coins to advance with Andrew Carnegie.')
+      return ok({
+        state: withPlayerHand(state, { ...player, freeAdvances: player.freeAdvances + earned }),
+        extra: { freeAdvances: earned },
+        said: `, earning ${earned} free culture ${earned === 1 ? 'advance' : 'advances'} to make one space at a time`,
+      })
     }
     case 'Orville Wright': {
       const sheetName = unitSheetOf('aircraft')
@@ -901,6 +911,9 @@ export const playCard: AssistedActionDefinition = {
     if (effect.wonderDiscount !== undefined && player.wonderDiscount < effect.wonderDiscount) {
       return blockedBy(`The ${effect.wonderDiscount}-production discount from ${effect.name} has already been used.`)
     }
+    if (effect.freeAdvances !== undefined && player.freeAdvances < effect.freeAdvances) {
+      return blockedBy(`Some of the free advances from ${effect.name} have already been made. Undo those advances first.`)
+    }
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
       return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
     }
@@ -994,6 +1007,9 @@ export const playCard: AssistedActionDefinition = {
     }
     if (effect.curieSubstitute !== undefined) {
       hand = { ...hand, curieSubstitute: null }
+    }
+    if (effect.freeAdvances !== undefined) {
+      hand = { ...hand, freeAdvances: Math.max(0, hand.freeAdvances - effect.freeAdvances) }
     }
     if (effect.galileo !== undefined) {
       for (const move of [...effect.galileo.moves].reverse()) {
