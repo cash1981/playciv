@@ -1244,6 +1244,140 @@ describe('face-off on arrival', () => {
   })
 })
 
+describe('taking back an arrival', () => {
+  type Kind = 'infantry' | 'artillery' | 'mounted'
+
+  /**
+   * The reported game: Karandras's infantry kills Cash's infantry on front 0,
+   * then Cash reinforces with artillery, which trumps and kills it.
+   */
+  function reinforcedAndTrumped(): {
+    readonly state: GameState
+    readonly fallenId: string
+    readonly opponentId: string
+    readonly reinforcementId: string
+    readonly reinforcementCardId: string
+  } {
+    let state = withBattlehand(CASH1981, 2)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const place = (playerId: string, index: number, kind: Kind, side: 'attacker' | 'defender', attack: number, health: number) => {
+      const player = findPlayer(state, playerId)!
+      const unit = player.battlehand[index]!
+      state = withPlayer(state, {
+        ...player,
+        battlehand: player.battlehand.map((u) => (u.id === unit.id ? ({ ...u, kind } as typeof u) : u)),
+      })
+      state = unwrap(placeUnitInArena(state, { playerId, unitId: unit.id, side, position: 0, attack, health }))
+      return { slotId: state.battle!.arena[state.battle!.arena.length - 1]!.id, cardId: unit.id }
+    }
+    const fallen = place(CASH1981, 0, 'infantry', 'attacker', 1, 1)
+    const opponent = place(KARANDRAS1, 0, 'infantry', 'defender', 2, 3)
+    // Infantry against infantry: both strike. Cash's unit falls, 2 HP remain.
+    expect(state.battle!.arena.find((u) => u.id === fallen.slotId)).toMatchObject({ killed: true })
+    expect(state.battle!.arena.find((u) => u.id === opponent.slotId)).toMatchObject({ health: 2, killed: false })
+
+    const reinforcement = place(CASH1981, 1, 'artillery', 'attacker', 4, 3)
+    // Artillery trumps infantry and 4 ≥ 2: the opponent dies before striking back.
+    expect(state.battle!.arena.find((u) => u.id === opponent.slotId)).toMatchObject({ health: 0, killed: true })
+    expect(state.battle!.arena.some((u) => u.id === fallen.slotId)).toBe(false)
+    return {
+      state,
+      fallenId: fallen.slotId,
+      opponentId: opponent.slotId,
+      reinforcementId: reinforcement.slotId,
+      reinforcementCardId: reinforcement.cardId,
+    }
+  }
+
+  it('returning the reinforcement brings back the fallen unit and the unit it killed', () => {
+    const { state, fallenId, opponentId, reinforcementId, reinforcementCardId } = reinforcedAndTrumped()
+    const next = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: reinforcementId }))
+
+    const arena = next.battle!.arena
+    expect(arena.map((u) => u.id).sort()).toEqual([fallenId, opponentId].sort())
+    expect(arena.find((u) => u.id === fallenId)).toMatchObject({ position: 0, killed: true })
+    expect(arena.find((u) => u.id === opponentId)).toMatchObject({ health: 2, killed: false })
+    expect(next.battle!.departedUnits).toEqual([])
+    expect(findPlayer(next, CASH1981)!.battlehand.find((u) => u.id === reinforcementCardId)!.inBattle).toBe(false)
+  })
+
+  it('moving the reinforcement to another front takes its arrival back too', () => {
+    const { state, fallenId, opponentId, reinforcementId } = reinforcedAndTrumped()
+    const next = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: reinforcementId, position: 1 }))
+
+    const arena = next.battle!.arena
+    expect(arena.find((u) => u.id === fallenId)).toMatchObject({ position: 0, killed: true })
+    expect(arena.find((u) => u.id === opponentId)).toMatchObject({ health: 2, killed: false })
+    // Front 1 is open: the reinforcement stands there unhurt, with nothing to take back.
+    expect(arena.find((u) => u.id === reinforcementId)).toMatchObject({ position: 1, health: 3, arrival: null })
+    expect(next.battle!.departedUnits).toEqual([])
+  })
+
+  it('restores the unit’s own HP when it leaves a front where it was hurt', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const cashUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const karUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(placeUnitInArena(state, {
+      playerId: KARANDRAS1, unitId: karUnit.id, side: 'defender', position: 0, attack: 3, health: 4,
+    }))
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: cashUnit.id, side: 'attacker', position: 0, attack: 2, health: 4,
+    }))
+    const mover = state.battle!.arena.find((u) => u.side === 'attacker')!
+    expect(mover.health).toBe(1)
+
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: mover.id, position: 1 }))
+    const arena = state.battle!.arena
+    expect(arena.find((u) => u.side === 'attacker')).toMatchObject({ position: 1, health: 4 })
+    expect(arena.find((u) => u.side === 'defender')).toMatchObject({ health: 4 })
+  })
+
+  it('keeps a hand edit made after the face-off', () => {
+    const { state, fallenId, opponentId, reinforcementId } = reinforcedAndTrumped()
+    // The opponent's kill is undone by hand, then its HP set: both are newer decisions.
+    let edited = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: opponentId }))
+    edited = unwrap(setArenaUnitStat(edited, { playerId: KARANDRAS1, arenaUnitId: opponentId, key: 'health', value: 1 }))
+    const next = unwrap(returnArenaUnitToHand(edited, { playerId: CASH1981, arenaUnitId: reinforcementId }))
+
+    expect(next.battle!.arena.find((u) => u.id === opponentId)).toMatchObject({ health: 1, killed: false })
+    expect(next.battle!.arena.find((u) => u.id === fallenId)).toMatchObject({ killed: true })
+  })
+
+  it('returning a unit that displaced nothing and fought nobody changes nothing else', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: unit.id, side: 'attacker', position: 0, attack: 3, health: 4,
+    }))
+    expect(state.battle!.arena[0]!.arrival).toBeNull()
+    const next = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: state.battle!.arena[0]!.id }))
+    expect(next.battle!.arena).toEqual([])
+    expect(next.battle!.departedUnits).toEqual([])
+  })
+
+  it('an arena saved before arrivals were recorded loads with nothing to take back', () => {
+    const { state } = reinforcedAndTrumped()
+    const strip = (u: Record<string, unknown>) => {
+      const { arrival: _arrival, ...rest } = u
+      return rest
+    }
+    const old = {
+      ...state,
+      battle: {
+        ...state.battle!,
+        arena: state.battle!.arena.map((u) => strip(u as unknown as Record<string, unknown>)),
+        departedUnits: state.battle!.departedUnits.map((u) => strip(u as unknown as Record<string, unknown>)),
+      },
+    } as unknown as GameState
+    const migrated = migrateGameState(old)
+    expect([...migrated.battle!.arena, ...migrated.battle!.departedUnits].every((u) => u.arrival === null)).toBe(true)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // endBattleTurn
 // ---------------------------------------------------------------------------
