@@ -179,6 +179,7 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Jim Henson', none],
   ['St. Francis of Assisi', none],
   ['A. P. Giannini', none],
+  ['Andrew Carnegie', none],
   ['Captain James Cook', none],
   ["Lorenzo de' Medici", none],
   ['Albert Einstein', none],

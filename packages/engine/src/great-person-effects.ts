@@ -8,7 +8,7 @@
  * cannot disagree with the card-play and Start of Turn checks.
  */
 
-import { blockadedGreatPersonTypes, GREAT_PERSON_CARD_TYPES } from './blockade.js'
+import { blockadedGreatPersonTypes, cityFootprintsOf, GREAT_PERSON_CARD_TYPES, mapCellOf } from './blockade.js'
 import { findBoardAsset, remainingBoardAssetCount } from './board.js'
 import type { GreatPersonItem, Item } from './item.js'
 import type { GameState, Playerhand } from './state.js'
@@ -73,4 +73,25 @@ export function anyGreatPersonMarkerLeft(state: GameState): boolean {
 export function hasGreatPersonMarkerLeft(state: GameState, item: Item): boolean {
   const assetId = greatPersonMarkerAssetId(item)
   return assetId !== undefined && greatPersonMarkersLeft(state, assetId) > 0
+}
+
+/**
+ * Frank Lloyd Wright: the buildings in the player's cities, that is on a map square in
+ * the outskirts of one of their own cities. Ownership is the city, never `placedBy`, as
+ * `upgradablePiecesOf` reads it: a building outside every outskirts, off the map or in
+ * another player's city does not count.
+ */
+export function buildingsInCitiesOf(state: GameState, player: Playerhand): number {
+  if (player.color === null) return 0
+  const outskirts = new Set(
+    cityFootprintsOf(state, player.color.toLowerCase()).flatMap((footprint) =>
+      footprint.outskirts.map((cell) => `${cell.column},${cell.row}`),
+    ),
+  )
+  if (outskirts.size === 0) return 0
+  return state.board.pieces.filter((piece) => {
+    if (piece.category !== 'building') return false
+    const cell = mapCellOf(state.board, piece)
+    return cell !== null && outskirts.has(`${cell.column},${cell.row}`)
+  }).length
 }

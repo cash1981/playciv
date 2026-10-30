@@ -160,6 +160,14 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 - Metropolis outskirts are the ten squares around two centres, excluding both.
 - A Great Person with no tracked matching token is not assumed blockaded
   (compatibility with existing games).
+- Frank Lloyd Wright counts the building pieces on map squares in the outskirts
+  of the player's own cities (ownership is the city, never `placedBy`, as for
+  upgrades); none without a city. Trade is capped at the track ceiling, as for
+  Marco Polo. Albert Einstein turns a chosen whole amount (1 to what the player
+  holds) either way; culture into trade is refused beyond the trade ceiling. Both
+  are City Management cards. Undoing Einstein is refused when the resource he gave
+  has been spent or giving back would pass the trade track; Wright's undo clamps
+  at zero like Marco Polo's.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

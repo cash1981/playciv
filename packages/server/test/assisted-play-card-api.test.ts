@@ -201,6 +201,30 @@ describe('playing a card through the actions route', () => {
     expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
   })
 
+  it('carries Albert Einstein’s conversion through the route', async () => {
+    const t = await table('Albert Einstein')
+    const saved = await repo.findGame(t.gameId)
+    if (saved === undefined) throw new Error('missing game')
+    const opened = unwrap(markPhasesDone(saved, { playerId: t.starterId, turnNumber: 1, upToPhase: 'TRADE' }))
+    await repo.saveGame({
+      ...opened,
+      players: opened.players.map((candidate) =>
+        candidate.playerId === t.starterId ? { ...candidate, stats: { ...candidate.stats, trade: 6, culture: 1 } } : candidate,
+      ),
+    })
+    const rev = (await view(t.gameId, t.starter)).rev
+    const response = await post(t.starter, actions(t.gameId), {
+      action: 'playCard',
+      requestId: 'req-1',
+      rev,
+      args: { itemId: t.itemId, targets: [], convert: { from: 'trade', amount: 4 } },
+    })
+    expect(response.status).toBe(200)
+    const after = await repo.findGame(t.gameId)
+    const stats = after?.players.find((candidate) => candidate.playerId === t.starterId)?.stats
+    expect(stats).toMatchObject({ trade: 2, culture: 5 })
+  })
+
   it('carries Galileo’s two squares through the route and moves the figures', async () => {
     const t = await table('Galileo Galilei')
     const saved = await repo.findGame(t.gameId)

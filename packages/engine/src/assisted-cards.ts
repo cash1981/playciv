@@ -39,7 +39,7 @@ import {
   figuresAt,
 } from './movement.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
-import { revealedTechNamesOfOthers, stackingLimitOf } from './great-person-effects.js'
+import { buildingsInCitiesOf, revealedTechNamesOfOthers, stackingLimitOf } from './great-person-effects.js'
 import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
@@ -58,7 +58,7 @@ import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
 import type { AssistedEffect, GameState, Playerhand } from './state.js'
-import { buildingCountOf, withPlayer } from './state.js'
+import { withPlayer } from './state.js'
 import type { PlayCardPayload } from './assisted-core.js'
 import type { TechGrant } from './state.js'
 import { startPlayerOf, turnStatus } from './turn.js'
@@ -358,7 +358,7 @@ function automate(
       return gained(0, armies * 3, `, gaining ${armies * 3} culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
     }
     case 'Frank Lloyd Wright': {
-      const buildings = buildingCountOf(state, player.playerId)
+      const buildings = buildingsInCitiesOf(state, player)
       const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + buildings) - player.stats.trade)
       return gained(
         trade,
@@ -372,6 +372,7 @@ function automate(
         return err('Choose whether to turn trade into culture or culture into trade, and how much.')
       }
       const held = convert.from === 'trade' ? player.stats.trade : player.stats.culture
+      if (held < 1) return err(`You have no ${convert.from} to turn.`)
       if (!Number.isInteger(convert.amount) || convert.amount < 1 || convert.amount > held) {
         return err(`Choose a whole amount from 1 to ${held} of your ${convert.from}.`)
       }
@@ -939,6 +940,19 @@ export const playCard: AssistedActionDefinition = {
       effect.coin === undefined ? undefined : playerOf(state, effect.coin.targetId)
     if (effect.coin !== undefined && (coinTarget === undefined || coinTarget.stats.coinSources.sheet < 1)) {
       return blockedBy(`${coinTarget?.username ?? 'The other player'} no longer has the coin ${effect.name} gave them.`)
+    }
+
+    // Einstein's gain is negative on the side he spent, so the undo gives that back: it has to fit
+    // the track and the other side has to still hold what he gave, or the undo would invent resources
+    if (effect.gain !== undefined && effect.name === 'Albert Einstein') {
+      const trade = player.stats.trade - effect.gain.trade
+      const culture = player.stats.culture - effect.gain.culture
+      if (trade < 0 || culture < 0) {
+        return blockedBy(`${player.username} has already spent what ${effect.name} gave, so it cannot be undone.`)
+      }
+      if (trade > tradeCeilingOf(player.civilization?.name)) {
+        return blockedBy(`Giving the trade back would pass the end of ${player.username}'s trade track, so ${effect.name} cannot be undone.`)
+      }
     }
 
     let current: GameState = state

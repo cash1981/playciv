@@ -221,7 +221,7 @@ export function PlayCardControl({
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertAmount}`}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
