@@ -1048,6 +1048,7 @@ export function endBattleAction(
     endedBattle: {
       battle,
       endedBy: input.playerId,
+      summary: summaries,
       ...(fortification === undefined ? {} : { fortification }),
     },
   })

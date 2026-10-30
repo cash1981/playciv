@@ -352,7 +352,12 @@ export function migrateGameState(state: GameState): GameState {
     endedBattle:
       older.endedBattle === null || older.endedBattle === undefined
         ? null
-        : { ...older.endedBattle, battle: migrateBattle(older.endedBattle.battle as MaybeOlderBattle) },
+        : {
+            ...older.endedBattle,
+            battle: migrateBattle(older.endedBattle.battle as MaybeOlderBattle),
+            // Ended before the result was kept: the view derives it instead.
+            summary: older.endedBattle.summary ?? null,
+          },
     rev: older.rev ?? 0,
     chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
     startPlayerId: older.startPlayerId ?? null,
