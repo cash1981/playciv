@@ -174,8 +174,10 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   and Shakespeare buttons spend one per advance in place of the price, in City
   Management of that turn only, one space at a time, so the usual stops apply: a
   card choice or Mysticism discard, hand size, the deck. Unspent advances lapse
-  with the turn. An undone advance returns its free advance; the card cannot be
-  undone once one is spent.
+  with the turn. Carnegie gives free advances once a turn, so the bank is never
+  mixed with another grant. An undone advance returns its free advance to the
+  bank of its own turn only; the card cannot be undone once one is spent.
+  Einstein's form offers only as much culture as the trade track has room for.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

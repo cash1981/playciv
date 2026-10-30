@@ -150,6 +150,12 @@ describe('Albert Einstein', () => {
     expect(over.ok).toBe(false)
   })
 
+  it('offers only as much culture as the trade track has room for', () => {
+    const card = einstein({ trade: 20, culture: 9 })
+    const listed = playableCardsOf(card.state, me(card.state)).find((entry) => entry.itemId === card.itemId)
+    expect(listed?.conversion).toEqual({ trade: 20, culture: 7 })
+  })
+
   it('undoes culture into trade, and refuses an undo that would invent resources', () => {
     const card = einstein({ trade: 5, culture: 9 })
     const played = unwrap(play(card.state, 'e-5', card.itemId, { from: 'culture', amount: 4 }))
@@ -270,6 +276,44 @@ describe('Andrew Carnegie', () => {
     expect(assistedAvailability(closed, CASH1981, 'cultureAdvance').status).toBe('wrong-phase')
     const stale = { ...played, players: played.players.map((hand) => (hand.playerId === CASH1981 ? { ...hand, freeAdvancesTurn: 0 } : hand)) }
     expect(assistedAvailability(stale, CASH1981, 'cultureAdvance').reason).not.toContain('Carnegie')
+  })
+
+  it('gives free advances once a turn, so an undo of the card cannot take another grant', () => {
+    const card = carnegieTurn(6)
+    const played = unwrap(play(card.state, 'c-6', card.itemId))
+    // Carnegie is discarded when played: put him back in the hand as a redraw would
+    const discarded = played.discardedItems.find((item) => item.id === card.itemId)
+    if (discarded === undefined) throw new Error('Carnegie was not discarded')
+    const again = {
+      ...played,
+      discardedItems: played.discardedItems.filter((item) => item.id !== card.itemId),
+      players: played.players.map((hand) =>
+        hand.playerId === CASH1981 ? { ...hand, items: [...hand.items, { ...discarded, hidden: true, ownerId: CASH1981 }] } : hand,
+      ),
+    }
+    expect(JSON.stringify(play(again, 'c-7', card.itemId))).toContain('already given free advances this turn')
+
+    // Undone, the turn is free of a grant again and the card can be played anew
+    const undone = undoByVote(played, 'c-6')
+    expect(me(undone).freeAdvancesTurn).toBe(0)
+    expect(me(undone).items.some((item) => item.id === card.itemId)).toBe(true)
+    expect(me(unwrap(play(undone, 'c-8', card.itemId))).freeAdvances).toBe(2)
+  })
+
+  it('does not hand an advance undone from an earlier turn to a later bank', () => {
+    const card = carnegieTurn(3)
+    const played = unwrap(play(card.state, 'c-9', card.itemId))
+    const advanced = unwrap(press(played, 'a-9'))
+    // A later turn's bank: the credit the undone advance would give back is long expired
+    const later = {
+      ...advanced,
+      players: advanced.players.map((hand) =>
+        hand.playerId === CASH1981 ? { ...hand, freeAdvances: 1, freeAdvancesTurn: 2 } : hand,
+      ),
+    }
+    expect(me(undoByVote(later, 'a-9')).freeAdvances).toBe(1)
+    // In its own turn it does come back
+    expect(me(undoByVote(advanced, 'a-9')).freeAdvances).toBe(1)
   })
 
   it('refuses without a leader marker on the culture track', () => {

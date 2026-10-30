@@ -167,7 +167,8 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
         name === 'Albert Einstein'
           ? {
               trade: player.stats.trade,
-              culture: player.stats.culture,
+              // Only as much culture as the trade track has room for: more would be refused
+              culture: Math.max(0, Math.min(player.stats.culture, tradeCeilingOf(player.civilization?.name) - player.stats.trade)),
             }
           : null,
       substituteResources:
@@ -397,6 +398,10 @@ function automate(
     case 'Andrew Carnegie': {
       const marker = cultureMarkerOf(state, player)
       if (marker === undefined) return err('Your leader marker is not on the culture track.')
+      // One grant a turn, so an undo of it can tell that none of the bank is anyone else's
+      if (player.freeAdvancesTurn === turnStatus(state).currentTurn) {
+        return err('Andrew Carnegie has already given free advances this turn.')
+      }
       const room = CULTURE_VICTORY_STEP - marker.step
       const earned = Math.min(Math.floor(totalCoins(coinSourcesOf(state, player)) / 3), room - freeAdvancesLeft(state, player))
       if (earned < 1) {
@@ -932,7 +937,10 @@ export const playCard: AssistedActionDefinition = {
     if (effect.wonderDiscount !== undefined && player.wonderDiscount < effect.wonderDiscount) {
       return blockedBy(`The ${effect.wonderDiscount}-production discount from ${effect.name} has already been used.`)
     }
-    if (effect.freeAdvances !== undefined && player.freeAdvances < effect.freeAdvances) {
+    if (
+      effect.freeAdvances !== undefined &&
+      (player.freeAdvancesTurn !== record.turnNumber || player.freeAdvances !== effect.freeAdvances)
+    ) {
       return blockedBy(`Some of the free advances from ${effect.name} have already been made. Undo those advances first.`)
     }
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
@@ -1030,7 +1038,8 @@ export const playCard: AssistedActionDefinition = {
       hand = { ...hand, curieSubstitute: null }
     }
     if (effect.freeAdvances !== undefined) {
-      hand = { ...hand, freeAdvances: Math.max(0, hand.freeAdvances - effect.freeAdvances) }
+      // The whole bank is this grant's: it is the only one of its turn and none of it is spent
+      hand = { ...hand, freeAdvances: 0, freeAdvancesTurn: 0 }
     }
     if (effect.galileo !== undefined) {
       for (const move of [...effect.galileo.moves].reverse()) {

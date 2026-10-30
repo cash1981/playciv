@@ -848,7 +848,10 @@ export function reverseAdvanceEffect(
       culture: player.stats.culture + effect.culture,
       trade: player.stats.trade + effect.trade,
     },
-    ...(effect.freeAdvance === true ? { freeAdvances: player.freeAdvances + 1 } : {}),
+    // Given back only to the bank of the turn it was spent in: an earlier turn's credit has expired
+    ...(effect.freeAdvance === true && player.freeAdvancesTurn === record.turnNumber
+      ? { freeAdvances: player.freeAdvances + 1 }
+      : {}),
   }
   const restored = restoreDrawnCards(
     withPlayerHand(state, paidBack),
