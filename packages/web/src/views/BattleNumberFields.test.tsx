@@ -23,7 +23,7 @@ const card: ArenaUnit['unit'] = {
 
 const arenaUnit: ArenaUnit = {
   id: 'arena-1', side: 'attacker', position: 0, unit: card, attack: 1, health: 3,
-  placedBy: 'me', rotation: 0, killed: false,
+  placedBy: 'me', rotation: 0, killed: false, arrival: null,
 }
 
 const run: Run = async (action) => { await action() }

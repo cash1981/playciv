@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
-import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, PlayableCard, SheetName } from '@civ/engine'
+import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { confirmationText } from '../lib/confirmation.js'
@@ -1355,6 +1355,11 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
   const battleUndo = view.battleUndo ?? null
   const battleEnderName =
     view.opponents.find((o) => o.playerId === battleUndo?.endedBy)?.username ?? 'another player'
+  // The ended battle's final arena stays on show until the next battle starts,
+  // so the player who did not press End battle can still see how it ended.
+  const lastBattle = view.lastBattle ?? null
+  const [lastArenaHidden, setLastArenaHidden] = useState(false)
+  useEffect(() => { if (battle !== null) setLastArenaHidden(false) }, [battle])
 
   const [opponentId, setOpponentId] = useState('')
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null)
@@ -1698,8 +1703,14 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         >
           <span>
             Battle ended{battleUndo.endedBy === myId ? '' : ` by ${battleEnderName}`}
+            {lastBattle !== null && <> — {lastBattleResult(lastBattle)}</>}
           </span>
           <span style={{ flex: 1 }} />
+          {lastBattle !== null && (
+            <button className="small" onClick={() => setLastArenaHidden((hidden) => !hidden)}>
+              {lastArenaHidden ? 'Show final arena' : 'Hide final arena'}
+            </button>
+          )}
           {myId !== '' && battleUndo.endedBy === myId && (
             <button
               className="small"
@@ -1710,6 +1721,9 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
             </button>
           )}
         </div>
+      )}
+      {battle === null && lastBattle !== null && !lastArenaHidden && (
+        <EndedBattleArena lastBattle={lastBattle} gameId={gameId} rev={rev} run={run} />
       )}
 
       {/* — Arena — */}
@@ -1818,6 +1832,80 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         </div>
       )}
     </CollapsiblePanel>
+  )
+}
+
+/** "Karandras1 won with 7 HP vs 5 HP", the same scores the log line gives. */
+function lastBattleResult(lastBattle: LastBattleView): string {
+  const winner = lastBattle.summary.find((s) => s.side === lastBattle.winner)
+  const loser = lastBattle.summary.find((s) => s.side !== lastBattle.winner)
+  if (winner === undefined || loser === undefined) return 'no result'
+  const score = (s: BattleSideSummary): number => s.totalHealth + s.combatBonus
+  return `${winner.label} won with ${score(winner)} HP vs ${score(loser)} HP`
+}
+
+const noop = (): void => undefined
+
+interface EndedBattleArenaProps {
+  readonly lastBattle: LastBattleView
+  readonly gameId: string
+  readonly rev: number
+  readonly run: Run
+}
+
+/**
+ * The final arena of the ended battle, as it stood when it ended. Nothing in
+ * it can be changed: the battle is over, and its units are back in hand.
+ */
+function EndedBattleArena({ lastBattle, gameId, rev, run }: EndedBattleArenaProps): React.JSX.Element {
+  const label = (side: BattleSideId): string =>
+    lastBattle.summary.find((s) => s.side === side)?.label ?? (side === 'attacker' ? 'Attacker' : 'Defender')
+  const maxPositions = lastBattle.arena.reduce((max, unit) => Math.max(max, unit.position), -1)
+  const row = (side: BattleSideId): React.JSX.Element => (
+    <ArenaRow
+      label={label(side)}
+      side={side}
+      units={lastBattle.arena.filter((u) => u.side === side)}
+      maxPositions={maxPositions}
+      onHealthDraft={noop}
+      gameId={gameId}
+      busy={false}
+      readOnly
+      rev={rev}
+      run={run}
+      draggingUnitId={null}
+      draggingArenaUnitId={null}
+      onArenaDragStart={noop}
+      onArenaDragEnd={noop}
+      onDropUnit={noop}
+      onSlotClick={noop}
+      onArenaPointerDown={noop}
+      onArenaPointerMove={noop}
+      onArenaPointerUp={noop}
+      selectedBattlePiece={null}
+      onSelectPiece={noop}
+      canManage={false}
+      isOwnSide={false}
+    />
+  )
+  return (
+    <div className="ended-battle-arena" aria-label="Final arena">
+      {lastBattle.summary.length > 0 && (
+        <div className="row battle-summary">
+          {lastBattle.summary.map((s) => (
+            <div key={s.side} className="battle-summary-side">
+              <strong>{s.label}{s.side === lastBattle.winner ? ' (won)' : ''}</strong>
+              <span>{s.unitCount} unit{s.unitCount !== 1 ? 's' : ''} left</span>
+              <span>HP {s.totalHealth}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="arena-frame mobile-arena-frame">
+        {row('attacker')}
+        {row('defender')}
+      </div>
+    </div>
   )
 }
 
