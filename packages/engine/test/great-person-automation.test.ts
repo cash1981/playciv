@@ -305,9 +305,14 @@ describe('Michelangelo', () => {
       }),
     )
     expect(me(built).wonderDiscount).toBe(0)
+    // The rush covers the discounted cost only: 3 trade per production the city lacks
+    const shortfall = Math.max(0, (wonderAfter?.cost ?? 0) - (after?.production ?? 0))
+    expect(wonderAfter?.tradeToPay).toBe(3 * shortfall)
+    expect(me(built).stats.trade).toBe(60 - 3 * shortfall)
 
     const undone = undoByVote(built, 'build-1')
     expect(me(undone).wonderDiscount).toBe(5)
+    expect(me(undone).stats.trade).toBe(60)
   })
 })
 

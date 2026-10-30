@@ -688,6 +688,8 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   Logistics → II; Railroad, Gunpowder, Metal Casting → III; Combustion,
   Replacement Parts, Ballistics → IV). The first reveal raises the status value,
   never lowers it, as Flight ticks Aircraft. Unrevealed techs count for nothing.
+  Card effects on unit cost (Leonardo's Workshop) are not applied; the player
+  covers them with a hand-set production.
 - A building needs a revealed tech (`BUILDING_TECH_UNLOCKS`, the human's sheet).
   Once the upgraded form is unlocked only it is built, and its tech alone suffices
   (p. 22).

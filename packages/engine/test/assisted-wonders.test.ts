@@ -403,6 +403,11 @@ describe('building a wonder', () => {
     expect(buildLine(done)).toBe('cash1981 built the Colossus in City B2 on square C2, paying 15 trade for the missing production')
     expect(piecesOf(done, COLOSSUS)[0]?.ownerId).toBe(CASH1981)
     expect(me(undoByVote(done, 'req-1')).stats.trade).toBe(16)
+    // Removing the piece before End turn takes the build back and gives the trade back too
+    const piece = piecesOf(done, COLOSSUS)[0] as BoardPiece
+    const taken = takeBackOpenBuild(done, { playerId: CASH1981, pieceId: piece.id, at: AT })
+    if (taken === undefined) throw new Error('not an open build')
+    expect(me(unwrap(taken)).stats.trade).toBe(16)
   })
 
   it('refuses a wonder that is not in the market, with the reason', () => {
