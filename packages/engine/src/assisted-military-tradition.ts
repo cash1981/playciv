@@ -45,16 +45,20 @@ const kindOf = (unitType: UnitType) => `militaryTradition:${unitType}` as const
 
 const unitNoun = (unitType: UnitType): string => `${unitType} unit`
 
-/** The player's army builds of this turn that are still applied. */
+/** The player's army builds of this turn that are still applied and whose army is still on the board. */
 const armyBuildsOf = (state: GameState, playerId: string, turnNumber: number): readonly AssistedActionRecord[] =>
-  state.assistedActions.filter(
-    (record) =>
+  state.assistedActions.filter((record) => {
+    const effect = record.effect
+    return (
       record.status === 'applied' &&
       record.playerId === playerId &&
       record.turnNumber === turnNumber &&
-      record.effect.kind === 'build' &&
-      record.effect.item.kind === 'army',
-  )
+      effect.kind === 'build' &&
+      effect.item.kind === 'army' &&
+      'pieceId' in effect &&
+      state.board.pieces.some((piece) => piece.id === effect.pieceId)
+    )
+  })
 
 /**
  * Why the army build `record` cannot be taken back: a free unit of Military Tradition
@@ -78,6 +82,11 @@ export function militaryTraditionUndoBlock(state: GameState, record: AssistedAct
 function gate(state: GameState, player: Playerhand, unitType: UnitType): BlockedAvailability | undefined {
   const policy = policyBlock(player, [POLICY], POLICY)
   if (policy !== undefined) return policy
+  // Before the use, so a player without Flight never sees an aircraft button, not even a used one
+  if (unitType === 'aircraft') {
+    const flight = techBlock(player, AIRCRAFT_TECH)
+    if (flight !== undefined) return blocked(flight.status, `Aircraft units need ${AIRCRAFT_TECH}. ${flight.reason}`)
+  }
   const turn = openCityManagementTurn(state, player)
   if (turn === undefined) return blocked('wrong-phase', PHASE_REASON)
   if (turn.usedActions.includes(MILITARY_TRADITION_USAGE_KEY)) {
@@ -85,10 +94,6 @@ function gate(state: GameState, player: Playerhand, unitType: UnitType): Blocked
   }
   if (armyBuildsOf(state, player.playerId, turn.turnNumber).length === 0) {
     return blocked('unavailable', 'Build an army figure with Build this turn first.')
-  }
-  if (unitType === 'aircraft') {
-    const flight = techBlock(player, AIRCRAFT_TECH)
-    if (flight !== undefined) return blocked(flight.status, `Aircraft units need ${AIRCRAFT_TECH}. ${flight.reason}`)
   }
   if (!unitCardAvailable(state, unitSheetOf(unitType))) {
     return blocked('unavailable', `No ${unitNoun(unitType)} cards are left in the deck or the discard pile.`)

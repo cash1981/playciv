@@ -119,6 +119,13 @@ describe('when Military Tradition gives a free unit', () => {
     expect(assistedAvailability(buildArmy(state), CASH1981, 'militaryTradition:infantry').status).toBe('ready')
   })
 
+  it('not for an army build that was undone, nor for an army put on the map by hand', () => {
+    const undone = undoByVote(buildArmy(ready()), 'army-1')
+    expect(reasonOf(undone, 'infantry')).toBe('Build an army figure with Build this turn first.')
+    const byHand = put(ready(), 'figures/redarmy', 2, 1)
+    expect(reasonOf(byHand, 'infantry')).toBe('Build an army figure with Build this turn first.')
+  })
+
   it('only with the policy adopted and revealed', () => {
     expect(reasonOf(buildArmy(ready({ policy: 'none' })), 'infantry')).toBe('You have not adopted Military Tradition.')
     expect(reasonOf(buildArmy(ready({ policy: 'hidden' })), 'infantry')).toBe('Reveal Military Tradition before using it.')
@@ -140,6 +147,8 @@ describe('when Military Tradition gives a free unit', () => {
       })
     }
     expect(describeError(unwrapErr(tryFree(done, 'infantry', 'free-2')))).toContain('already given a free unit this turn')
+    // Without Flight the aircraft button stays out of the list, not shown as used
+    expect(assistedAvailability(done, CASH1981, 'militaryTradition:aircraft').status).toBe('not-owned')
   })
 })
 
@@ -188,9 +197,57 @@ describe('the free unit', () => {
     )
     const army = done.board.pieces.find((piece) => piece.category === 'figure' && piece.assetId === 'figures/redarmy')
     if (army === undefined) throw new Error('no army')
+    // Without the free unit the same removal takes the build back
+    const control = takeBackOpenBuild(buildArmy(ready()), { playerId: CASH1981, pieceId: army.id, at: AT })
+    expect(control?.ok).toBe(true)
     expect(takeBackOpenBuild(done, { playerId: CASH1981, pieceId: army.id, at: AT })).toBeUndefined()
+    expect(unitsOf(done, 'INFANTRY').length).toBeGreaterThan(0)
     // After the free unit's undo the army build can be undone
     const both = undoByVote(undoByVote(done, 'free-1'), 'army-1')
     expect(both.board.pieces.some((piece) => piece.assetId === 'figures/redarmy')).toBe(false)
+  })
+
+  it('cannot be undone once its card has left the hand', () => {
+    const built = buildArmy(ready())
+    const done = free(built, 'artillery')
+    const card = unitsOf(done, 'ARTILLERY').find((item) => !unitsOf(built, 'ARTILLERY').some((before) => before.id === item.id))
+    if (card === undefined) throw new Error('no card drawn')
+    const gone: GameState = {
+      ...done,
+      players: done.players.map((p) => (p.playerId === CASH1981 ? { ...p, items: p.items.filter((item) => item.id !== card.id) } : p)),
+    }
+    const entry = gone.log.find((candidate) => candidate.assistedActionId === 'free-1')
+    if (entry === undefined) throw new Error('no line')
+    let next = unwrap(initiateUndo(gone, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
+    const refused = unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    expect(refused.kind === 'ASSISTED_UNDO_BLOCKED' && refused.reason).toBe(
+      'The free artillery unit card is no longer in your hand, so it cannot be undone.',
+    )
+  })
+
+  it('with two armies built this turn, either army build can still be undone', () => {
+    let state = put(ready(), 'cities/redcity2', 3, 3)
+    state = unwrap(setCityProductionOverride(state, { playerId: CASH1981, pieceId: (state.board.pieces.filter((piece) => piece.category === 'city')[1] as BoardPiece).id, value: 20 }))
+    state = buildArmy(state)
+    const second = state.board.pieces.filter((piece) => piece.category === 'city')[1] as BoardPiece
+    state = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'army-2',
+        at: AT,
+        payload: { cityPieceId: second.id, item: { kind: 'army' }, target: { column: 3, row: 2 } },
+      }),
+    )
+    const done = free(state, 'infantry')
+    const undone = undoByVote(done, 'army-1')
+    expect(undone.assistedActions.find((record) => record.id === 'army-1')?.status).toBe('undone')
+    // The second army now carries the free unit alone
+    const entry = undone.log.find((candidate) => candidate.assistedActionId === 'army-2')
+    if (entry === undefined) throw new Error('no line')
+    let next = unwrap(initiateUndo(undone, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
+    expect(unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT })).kind).toBe('ASSISTED_UNDO_BLOCKED')
   })
 })
