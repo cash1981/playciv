@@ -124,7 +124,8 @@ export function ItemCard({
       <div className="card-caption">
         <strong>{label}</strong>
         <span className="muted">
-          {item.sheetName} · #{item.itemNumber}
+          {/* 0 is no number: not yet dealt, or scrubbed from an ended battle's arena. */}
+          {item.sheetName}{item.itemNumber > 0 ? ` · #${item.itemNumber}` : ''}
         </span>
         {item.description !== null && item.description !== '' && (
           <span className="card-text">{item.description}</span>

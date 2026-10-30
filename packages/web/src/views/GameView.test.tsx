@@ -1713,6 +1713,8 @@ describe('the ended-battle banner', () => {
       const arena = container.querySelector('.ended-battle-arena')
       expect(arena).not.toBeNull()
       expect(arena!.textContent).toContain('Karandras1 (won)')
+      // The scrubbed log number is not shown as "#0".
+      expect(arena!.textContent).not.toContain('#0')
       expect(arena!.querySelectorAll('.arena-slot')).not.toHaveLength(0)
       expect(arena!.querySelectorAll('input:not([disabled])')).toHaveLength(0)
       expect(arena!.querySelectorAll('button:not([disabled])')).toHaveLength(0)
