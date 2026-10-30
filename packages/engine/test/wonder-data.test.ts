@@ -59,8 +59,10 @@ describe('the wonder cost table', () => {
     expect(wonderDataOf('wonders/angkorwat')?.discount).toEqual({ tech: 'Theology', cost: 15 })
   })
 
-  it('has the discount each tech card names, with its price', () => {
+  it('has the discount of every wonder a tech card on the tech sheet names, with its price', () => {
     // The tech reference sheet (public/help/Civ_Tech_FF-WW.-2.jpg): the wonder a tech unlocks and what it then costs.
+    // The Great Lighthouse, Leonardo's Workshop, Notre-Dame, the Internet and the Pentagon are on no tech card
+    // there; their discounts are checked against the Wonders sheet above.
     // Not Philosophy → Angkor Wat: that is from later rules, and Theology discounts it here (human)
     const techCards: Readonly<Record<string, readonly [string, number]>> = {
       'Animal Husbandry': ['wonders/hanginggardens', 10],
