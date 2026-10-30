@@ -1291,8 +1291,8 @@ describe('building a wonder', () => {
     expect(colossus?.textContent).toContain('The Colossus')
     expect(colossus?.textContent).toContain('Cost 10 (15 without Metalworking)')
     expect(colossus?.textContent).not.toMatch(/square/i)
-    // The group says that the cost is only told: other effects add hammers
-    expect(screen.getByText('The cost is not checked against the city’s production.')).toBeTruthy()
+    // The group says how hammers from other effects are counted
+    expect(screen.getByText('Hammers from cards or Great Persons count when you set the city’s production by hand.')).toBeTruthy()
   })
 
   it('enters square picking like a building, and is placed by the tap with no Confirm', async () => {

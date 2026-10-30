@@ -682,6 +682,12 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   a reason. Cost above production is such a reason; the way out is a hand-set
   production (human). Rush (p. 15): 3 trade per production (Americans 2 per 3),
   whole steps, never more than needed.
+- **Unit cost** (p. 15–17, tech sheet Military Unit table): 5/7/9/11 by level,
+  aircraft 12 with Flight. The level is the higher of the hand-set status value
+  and the revealed techs (`UNIT_LEVEL_TECHS`: Chivalry, Democracy, Mathematics,
+  Logistics → II; Railroad, Gunpowder, Metal Casting → III; Combustion,
+  Replacement Parts, Ballistics → IV). The first reveal raises the status value,
+  never lowers it, as Flight ticks Aircraft. Unrevealed techs count for nothing.
 - A building needs a revealed tech (`BUILDING_TECH_UNLOCKS`, the human's sheet).
   Once the upgraded form is unlocked only it is built, and its tech alone suffices
   (p. 22).
@@ -712,11 +718,13 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   removal it is a plain removal with no refund. Upgrades and units are not taken
   back this way.
 - **Wonders** (p. 17): any city may build a faceup market wonder (unowned pieces
-  in the shared Wonders area, `marketWondersOf`). The cost shown (printed, or
-  discounted with the card's tech; `wonder-data.ts` equals the `Wonders` sheet by
-  test) is **not enforced** (human): no trade paid, rush pays nothing; the Building
-  Program marker is still used. Angkor Wat is 15 with Theology (`SHEET_CORRECTIONS`
-  until the sheet is fixed). Placed in outskirts on any non-water square, empty or
+  in the shared Wonders area, `marketWondersOf`). The cost (printed, or discounted
+  with a revealed tech; `wonder-data.ts` equals the `Wonders` sheet by test) is
+  **enforced like a building** (human, 2026-10-30, replacing "shown, not
+  enforced"): rush trade is paid, refunded on undo; hammers from cards and Great
+  Persons count through a hand-set production. Where the sheet and the tech cards
+  (`public/help/Civ_Tech_FF-WW.-2.jpg`) differ, the cards win (human): Angkor Wat
+  is 15 with Philosophy (`SHEET_CORRECTIONS`). Placed in outskirts on any non-water square, empty or
   holding the player's own building/wonder/Great Person, no enemy figure; one per
   city, not counted as the limited building. The market piece moves onto the
   square and gains its owner (two history entries).

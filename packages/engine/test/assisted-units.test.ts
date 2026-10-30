@@ -371,6 +371,48 @@ describe('the cost', () => {
     expect(choiceOf(options, unit('mounted'))?.cost).toBe(11)
   })
 
+  it('the revealed techs give the level, as the tech sheet lists them', () => {
+    // Military Unit table of the tech reference sheet: the tech and what the unit then costs
+    const cases: readonly (readonly [string, UnitType, number])[] = [
+      ['Chivalry', 'mounted', 7],
+      ['Democracy', 'infantry', 7],
+      ['Mathematics', 'artillery', 7],
+      ['Railroad', 'mounted', 9],
+      ['Gunpowder', 'infantry', 9],
+      ['Metal Casting', 'artillery', 9],
+      ['Combustion', 'mounted', 11],
+      ['Replacement Parts', 'infantry', 11],
+      ['Ballistics', 'artillery', 11],
+    ]
+    for (const [tech, type, cost] of cases) {
+      // The status values are left at 1 here, as in a game saved before the reveal raised them
+      const state = withStats(withOverride(ready([tech]), 20), { infantry: 1, artillery: 1, mounted: 1 })
+      const options = optionsOf(state)
+      for (const other of ['infantry', 'artillery', 'mounted'] as const) {
+        expect(choiceOf(options, unit(other))?.cost, `${tech}: ${other}`).toBe(other === type ? cost : 5)
+      }
+    }
+    const logistics = optionsOf(withStats(withOverride(ready(['Logistics']), 20), { infantry: 1, artillery: 1, mounted: 1 }))
+    for (const type of ['infantry', 'artillery', 'mounted'] as const) expect(choiceOf(logistics, unit(type))?.cost, type).toBe(7)
+  })
+
+  it('a tech chosen but not revealed yet does not raise the level, and a higher status value wins', () => {
+    const chosen = withOverride(openTurn(unwrap(chooseTech(scene(), { playerId: CASH1981, techName: 'Chivalry' }))), 20)
+    expect(choiceOf(optionsOf(chosen), unit('mounted'))?.cost).toBe(5)
+    const higher = withStats(withOverride(ready(['Chivalry']), 20), { mounted: 3 })
+    expect(choiceOf(optionsOf(higher), unit('mounted'))?.cost).toBe(9)
+  })
+
+  it('revealing a unit tech raises the status value once, and never lowers it', () => {
+    const revealed = ready(['Logistics'])
+    expect(me(revealed).stats).toMatchObject({ infantry: 2, artillery: 2, mounted: 2 })
+    const railroad = learn(withStats(ready(), { infantry: 4 }), 'Railroad', 'Democracy')
+    expect(me(railroad).stats).toMatchObject({ infantry: 4, artillery: 1, mounted: 3 })
+    // Revealing an already revealed tech again does not overrule a value set by hand
+    const lowered = withStats(ready(['Chivalry']), { mounted: 1 })
+    expect(me(unwrap(revealTech(lowered, { playerId: CASH1981, techName: 'Chivalry' }))).stats.mounted).toBe(1)
+  })
+
   it('a level outside 1 to 4 is read as the nearest level and never changed', () => {
     const state = withStats(withOverride(ready(), 20), { infantry: 0, artillery: 9, mounted: 2.9 })
     const options = optionsOf(state)

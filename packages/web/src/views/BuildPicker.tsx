@@ -44,8 +44,8 @@ const GROUPS = [
     id: 'wonder',
     noun: 'Wonders',
     heading: 'Wonders',
-    // Cards and Great Persons can add hammers, and how to count them is not settled: only the cost is told
-    note: 'The cost is not checked against the city’s production.',
+    // The cost is checked like a building's; hammers from cards and Great Persons are not counted by the estimate
+    note: 'Hammers from cards or Great Persons count when you set the city’s production by hand.',
   },
   { id: 'figure', noun: 'Figures', heading: 'Figures (placed on the map)' },
   { id: 'unit', noun: 'Units', heading: 'Units' },

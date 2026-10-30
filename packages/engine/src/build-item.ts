@@ -12,6 +12,25 @@ export const UNIT_TYPES = ['infantry', 'artillery', 'mounted', 'aircraft'] as co
 export type UnitType = (typeof UNIT_TYPES)[number]
 
 /**
+ * The techs that raise a unit type's level, from the Military Unit table of the
+ * tech reference sheet (`public/help/Civ_Tech_FF-WW.-1.jpg`): Logistics gives
+ * level II of all three.
+ */
+export const UNIT_LEVEL_TECHS: Readonly<Record<Exclude<UnitType, 'aircraft'>, Readonly<Record<string, number>>>> = {
+  infantry: { Democracy: 2, Logistics: 2, Gunpowder: 3, 'Replacement Parts': 4 },
+  artillery: { Mathematics: 2, Logistics: 2, 'Metal Casting': 3, Ballistics: 4 },
+  mounted: { Chivalry: 2, Logistics: 2, Railroad: 3, Combustion: 4 },
+}
+
+/** The highest level of a unit type that the techs in `known` give, 1 without any. */
+export function unitLevelFromTechs(unitType: Exclude<UnitType, 'aircraft'>, known: Iterable<string>): number {
+  const levels = UNIT_LEVEL_TECHS[unitType]
+  let level = 1
+  for (const tech of known) if (Object.hasOwn(levels, tech)) level = Math.max(level, levels[tech] ?? 1)
+  return level
+}
+
+/**
  * An item that is put on a map square: a building, a wonder from the market, an army
  * figure or a scout figure. A wonder's `assetId` is the wonder's own board asset.
  */

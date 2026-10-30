@@ -21,7 +21,7 @@
  */
 
 import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
-import { UNIT_TYPES } from './build-item.js'
+import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
 import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
@@ -108,7 +108,7 @@ export interface BuildChoice {
   readonly label: string
   /** Production the item costs. */
   readonly cost: number
-  /** Only for a wonder with a discount: the other price, for example "15 without Metalworking". Costs are not checked for a wonder, so this is what the player reads. */
+  /** Only for a wonder with a discount: the other price, for example "15 without Metalworking". Shown next to the cost so the player sees why it is what it is. */
   readonly costNote?: string
   /** Trade the player pays to cover what the city's production lacks. 0 when the production is enough. */
   readonly tradeToPay: number
@@ -710,13 +710,14 @@ const UNIT_SHEET: Readonly<Record<UnitType, SheetName>> = {
 export const unitSheetOf = (unitType: UnitType): SheetName => UNIT_SHEET[unitType]
 
 /**
- * The level the player has for a unit type, 1 to 4, read off `stats` and never
- * enforced or changed here: a value outside the range or a fraction is read as
- * the nearest level. Aircraft have none.
+ * The level the player has for a unit type, 1 to 4: the higher of the status value
+ * in `stats` (hand-set, so a value outside the range or a fraction is read as the
+ * nearest level) and the level the revealed techs give. Aircraft have none.
  */
-function unitLevelOf(player: Playerhand, unitType: Exclude<UnitType, 'aircraft'>): number {
+function unitLevelOf(player: Playerhand, unitType: Exclude<UnitType, 'aircraft'>, techs: TechView): number {
   const raw = player.stats[unitType]
-  return Number.isFinite(raw) ? Math.min(4, Math.max(1, Math.floor(raw))) : 1
+  const fromStats = Number.isFinite(raw) ? Math.min(4, Math.max(1, Math.floor(raw))) : 1
+  return Math.max(fromStats, unitLevelFromTechs(unitType, techs.revealed))
 }
 
 /** Level 1 costs 5, level 2 costs 7, level 3 costs 9, level 4 costs 11 (base rules p. 15 to 17). */
@@ -918,7 +919,7 @@ function optionsForCity(
     }
   }
 
-  // Wonders from the market: one per city, on any terrain but water; a second one replaces the first. Their cost is shown, not enforced
+  // Wonders from the market: one per city, on any terrain but water; a second one replaces the first
   for (const piece of shared.market) {
     const item = { kind: 'wonder', assetId: piece.assetId } as const
     const label = piece.label
@@ -938,8 +939,8 @@ function optionsForCity(
       continue
     }
 
-    // The cost is only told, not checked against the city's production or paid with trade:
-    // cards, Great Persons and other effects add hammers, and how to count them is not settled.
+    // Checked against the city's production and rushed with trade like any other build;
+    // hammers from cards and Great Persons count through a production set by hand
     const baseCost = wonderCostFor(data, techs.revealed)
     const discount = data.discount
     const discountNote =
@@ -955,6 +956,11 @@ function optionsForCity(
       ...(michelangeloOff > 0 ? [`${michelangeloOff} less with Michelangelo`] : []),
     ]
     const costNote = notes.length === 0 ? undefined : notes.join('; ')
+    const payment = paymentFor(cost, `Costs ${cost} production`, city, production, player)
+    if ('short' in payment) {
+      skip(payment.short)
+      continue
+    }
     choices.push({
       assetId: piece.assetId,
       item,
@@ -962,7 +968,7 @@ function optionsForCity(
       label,
       cost,
       ...(costNote === undefined ? {} : { costNote }),
-      tradeToPay: 0,
+      tradeToPay: payment.tradeToPay,
       squares,
     })
   }
@@ -1039,7 +1045,7 @@ function optionsForCity(
     let cost = AIRCRAFT_COST
     let costText = `Costs ${cost} production`
     if (unitType !== 'aircraft') {
-      const level = unitLevelOf(player, unitType)
+      const level = unitLevelOf(player, unitType, techs)
       cost = unitCostOfLevel(level)
       costText = `Costs ${cost} production (${unitType} level ${level})`
     }

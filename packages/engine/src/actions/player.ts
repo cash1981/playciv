@@ -36,6 +36,7 @@ import type { PlayerTurn } from '../turn.js'
 import { TRADE_SET_KEY, createPlayerTurn, turnStatus } from '../turn.js'
 import { useTurnAction } from '../assisted-core.js'
 import { blockadedPieceIds } from '../blockade.js'
+import { unitLevelFromTechs } from '../build-item.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
 import { isGovernment, startingGovernmentFor } from '../government.js'
@@ -249,6 +250,14 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
       // counts, so a player who unticked the box by hand is not overruled by
       // revealing it again.
       ...(tech.hidden && tech.name === 'Flight' ? { aircraft: true } : {}),
+      // A unit upgrade (Chivalry, Logistics, Gunpowder, ...) raises the level the same way, never lowers it
+      ...(tech.hidden
+        ? {
+            infantry: Math.max(player.stats.infantry, unitLevelFromTechs('infantry', [tech.name])),
+            artillery: Math.max(player.stats.artillery, unitLevelFromTechs('artillery', [tech.name])),
+            mounted: Math.max(player.stats.mounted, unitLevelFromTechs('mounted', [tech.name])),
+          }
+        : {}),
       ...(source === undefined
         ? {}
         : { coinSources: withCoinSource(player.stats.coinSources, source, coinOnReveal(source)) }),
