@@ -372,7 +372,9 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   city's Devote and Harvest; coin icons stay manual. The square leaves the city it
   lies in when sent elsewhere (also by the default). The metropolis is the capital
   (see Assisted build). With no capital on the map an unsent scout goes nowhere
-  and is offered to every city, with a note. An English army is only sent by hand.
+  and is offered to every city, with a note. With a capital, a scout that sends
+  nothing (a second one on a square, or one on a city centre) is offered to no
+  city. An English army is only sent by hand.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan
   Turing (counts Russia's white army in the supply, human) add their numbers;

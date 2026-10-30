@@ -535,6 +535,23 @@ describe('sending a scout’s square to a city', () => {
       expect(scoutChoices(stopped, 'I9')).toEqual([])
     })
 
+    it('offers a square once although two unsent scouts stand on it, and to the capital only', () => {
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(state, 'I9')).toEqual([])
+      const notes = cityActionsOf(state, me(state)).map((options) => options.harvest.notes.join(' ')).join(' ')
+      expect(notes).not.toContain('Your capital is not marked on the map')
+    })
+
+    it('does not offer a scout standing on the centre of another of the player\'s cities', () => {
+      // A scout on the far city's centre I9 sends nothing; the capital must not take it as unsent
+      const state = put(twoCities(WHEAT_D4), CASH1981, 'figures/redscout', 8, 8)
+      expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
+      expect(cityActionsOf(state, me(state)).find((options) => options.label.endsWith('B2'))?.harvest.notes.join(' ')).not.toContain(
+        'Your capital is not marked on the map',
+      )
+    })
+
     it('offers a scout to every city when no capital is marked on the map, and says why', () => {
       let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
       state = put(state, CASH1981, 'cities/redcity2', 1, 1)

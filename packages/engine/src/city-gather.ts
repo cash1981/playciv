@@ -16,7 +16,7 @@
 import { mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import { WHITE_SCOUT_ID, isMapCell, whiteFigureFor } from './board.js'
-import { scoutDestinationsOf } from './sot.js'
+import { capitalOf, scoutDestinationsOf } from './sot.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import { buildingDataOf, buildingNameOf } from './building-data.js'
@@ -260,7 +260,10 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   const scouts: ScoutSquare[] = []
   const scoutChoices: HarvestChoiceView[] = []
   // A scout gathers for the city it was sent to in the Start of Turn, and for the capital when it was
-  // not sent (base rules p. 26). Without a capital on the map it is offered to every city.
+  // not sent (base rules p. 26). Without a capital on the map it is offered to every city. With
+  // one, a scout `scoutDestinationsOf` gives no city (a second scout on a square, or one on a
+  // city centre) sends nothing.
+  const hasCapital = capitalOf(state, player) !== undefined
   let sentHere = false
   let defaultHere = false
   let unsent = false
@@ -268,6 +271,7 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
     if (!isOwnScout(piece, player)) continue
     const destination = sentTo.get(piece.id)
     if (destination !== undefined && destination.cityPieceId !== footprint.piece.id) continue
+    if (destination === undefined && hasCapital) continue
     const cell = mapCellOf(board, piece)
     if (cell === null || own.some((mine) => sameCell(mine, cell))) continue
     if (destination === undefined) unsent = true
