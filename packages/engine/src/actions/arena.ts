@@ -20,6 +20,8 @@ import type { GameState, Playerhand } from '../state.js'
 import { battleSummaries, findPlayer, withPlayer } from '../state.js'
 import type { ArenaUnit, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
+import { removePiece } from './board.js'
+import { placeBack } from '../assisted-core.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -852,6 +854,8 @@ export function endBattleTurn(
 
 export interface EndBattleInput {
   readonly playerId: string
+  /** ISO timestamp for the board history entry that removes a fortification. */
+  readonly at?: string
 }
 
 /**
@@ -933,12 +937,38 @@ export function endBattleAction(
       : `ends the battle — ${outcome.winner.label} won with ${outcome.winnerScore} HP vs ${outcome.loserScore} HP`,
   )
 
+  // A fortification is used up by the battle for its city, whoever won (Fame and Fortune p. 7, the human)
+  const defence = defenderSummary?.cityDefence ?? null
+  const fortification =
+    defence?.fortificationPieceId == null
+      ? undefined
+      : state.board.pieces.find((piece) => piece.id === defence.fortificationPieceId)
+  if (fortification !== undefined) {
+    const removed = removePiece(nextState, {
+      playerId: input.playerId,
+      pieceId: fortification.id,
+      ...(input.at === undefined ? {} : { at: input.at }),
+    })
+    if (removed.ok) {
+      nextState = appendPublicLog(
+        removed.value,
+        player.username,
+        player.playerId,
+        `removes the fortification of ${defence?.cityLabel ?? 'the city'}: the battle used it up`,
+      )
+    }
+  }
+
   // Keep the battle as it stood so its ender can undo an accidental press. The
   // log line above carries no unit names, and the snapshot never reaches a view.
   return ok({
     ...nextState,
     battle: null,
-    endedBattle: { battle, endedBy: input.playerId },
+    endedBattle: {
+      battle,
+      endedBy: input.playerId,
+      ...(fortification === undefined ? {} : { fortification }),
+    },
   })
 }
 
@@ -1016,6 +1046,11 @@ export function undoEndBattle(
     const ownerSide =
       arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
     nextState = lockArenaUnitCard(nextState, arenaUnit, ownerSide)
+  }
+
+  // The fortification the end removed comes back, unless a board Undo already put it back
+  if (ended.fortification !== undefined) {
+    nextState = placeBack(nextState, player, ended.fortification, null)
   }
 
   nextState = appendPublicLog(

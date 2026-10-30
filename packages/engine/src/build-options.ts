@@ -20,6 +20,7 @@
  * only call each other inside functions, never while the modules load.
  */
 
+import { CARAVAN_PRODUCTION } from './disband.js'
 import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
@@ -139,6 +140,8 @@ export interface CityBuildOptions {
   /** The production the city has to build with. */
   readonly production: number
   readonly productionSource: BuildProductionSource
+  /** A caravan on the city centre (Fame and Fortune p. 7): `production` includes its 2, and a Build uses it up. */
+  readonly caravan: boolean
   /** Empty unless `status` is `ready`. */
   readonly choices: readonly BuildChoice[]
   /** Empty unless `status` is `ready`. */
@@ -625,11 +628,24 @@ export function buildSquareRefusal(
 // The options
 // ---------------------------------------------------------------------------
 
-/** The production a city builds with: the hand set number, else the Building Program figure, else the estimate. */
-function productionOf(city: CityProduction): { readonly value: number; readonly source: BuildProductionSource } {
-  if (city.override !== null) return { value: city.override, source: 'override' }
-  if (city.withBuildingProgram !== null) return { value: city.withBuildingProgram, source: 'building-program' }
-  return { value: city.estimate, source: 'estimate' }
+interface CityBuildProduction {
+  readonly value: number
+  readonly source: BuildProductionSource
+  readonly caravan: boolean
+}
+
+/**
+ * The production a city builds with: the hand set number, else the Building Program
+ * figure, else the estimate; plus 2 for a caravan, which none of them counts and the
+ * Building Program does not double (Fame and Fortune p. 7).
+ */
+function productionOf(city: CityProduction): CityBuildProduction {
+  const caravan = city.caravan ? CARAVAN_PRODUCTION : 0
+  if (city.override !== null) return { value: city.override + caravan, source: 'override', caravan: city.caravan }
+  if (city.withBuildingProgram !== null) {
+    return { value: city.withBuildingProgram + caravan, source: 'building-program', caravan: city.caravan }
+  }
+  return { value: city.estimate + caravan, source: 'estimate', caravan: city.caravan }
 }
 
 const SOURCE_TEXT: Readonly<Record<BuildProductionSource, string>> = {
@@ -797,7 +813,7 @@ function paymentFor(
   cost: number,
   costText: string,
   city: CityProduction,
-  production: { readonly value: number; readonly source: BuildProductionSource },
+  production: CityBuildProduction,
   player: Playerhand,
 ): Payment {
   const shortfall = Math.max(0, cost - production.value)
@@ -805,7 +821,7 @@ function paymentFor(
   if (tradeToPay <= player.stats.trade) return { tradeToPay }
   return {
     short:
-      `${costText} and ${city.label} has ${production.value} (${SOURCE_TEXT[production.source]}). ` +
+      `${costText} and ${city.label} has ${production.value} (${SOURCE_TEXT[production.source]}${production.caravan ? ', plus 2 from the caravan' : ''}). ` +
       `Covering the missing ${shortfall} takes ${tradeToPay} trade and you have ${player.stats.trade}. ` +
       'If the city makes more than that, set its production by hand on the city.',
   }
@@ -869,6 +885,7 @@ function optionsForCity(
     label: city.label,
     production: production.value,
     productionSource: production.source,
+    caravan: production.caravan,
   }
   if (!open) {
     return { ...base, status: 'wrong-phase', reason: PHASE_REASON, choices: [], unavailable: [] }

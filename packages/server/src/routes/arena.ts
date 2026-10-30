@@ -285,7 +285,7 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       context,
       c,
       gameId,
-      (state) => endBattleAction(state, { playerId: currentPlayer(c).id }),
+      (state) => endBattleAction(state, { playerId: currentPlayer(c).id, at: new Date().toISOString() }),
       clientRev,
     )
   })

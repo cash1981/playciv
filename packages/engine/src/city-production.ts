@@ -13,6 +13,7 @@
  * projection can carry them for every player. Nothing here is stored.
  */
 
+import { CARAVAN_ASSET_ID, cityMarkerOf } from './disband.js'
 import { buildingDataOf } from './building-data.js'
 import { greatPersonProductionOf, greatPersonTradeOf } from './great-person-data.js'
 import { cityFootprintsOf, blockadedGreatPersonTypes, isOwnWonderBlockaded, mapCellOf } from './blockade.js'
@@ -84,6 +85,11 @@ export interface CityProduction {
   readonly modifiers: readonly CityModifier[]
   /** Whether a Building Program marker stands on a centre square of the city. */
   readonly buildingProgram: boolean
+  /**
+   * Whether a caravan marker stands on a centre square of the city (Fame and Fortune
+   * p. 7): the next Build adds 2 production and uses it up. Not in `estimate`.
+   */
+  readonly caravan: boolean
   /** The outskirts plus the applied modifiers. Never a complete count; see `notes`. */
   readonly estimate: number
   /**
@@ -465,6 +471,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     const estimate = outskirtsTotal + modifierTotal
     const buildingProgram = buildingProgramCells.some((marker) => centers.some((centre) => sameCell(centre, marker)))
     const override = piece.productionOverride ?? null
+    const caravan = cityMarkerOf(board, piece)?.assetId === CARAVAN_ASSET_ID
 
     const notes = [
       'Not a complete count: the map data does not hold every icon, and one-turn effects such as event cards are not counted.',
@@ -528,6 +535,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       outskirtsDetail: detail,
       modifiers,
       buildingProgram,
+      caravan,
       estimate,
       withBuildingProgram: buildingProgram ? outskirtsTotal * 2 + modifierTotal : null,
       override,

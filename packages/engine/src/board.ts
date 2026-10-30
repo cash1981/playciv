@@ -431,6 +431,18 @@ export type BoardChange =
       readonly toTop: boolean
     }
   /**
+   * A figure disbanded on a centre of its own city (Fame and Fortune p. 7): the figure
+   * is removed from where it stood in the stack and, when the city had no
+   * fortification or caravan yet, the marker is put on top. One entry, so one board
+   * Undo gives the figure back and takes the marker away.
+   */
+  | {
+      readonly kind: 'disband'
+      readonly figure: BoardPiece
+      readonly index: number
+      readonly marker: BoardPiece | null
+    }
+  /**
    * The clear action was removed in issue #14, but games cleared before then
    * still carry this entry in their history, so replay and undo must keep
    * handling it. No code produces a new one.
@@ -1334,6 +1346,10 @@ export function applyChange(
         ? (change.toTop ? [...tiles, piece, ...ordinary] : [piece, ...tiles, ...ordinary])
         : (change.toTop ? [...tiles, ...ordinary, piece] : [...tiles, piece, ...ordinary])
     }
+    case 'disband': {
+      const rest = withoutPiece(pieces, change.figure.id)
+      return change.marker === null ? rest : [...rest, change.marker]
+    }
     // Kept for games cleared before the clear action was removed (issue #14).
     case 'clear':
       return []
@@ -1378,6 +1394,10 @@ export function revertChange(
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
       return insertAt(withoutPiece(pieces, piece.id), change.fromIndex, piece)
+    }
+    case 'disband': {
+      const rest = change.marker === null ? pieces : withoutPiece(pieces, change.marker.id)
+      return insertAt(rest, change.index, change.figure)
     }
     // Kept for games cleared before the clear action was removed (issue #14).
     case 'clear':

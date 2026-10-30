@@ -47,6 +47,9 @@ import {
   whiteFigureCivilization,
 } from '../board.js'
 import { cityFootprintsOf, mapCellOf } from '../blockade.js'
+import type { Cell } from '../blockade.js'
+import { CARAVAN_ASSET_ID, FORTIFICATION_ASSET_ID, disbandOfferAt } from '../disband.js'
+import type { DisbandOffer } from '../disband.js'
 import type { EngineError } from '../errors.js'
 import { MAX_PRODUCTION_OVERRIDE } from '../limits.js'
 import { appendLog } from '../log.js'
@@ -399,6 +402,11 @@ export interface TravelFigureInput {
   /** The destination map square, zero based from the map's top-left corner. */
   readonly column: number
   readonly row: number
+  /**
+   * Disband the figure on arrival (Fame and Fortune p. 7): only onto a centre square
+   * of the player's own city, for an army or a scout. The web asks first.
+   */
+  readonly disband?: boolean
   readonly at?: string
 }
 
@@ -510,6 +518,16 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
       reason: `That square is not a legal destination for ${piece.label} this turn.`,
     })
   }
+  const offer =
+    input.disband === true && destination.contact !== true
+      ? disbandOfferAt(state.board, player.color, piece, destination)
+      : undefined
+  if (input.disband === true && offer === undefined) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `${piece.label} can only be disbanded on a centre square of one of your own cities.`,
+    })
+  }
 
   const x = input.column * state.board.squareSize + (state.board.squareSize - piece.width) / 2
   const y =
@@ -535,9 +553,65 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
       (destination.contact === true ? ', onto another player\'s figures: settle the battle and loot by hand' : ''),
     ...(input.at === undefined ? {} : { at: input.at }),
   })
-  return moved === undefined
+  if (moved === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  if (offer === undefined) return ok(moved)
+  const disbanded = disbandUnchecked(moved, input, piece.id, destination, offer)
+  return disbanded === undefined
     ? err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
-    : ok(moved)
+    : ok(disbanded)
+}
+
+/**
+ * Takes a figure that has just arrived on a centre of its own city off the board and,
+ * when the city has no fortification or caravan yet, puts the marker for the
+ * figure's kind on that square (Fame and Fortune p. 7). One board history entry
+ * after the move, so the first board Undo leaves the figure standing on the centre
+ * and the second takes the move back. No rule is checked here; `travelFigure` has.
+ */
+function disbandUnchecked(
+  state: GameState,
+  input: { readonly playerId: string; readonly at?: string },
+  figureId: string,
+  cell: Cell,
+  offer: DisbandOffer,
+): GameState | undefined {
+  const index = state.board.pieces.findIndex((candidate) => candidate.id === figureId)
+  const figure = state.board.pieces[index]
+  if (figure === undefined) return undefined
+  const assetId = offer.marker === 'caravan' ? CARAVAN_ASSET_ID : FORTIFICATION_ASSET_ID
+  const asset = offer.existing === undefined ? findBoardAsset(assetId) : undefined
+
+  let next = state
+  let marker: BoardPiece | null = null
+  if (asset !== undefined) {
+    const [id, rng] = nextId(state.rng)
+    next = { ...state, rng }
+    marker = {
+      id,
+      assetId: asset.id,
+      path: asset.path,
+      label: asset.label,
+      category: asset.category,
+      x: Math.round((cell.column + 0.5) * state.board.squareSize - asset.width / 2),
+      y: Math.round(mapTop(state.board) + (cell.row + 0.5) * state.board.squareSize - asset.height / 2),
+      width: asset.width,
+      height: asset.height,
+      rotation: 0,
+      placedBy: input.playerId,
+    }
+  }
+  const rest = next.board.pieces.filter((candidate) => candidate.id !== figureId)
+  const what = offer.marker === 'caravan' ? 'sending a caravan to' : 'fortifying'
+  return record(input, {
+    state: next,
+    pieces: marker === null ? rest : [...rest, marker],
+    change: { kind: 'disband', figure, index, marker },
+    description:
+      `disbanded ${figure.label} in ${offer.cityLabel}, ` +
+      (marker !== null
+        ? `${what} the city`
+        : `which already has a ${offer.existing?.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so nothing is gained`),
+  })
 }
 
 /**

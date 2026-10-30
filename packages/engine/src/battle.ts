@@ -7,6 +7,7 @@
  */
 
 import type { Rotation } from './board.js'
+import type { CityDefence } from './city-defence.js'
 import type { UnitItem } from './item.js'
 
 /** Which side of the arena. The initiator is always 'attacker'. */
@@ -114,7 +115,14 @@ export interface BattleSideSummary {
   readonly totalAttack: number
   /**
    * The player's derived combat bonus (`combatBonusOf`, issue #197) for player
-   * sides. Barbarians have no combat bonus; their value is always 0.
+   * sides, plus the defended city's bonus for the defender. Barbarians have no
+   * combat bonus; their value is always 0.
    */
   readonly combatBonus: number
+  /**
+   * The defender only, in a battle for one of their cities (an attacking army on
+   * its centre): what the city adds, already counted in `combatBonus`. `null`
+   * otherwise. Derived from the public board.
+   */
+  readonly cityDefence: CityDefence | null
 }

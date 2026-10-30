@@ -112,6 +112,7 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     if (column === undefined || row === undefined || !Number.isInteger(column) || !Number.isInteger(row)) {
       return sendError(c, 400, 'BAD_REQUEST', 'column and row are required whole numbers')
     }
+    const disband = optionalBoolean(body, 'disband')
 
     return applyToGame(context, c, gameId, (state) =>
       travelFigure(state, {
@@ -119,6 +120,7 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
         pieceId,
         column,
         row,
+        ...(disband === true ? { disband } : {}),
         at: now(),
       }),
     )
