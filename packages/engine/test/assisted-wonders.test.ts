@@ -8,8 +8,8 @@
  * first map slot with a red city on its square B2, whose outskirts are A1 mountain, B1
  * mountain, C1 water, A2 forest, C2 grassland, A3 desert, B3 desert and C3 mountain.
  * The market is the shared Wonders area: the test puts the wonders it needs there. The
- * cost of a wonder is shown and not checked against production or paid with trade, and
- * building one draws the next into the market (four of each era, ancient first), from a
+ * cost of a wonder is checked against production and the rest rushed with trade, as for
+ * a building, and building one draws the next into the market (four of each era, ancient first), from a
  * deck the test sets up so the draws are known.
  */
 
@@ -264,11 +264,25 @@ describe('what a city may build of the wonders', () => {
     expect(wonderChoice(options, 'wonders/statueofzeus')).toMatchObject({ cost: 15 })
   })
 
-  it('the cost is shown and not checked: a city with no production and no trade is offered every wonder', () => {
-    const options = optionsOf(ready({ production: 0, trade: 0 }))
-    expect(wonderChoice(options, COLOSSUS)).toMatchObject({ cost: 15, tradeToPay: 0 })
+  it('the cost is checked like a building: what the production lacks is rushed with trade', () => {
+    const options = optionsOf(ready({ production: 10, trade: 15 }))
+    expect(wonderChoice(options, COLOSSUS)).toMatchObject({ cost: 15, tradeToPay: 15 })
     expect(wonderChoice(options, STONEHENGE)).toMatchObject({ cost: 10, tradeToPay: 0 })
-    expect(options.unavailable.filter((entry) => entry.item.kind === 'wonder')).toEqual([])
+  })
+
+  it('a wonder the production and the trade cannot cover is not offered, with the reason', () => {
+    const options = optionsOf(ready({ production: 10, trade: 14 }))
+    expect(wonderChoice(options, COLOSSUS)).toBeUndefined()
+    expect(wonderReason(options, COLOSSUS)).toBe(
+      'Costs 15 production and City B2 has 10 (the number you set by hand). Covering the missing 5 takes 15 trade and you have 14. ' +
+        'If the city makes more than that, set its production by hand on the city.',
+    )
+    expect(wonderChoice(options, STONEHENGE)).toMatchObject({ cost: 10, tradeToPay: 0 })
+  })
+
+  it('the discount of the tech lowers what is rushed', () => {
+    const options = optionsOf(ready({ techs: ['Metalworking'], production: 7, trade: 9 }))
+    expect(wonderChoice(options, COLOSSUS)).toMatchObject({ cost: 10, costNote: '15 without Metalworking', tradeToPay: 9 })
   })
 
   it('a city holds one wonder: with one in its outskirts a new wonder may only take its square', () => {
@@ -381,12 +395,19 @@ describe('building a wonder', () => {
     })
   })
 
-  it('the cost is not checked and no trade is paid: a city with nothing builds it, and a rush flag pays nothing', () => {
-    const state = ready({ production: 0, trade: 7 })
+  it('a rush pays the trade and needs the flag, and the vote undo gives it back', () => {
+    const state = ready({ production: 10, trade: 16 })
+    expect(describeError(unwrapErr(tryBuild(state, COLOSSUS, C2)))).toContain('Confirm paying 15 trade to build it.')
     const done = build(state, COLOSSUS, C2, 'req-1', true)
-    expect(me(done).stats.trade).toBe(7)
-    expect(buildLine(done)).toBe('cash1981 built the Colossus in City B2 on square C2')
+    expect(me(done).stats.trade).toBe(1)
+    expect(buildLine(done)).toBe('cash1981 built the Colossus in City B2 on square C2, paying 15 trade for the missing production')
     expect(piecesOf(done, COLOSSUS)[0]?.ownerId).toBe(CASH1981)
+    expect(me(undoByVote(done, 'req-1')).stats.trade).toBe(16)
+    // Removing the piece before End turn takes the build back and gives the trade back too
+    const piece = piecesOf(done, COLOSSUS)[0] as BoardPiece
+    const taken = takeBackOpenBuild(done, { playerId: CASH1981, pieceId: piece.id, at: AT })
+    if (taken === undefined) throw new Error('not an open build')
+    expect(me(unwrap(taken)).stats.trade).toBe(16)
   })
 
   it('refuses a wonder that is not in the market, with the reason', () => {
@@ -604,8 +625,8 @@ describe('undoing a wonder', () => {
   })
 
   it('after the vote undo the board Undo has nothing to go back to, so the drawn wonder cannot be brought back with its card in the deck', () => {
-    const marked = put(ready({ production: null }), CASH1981, 'markers/Building Program', 1, 1)
-    const undone = undoByVote(build(marked, COLOSSUS, C2), 'req-1')
+    const marked = put(ready({ production: null, trade: 60 }), CASH1981, 'markers/Building Program', 1, 1)
+    const undone = undoByVote(build(marked, COLOSSUS, C2, 'req-1', true), 'req-1')
     expect(deckNames(undone)[0]).toBe('The Great Wall')
     expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
     expect(undone.board.redo).toEqual([])
@@ -614,7 +635,8 @@ describe('undoing a wonder', () => {
 
   it('two builds: the older one cannot be undone once the wonder it drew is the newer one, but the newer one can, and then the older', () => {
     // A: Colossus in B2 draws The Great Wall. B: a second city builds The Great Wall and draws The Oracle.
-    const state = put(ready({ production: 15 }), CASH1981, 'cities/redcity2', 3, 3)
+    // The second city has no production set by hand, so it rushes with the trade
+    const state = put(ready({ production: 15, trade: 60 }), CASH1981, 'cities/redcity2', 3, 3)
     const first = build(state, COLOSSUS, C2, 'req-1')
     const second = unwrap(
       performAssistedAction(first, {
@@ -626,6 +648,7 @@ describe('undoing a wonder', () => {
           cityPieceId: (first.board.pieces.filter((piece) => piece.category === 'city')[1] as BoardPiece).id,
           item: { kind: 'wonder', assetId: 'wonders/greatwall' },
           target: { column: 3, row: 2 },
+          rush: true,
         },
       }),
     )

@@ -342,6 +342,12 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   level); Rationalism spends 6 or 11 trade for a level I or II `TechGrant`, spent
   when the tech is revealed in Start of Turn. Learning is not researching: no
   coins keep trade.
+- **Military Tradition** (#311, City Management): once an army figure has been
+  built with Build this turn, one button per unit type draws a free unit card of
+  that type (aircraft need Flight), once per turn whatever the type. An army put
+  on the map by hand, or one built and then removed or undone, does not
+  count. The army build's vote undo is refused while the free unit stands on
+  it, and its take-back is a plain removal.
 - **Mysticism's** extra card applies to every culture card draw (advance,
   Patronage, Cristo Redentor) (human).
 - **Government:** one change per Start of Turn. A government whose tech was
@@ -682,6 +688,14 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   a reason. Cost above production is such a reason; the way out is a hand-set
   production (human). Rush (p. 15): 3 trade per production (Americans 2 per 3),
   whole steps, never more than needed.
+- **Unit cost** (p. 15–17, tech sheet Military Unit table): 5/7/9/11 by level,
+  aircraft 12 with Flight. The level is the higher of the hand-set status value
+  and the revealed techs (`UNIT_LEVEL_TECHS`: Chivalry, Democracy, Mathematics,
+  Logistics → II; Railroad, Gunpowder, Metal Casting → III; Combustion,
+  Replacement Parts, Ballistics → IV). The first reveal raises the status value,
+  never lowers it, as Flight ticks Aircraft. Unrevealed techs count for nothing.
+  Card effects on unit cost (Leonardo's Workshop) are not applied; the player
+  covers them with a hand-set production.
 - A building needs a revealed tech (`BUILDING_TECH_UNLOCKS`, the human's sheet).
   Once the upgraded form is unlocked only it is built, and its tech alone suffices
   (p. 22).
@@ -712,11 +726,13 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   removal it is a plain removal with no refund. Upgrades and units are not taken
   back this way.
 - **Wonders** (p. 17): any city may build a faceup market wonder (unowned pieces
-  in the shared Wonders area, `marketWondersOf`). The cost shown (printed, or
-  discounted with the card's tech; `wonder-data.ts` equals the `Wonders` sheet by
-  test) is **not enforced** (human): no trade paid, rush pays nothing; the Building
-  Program marker is still used. Angkor Wat is 15 with Theology (`SHEET_CORRECTIONS`
-  until the sheet is fixed). Placed in outskirts on any non-water square, empty or
+  in the shared Wonders area, `marketWondersOf`). The cost (printed, or discounted
+  with a revealed tech; `wonder-data.ts` equals the `Wonders` sheet by test) is
+  **enforced like a building** (human, 2026-10-30, replacing "shown, not
+  enforced"): rush trade is paid, refunded on undo; hammers from cards and Great
+  Persons count through a hand-set production. Angkor Wat is 15 with Theology
+  (`SHEET_CORRECTIONS` until the sheet is fixed); Philosophy on the tech sheet is
+  from later rules and gives no discount (human, 2026-10-30). Placed in outskirts on any non-water square, empty or
   holding the player's own building/wonder/Great Person, no enemy figure; one per
   city, not counted as the limited building. The market piece moves onto the
   square and gains its owner (two history entries).

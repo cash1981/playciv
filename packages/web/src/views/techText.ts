@@ -18,6 +18,9 @@
  * Military Science is the second exception: it follows the DoC card, which
  * unlocks the Military dock as well as the Academy, and the help sheet still
  * shows the old card. Do not "correct" it back (decisions.md, 2026-10-01).
+ *
+ * Angkor Wat is the third: the help sheet lists it under Philosophy, which is from
+ * later rules; Theology discounts it here (the human, 2026-10-30; `wonder-data.ts`).
  */
 export const TECH_TEXT: Readonly<Record<string, string>> = {
   'Animal Husbandry':
@@ -38,7 +41,7 @@ export const TECH_TEXT: Readonly<Record<string, string>> = {
     'Iron — Battle: when playing a unit from hand, add 3 to the attack of its strength. ' +
     'Unlocks: the Barracks building, The Colossus.',
   Navigation: 'You may cross water, but you may not end your movement in it. Unlocks: the Harbor building.',
-  Philosophy: 'Any 3 — City Management: gain a random great person. Unlocks: the Temple building, Angkor Wat.',
+  Philosophy: 'Any 3 — City Management: gain a random great person. Unlocks: the Temple building.',
   Pottery:
     'Any 2 — City Management: add 1 coin token to this tech (max 4). ' +
     'Unlocks: +1 hand size, the Granary building, The Pyramids.',
@@ -104,7 +107,7 @@ export const TECH_TEXT: Readonly<Record<string, string>> = {
     'You may cross or end your movement in water. Silk — City Management: move all of your figures in one ' +
     'square to any water square on the map; those figures may not move again this turn. ' +
     'Unlocks: travel speed 5.',
-  Theology: 'Unlocks: the Fundamentalism government, +1 hand size, the Cathedral building.',
+  Theology: 'Unlocks: the Fundamentalism government, +1 hand size, the Cathedral building, Angkor Wat.',
   Education:
     'Once per turn, when you build a wonder, add one coin to this tech (max 4). ' +
     '4 resources (1 of each) — City Management: learn a new tech of your choice for free.',

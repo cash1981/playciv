@@ -11,9 +11,8 @@
  * {@link SHEET_CORRECTIONS}.
  *
  * The abilities are not here: building a wonder places it and names its owner, nothing
- * more (`build-options.ts`). Build shows the cost and does not check it against the
- * city's production: cards and Great Persons can add hammers, and how to count them is
- * not settled.
+ * more (`build-options.ts`). Build checks the cost against the city's production and
+ * rushes the rest with trade, as for a building.
  */
 
 export type WonderEra = 'Ancient' | 'Medieval' | 'Modern'

@@ -270,7 +270,8 @@ function put(state: GameState, assetId: string, column: number, row: number): Ga
 
 describe('Michelangelo', () => {
   it('arms a 5-production wonder discount, shows it in Build, consumes it and restores it on undo', () => {
-    let state = cityManagement(scene())
+    // Trade enough to rush any ancient wonder, since the city's own production is small
+    let state = withStats(cityManagement(scene()), { trade: 60 })
     const wonder = unwrap(drawWonderToBoard(state, CASH1981, 'ANCIENT_WONDERS'))
     state = wonder
     const card = withCardInHand(state, 'Michelangelo')
@@ -293,7 +294,7 @@ describe('Michelangelo', () => {
     const city = placedCity(played)
     const target = wonderAfter?.squares[0]
     if (target === undefined) throw new Error('no wonder square')
-    const payload: BuildPayload = { cityPieceId: city.id, item: { kind: 'wonder', assetId: wonderBefore.assetId }, target }
+    const payload: BuildPayload = { cityPieceId: city.id, item: { kind: 'wonder', assetId: wonderBefore.assetId }, target, rush: true }
     const built = unwrap(
       performAssistedAction(played, {
         playerId: CASH1981,
@@ -304,9 +305,15 @@ describe('Michelangelo', () => {
       }),
     )
     expect(me(built).wonderDiscount).toBe(0)
+    // The rush covers the discounted cost only: 3 trade per production the city lacks
+    const shortfall = Math.max(0, (wonderAfter?.cost ?? 0) - (after?.production ?? 0))
+    expect(shortfall).toBeGreaterThan(0)
+    expect(wonderAfter?.tradeToPay).toBe(3 * shortfall)
+    expect(me(built).stats.trade).toBe(60 - 3 * shortfall)
 
     const undone = undoByVote(built, 'build-1')
     expect(me(undone).wonderDiscount).toBe(5)
+    expect(me(undone).stats.trade).toBe(60)
   })
 })
 

@@ -59,6 +59,37 @@ describe('the wonder cost table', () => {
     expect(wonderDataOf('wonders/angkorwat')?.discount).toEqual({ tech: 'Theology', cost: 15 })
   })
 
+  it('has the discount of every wonder a tech card on the tech sheet names, with its price', () => {
+    // The tech reference sheet (public/help/Civ_Tech_FF-WW.-2.jpg): the wonder a tech unlocks and what it then costs.
+    // The Great Lighthouse, Leonardo's Workshop, Notre-Dame, the Internet and the Pentagon are on no tech card
+    // there; their discounts are checked against the Wonders sheet above.
+    // Not Philosophy → Angkor Wat: that is from later rules, and Theology discounts it here (human)
+    const techCards: Readonly<Record<string, readonly [string, number]>> = {
+      'Animal Husbandry': ['wonders/hanginggardens', 10],
+      'Code of Laws': ['wonders/oracle', 10],
+      Currency: ['wonders/chichenitza', 10],
+      Masonry: ['wonders/greatwall', 10],
+      Metalworking: ['wonders/colossus', 10],
+      Pottery: ['wonders/pyramids', 10],
+      Chivalry: ['wonders/tajmahal', 15],
+      Construction: ['wonders/porcelaintower', 15],
+      Engineering: ['wonders/panamacanal', 20],
+      Irrigation: ['wonders/machupichu', 15],
+      Monarchy: ['wonders/himejisamuraicastle', 15],
+      'Printing Press': ['wonders/louvre', 15],
+      Banking: ['wonders/bigben', 20],
+      Communism: ['wonders/kremlin', 20],
+      'Metal Casting': ['wonders/statueofliberty', 20],
+      'Mass Media': ['wonders/cristoredentor', 15],
+    }
+    for (const [tech, [assetId, cost]] of Object.entries(techCards)) {
+      expect(wonderDataOf(assetId)?.discount, tech).toEqual({ tech, cost })
+    }
+    const angkor = wonderDataOf('wonders/angkorwat')
+    expect(angkor === undefined ? undefined : wonderCostFor(angkor, new Set(['Theology']))).toBe(15)
+    expect(angkor === undefined ? undefined : wonderCostFor(angkor, new Set(['Philosophy']))).toBe(20)
+  })
+
   it('has the era of the block of the sheet the wonder is in, nine of each', () => {
     let era = 0
     const eras = WONDER_ERAS

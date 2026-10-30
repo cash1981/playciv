@@ -127,7 +127,7 @@ export function startOfTurnGate(
 const EXPANSIONISM = ['Expansionsim', 'Expansionism'] as const
 
 /** The policy must be adopted, revealed and not switched off by Anarchy. */
-function policyBlock(player: Playerhand, names: readonly string[], label: string): BlockedAvailability | undefined {
+export function policyBlock(player: Playerhand, names: readonly string[], label: string): BlockedAvailability | undefined {
   const policy = player.socialPolicies.find((candidate) => names.includes(candidate.name))
   if (policy === undefined) return blocked('not-owned', `You have not adopted ${label}.`)
   if (policy.hidden) return blocked('unavailable', `Reveal ${label} before using it.`)

@@ -125,9 +125,9 @@ export function FaqView(): React.JSX.Element {
             Build opens with a button for each kind of thing the city can build now: buildings,
             wonders, figures and units, with no button for a kind that has nothing to pick. Press
             one to see its list, and <strong>Back</strong> to return to the buttons. Only what you
-            can really build is listed. A wonder shows what it costs, the printed amount or less if you know the tech on its
-            card, but the cost is not checked against the city&rsquo;s production: cards and Great
-            Persons can add hammers, so you count that yourself. A city holds one wonder, and a second one can only go on the
+            can really build is listed. A wonder costs the printed amount, or less if you have revealed the tech on its
+            card, and is paid like a building: with the city&rsquo;s production and trade for what is missing. Cards and Great
+            Persons can add hammers; count them by setting the production by hand. A city holds one wonder, and a second one can only go on the
             first one&rsquo;s square and takes its place. The reasons for the others are behind the link{' '}
             <strong>Why not the others</strong>. If the estimate of the city&rsquo;s production is
             too low, set the production by hand in the same card. When production is short but the
