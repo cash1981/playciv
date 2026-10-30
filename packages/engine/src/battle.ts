@@ -76,6 +76,43 @@ export interface ArenaUnit {
    * with this still `true`.
    */
   readonly killed: boolean
+  /**
+   * What this unit's latest arrival on its front did, so taking it back off
+   * that front (to hand, or to another front) undoes it. `null` when it
+   * arrived on an open front with nobody facing it.
+   */
+  readonly arrival: ArenaArrival | null
+}
+
+/** The two things a face-off changes on a unit. */
+export interface ArenaVitals {
+  readonly health: number
+  readonly killed: boolean
+}
+
+/**
+ * The side effects of a unit arriving on a front. A player who places a unit
+ * and then changes their mind expects the arena to look as it did before —
+ * the fallen unit it replaced back, the unit it fought unhurt.
+ */
+export interface ArenaArrival {
+  /** Slot id of the fallen unit it displaced into `departedUnits`, or null. */
+  readonly displacedId: string | null
+  /** The face-off fought on arrival, or null when no living unit faced it. */
+  readonly faceOff: ArenaFaceOff | null
+}
+
+/**
+ * Both units' vitals before and after a face-off. Undoing restores a unit
+ * only while it still has the "after" vitals: a later hand edit or kill
+ * toggle is the player's own, and is never overwritten.
+ */
+export interface ArenaFaceOff {
+  readonly opponentId: string
+  readonly opponentBefore: ArenaVitals
+  readonly opponentAfter: ArenaVitals
+  readonly selfBefore: ArenaVitals
+  readonly selfAfter: ArenaVitals
 }
 
 /** The one battle that may be active in a game at a time. */
