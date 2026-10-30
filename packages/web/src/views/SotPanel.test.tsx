@@ -532,6 +532,12 @@ describe('scouts and cities', () => {
     expect(screen.queryByRole('combobox', { name: /Send the square/ })).toBeNull()
   })
 
+  it('says why a scout on a city centre has no sending', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout({ canSend: false })] as never })))
+    expect(screen.getByText(/sends no square: it stands on a city centre/)).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: /Send the square/ })).toBeNull()
+  })
+
   it('founds a city where the scout stands, once, then goes to the map', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const scrolled: Element[] = []

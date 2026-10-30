@@ -16,12 +16,12 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { movePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { movePiece, placePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
 import { describeError } from '../src/errors.js'
-import { SQUARE_SIZE } from '../src/board.js'
+import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
 import { scoutViewsOf } from '../src/assisted-city.js'
 import { cityActionsOf } from '../src/city-actions.js'
@@ -613,6 +613,50 @@ describe('sending a scout’s square to a city', () => {
       }
       expect(scoutViewsOf(state, me(state)).find((view) => view.pieceId === centreScout?.id)).toMatchObject({ canSend: false, assignedTo: null })
       expect(scoutViewsOf(state, me(state)).find((view) => view.pieceId !== centreScout?.id)).toMatchObject({ canSend: true })
+    })
+
+    it('never gathers from a scout on a city centre when no capital is on the map', () => {
+      let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
+      state = put(state, CASH1981, 'cities/redcity2', 1, 1)
+      state = put(state, CASH1981, 'cities/redcity2', WHEAT_D4.column, WHEAT_D4.row)
+      state = put(state, CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      const centreScout = scoutOf(state).id
+      for (const options of cityActionsOf(state, me(state))) {
+        expect(options.harvest.choices.some((choice) => choice.scoutPieceId === centreScout), options.label).toBe(false)
+        expect(options.devoteToTheArts.scouts.some((scout) => scout.pieceId === centreScout), options.label).toBe(false)
+      }
+    })
+
+    it('treats both centres of a metropolis as centres', () => {
+      let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
+      // Lying flat with its image centre between B2 and C2
+      const asset = findBoardAsset('cities/redmetropolis2')
+      if (asset === undefined) throw new Error('no metropolis asset')
+      state = unwrap(
+        placePiece(state, {
+          playerId: CASH1981,
+          assetId: asset.id,
+          x: 2 * SQUARE_SIZE - asset.width / 2,
+          y: mapTop(state.board) + 1.5 * SQUARE_SIZE - asset.height / 2,
+        }),
+      )
+      state = put(state, CASH1981, 'cities/redcity2', 8, 8)
+      for (const column of [1, 2]) {
+        const placed = put(state, CASH1981, 'figures/redscout', column, 1)
+        const view = scoutViewsOf(placed, me(placed))[0]
+        expect(view, `column ${column}`).toMatchObject({ canSend: false, assignedTo: null })
+      }
+    })
+
+    it('never sends the square of an English army on a city centre', () => {
+      let english = withAmerica(sotTurn({ civ: 'England' }))
+      english = put(english, CASH1981, 'cities/redcapital2', 1, 1)
+      english = put(english, CASH1981, 'figures/redarmy', 1, 1)
+      const army = english.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+      expect(scoutViewsOf(english, me(english)).find((view) => view.pieceId === army?.id)).toMatchObject({ canSend: false })
+      expect(describeError(unwrapErr(assign(english, army?.id ?? '', near(english)?.pieceId ?? '')))).toBe(
+        'B2 is the centre of your city, and a scout there sends no square.',
+      )
     })
 
     it('drops a send made before the scout\'s square became a city centre', () => {

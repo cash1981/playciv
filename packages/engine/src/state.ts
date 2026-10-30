@@ -1381,7 +1381,7 @@ export interface ScoutView {
   readonly terrain: string | null
   /** A scout, or an army (the Republic's armies found cities, and the English gather as scouts). */
   readonly figure: 'scout' | 'army'
-  /** The city it sends its square to this turn: the one chosen, else the capital, or `null` without a capital on the map. */
+  /** The city it sends its square to this turn: the one chosen, else the capital; `null` without a capital on the map or on a centre of an own city. */
   readonly assignedTo: string | null
   /** Whether `assignedTo` is the capital because no city was chosen. */
   readonly assignedByDefault: boolean
