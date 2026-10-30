@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### disband-figures
-
-- **Owner:** Claude (Opus 5.5)
-- **Branch:** `feat/disband-figures`
-- **Brief:** `docs/agents/tasks/disband-figures.md`
-- **Status:** in progress
-- **Claimed paths:** see the brief
-- **Notes:** owns `state.ts` (`PlayerView` battle summary) and `api.ts`
+_None._
 
 ## Format
 
@@ -40,8 +33,8 @@ Rewritten wholesale, so only one task may own each at a time. Claim by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | disband-figures |
-| `packages/web/src/lib/api.ts` | disband-figures |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
+| `packages/web/src/lib/api.ts` | free |
 
 ## Queue
 
