@@ -17,7 +17,7 @@ import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
-import { battleSummaries, findPlayer, withPlayer } from '../state.js'
+import { battleSummaries, battleWinner, findPlayer, withPlayer } from '../state.js'
 import type { ArenaFaceOff, ArenaUnit, ArenaVitals, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
 
@@ -991,17 +991,17 @@ export function endBattleAction(
   // Winner: whichever side's remaining HP plus its combat bonus (the derived
   // `combatBonusOf`, issue #197, always 0 for barbarians) is higher; a draw
   // goes to the defender, per the human's explicit tie-break rule.
-  const [attackerSummary, defenderSummary] = battleSummaries(state)
+  const summaries = battleSummaries(state)
+  const winner = battleWinner(summaries)
+  const loser = summaries.find((s) => s !== winner)
   const outcome =
-    attackerSummary === undefined || defenderSummary === undefined
+    winner === null || loser === undefined
       ? null
-      : (() => {
-          const attackerScore = attackerSummary.totalHealth + attackerSummary.combatBonus
-          const defenderScore = defenderSummary.totalHealth + defenderSummary.combatBonus
-          return attackerScore > defenderScore
-            ? { winner: attackerSummary, winnerScore: attackerScore, loserScore: defenderScore }
-            : { winner: defenderSummary, winnerScore: defenderScore, loserScore: attackerScore }
-        })()
+      : {
+          winner,
+          winnerScore: winner.totalHealth + winner.combatBonus,
+          loserScore: loser.totalHealth + loser.combatBonus,
+        }
 
   nextState = appendPublicLog(
     nextState,
@@ -1012,8 +1012,9 @@ export function endBattleAction(
       : `ends the battle — ${outcome.winner.label} won with ${outcome.winnerScore} HP vs ${outcome.loserScore} HP`,
   )
 
-  // Keep the battle as it stood so its ender can undo an accidental press. The
-  // log line above carries no unit names, and the snapshot never reaches a view.
+  // Keep the battle as it stood so its ender can undo an accidental press and
+  // everyone can still see how it ended (`lastBattle`, ids scrubbed). The log
+  // line above carries no unit names.
   return ok({
     ...nextState,
     battle: null,
