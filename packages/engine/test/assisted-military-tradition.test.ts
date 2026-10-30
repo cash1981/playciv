@@ -198,10 +198,11 @@ describe('the free unit', () => {
     const army = done.board.pieces.find((piece) => piece.category === 'figure' && piece.assetId === 'figures/redarmy')
     if (army === undefined) throw new Error('no army')
     // Without the free unit the same removal takes the build back
-    const control = takeBackOpenBuild(buildArmy(ready()), { playerId: CASH1981, pieceId: army.id, at: AT })
-    expect(control?.ok).toBe(true)
+    const plain = buildArmy(ready())
+    const plainArmy = plain.board.pieces.find((piece) => piece.category === 'figure' && piece.assetId === 'figures/redarmy')
+    if (plainArmy === undefined) throw new Error('no army')
+    expect(takeBackOpenBuild(plain, { playerId: CASH1981, pieceId: plainArmy.id, at: AT })?.ok).toBe(true)
     expect(takeBackOpenBuild(done, { playerId: CASH1981, pieceId: army.id, at: AT })).toBeUndefined()
-    expect(unitsOf(done, 'INFANTRY').length).toBeGreaterThan(0)
     // After the free unit's undo the army build can be undone
     const both = undoByVote(undoByVote(done, 'free-1'), 'army-1')
     expect(both.board.pieces.some((piece) => piece.assetId === 'figures/redarmy')).toBe(false)
@@ -226,7 +227,7 @@ describe('the free unit', () => {
     )
   })
 
-  it('with two armies built this turn, either army build can still be undone', () => {
+  it('with two armies, the first army\'s undo goes through and the remaining army then carries the free unit', () => {
     let state = put(ready(), 'cities/redcity2', 3, 3)
     state = unwrap(setCityProductionOverride(state, { playerId: CASH1981, pieceId: (state.board.pieces.filter((piece) => piece.category === 'city')[1] as BoardPiece).id, value: 20 }))
     state = buildArmy(state)

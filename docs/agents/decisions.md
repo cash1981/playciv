@@ -345,8 +345,9 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
 - **Military Tradition** (#311, City Management): once an army figure has been
   built with Build this turn, one button per unit type draws a free unit card of
   that type (aircraft need Flight), once per turn whatever the type. An army put
-  on the map by hand, or one built and then removed or undone, does not count. The army build's vote undo is refused while
-  the free unit stands on it, and its take-back is a plain removal.
+  on the map by hand, or one built and then removed or undone, does not
+  count. The army build's vote undo is refused while the free unit stands on
+  it, and its take-back is a plain removal.
 - **Mysticism's** extra card applies to every culture card draw (advance,
   Patronage, Cristo Redentor) (human).
 - **Government:** one change per Start of Turn. A government whose tech was
