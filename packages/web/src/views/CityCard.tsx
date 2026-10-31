@@ -79,7 +79,8 @@ export function CityCard({
   // A panel whose action stopped being ready (the phase ended) must not come back by itself in the next phase
   // Nor may one outlive the controls (a replay or a locked game takes them away)
   const hasControls = own !== undefined && !own.readOnly
-  const acted = own?.cityActions?.actedThisTurn ?? []
+  // Ada Lovelace's extra city action is taken with no question, so the city is not asked about
+  const acted = own?.cityActions?.extraAction === true ? [] : (own?.cityActions?.actedThisTurn ?? [])
   /** Opens a panel, after asking when the city has already acted this turn. A "no" opens nothing. */
   function toggleGather(panel: GatherPanel): void {
     if (gather === panel) {

@@ -183,6 +183,8 @@ export interface DevoteToTheArtsPayload {
   readonly cityPieceId: string
   readonly scoutPieceIds?: readonly string[]
   readonly culture?: number
+  /** Charles Darwin: turn all of the city's culture into trade. */
+  readonly darwin?: boolean
 }
 
 /** What `harvest` carries: the city, the resource, and the scout when the resource is under one rather than in the outskirts. */
@@ -448,30 +450,72 @@ export const CITY_ACTION_LABELS: Readonly<Partial<Record<AssistedActionKind, str
   harvest: 'Harvest',
 }
 
+export const LOVELACE_NAME = 'Ada Lovelace'
+
+/** One city action of the turn that is still in force: the city it counts against and what it is called. */
+interface CityActionRecord {
+  readonly cityPieceId: string
+  readonly label: string
+}
+
+/** Jerry Garcia's devotion is the capital's action for the turn (the other cities may still act). */
+const GARCIA_ACTION_LABEL = 'Devote to the Arts (Jerry Garcia)'
+
+/** One step of the player's turn that matters for extra city actions: a city action, or a Lovelace card. */
+type CityStep = { readonly lovelace: true } | (CityActionRecord & { readonly lovelace?: undefined })
+
+/** The player's city actions and Ada Lovelace plays of the current turn that have not been undone, oldest first. */
+function cityStepsThisTurn(state: GameState, player: Playerhand): readonly CityStep[] {
+  const turn = turnStatus(state).currentTurn
+  return state.assistedActions.flatMap((record): readonly CityStep[] => {
+    const effect = record.effect
+    if (record.status !== 'applied' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
+    if (effect.kind === 'playCard') {
+      if (effect.name === LOVELACE_NAME) return [{ lovelace: true }]
+      return effect.garcia === undefined ? [] : [{ cityPieceId: effect.garcia.capitalPieceId, label: GARCIA_ACTION_LABEL }]
+    }
+    const label = CITY_ACTION_LABELS[record.kind]
+    if (label === undefined || !('cityPieceId' in effect) || effect.cityPieceId === null) return []
+    return [{ cityPieceId: effect.cityPieceId, label }]
+  })
+}
+
+const cityActionRecordsThisTurn = (state: GameState, player: Playerhand): readonly CityActionRecord[] =>
+  cityStepsThisTurn(state, player).flatMap((step) => (step.lovelace === true ? [] : [step]))
+
 /**
  * The city actions this city has taken this turn that are still in force (not undone), by name, oldest
  * first. A city may take one a turn as a rule; the game does not forbid more, it asks first.
  */
 export function cityActionsTakenThisTurn(state: GameState, player: Playerhand, cityPieceId: string): readonly string[] {
-  const turn = turnStatus(state).currentTurn
-  return state.assistedActions.flatMap((record) => {
-    const label = CITY_ACTION_LABELS[record.kind]
-    const effect = record.effect
-    if (
-      label === undefined ||
-      record.status !== 'applied' ||
-      record.playerId !== player.playerId ||
-      record.turnNumber !== turn ||
-      !('cityPieceId' in effect) ||
-      effect.cityPieceId !== cityPieceId
-    ) {
-      return []
+  return cityActionRecordsThisTurn(state, player)
+    .filter((record) => record.cityPieceId === cityPieceId)
+    .map((record) => record.label)
+}
+
+
+/**
+ * The extra city actions Ada Lovelace has given this turn that no action has used yet. The turn is
+ * replayed in order: an action that is not its city's first uses a credit if one has been played by then,
+ * so a second action confirmed before her card was played stays that player's own and uses none. A city's
+ * second action is asked about unless a credit is left.
+ */
+export function extraCityActionsLeft(state: GameState, player: Playerhand): number {
+  let left = 0
+  const acted = new Set<string>()
+  for (const step of cityStepsThisTurn(state, player)) {
+    if (step.lovelace === true) {
+      left += 1
+    } else {
+      if (acted.has(step.cityPieceId) && left > 0) left -= 1
+      acted.add(step.cityPieceId)
     }
-    return [label]
-  })
+  }
+  return left
 }
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
+export const LOVELACE_ACTION_NOTE = ' (an extra city action from Ada Lovelace)'
 
 /**
  * What the city's earlier actions this turn mean for one more: nothing to say, a note for the log
@@ -485,6 +529,7 @@ export function earlierCityActions(
 ): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
   const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
   if (taken.length === 0) return { refusal: undefined, note: '' }
+  if (extraCityActionsLeft(state, player) > 0) return { refusal: undefined, note: LOVELACE_ACTION_NOTE }
   if (confirmed) return { refusal: undefined, note: SECOND_ACTION_NOTE }
   return {
     refusal: blocked(

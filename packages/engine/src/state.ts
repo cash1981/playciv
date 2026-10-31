@@ -680,6 +680,13 @@ export type AssistedEffect =
       readonly curieSubstitute?: string
       /** A once-per-turn marker the card wrote (Captain James Cook), so an undo frees it. */
       readonly usedAction?: { readonly key: string; readonly turnNumber: number }
+      /** Jerry Garcia: the capital whose action it was and each city devoted, with the culture the estimate gave it. */
+      readonly garcia?: {
+        readonly capitalPieceId: string
+        readonly cities: readonly { readonly cityPieceId: string; readonly cityLabel: string; readonly culture: number }[]
+      }
+      /** The culture Akira Kurosawa's holders gained because this devotion was made. */
+      readonly kurosawa?: readonly KurosawaPayment[]
       /** A movement culture card: the source and destination, and each moved figure. */
       readonly cardMove?: {
         readonly card: string
@@ -841,6 +848,12 @@ export type AssistedEffect =
       readonly cityLabel: string
       /** The culture added to the player's stock, which an undo takes off again. */
       readonly culture: number
+      /** The trade added instead, when Charles Darwin turned the city's culture into trade. */
+      readonly trade?: number
+      /** The once-per-turn marker Charles Darwin wrote, so an undo frees it. */
+      readonly usedAction?: { readonly key: string; readonly turnNumber: number }
+      /** The culture Akira Kurosawa's holders gained because of this devotion. */
+      readonly kurosawa?: readonly KurosawaPayment[]
     }
   | {
       readonly kind: 'harvest'
@@ -867,6 +880,12 @@ export type AssistedEffect =
         readonly placedHistoryId: string
       }[]
     }
+
+/** Culture Akira Kurosawa gave his holder for another player's devotion, kept for the undo. */
+export interface KurosawaPayment {
+  readonly playerId: string
+  readonly culture: number
+}
 
 /** The wonder a wonder build drew into the market, for its undo: the card, the piece that was placed and the history entry that placed it. */
 export interface DrawnWonder {
