@@ -45,6 +45,7 @@ import {
   usedReason,
   withPlayerHand,
 } from './assisted-core.js'
+import { darwinTradeOf, payKurosawa, takeBackKurosawa, useDarwin } from './assisted-arts.js'
 import { playCard } from './assisted-cards.js'
 import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
 import { CITY_ACTIONS } from './assisted-city.js'
@@ -1445,25 +1446,49 @@ const devoteToTheArts: AssistedActionDefinition = {
     if (typed !== undefined && (typeof typed !== 'number' || !Number.isInteger(typed) || typed < 0 || typed > MAX_DEVOTE_CULTURE)) {
       return err(failed(`culture must be a whole number from 0 to ${MAX_DEVOTE_CULTURE}.`))
     }
+    if (payload.darwin !== undefined && typeof payload.darwin !== 'boolean') return err(failed('darwin must be true or false.'))
+    if (payload.darwin === true) {
+      if (option.darwin === null) return err(failed('Charles Darwin must be faceup in your hand, with a Scientist token on the map that is not blockaded.'))
+      if (option.darwin === 'used') return err(rejected('devoteToTheArts', blocked('used', 'Charles Darwin can turn culture into trade only once each turn.')))
+    }
     const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
     if (again.refusal !== undefined) return err(rejected('devoteToTheArts', again.refusal))
     const estimate = option.culture + chosen.reduce((total, scout) => total + scout.culture, 0)
     const culture = typeof typed === 'number' ? typed : estimate
 
-    const stats = { ...player.stats, culture: player.stats.culture + culture }
+    // Charles Darwin changes all of the city's culture into trade, as far as the trade track has room
+    const darwinTrade = payload.darwin === true ? darwinTradeOf(player, culture) : 0
+    const stats = {
+      ...player.stats,
+      culture: player.stats.culture + (payload.darwin === true ? 0 : culture),
+      trade: player.stats.trade + darwinTrade,
+    }
     const scoutText = chosen.length === 0 ? '' : `, with the squares of the scouts at ${listLabels(chosen.map((scout) => scout.square))}`
     const handText = culture === estimate ? '' : ` (set by the player; the estimate was ${estimate})`
-    const logged = appendLog(withPlayerHand(state, { ...player, stats }), {
+    const darwin = payload.darwin === true ? useDarwin(state, player, stats) : undefined
+    const kurosawa = payKurosawa(darwin?.state ?? withPlayerHand(state, { ...player, stats }), player, 1)
+    const gained =
+      darwin === undefined
+        ? `gained ${culture} culture`
+        : `turned its ${culture} culture into ${darwinTrade} trade with Charles Darwin${darwinTrade < culture ? ' (the trade track has no room for more)' : ''}`
+    const logged = appendLog(kurosawa.state, {
       username: player.username,
       playerId: player.playerId,
-      publicLog: `${player.username} devoted ${city.label} to the arts and gained ${culture} culture${scoutText}${handText}${again.note}`,
+      publicLog: `${player.username} devoted ${city.label} to the arts and ${gained}${scoutText}${handText}${again.note}${kurosawa.said}`,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
     })
     return ok({
       state: logged,
-      effect: { kind: 'devoteToTheArts', cityPieceId: city.cityPieceId, cityLabel: city.label, culture },
+      effect: {
+        kind: 'devoteToTheArts',
+        cityPieceId: city.cityPieceId,
+        cityLabel: city.label,
+        culture: payload.darwin === true ? 0 : culture,
+        ...(darwin === undefined ? {} : { trade: darwinTrade, usedAction: darwin.usedAction }),
+        ...(kurosawa.paid.length === 0 ? {} : { kurosawa: kurosawa.paid }),
+      },
       logId: lastLogId(logged),
     })
   },
@@ -1478,10 +1503,24 @@ const devoteToTheArts: AssistedActionDefinition = {
         reason: `Only ${player.stats.culture} culture is left, so the ${effect.culture} culture from ${effect.cityLabel} cannot be taken back. It has been spent, or the counter was changed by hand.`,
       })
     }
-    const stats = { ...player.stats, culture: player.stats.culture - effect.culture }
+    const trade = effect.trade ?? 0
+    if (player.stats.trade < trade) {
+      return err({
+        kind: 'ASSISTED_UNDO_BLOCKED',
+        logId: record.logId,
+        reason: `Only ${player.stats.trade} trade is left, so the ${trade} trade from ${effect.cityLabel} cannot be taken back. It has been spent, or the counter was changed by hand.`,
+      })
+    }
+    const stats = { ...player.stats, culture: player.stats.culture - effect.culture, trade: player.stats.trade - trade }
+    let undone = withPlayerHand(state, { ...player, stats })
+    if (effect.usedAction !== undefined) {
+      undone = freeTurnAction(undone, playerOf(undone, player.playerId) ?? player, effect.usedAction.turnNumber, effect.usedAction.key)
+    }
+    const kurosawa = takeBackKurosawa(undone, effect.kurosawa ?? [])
+    const removed = trade > 0 || effect.usedAction !== undefined ? `${trade} trade removed` : `${effect.culture} culture removed`
     return ok({
-      state: withPlayerHand(state, { ...player, stats }),
-      text: `${player.username}'s devotion of ${effect.cityLabel} to the arts was undone: ${effect.culture} culture removed`,
+      state: kurosawa.state,
+      text: `${player.username}'s devotion of ${effect.cityLabel} to the arts was undone: ${removed}${kurosawa.said}`,
     })
   },
 }

@@ -14,6 +14,10 @@
  */
 
 import { tradeCeilingOf } from './limits.js'
+import { payKurosawa, takeBackKurosawa } from './assisted-arts.js'
+import { cityActionsOf, ownCityFootprint } from './city-actions.js'
+import { isCapital } from './city-defence.js'
+import { cityActionsTakenThisTurn } from './assisted-core.js'
 import { investableCoinsOf } from './sot.js'
 import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
@@ -304,6 +308,8 @@ interface Automated {
     | 'usedAction'
     | 'galileo'
     | 'cardMove'
+    | 'garcia'
+    | 'kurosawa'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -474,6 +480,43 @@ function automate(
         }),
         extra: { freeAdvances: earned },
         said: `, earning ${earned} free culture ${earned === 1 ? 'advance' : 'advances'} to make one space at a time`,
+      })
+    }
+    case 'Jerry Garcia': {
+      // The capital's own action: every city is devoted for the culture the board gives it, and the other
+      // cities may still act (the card's text). The scouts' squares are not sent, so the figure can be
+      // corrected by hand on the counter.
+      const cities = cityActionsOf(state, player)
+      const capital = cities.find((city) => {
+        const piece = ownCityFootprint(state, player, city.cityPieceId)?.piece
+        return piece !== undefined && isCapital(piece)
+      })
+      if (capital === undefined) return err('You have no capital on the map, so there is no city action for Jerry Garcia to take.')
+      const devoted = cities.map((city) => ({
+        cityPieceId: city.cityPieceId,
+        cityLabel: city.label,
+        culture: city.devoteToTheArts.culture,
+      }))
+      const culture = devoted.reduce((total, city) => total + city.culture, 0)
+      const acted = cityActionsTakenThisTurn(state, player, capital.cityPieceId)
+      const gained = withPlayerHand(state, {
+        ...player,
+        stats: { ...player.stats, culture: player.stats.culture + culture },
+      })
+      const kurosawa = payKurosawa(gained, player, devoted.length)
+      const list = devoted.map((city) => `${city.cityLabel} ${city.culture}`).join(', ')
+      return ok({
+        state: kurosawa.state,
+        extra: {
+          gain: { trade: 0, culture },
+          garcia: { capitalPieceId: capital.cityPieceId, cities: devoted },
+          ...(kurosawa.paid.length === 0 ? {} : { kurosawa: kurosawa.paid }),
+        },
+        said:
+          `, devoting ${devoted.length} ${devoted.length === 1 ? 'city' : 'cities'} to the arts as the action of ${capital.label} ` +
+          `and gaining ${culture} culture (${list})` +
+          (acted.length === 0 ? '' : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
+          kurosawa.said,
       })
     }
     case 'Jacques Cousteau': {
@@ -1109,6 +1152,10 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${coinTarget?.username ?? 'The other player'} no longer has the coin ${effect.name} gave them.`)
     }
 
+    if (effect.garcia !== undefined && effect.gain !== undefined && player.stats.culture < effect.gain.culture) {
+      return blockedBy(`Only ${player.stats.culture} culture is left, so the ${effect.gain.culture} culture from ${effect.name} cannot be taken back. It has been spent, or the counter was changed by hand.`)
+    }
+
     // Einstein's gain is negative on the side he spent, so the undo gives that back: it has to fit
     // the track and the other side has to still hold what he gave, or the undo would invent resources
     if (effect.gain !== undefined && effect.name === 'Albert Einstein') {
@@ -1232,6 +1279,10 @@ export const playCard: AssistedActionDefinition = {
       }
     }
 
+    // Akira Kurosawa's culture goes back from the holder, as far as it is still there
+    const kurosawa = takeBackKurosawa(current, effect.kurosawa ?? [])
+    current = kurosawa.state
+
     const freeTurnUse = (state: GameState): GameState => {
       let freed = state
       if (effect.coin !== undefined) {
@@ -1252,7 +1303,7 @@ export const playCard: AssistedActionDefinition = {
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       })
-      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand` })
+      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${kurosawa.said}` })
     }
     const back = freeTurnUse(
       withPlayerHand(current, {

@@ -59,3 +59,4 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   Science artwork is the intended replacement before running the generator.
 
 - Jim Henson's wound markers are kept on the hand (`hensonWounds`), not on the card: if the card changes hands or is discarded and drawn again, the count stays with the player. Wonders put on the board by hand add no wound.
+- Jerry Garcia's all-city devotion counts no scout's square and offers no Charles Darwin conversion; a figure can be corrected on the culture counter by hand. Ada Lovelace's credit cannot be told apart from a second action the player confirmed manually after her play, so that one is also taken with no question.

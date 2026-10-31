@@ -11,17 +11,19 @@ import { AssistedActionsPanel } from './panelForTests.js'
 import type { Run } from './GameView.js'
 
 /** The two gather options every city has; these tests are about the Building Program and the Upgrades. */
-const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest' | 'actedThisTurn'> = {
+const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest' | 'actedThisTurn' | 'extraAction'> = {
   devoteToTheArts: {
     status: 'ready',
     reason: 'Ready to devote this city to the arts.',
     culture: 1,
+    darwin: null,
     parts: [{ label: 'The city itself', amount: 1 }],
     notes: [],
     scouts: [],
   },
   harvest: { status: 'unavailable', reason: 'No resource icon in the outskirts.', choices: [], notes: [] },
   actedThisTurn: [],
+  extraAction: false,
 }
 
 

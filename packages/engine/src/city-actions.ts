@@ -14,7 +14,8 @@
  * call each other inside functions, never while the modules load.
  */
 
-import { PHASE_REASON, cityActionsTakenThisTurn, openCityManagementTurn } from './assisted-core.js'
+import { PHASE_REASON, cityActionsTakenThisTurn, extraCityActionsLeft, openCityManagementTurn } from './assisted-core.js'
+import { darwinStatusOf } from './assisted-arts.js'
 import { cityFootprintsOf, mapCellOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import type { BoardPiece } from './board.js'
@@ -47,6 +48,8 @@ export interface StartBuildingProgramOption {
 
 /** Devote to the Arts for one city: the culture it would give and how that adds up. */
 export interface DevoteToTheArtsOption extends DevoteGathering {
+  /** Charles Darwin may turn this city's culture into trade: `ready`, `used` this turn, or `null` without the faceup card. */
+  readonly darwin: 'ready' | 'used' | null
   /** `wrong-phase` outside the player's open City Management phase. */
   readonly status: 'ready' | 'wrong-phase'
   readonly reason: string
@@ -71,6 +74,8 @@ export interface CityActionOptions {
    * one action a turn as a rule; the client asks the player to confirm before another.
    */
   readonly actedThisTurn: readonly string[]
+  /** An extra city action from Ada Lovelace is left this turn, so a city's second action needs no question. */
+  readonly extraAction: boolean
 }
 
 /** Whether the market still has a token of the resource. The pieces on the board are the supply that is gone. */
@@ -133,6 +138,8 @@ export function cityActionsOf(state: GameState, player: Playerhand): readonly Ci
 
   const productions = cityProductionsOf(state, player)
   const open = openCityManagementTurn(state, player) !== undefined
+  const darwin = darwinStatusOf(state, player)
+  const extraAction = extraCityActionsLeft(state, player) > 0
   return footprints.flatMap((footprint) => {
     const city = productions.find((candidate) => candidate.pieceId === footprint.piece.id)
     if (city === undefined) return []
@@ -144,11 +151,11 @@ export function cityActionsOf(state: GameState, player: Playerhand): readonly Ci
         : { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker }
     const gathering = cityGatheringOf(state, player, footprint)
     const devoteToTheArts: DevoteToTheArtsOption = open
-      ? { ...gathering.devote, status: 'ready', reason: 'Ready to devote this city to the arts.' }
-      : { ...gathering.devote, status: 'wrong-phase', reason: PHASE_REASON }
+      ? { ...gathering.devote, darwin, status: 'ready', reason: 'Ready to devote this city to the arts.' }
+      : { ...gathering.devote, darwin, status: 'wrong-phase', reason: PHASE_REASON }
     const harvest = harvestOptionOf(state, gathering.harvest, city.label, open)
     const actedThisTurn = cityActionsTakenThisTurn(state, player, city.pieceId)
-    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest, actedThisTurn }]
+    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest, actedThisTurn, extraAction }]
   })
 }
 

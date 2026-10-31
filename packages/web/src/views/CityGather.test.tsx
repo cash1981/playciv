@@ -39,6 +39,7 @@ const DEVOTE: CityActionOptions['devoteToTheArts'] = {
   status: 'ready',
   reason: 'Ready to devote this city to the arts.',
   culture: 3,
+  darwin: null,
   parts: [
     { label: 'The city itself', amount: 1 },
     { label: 'Temple at A3', amount: 2 },
@@ -65,6 +66,7 @@ const options = (overrides: Partial<CityActionOptions> = {}): CityActionOptions 
   devoteToTheArts: DEVOTE,
   harvest: HARVEST,
   actedThisTurn: [],
+  extraAction: false,
   ...overrides,
 })
 
@@ -287,6 +289,16 @@ describe('a second action of the same city this turn', () => {
     expect(screen.queryByRole('group', { name: 'Devote Capital B3 to the arts' })).toBeNull()
   })
 
+  it("Ada Lovelace's extra city action is taken with no question", async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const send = vi.spyOn(api, 'devoteToTheArts').mockResolvedValue({} as PlayerView)
+    renderPanel(viewOf([options({ actedThisTurn: ['Build'], extraAction: true })]))
+    fireEvent.click(devoteButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Devote and take 3 culture' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).not.toHaveBeenCalled()
+  })
+
   it('Devote with a yes sends confirmedRepeat', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const send = vi.spyOn(api, 'devoteToTheArts').mockResolvedValue({} as PlayerView)
@@ -348,5 +360,41 @@ describe('a second action of the same city this turn', () => {
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(ask).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1')
+  })
+})
+
+describe("Charles Darwin on a devotion", () => {
+  const withDarwin = (darwin: 'ready' | 'used' | null): PlayerView => viewOf([options({ devoteToTheArts: { ...DEVOTE, darwin } })])
+
+  it('shows no box without the faceup card', () => {
+    renderPanel(withDarwin(null))
+    fireEvent.click(devoteButton())
+    expect(screen.queryByRole('checkbox', { name: /Charles Darwin/ })).toBeNull()
+  })
+
+  it('sends darwin when the box is ticked, and the button says trade', async () => {
+    const send = vi.spyOn(api, 'devoteToTheArts').mockResolvedValue({} as PlayerView)
+    renderPanel(withDarwin('ready'))
+    fireEvent.click(devoteButton())
+    fireEvent.click(screen.getByRole('checkbox', { name: /Turn this culture into trade with Charles Darwin/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Devote and take 3 trade' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1', { scoutPieceIds: [], darwin: true })
+  })
+
+  it('sends plain culture when the box is left alone', async () => {
+    const send = vi.spyOn(api, 'devoteToTheArts').mockResolvedValue({} as PlayerView)
+    renderPanel(withDarwin('ready'))
+    fireEvent.click(devoteButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Devote and take 3 culture' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1', { scoutPieceIds: [] })
+  })
+
+  it('shows the box disabled once he has been used this turn', () => {
+    renderPanel(withDarwin('used'))
+    fireEvent.click(devoteButton())
+    const box = screen.getByRole('checkbox', { name: /Charles Darwin has been used this turn/ }) as HTMLInputElement
+    expect(box.disabled).toBe(true)
   })
 })

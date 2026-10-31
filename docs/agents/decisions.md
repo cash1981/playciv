@@ -191,6 +191,28 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   list (empty water squares in the outskirts of their cities, no unlock or
   production needed, no limit of one a city since the card does not name one; a replacement is not offered), the card is
   discarded, and one undo removes the Harbors again.
+- Jerry Garcia devotes every city of the player in one play, for the culture the
+  board gives each city (scouts' squares are not sent), as the capital's city
+  action: the capital counts as having acted (named "Devote to the Arts (Jerry
+  Garcia)"), the other cities may still act with no question. A capital is a
+  `capital` piece or a metropolis; without one the play is refused. If the capital
+  had already acted the log says so; it is not refused, like any second action.
+  Ada Lovelace is an "extra city action" credit derived from the applied records
+  of the turn: her plays that were not undone, less the actions that came after a
+  city's first. While one is left a city's second action is taken with no question
+  (`extraAction` on the city options, own view) and the log says it came from her;
+  a manually confirmed second action made before her play is not taken for hers.
+  Anarchy is not enforced for the capital anywhere, so her anarchy clause needs
+  nothing.
+- Akira Kurosawa, faceup and not blockaded, pays his holder 1 culture for every
+  city another player devotes (also each city of Garcia's play), in the same log
+  line; the holder's own devotions pay nothing. Undoing the devotion takes the
+  culture back from the holder as far as it is still there and the undo line says
+  when it was spent. Charles Darwin, faceup, adds a box to Devote to the Arts
+  (`darwin` on the option, `null` without the card): the city's culture, with the
+  typed number if any, becomes the same amount of trade up to the end of the trade
+  track, once each turn (`person:Charles Darwin` on the turn record). Undo returns
+  culture and trade and frees him; it is blocked if that trade has been spent.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.
