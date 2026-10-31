@@ -221,6 +221,8 @@ export interface PlayCardPayload {
   readonly convert?: { readonly from: 'trade' | 'culture'; readonly amount: number }
   /** Jacques Cousteau: the squares of the Harbors to build, up to 3, each in the outskirts of the named city. */
   readonly harbors?: readonly { readonly cityPieceId: string; readonly column: number; readonly row: number }[]
+  /** Frida Kahlo: the ids of the culture cards in the player's own hand to discard before drawing back up. None is allowed. */
+  readonly discard?: readonly string[]
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
   /** The map square whose figures move (Galileo and the movement culture cards). */

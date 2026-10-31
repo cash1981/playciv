@@ -37,7 +37,9 @@ import {
   shuffleSheetTwice,
 } from './assisted-culture.js'
 import { CULTURE_VICTORY_STEP, findBoardAsset, remainingBoardAssetCount } from './board.js'
-import { cultureMarkerOf } from './culture-track.js'
+import { cultureMarkerOf, cultureSpaceAt } from './culture-track.js'
+import { cultureCardsHeld, cultureHandSizeOf } from './culture-hand.js'
+import { SHEET_LABEL } from './sheet-name.js'
 import { buildSquareRefusal, freeBuildingSquaresOf, squareCentre, squareLabel, unitSheetOf } from './build-options.js'
 import { cityFootprintsOf, mapCellOf } from './blockade.js'
 import { cityLabelOf } from './disband.js'
@@ -60,7 +62,18 @@ import {
 } from './movement.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import { buildingsInCitiesOf, revealedTechNamesOfOthers, stackingLimitOf } from './great-person-effects.js'
-import { READY, blocked, freeTurnAction, lastLogId, playerOf, rejected, useTurnAction, withPlayerHand } from './assisted-core.js'
+import {
+  READY,
+  blocked,
+  freeTurnAction,
+  lastLogId,
+  levelSheet,
+  playerOf,
+  plural,
+  rejected,
+  useTurnAction,
+  withPlayerHand,
+} from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
   AUTOMATIC_EFFECTS,
@@ -125,7 +138,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
   const now = currentPhaseOf(state, player.playerId)
   const blockaded = blockadedGreatPersonTypes(state, player)
   // The cards drawn for a choice are in the hand until one is kept: none of them is the player's yet
-  const waiting = new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
+  const waiting = waitingCardIds(player)
   return player.items.flatMap((item): readonly PlayableCard[] => {
     const kind = KIND_OF[item.kind]
     if (kind === undefined || item.description === null || item.description === undefined) return []
@@ -185,6 +198,10 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
             }
           : null,
       harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
+      cultureHand:
+        name === FRIDA
+          ? cultureCardsOf(player).map((card) => ({ itemId: card.id, name: itemName(card) }))
+          : null,
       substituteResources:
         name === 'Marie Curie'
           ? ['Iron', 'Wheat', 'Spy', 'Silk', 'Incense']
@@ -269,6 +286,21 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
   })
 }
 
+/** The cards drawn for a choice, which stay in the hand until one is kept. */
+const waitingCardIds = (player: Playerhand): ReadonlySet<string> =>
+  new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
+
+const FRIDA = 'Frida Kahlo'
+
+/** The culture cards of the hand that are the player's own: not the ones still being chosen between. */
+function cultureCardsOf(player: Playerhand): readonly Item[] {
+  const waiting = waitingCardIds(player)
+  return player.items.filter(
+    (item) =>
+      (item.kind === 'cultureI' || item.kind === 'cultureII' || item.kind === 'cultureIII') && !waiting.has(item.id),
+  )
+}
+
 const HARBOR = 'buildings/harbor'
 
 /** Every empty square where Jacques Cousteau can put a Harbor, with the city it belongs to. */
@@ -309,6 +341,7 @@ interface Automated {
     | 'advance'
     | 'freeAdvances'
     | 'harbors'
+    | 'frida'
     | 'curieSubstitute'
     | 'usedAction'
     | 'galileo'
@@ -318,6 +351,8 @@ interface Automated {
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
+  /** A line for the player's own log, naming cards the public line must not. */
+  readonly privateSaid?: string
 }
 
 /** The current turn's record, or a fresh one when the player has not written anything yet. */
@@ -580,6 +615,60 @@ function automate(
         state: working,
         extra: { harbors: built },
         said: `, building ${built.length === 1 ? 'a Harbor' : `${built.length} Harbors`} for free on ${joinNames(built.map((harbor) => harbor.square.label))}`,
+      })
+    }
+    case 'Frida Kahlo': {
+      const marker = cultureMarkerOf(state, player)
+      if (marker === undefined) return err('Your leader marker is not on the culture track, so there is no culture deck to draw from.')
+      const space = cultureSpaceAt(marker.step)
+      if (space === undefined) return err('Your leader marker is still at the start of the culture track, so there is no culture deck to draw from.')
+      // Space 21 is the Culture Victory panel: the ladder lists it as a level III event, but it has no deck
+      if (marker.step >= CULTURE_VICTORY_STEP) return err('Your leader marker is on the Culture Victory space, which has no culture deck to draw from.')
+      if (space.kind !== 'event') return err('Your leader marker is on a Great Person space, which has no culture deck to draw from.')
+      const sheetName = levelSheet(space.level)
+      const deck = `the ${SHEET_LABEL[sheetName]} deck`
+
+      const wanted = payload?.discard ?? []
+      if (!Array.isArray(wanted) || new Set(wanted).size !== wanted.length) {
+        return err('Choose each culture card to discard once.')
+      }
+      const own = cultureCardsOf(player)
+      const thrown = wanted.map((id) => own.find((card) => card.id === id))
+      if (thrown.some((card) => card === undefined)) return err('Choose only culture cards from your own hand to discard.')
+      const discarding = thrown.filter((card): card is Item => card !== undefined)
+
+      const holder: Playerhand = { ...player, items: player.items.filter((card) => !wanted.includes(card.id)) }
+      const discarded: GameState = {
+        ...withPlayerHand(state, holder),
+        discardedItems: [...state.discardedItems, ...discarding.map((card) => ({ ...card, hidden: true }))],
+      }
+      const room = Math.max(0, cultureHandSizeOf(discarded, holder) - cultureCardsHeld(holder))
+      const thrownText = discarding.length === 0 ? '' : `discarding ${plural(discarding.length, 'culture card')}`
+      const effectOf = (drawn: readonly string[]) => ({ frida: { discarded: discarding, drawn, sheetName } })
+      if (room === 0) {
+        return ok({
+          state: discarded,
+          extra: effectOf([]),
+          said:
+            discarding.length === 0
+              ? ', but the culture hand was already full, so nothing was drawn'
+              : `, ${thrownText}; the culture hand was already full, so nothing was drawn`,
+          ...(discarding.length === 0 ? {} : { privateSaid: `${player.username} discarded ${discarding.map(itemName).join(', ')} with ${FRIDA}` }),
+        })
+      }
+      const taken = drawCandidates(discarded, sheetName, room)
+      if (!taken.ok) return err(`No ${SHEET_LABEL[sheetName]} cards are left in the deck or the discard pile.`)
+      const cards = taken.value.items.map((card): Item => ({ ...card, ownerId: player.playerId, hidden: true }))
+      const drawer = playerOf(taken.value.state, player.playerId) ?? holder
+      const drawnText = `drawing ${cards.length} from ${deck}${cards.length < room ? ' (no more cards were left)' : ''}`
+      return ok({
+        state: withPlayerHand(taken.value.state, { ...drawer, items: [...drawer.items, ...cards] }),
+        extra: effectOf(cards.map((card) => card.id)),
+        said: `, ${thrownText === '' ? '' : `${thrownText} and `}${drawnText}`,
+        privateSaid:
+          `${player.username} ` +
+          (discarding.length === 0 ? '' : `discarded ${discarding.map(itemName).join(', ')} and `) +
+          `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}`,
       })
     }
     case 'Orville Wright': {
@@ -1050,8 +1139,19 @@ export const playCard: AssistedActionDefinition = {
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
     })
+    const logId = lastLogId(logged)
+    // Names of cards go to the player's own log only, after the public line the undo is tied to
+    const withPrivate =
+      automated.value?.privateSaid === undefined
+        ? logged
+        : appendLog(logged, {
+            username: player.username,
+            playerId: player.playerId,
+            privateLog: automated.value.privateSaid,
+            createdAt: context.at ?? null,
+          })
     return ok({
-      state: countLinesIn(logged, (automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId)),
+      state: countLinesIn(withPrivate, (automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId)),
       effect: {
         kind: 'playCard',
         item,
@@ -1061,7 +1161,7 @@ export const playCard: AssistedActionDefinition = {
         name: card.name,
         ...automated.value?.extra,
       },
-      logId: lastLogId(logged),
+      logId,
     })
   },
 
@@ -1092,6 +1192,16 @@ export const playCard: AssistedActionDefinition = {
     const drewCard = effect.drew === undefined ? undefined : player.items.find((candidate) => candidate.id === effect.drew?.itemId)
     if (effect.drew !== undefined && drewCard === undefined) {
       return blockedBy(`The unit card ${effect.name} gave is no longer in ${player.username}'s hand.`)
+    }
+    if (effect.frida !== undefined) {
+      const { drawn, discarded } = effect.frida
+      if (drawn.some((id) => !player.items.some((candidate) => candidate.id === id))) {
+        return blockedBy(`A culture card ${effect.name} drew is no longer in ${player.username}'s hand, so it cannot be undone.`)
+      }
+      // A discard reshuffled into the deck and drawn again is in the hand, and goes back with the drawn cards
+      if (discarded.some((card) => !drawn.includes(card.id) && !state.discardedItems.some((candidate) => candidate.id === card.id))) {
+        return blockedBy(`A culture card ${effect.name} discarded is no longer in the discard pile, so it cannot be undone.`)
+      }
     }
     if (effect.discarded && !state.discardedItems.some((candidate) => candidate.id === effect.item.id)) {
       return blockedBy(`${effect.name} is no longer in the discard pile.`)
@@ -1232,6 +1342,24 @@ export const playCard: AssistedActionDefinition = {
         items: [...current.items, { ...drewCard, hidden: true, ownerId: null }],
       }
       current = shuffleSheetTwice(current, effect.drew.sheetName)
+      hand = playerOf(current, player.playerId) ?? hand
+    }
+    if (effect.frida !== undefined) {
+      const { drawn, discarded, sheetName } = effect.frida
+      // The drawn cards go back to the deck first: a discard that was reshuffled and drawn again is among them
+      const returning = hand.items.filter((candidate) => drawn.includes(candidate.id))
+      current = {
+        ...withPlayerHand(current, { ...hand, items: hand.items.filter((candidate) => !drawn.includes(candidate.id)) }),
+        items: [...current.items, ...returning.map((card) => ({ ...card, hidden: true, ownerId: null }))],
+      }
+      const restored = discarded.map((card) => card.id)
+      hand = playerOf(current, player.playerId) ?? hand
+      current = {
+        ...withPlayerHand(current, { ...hand, items: [...hand.items, ...discarded] }),
+        discardedItems: current.discardedItems.filter((candidate) => !restored.includes(candidate.id)),
+        items: current.items.filter((candidate) => !restored.includes(candidate.id)),
+      }
+      current = shuffleSheetTwice(current, sheetName)
       hand = playerOf(current, player.playerId) ?? hand
     }
     if (effect.grantId !== undefined) {

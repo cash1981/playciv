@@ -37,8 +37,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'from', 'to', 'figureId', 'figureIds'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, harbors, from, to, figureId and figureIds, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'discard', 'from', 'to', 'figureId', 'figureIds'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, harbors, discard, from, to, figureId and figureIds, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -94,6 +94,10 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     }
     harbors = parsed
   }
+  const discard = args['discard']
+  if (discard !== undefined && (!Array.isArray(discard) || discard.length > 20 || !discard.every(isId))) {
+    return 'discard must be a list of at most 20 card ids'
+  }
   const figureId = args['figureId']
   if (figureId !== undefined && !isId(figureId)) return 'figureId must be a piece id'
   const figureIds = args['figureIds']
@@ -128,6 +132,7 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     ...(substitute === undefined ? {} : { substitute }),
     ...(convert === undefined ? {} : { convert }),
     ...(harbors === undefined ? {} : { harbors }),
+    ...(discard === undefined ? {} : { discard: discard as readonly string[] }),
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
     ...(figureId === undefined ? {} : { figureId }),

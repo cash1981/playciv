@@ -674,6 +674,15 @@ export type AssistedEffect =
         readonly cityPieceId: string
         readonly square: { readonly column: number; readonly row: number; readonly label: string }
       }[]
+      /**
+       * Frida Kahlo: the culture cards discarded (as they stood in the hand, so an undo puts the same ones back),
+       * the ids of the cards drawn in their place and the deck they came from. Never projected.
+       */
+      readonly frida?: {
+        readonly discarded: readonly Item[]
+        readonly drawn: readonly string[]
+        readonly sheetName: SheetName
+      }
       /** The free culture advances the card banked for the Advance buttons (Andrew Carnegie). */
       readonly freeAdvances?: number
       /** The Uranium substitution the card armed (Marie Curie), or `null` when it was not armed. */

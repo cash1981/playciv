@@ -210,6 +210,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Frank Lloyd Wright', 'gains trade and culture equal to the buildings in your cities'],
   ['Andrew Carnegie', 'earns one free culture advance for every 3 coins you have, made one space at a time with the Advance buttons'],
   ['Jacques Cousteau', 'builds up to 3 Harbors in your cities for free, on the squares you choose'],
+  ['Frida Kahlo', 'discards the culture cards you choose, then draws culture cards from the deck of the area your culture marker is in until your hand is full'],
   ['Jerry Garcia', "devotes every one of your cities to the arts as your capital's action, for the culture each city's board gives, the other cities may still act"],
   ['Ada Lovelace', 'gives one extra city action this turn: a second action of a city is taken without the question'],
   ['Akira Kurosawa', 'gains you 1 culture each time another player devotes a city to the arts, while the card is faceup'],
@@ -300,6 +301,8 @@ export interface PlayableCard {
   readonly conversion?: { readonly trade: number; readonly culture: number } | null
   /** The squares Jacques Cousteau can put a free Harbor on, null for every other card. */
   readonly harbors?: readonly HarborChoice[] | null
+  /** The culture cards in the viewer's own hand that Frida Kahlo may discard, null for every other card. Own view only. */
+  readonly cultureHand?: readonly { readonly itemId: string; readonly name: string }[] | null
   /** Resources the card can substitute for Uranium (Marie Curie), empty for every other card. */
   readonly substituteResources: readonly string[]
   readonly status: PlayableCardStatus
