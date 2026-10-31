@@ -1203,6 +1203,7 @@ const gianniniBuild: AssistedActionDefinition = {
         (other) =>
           other.status === 'applied' &&
           ((other.effect.kind === 'build' && 'replaced' in other.effect && other.effect.replaced?.piece.id === effect.pieceId) ||
+            (other.effect.kind === 'gianniniBuild' && other.effect.replaced?.piece.id === effect.pieceId) ||
             (other.effect.kind === 'upgradeBuildings' && other.effect.flipped.some((flip) => flip.from.id === effect.pieceId))),
       )
       if (holder !== undefined) {
@@ -1211,6 +1212,26 @@ const gianniniBuild: AssistedActionDefinition = {
       // What it replaced stands again all the same, unless a Great Person put in reserve has left the player's area
       const reservedGone = reservedUndoBlock(state, record.playerId, effect)
       if (reservedGone !== undefined) return blockedBy(reservedGone)
+      // ...and unless the square or the city cannot take it back now: the piece goes where it stood, so nothing else may stand there
+      const before = effect.replaced?.piece ?? effect.reserved?.piece
+      if (before !== undefined) {
+        const taken = state.board.pieces.some((other) => {
+          if (other.category !== 'building' && other.category !== 'wonder' && other.category !== 'greatperson') return false
+          const spot = mapCellOf(state.board, other)
+          return spot !== null && spot.column === effect.square.column && spot.row === effect.square.row
+        })
+        if (taken) return blockedBy(`Something stands on ${effect.square.label} now, where the ${before.label} goes back. Take it off first.`)
+        if (effect.replaced !== undefined) {
+          const why = buildSquareRefusal(
+            state,
+            player,
+            effect.cityPieceId,
+            { kind: before.category === 'wonder' ? 'wonder' : 'building', assetId: before.assetId },
+            effect.square,
+          )
+          if (why !== undefined) return blockedBy(`The ${before.label} cannot go back: ${why}`)
+        }
+      }
       return ok({
         state: putReplacedBack(state, player, effect, at ?? null),
         text: `${player.username}'s free ${effect.label} from ${GIANNINI} was undone: it had already left ${effect.square.label} and the free building can be taken again${replacedText(effect)}`,

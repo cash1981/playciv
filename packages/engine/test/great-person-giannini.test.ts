@@ -464,6 +464,57 @@ describe('A. P. Giannini: a building that replaces one', () => {
     expect(status(undone).status).toBe('ready')
   })
 
+  it('refuses to put the old building back onto a square that something else stands on now', () => {
+    const state = templeScene()
+    const built = unwrap(freeBuild(state, marketOnTemple(state)))
+    const market = piecesOf(built, MARKET)[0] as BoardPiece
+    const gone = { ...built, board: { ...built.board, pieces: built.board.pieces.filter((p) => p.id !== market.id) } }
+    const crowded = put(gone, 'buildings/granary', A2.column, A2.row)
+    expect(unwrapErr(undoRejection(crowded, 'free-1'))).toMatchObject({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      reason: expect.stringContaining('Something stands on A2'),
+    })
+    // Once the square is clear again the undo goes through and the Temple stands as before
+    const granary = piecesOf(crowded, 'buildings/granary')[0] as BoardPiece
+    const cleared = { ...crowded, board: { ...crowded.board, pieces: crowded.board.pieces.filter((p) => p.id !== granary.id) } }
+    expect(piecesOf(undoByVote(cleared, 'free-1'), TEMPLE)).toHaveLength(1)
+  })
+
+  it('refuses to put the old star building back when the city has another one now', () => {
+    const state = templeScene()
+    const built = unwrap(freeBuild(state, marketOnTemple(state)))
+    const market = piecesOf(built, MARKET)[0] as BoardPiece
+    const gone = { ...built, board: { ...built.board, pieces: built.board.pieces.filter((p) => p.id !== market.id) } }
+    const another = put(gone, MARKET, C2.column, C2.row)
+    expect(JSON.stringify(unwrapErr(undoRejection(another, 'free-1')))).toContain('cannot go back')
+  })
+
+  it('refuses to undo while a later free building replaced this one', () => {
+    const state = templeScene()
+    const built = unwrap(freeBuild(state, marketOnTemple(state)))
+    const market = piecesOf(built, MARKET)[0] as BoardPiece
+    const gone = { ...built, board: { ...built.board, pieces: built.board.pieces.filter((p) => p.id !== market.id) } }
+    const later = {
+      ...gone,
+      assistedActions: [
+        ...gone.assistedActions,
+        {
+          id: 'later-free',
+          kind: 'gianniniBuild' as const,
+          playerId: CASH1981,
+          turnNumber: 2,
+          phase: 'SOT' as const,
+          usageKey: null,
+          at: AT,
+          logId: 'later-free-log',
+          status: 'applied' as const,
+          effect: { kind: 'gianniniBuild', replaced: { piece: market, historyId: 'h' } } as never,
+        },
+      ],
+    }
+    expect(JSON.stringify(unwrapErr(undoRejection(later, 'free-1')))).toContain('Undo that first')
+  })
+
   it('refuses to undo the invest while the replacing building stands, and allows it once that is undone', () => {
     const state = templeScene()
     const built = unwrap(freeBuild(state, marketOnTemple(state)))

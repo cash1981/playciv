@@ -233,9 +233,10 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   most one building a turn. The Board Undo refuses the placement like Cousteau's
   Harbors; undoing the investment, or the play that turned him faceup, is refused
   while the building stands. Undoing the building puts back what it replaced, and
-  works when the piece has been taken off by hand, so the investment is never stuck;
-  it is refused when the piece was moved or replaced by a later build or upgrade
-  that is still in force.
+  works when the piece has been taken off by hand, so the investment is never stuck,
+  provided the old piece can stand again (nothing else is on its square, the city
+  has no other star building); it is refused when the piece was moved or replaced by
+  a later build, upgrade or free building that is still in force.
 - Frida Kahlo discards the culture cards the player ticks (none is allowed) and
   draws until the culture hand size from the deck of the area the culture marker is
   in, the level Patronage uses (a Great Person space and the last space are in an
