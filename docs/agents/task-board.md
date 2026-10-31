@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### great-person-arts
+
+- **Owner:** Claude Code (Sonnet 5.5)
+- **Branch:** `feat/great-person-arts`
+- **Brief:** `docs/agents/tasks/great-person-arts.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/assisted*.ts`, `card-timing.ts`, `city-actions.ts`, `state.ts`, `packages/server/src/routes/play.ts`, `packages/web/src/views/{CityGather,CityCard,BuildPicker}.tsx`, `packages/web/src/lib/api.ts`
+- **Notes:** `state.ts` is claimed only for effect types, not the `PlayerView` shape.
 
 ## Format
 
