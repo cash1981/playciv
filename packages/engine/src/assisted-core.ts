@@ -221,6 +221,8 @@ export interface PlayCardPayload {
   readonly convert?: { readonly from: 'trade' | 'culture'; readonly amount: number }
   /** Jacques Cousteau: the squares of the Harbors to build, up to 3, each in the outskirts of the named city. */
   readonly harbors?: readonly { readonly cityPieceId: string; readonly column: number; readonly row: number }[]
+  /** Frida Kahlo: the ids of the culture cards in the player's own hand to discard before drawing back up. None is allowed. */
+  readonly discard?: readonly string[]
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
   /** The map square whose figures move (Galileo and the movement culture cards). */
@@ -247,6 +249,14 @@ export interface GovernmentPayload {
 export interface InvestPayload {
   readonly source: string
   readonly card: InvestmentCard
+}
+
+/** What `gianniniBuild` carries: the city, the building and the empty square for A. P. Giannini's free building. */
+export interface GianniniBuildPayload {
+  readonly cityPieceId: string
+  readonly assetId: string
+  readonly column: number
+  readonly row: number
 }
 
 /** What `communism` carries: the square whose figures may not leave this turn. */
@@ -287,6 +297,7 @@ export type AssistedPayload =
   | PlayCardPayload
   | GovernmentPayload
   | InvestPayload
+  | GianniniBuildPayload
   | CommunismPayload
   | SteamPowerPayload
   | FeudalismHarvestPayload

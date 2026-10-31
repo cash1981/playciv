@@ -8,7 +8,8 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { findBoardAsset, mapCellOf, mapTop, markPhasesDone, placePiece, unwrap } from '@civ/engine'
+import { cultureCellCenter, findBoardAsset, leaderAssetId, mapCellOf, mapTop, markPhasesDone, placePiece, unwrap } from '@civ/engine'
+import type { CivItem } from '@civ/engine'
 
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
@@ -200,6 +201,9 @@ describe('playing a card through the actions route', () => {
     ]) {
       expect((await send({ itemId: t.itemId, targets: [], harbors })).status).toBe(400)
     }
+    for (const discard of ['card-1', [1], [null], ['bad id!'], Array.from({ length: 21 }, (_, index) => `card-${index}`), { 0: 'card-1' }]) {
+      expect((await send({ itemId: t.itemId, targets: [], discard })).status).toBe(400)
+    }
     expect((await send({ itemId: t.itemId, targets: [], extra: 1 })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [] }, { family: 'x' })).status).toBe(400)
     // A field of the body that no action reads is refused too, not ignored
@@ -211,6 +215,59 @@ describe('playing a card through the actions route', () => {
     expect(empty.status).toBe(400)
     expect(await empty.json()).toMatchObject({ message: 'args must be an object' })
     expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+  })
+
+  it('carries Frida Kahlo’s discard through the route, and shows the culture hand to its owner only', async () => {
+    const t = await table('Frida Kahlo')
+    const saved = await repo.findGame(t.gameId)
+    if (saved === undefined) throw new Error('missing game')
+    const opened = unwrap(markPhasesDone(saved, { playerId: t.starterId, turnNumber: 1, upToPhase: 'TRADE' }))
+    // A Japanese leader marker on space 8 (the level II culture deck) and two level I culture cards in the hand
+    const assetId = leaderAssetId('Japanese', 'Red')
+    const asset = assetId === undefined ? undefined : findBoardAsset(assetId)
+    if (assetId === undefined || asset === undefined) throw new Error('missing leader')
+    const colored = {
+      ...opened,
+      players: opened.players.map((candidate) =>
+        candidate.playerId === t.starterId
+          ? { ...candidate, color: 'Red', civilization: { kind: 'civ', name: 'Japanese' } as unknown as CivItem }
+          : candidate,
+      ),
+    }
+    const centre = cultureCellCenter(colored.board, 8)
+    const marked = unwrap(placePiece(colored, { playerId: t.starterId, assetId, x: Math.round(centre.x - asset.width / 2), y: 10 }))
+    const cards = marked.items.filter((item) => item.sheetName === 'CULTURE_1').slice(0, 2)
+    const held = new Set(cards.map((card) => card.id))
+    await repo.saveGame({
+      ...marked,
+      items: marked.items.filter((item) => !held.has(item.id)),
+      players: marked.players.map((candidate) =>
+        candidate.playerId === t.starterId
+          ? { ...candidate, items: [...candidate.items, ...cards.map((card) => ({ ...card, hidden: true, ownerId: t.starterId }))] }
+          : candidate,
+      ),
+    })
+
+    const mine = await view(t.gameId, t.starter)
+    const listed = mine.you?.playableCards.find((card) => card.itemId === t.itemId) as unknown as { cultureHand: { itemId: string }[] }
+    expect(listed.cultureHand.map((card) => card.itemId).sort()).toEqual([...held].sort())
+    expect(JSON.stringify(await view(t.gameId, t.other))).not.toContain('"cultureHand"')
+
+    const [first] = cards
+    const response = await post(t.starter, actions(t.gameId), {
+      action: 'playCard',
+      requestId: 'req-1',
+      rev: mine.rev,
+      args: { itemId: t.itemId, targets: [], discard: [first?.id] },
+    })
+    expect(response.status).toBe(200)
+    const after = await repo.findGame(t.gameId)
+    const hand = after?.players.find((candidate) => candidate.playerId === t.starterId)?.items ?? []
+    expect(hand.filter((item) => item.kind.startsWith('culture'))).toHaveLength(2)
+    expect(hand.some((item) => item.id === first?.id)).toBe(false)
+    expect(after?.discardedItems.some((item) => item.id === first?.id)).toBe(true)
+    // The other player's view carries no card name or id of it
+    expect(JSON.stringify(await view(t.gameId, t.other))).not.toContain(first?.id as string)
   })
 
   it('carries Albert Einstein’s conversion through the route', async () => {

@@ -271,6 +271,7 @@ describe('the phase tabs', () => {
     const startOfTurn = {
       government: { status: 'ready', reason: 'You may change government once in your Start of Turn.', current: 'Despotism', options: [], canEnterAnarchy: true },
       feudalism: null,
+      giannini: null,
       invest: {
         status: 'ready',
         reason: 'Invest one coin token this turn.',

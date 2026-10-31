@@ -49,6 +49,7 @@ import {
 } from './assisted-core.js'
 import { DARWIN_NAME, darwinTradeOf, greatPersonActionIdOf, payKurosawa, takeBackKurosawa, useDarwin } from './assisted-arts.js'
 import { playCard } from './assisted-cards.js'
+import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
 import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
 import { CITY_ACTIONS } from './assisted-city.js'
 import { ABILITY_ACTIONS } from './assisted-abilities.js'
@@ -59,7 +60,6 @@ import {
   cultureAdvance,
   cultureAdvanceSkip,
   drawCandidates,
-  ownAreaOf,
   shuffleSheetTwice,
 } from './assisted-culture.js'
 import type {
@@ -73,10 +73,8 @@ import type {
 } from './assisted-core.js'
 import { blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
-  AREA_LABEL_HEIGHT,
   areaAt,
   areaSlotRegion,
-  boardAreas,
   findBoardAsset,
   isInWondersArea,
   nextFreeSlot,
@@ -487,34 +485,6 @@ function wonderBackInDeck(state: GameState, card: Item): GameState {
   return { ...state, items }
 }
 
-/** What a build replaced, as its effect keeps it: a building or wonder that was removed, or a Great Person that was held in reserve. */
-interface ReplacedEffect {
-  readonly replaced?: { readonly piece: BoardPiece; readonly historyId: string } | undefined
-  readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string } | undefined
-}
-
-/** ", and the Library it replaced was put back": the part of an undo line about a replaced building, wonder or Great Person. */
-function replacedText(effect: ReplacedEffect): string {
-  const old = effect.replaced?.piece ?? effect.reserved?.piece
-  if (old === undefined) return ''
-  const name = old.category === 'building' ? (buildingNameOf(old.assetId) ?? old.label) : old.label
-  return `, and ${old.category === 'wonder' ? name.replace(/^The /, 'the ') : `the ${name}`} it replaced was put back`
-}
-
-/**
- * Whether the Great Person a build held in reserve can be moved back: it is still on the board and
- * still in its owner's player area. `undefined` when it can, else the sentence that says why not.
- */
-function reservedUndoBlock(state: GameState, ownerId: string, effect: ReplacedEffect): string | undefined {
-  if (effect.reserved === undefined) return undefined
-  const person = state.board.pieces.find((candidate) => candidate.id === effect.reserved?.piece.id)
-  const name = effect.reserved.piece.label
-  if (person === undefined) return `The ${name} is no longer on the board, so the build cannot be undone.`
-  const inArea =
-    areaAt(boardAreas(state.board, state.players), person.x + person.width / 2, person.y + person.height / 2)?.playerId === ownerId
-  return inArea ? undefined : `The ${name} has left your player area. Move it back first.`
-}
-
 /**
  * Puts back the markers a build used up: the Building Program marker, then the caravan,
  * unless the city has received another fortification or caravan since (one per city).
@@ -532,21 +502,6 @@ function markersBack(
   return effect.caravan === undefined || !cityMarkerMayReturn(withMarker.board, effect.caravan.piece)
     ? withMarker
     : placeBack(withMarker, player, effect.caravan.piece, at)
-}
-
-/** Puts back what a build replaced: a removed piece exactly as it was, or a Great Person on the square it stood on. */
-function putReplacedBack(state: GameState, player: Playerhand, effect: ReplacedEffect, at: string | null): GameState {
-  if (effect.replaced !== undefined) return placeBack(state, player, effect.replaced.piece, at)
-  if (effect.reserved === undefined) return state
-  const back = movePieceUnchecked(state, {
-    playerId: player.playerId,
-    pieceId: effect.reserved.piece.id,
-    x: effect.reserved.piece.x,
-    y: effect.reserved.piece.y,
-    snap: false,
-    ...(at === null ? {} : { at }),
-  })
-  return back ?? state
 }
 
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
@@ -678,60 +633,6 @@ function placeWonder(
     historyId: moveEntry.id,
     wonder: { from: { x: piece.x, y: piece.y }, ownerHistoryId: ownerEntry.id },
   })
-}
-
-/**
- * Takes the building, wonder or Great Person a new piece replaces off its square (base rules p. 17
- * and 18: the old piece goes first, then the new one is placed on the empty square). A building or
- * wonder is removed from the board; a Great Person is held in reserve, which is the player's own
- * area, where it has no effect. The piece is the one standing on the square; `square.replaces` was
- * read from this same state by `buildOptionsOf`. `Err` is a sentence for the player and nothing is
- * changed.
- */
-function removeReplaced(
-  state: GameState,
-  player: Playerhand,
-  square: BuildSquare,
-  at: { readonly at?: string },
-): Result<
-  { readonly state: GameState; readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean },
-  string
-> {
-  const replaces = square.replaces
-  if (replaces === undefined) return err('There is nothing to replace on that square.')
-  const old = state.board.pieces.find((piece) => {
-    if (piece.category !== 'building' && piece.category !== 'wonder' && piece.category !== 'greatperson') return false
-    if (piece.assetId !== replaces.assetId) return false
-    const cell = mapCellOf(state.board, piece)
-    return cell !== null && cell.column === square.column && cell.row === square.row
-  })
-  if (old === undefined) return err(`${replaces.label} is no longer on ${square.label}.`)
-
-  if (old.category === 'greatperson') {
-    const area = ownAreaOf(state, player.playerId)
-    if (area === undefined) return err('You have no player area on the board to hold the Great Person in.')
-    const [slotX, slotY] = nextFreeSlot(state.board, area, state.board.pieces, {
-      x: area.x + 20,
-      y: area.y + AREA_LABEL_HEIGHT + 10,
-    })
-    const held = movePieceUnchecked(state, {
-      playerId: player.playerId,
-      pieceId: old.id,
-      x: slotX,
-      y: slotY,
-      ...at,
-    })
-    const entry = held?.board.history.at(-1)
-    if (held === undefined || entry === undefined || entry.change.kind !== 'move') {
-      return err(`${replaces.label} on ${square.label} could not be put back in your player area.`)
-    }
-    return ok({ state: held, piece: old, historyId: entry.id, reserved: true })
-  }
-
-  const removed = removePiece(state, { playerId: player.playerId, pieceId: old.id, ...at })
-  const entry = removed.ok ? removed.value.board.history.at(-1) : undefined
-  if (!removed.ok || entry === undefined) return err(`${replaces.label} on ${square.label} could not be taken off the board.`)
-  return ok({ state: removed.value, piece: old, historyId: entry.id, reserved: false })
 }
 
 /**
@@ -945,13 +846,7 @@ const build: AssistedActionDefinition = {
     const where =
       made.kind === 'placed'
         ? ` on square ${made.square.label}` +
-          (replaced === undefined || square?.replaces === undefined
-            ? ''
-            : square.replaces.kind === 'wonder'
-              ? `, replacing ${square.replaces.label.replace(/^The /, 'the ')}, which is destroyed`
-              : square.replaces.kind === 'greatperson'
-                ? `, replacing the ${square.replaces.label} (Great Person), which goes back to the player area`
-                : `, replacing the ${square.replaces.label}`) +
+          (replaced === undefined ? '' : replacingText(square?.replaces)) +
           (payload.item.kind === 'army' && square?.note !== undefined
             ? ' (an enemy figure is there, so the outcome is to be settled by hand)'
             : '')
@@ -1259,7 +1154,8 @@ const startPayloadOf = (payload: AssistedPayload | undefined): StartBuildingProg
   typeof payload.cityPieceId === 'string' &&
   !('item' in payload) &&
   !('resource' in payload) &&
-  !('scoutPieceId' in payload)
+  !('scoutPieceId' in payload) &&
+  !('assetId' in payload)
     ? { cityPieceId: payload.cityPieceId }
     : undefined
 
@@ -1388,7 +1284,7 @@ const startBuildingProgram: AssistedActionDefinition = {
 
 /** The `devoteToTheArts` payload, or `undefined` when the payload is another action's or missing. */
 const devotePayloadOf = (payload: AssistedPayload | undefined): DevoteToTheArtsPayload | undefined =>
-  payload !== undefined && 'cityPieceId' in payload && !('item' in payload) && !('resource' in payload) && !('scoutPieceId' in payload)
+  payload !== undefined && 'cityPieceId' in payload && !('item' in payload) && !('resource' in payload) && !('scoutPieceId' in payload) && !('assetId' in payload)
     ? (payload as DevoteToTheArtsPayload)
     : undefined
 
@@ -2082,12 +1978,13 @@ export function reverseAssistedAction(
   if (effect.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }
-  // Galileo's (and Cousteau's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
+  // Galileo's (and Cousteau's, and Giannini's free building's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
   // the forward moves, which would teleport the already-restored figures to the destination again.
   if (
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
-      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined))
+      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
+    effect.kind === 'gianniniBuild'
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }

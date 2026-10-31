@@ -42,6 +42,7 @@ function sotWith(overrides: Partial<StartOfTurn> = {}): StartOfTurn {
       ],
       totalCoins: 2,
     },
+    giannini: null,
     cityLimit: { have: 2, max: 2 },
     cities: [
       { pieceId: 'c1', label: 'Capital B3' },
@@ -626,5 +627,130 @@ describe('growing a capital into a metropolis', () => {
     cleanup()
     renderChoices(withAgriculture([{ label: 'Metropolis B3' }]))
     expect(screen.queryByRole('region', { name: 'Metropolis' })).toBeNull()
+  })
+})
+
+describe('A. P. Giannini', () => {
+  const choices = [
+    {
+      assetId: 'buildings/library',
+      label: 'Library',
+      squares: [
+        { cityPieceId: 'c1', cityLabel: 'Capital B3', column: 2, row: 2, label: 'C3' },
+        { cityPieceId: 'c2', cityLabel: 'City F6', column: 5, row: 5, label: 'F6' },
+      ],
+    },
+    { assetId: 'buildings/granary', label: 'Granary', squares: [{ cityPieceId: 'c1', cityLabel: 'Capital B3', column: 1, row: 3, label: 'B4' }] },
+  ]
+  const giannini = (status: string, reason: string, list: readonly unknown[] = choices) =>
+    sotWith({ giannini: { status, reason, choices: list } } as unknown as Partial<StartOfTurn>)
+  const READY_TEXT = 'Build one building you have unlocked in one of your cities for free (A. P. Giannini).'
+  const section = () => screen.getByRole('region', { name: 'A. P. Giannini: a free building' })
+
+  it('has no section without his card, or before a coin was invested', () => {
+    renderChoices(viewOf(sotWith()))
+    expect(screen.queryByRole('region', { name: 'A. P. Giannini: a free building' })).toBeNull()
+    cleanup()
+    renderChoices(viewOf(giannini('unavailable', 'Invest a coin while A. P. Giannini is faceup first.', [])))
+    expect(screen.queryByRole('region', { name: 'A. P. Giannini: a free building' })).toBeNull()
+  })
+
+  it('needs a building and a square, then sends the choice and clears the form', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    renderChoices(viewOf(giannini('ready', READY_TEXT)))
+    const button = within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    const building = within(section()).getByRole('combobox', { name: 'Building' }) as HTMLSelectElement
+    const square = within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement
+    expect(square.disabled).toBe(true)
+
+    fireEvent.change(building, { target: { value: 'buildings/library' } })
+    expect(within(square).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Choose a square',
+      'Capital B3 — C3',
+      'City F6 — F6',
+    ])
+    expect(button.disabled).toBe(true)
+    fireEvent.change(square, { target: { value: 'c2:5:5' } })
+    expect(button.disabled).toBe(false)
+    fireEvent.click(button)
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'gianniniBuild', expect.any(String), 6, {
+      cityPieceId: 'c2',
+      assetId: 'buildings/library',
+      column: 5,
+      row: 5,
+    })
+    await waitFor(() => expect(building.value).toBe(''))
+    expect(square.value).toBe('')
+  })
+
+  it('says what a square replaces, in the option and in a note once it is chosen, and sends the same payload', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const replacing = [
+      {
+        assetId: 'buildings/market',
+        label: 'Market',
+        squares: [
+          {
+            cityPieceId: 'c1',
+            cityLabel: 'City B2',
+            column: 2,
+            row: 1,
+            label: 'C2',
+            replaces: { assetId: 'buildings/library', label: 'Library', kind: 'building' },
+            note: 'Replaces your Library, which is taken off the board and goes back to the supply.',
+          },
+          { cityPieceId: 'c2', cityLabel: 'City F6', column: 5, row: 5, label: 'F6' },
+        ],
+      },
+    ]
+    renderChoices(viewOf(giannini('ready', READY_TEXT, replacing)))
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/market' } })
+    const square = within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement
+    expect(within(square).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Choose a square',
+      'City B2 — C2 (replaces your Library)',
+      'City F6 — F6',
+    ])
+    // A plain square says nothing; the one that replaces says what happens to the old building
+    expect(within(section()).queryByText(/Replaces your Library/)).toBeNull()
+    fireEvent.change(square, { target: { value: 'c2:5:5' } })
+    expect(within(section()).queryByText(/Replaces your Library/)).toBeNull()
+    fireEvent.change(square, { target: { value: 'c1:2:1' } })
+    expect(within(section()).getByText('Replaces your Library, which is taken off the board and goes back to the supply.')).toBeTruthy()
+    fireEvent.click(within(section()).getByRole('button', { name: 'Build for free' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'gianniniBuild', expect.any(String), 6, {
+      cityPieceId: 'c1',
+      assetId: 'buildings/market',
+      column: 2,
+      row: 1,
+    })
+  })
+
+  it('forgets the square when another building is chosen, and drops a choice that a refresh took away', () => {
+    const view = viewOf(giannini('ready', READY_TEXT))
+    const { rerender } = renderChoices(view)
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/library' } })
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Square' }), { target: { value: 'c1:2:2' } })
+    expect((within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement).disabled).toBe(false)
+
+    // The square is taken: the selection no longer counts, so nothing stale can be sent
+    const refreshed = giannini('ready', READY_TEXT, [{ ...choices[0], squares: [choices[0]?.squares[1]] }, choices[1]])
+    rerender(<StartOfTurnChoices gameId="g1" view={viewOf(refreshed)} busy={false} readOnly={false} run={run} />)
+    expect((within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement).value).toBe('')
+    expect((within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/granary' } })
+    expect((within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('stays as a compact disabled row once the free building was built', () => {
+    renderChoices(viewOf(giannini('used', 'The free building has already been done this turn.', [])))
+    const button = within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(within(section()).getByText('Used')).toBeTruthy()
+    expect(within(section()).queryByRole('combobox')).toBeNull()
   })
 })

@@ -86,6 +86,7 @@ export function PlayCardControl({
   const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
   const [convertAmount, setConvertAmount] = useState('')
   const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
+  const [discardIds, setDiscardIds] = useState<readonly string[]>([])
   const [moveFrom, setMoveFrom] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveTo, setMoveTo] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveHint, setMoveHint] = useState<string | null>(null)
@@ -121,6 +122,10 @@ export function PlayCardControl({
   const chosenHarborKeys =
     harborChoices === null ? [] : harborKeys.filter((key) => harborChoices.some((choice) => harborKeyOf(choice) === key))
   const harborsValid = harborChoices === null || (chosenHarborKeys.length >= 1 && chosenHarborKeys.length <= 3)
+  const cultureHand = card.cultureHand ?? null
+  // A refresh can take a card out of the hand: only the ticked cards still there count
+  const chosenDiscards =
+    cultureHand === null ? [] : discardIds.filter((id) => cultureHand.some((held) => held.itemId === id))
   const isGalileo = card.name === GALILEO_NAME
   const cardMove = card.mapMove ?? null
   const isMapMove = isGalileo || cardMove !== null
@@ -241,7 +246,7 @@ export function PlayCardControl({
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -260,6 +265,7 @@ export function PlayCardControl({
                   .filter((choice) => chosenHarborKeys.includes(harborKeyOf(choice)))
                   .map((choice) => ({ cityPieceId: choice.cityPieceId, column: choice.column, row: choice.row })),
               }),
+          ...(cultureHand === null ? {} : { discard: cultureHand.filter((held) => chosenDiscards.includes(held.itemId)).map((held) => held.itemId) }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
           ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
@@ -685,6 +691,29 @@ export function PlayCardControl({
                   </label>
                 )
               })}
+            </fieldset>
+          )}
+          {cultureHand !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Which culture cards do you want to discard?</legend>
+              {cultureHand.length === 0 && <p className="muted">You hold no culture cards to discard.</p>}
+              {cultureHand.map((held) => {
+                const checked = chosenDiscards.includes(held.itemId)
+                return (
+                  <label key={held.itemId} className="play-card-target">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled}
+                      onChange={() =>
+                        setDiscardIds(checked ? chosenDiscards.filter((id) => id !== held.itemId) : [...chosenDiscards, held.itemId])
+                      }
+                    />{' '}
+                    Discard {held.name}
+                  </label>
+                )
+              })}
+              <p className="muted">You then draw back up to your culture hand size from the deck for the area your culture marker is in.</p>
             </fieldset>
           )}
           <p className="muted play-card-note">

@@ -220,6 +220,36 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   A devotion that Darwin or Kurosawa changed names the card play that made it so
   (`darwinActivationId`, `cardActionId` on the payment), and that card play cannot
   be undone until the devotion is.
+- A. P. Giannini, faceup and not blockaded when the coin is invested, gives a free
+  building: the `invest` effect carries `giannini: true` and a separate Start of
+  Turn action `gianniniBuild` (once a turn, usage key `giannini`) builds it, from the
+  buildings the player has unlocked (a basic building whose upgrade is unlocked is
+  left out) on a square in the outskirts of one of their cities that Build would
+  offer: a star building (Market, Bank, Temple, Cathedral, Barracks, Academy) is
+  once per city and replaces the one the city has, and a building may replace one
+  of the player's own, exactly as Build does (the replaced piece is taken off first,
+  and a Great Person goes back to the player area). No cost and no production. It is not a city action, so it neither asks
+  about a second action nor uses Ada Lovelace. Invest is once a turn, so he gives at
+  most one building a turn. The Board Undo refuses the placement like Cousteau's
+  Harbors; undoing the investment, or the play that turned him faceup, is refused
+  while the building stands. Undoing the building puts back what it replaced, and
+  works when the piece has been taken off by hand, so the investment is never stuck,
+  provided the old piece can stand again (nothing else is on its square, the city
+  has no other star building); it is refused when the piece was moved or replaced by
+  a later build, upgrade or free building that is still in force.
+- Frida Kahlo discards the culture cards the player ticks (none is allowed) and
+  draws until the culture hand size from the deck of the area the culture marker is
+  in, the level Patronage uses (a Great Person space and the last space are in an
+  area; only the start space has none and is refused, and the card stays). With
+  Mysticism every place in the hand is a draw of two with one kept, a pending choice
+  each (`<request id>`, `<request id>:2`, as Cristo Redentor does), and she waits
+  for an earlier choice. If the deck runs out the discard pile is reshuffled, which
+  can deal a just discarded card back. The public line gives counts only and the
+  names of drawn cards are in the player's private log (with Mysticism the line of the choice names the card not kept, as any card choice does); the cards she discards go
+  to the public discard pile and show in the Revealed and Discarded list, as any
+  discard does. Undo returns the drawn cards to the deck (also after the choices,
+  from the hand or the discard pile) and the discards to the hand, and is refused
+  when a kept card has left the hand or a discard has left the pile.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

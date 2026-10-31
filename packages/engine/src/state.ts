@@ -24,7 +24,7 @@ import { cityProductionsOf } from './city-production.js'
 import { tradeEstimateOf } from './trade-estimate.js'
 import type { TradeEstimate } from './trade-estimate.js'
 import type { PlacedBuildItem, UnitBuildItem, UnitType, WallsBuildItem } from './build-item.js'
-import type { CityBuildOptions } from './build-options.js'
+import type { CityBuildOptions, ReplacedPiece } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
 import type { CityActionOptions, UpgradeFamilyOption } from './city-actions.js'
@@ -432,6 +432,7 @@ export type AssistedActionKind =
   | 'feudalismHarvest'
   | 'switchGovernment'
   | 'invest'
+  | 'gianniniBuild'
   | 'foundCity'
   | 'assignScout'
   | 'devoteToTheArts'
@@ -558,6 +559,24 @@ export type AssistedEffect =
       readonly grantId: string | null
       /** The free advance an Arab investment gave, or `null`. */
       readonly advance: CultureAdvanceEffect | null
+      /** A. P. Giannini was faceup and active when the coin was invested: one free building is owed (`gianniniBuild`). */
+      readonly giannini?: true
+    }
+  | {
+      /** A. P. Giannini's free building after an invest: the city, the building and the square, and the piece it put on the board. */
+      readonly kind: 'gianniniBuild'
+      readonly cityPieceId: string
+      readonly assetId: string
+      /** The building's display name, for the log and the undo. */
+      readonly label: string
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      readonly pieceId: string
+      /** The board history entry that placed it. */
+      readonly historyId: string
+      /** The limited building this one replaced, as `build` keeps it: exactly as it stood, and the entry that removed it. Absent when the square was empty. */
+      readonly replaced?: { readonly piece: BoardPiece; readonly historyId: string }
+      /** The Great Person this one replaced, held in the player's area, as `build` keeps it. Absent when none was replaced. */
+      readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string }
     }
   | {
       /** A city founded in place of a scout (or an army under the Republic). */
@@ -674,6 +693,18 @@ export type AssistedEffect =
         readonly cityPieceId: string
         readonly square: { readonly column: number; readonly row: number; readonly label: string }
       }[]
+      /**
+       * Frida Kahlo: the culture cards discarded (as they stood in the hand, so an undo puts the same ones back),
+       * the ids of the cards drawn in their place and the deck they came from. Never projected.
+       */
+      readonly frida?: {
+        readonly discarded: readonly Item[]
+        /** Every card drawn: with Mysticism two for each place in the hand, one of which is kept. */
+        readonly drawn: readonly string[]
+        /** The drawn cards kept so far: the draws with no choice at once, the others as the player chooses. */
+        readonly kept?: readonly string[]
+        readonly sheetName: SheetName
+      }
       /** The free culture advances the card banked for the Advance buttons (Andrew Carnegie). */
       readonly freeAdvances?: number
       /** The Uranium substitution the card armed (Marie Curie), or `null` when it was not armed. */
@@ -1458,6 +1489,23 @@ export interface ScoutView {
   }
 }
 
+/** A building the player may build for free, with every square in their cities where it can stand. */
+export interface FreeBuildingChoice {
+  readonly assetId: string
+  readonly label: string
+  readonly squares: readonly {
+    readonly cityPieceId: string
+    readonly cityLabel: string
+    readonly column: number
+    readonly row: number
+    readonly label: string
+    /** The player's own building, wonder or Great Person on the square, which the free building replaces (a limited building in a city that has one). Absent for an empty square. */
+    readonly replaces?: ReplacedPiece
+    /** Something to tell the player about this square before they pick it. */
+    readonly note?: string
+  }[]
+}
+
 export interface StartOfTurnView {
   readonly government: NowAnswer & {
     readonly current: Government
@@ -1496,6 +1544,11 @@ export interface StartOfTurnView {
     /** Every coin the player has, printed ones included. */
     readonly totalCoins: number
   }
+  /**
+   * A. P. Giannini's free building after an invest, `null` unless his card is faceup and active. The choices
+   * name the viewer's own cities and the buildings they have unlocked: own view only.
+   */
+  readonly giannini: (NowAnswer & { readonly choices: readonly FreeBuildingChoice[] }) | null
   /** The cities the player has and may have: building one needs fewer than the limit. */
   readonly cityLimit: { readonly have: number; readonly max: number }
   /** The player's own cities on the map, for choosing where a scout sends its square. */

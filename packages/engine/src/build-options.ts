@@ -20,7 +20,7 @@
  * only call each other inside functions, never while the modules load.
  */
 
-import { CARAVAN_PRODUCTION } from './disband.js'
+import { CARAVAN_PRODUCTION, cityLabelOf } from './disband.js'
 import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
@@ -49,7 +49,7 @@ import { cityProductionsOf } from './city-production.js'
 import type { CityProduction } from './city-production.js'
 import { SHUFFLABLE_ITEMS } from './sheet-name.js'
 import type { SheetName } from './sheet-name.js'
-import type { GameState, Playerhand } from './state.js'
+import type { FreeBuildingChoice, GameState, Playerhand } from './state.js'
 import { BUILDING_TERRAIN, CATEGORY_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
@@ -652,6 +652,51 @@ export function freeBuildingSquaresOf(
     onlyReplacingOf(scene, outskirts, item),
   )
   return squares.filter((square) => square.replaces === undefined)
+}
+
+/**
+ * The buildings the player may build for free (A. P. Giannini), with every square of their cities where each can
+ * stand. Only buildings they have unlocked, the basic form not once its upgrade is, as in {@link cityBuildOptions};
+ * nothing is paid, produced or counted as a city action. The squares are the normal Build's: a limited (star)
+ * building in a city that has one stands only on that one's square and replaces it, and with none left in the supply
+ * a building can only replace one of the same supply. A building with no legal square is left out.
+ */
+export function freeBuildingChoicesOf(state: GameState, player: Playerhand): readonly FreeBuildingChoice[] {
+  if (player.color === null) return []
+  const techs = techViewOf(player)
+  const footprints = cityFootprintsOf(state, player.color.toLowerCase())
+  const scene = sceneOf(state)
+  const choices: FreeBuildingChoice[] = []
+  for (const { assetId, label } of BUILDABLE_BUILDINGS) {
+    const upgrade = BUILDING_UPGRADES[assetId]
+    if (upgrade !== undefined && isUnlocked(techs, upgrade)) continue
+    if (!isUnlocked(techs, assetId)) continue
+    const asset = findBoardAsset(assetId)
+    if (asset === undefined) continue
+    const item = { kind: 'building', assetId } as const
+    const rules = placementRulesOf(item)
+    // As in Build: with none left in the supply a building can still replace one of the same supply
+    const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
+    const soldOut = remaining !== undefined && remaining <= 0
+    const squares = footprints.flatMap((footprint) => {
+      const outskirts = mapOutskirts(state.board, footprint)
+      const placed = placedSquaresOf(scene, footprint, rules, outskirts, player.playerId, onlyReplacingOf(scene, outskirts, item))
+      const legal = soldOut
+        ? placed.squares.filter((square) => square.replaces?.kind === 'building' && sameSupply(square.replaces.assetId, assetId))
+        : placed.squares
+      return legal.map((square) => ({
+        cityPieceId: footprint.piece.id,
+        cityLabel: cityLabelOf(state.board, footprint.piece),
+        column: square.column,
+        row: square.row,
+        label: square.label,
+        ...(square.replaces === undefined ? {} : { replaces: square.replaces }),
+        ...(square.note === undefined ? {} : { note: square.note }),
+      }))
+    })
+    if (squares.length > 0) choices.push({ assetId, label, squares })
+  }
+  return choices
 }
 
 // ---------------------------------------------------------------------------

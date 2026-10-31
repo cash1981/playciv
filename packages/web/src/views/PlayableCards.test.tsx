@@ -355,6 +355,74 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], harbors: [{ cityPieceId: 'p1', column: 5, row: 0 }] })
   })
 
+  it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const frida = card({
+      name: 'Frida Kahlo',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'none' },
+      prompt: '',
+      cultureHand: [
+        { itemId: 'k1', name: 'Marketplace Fire' },
+        { itemId: 'k2', name: 'Plague' },
+      ],
+    })
+    renderControl(viewWith([frida]), frida)
+    fireEvent.click(playButton('Frida Kahlo'))
+    expect(screen.getByText(/draw back up to your culture hand size/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('checkbox', { name: /Discard Plague/ }))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], discard: ['k2'] })
+  })
+
+  it('lets Frida Kahlo be played with nothing ticked, sending an empty discard list', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const frida = card({
+      name: 'Frida Kahlo',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'none' },
+      prompt: '',
+      cultureHand: [{ itemId: 'k1', name: 'Marketplace Fire' }],
+    })
+    renderControl(viewWith([frida]), frida)
+    fireEvent.click(playButton('Frida Kahlo'))
+    expect(confirmButton().disabled).toBe(false)
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], discard: [] })
+  })
+
+  it('forgets a ticked culture card that left the hand, and shows no boxes for another card', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const first = card({
+      name: 'Frida Kahlo',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'none' },
+      prompt: '',
+      cultureHand: [
+        { itemId: 'k1', name: 'Marketplace Fire' },
+        { itemId: 'k2', name: 'Plague' },
+      ],
+    })
+    const { rerender } = renderControl(viewWith([first]), first)
+    fireEvent.click(playButton('Frida Kahlo'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Discard Marketplace Fire/ }))
+    const later = { ...first, cultureHand: [{ itemId: 'k2', name: 'Plague' }] }
+    rerender(<PlayCardControl card={later} gameId="g1" view={viewWith([later])} busy={false} readOnly={false} run={run} />)
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], discard: [] })
+
+    cleanup()
+    renderControl(viewWith([card()]), card())
+    fireEvent.click(playButton('Counterfeiters'))
+    expect(screen.queryByText(/Discard /)).toBeNull()
+  })
+
   it('closes the form on Cancel without sending anything', () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     renderControl(viewWith([card()]), card())

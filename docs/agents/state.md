@@ -32,7 +32,7 @@ deployment reports do not establish present health.
   or culture card asks first.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
   Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein, Carnegie, Jim Henson, Jacques Cousteau, Jerry Garcia, Ada Lovelace, Akira
-  Kurosawa and Charles Darwin apply through the engine.
+  Kurosawa, Charles Darwin, A. P. Giannini and Frida Kahlo apply through the engine.
 - Trade: free-text trade offers (#265); trade resets to coins at turn start for
   a player who researched, and city trade is collected once when Trade starts.
 - Figure movement (#302): enforced speed, water, stacking and stops; movement is
