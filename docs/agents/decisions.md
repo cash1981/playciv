@@ -231,7 +231,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Harbors; undoing the investment, or the play that turned him faceup, is refused
   while the building stands. Undoing the building itself works when the piece has
   been taken off by hand, so the investment is never stuck, and is refused when it
-  was moved.
+  was moved or replaced by a later build or upgrade that is still in force.
 - Frida Kahlo discards the culture cards the player ticks (none is allowed) and
   draws until the culture hand size from the deck of the area the culture marker is
   in, the level Patronage uses (a Great Person space and the last space are in an
@@ -240,7 +240,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   each (`<request id>`, `<request id>:2`, as Cristo Redentor does), and she waits
   for an earlier choice. If the deck runs out the discard pile is reshuffled, which
   can deal a just discarded card back. The public line gives counts only and the
-  names of drawn cards are in the player's private log; the cards she discards go
+  names of drawn cards are in the player's private log (with Mysticism the line of the choice names the card not kept, as any card choice does); the cards she discards go
   to the public discard pile and show in the Revealed and Discarded list, as any
   discard does. Undo returns the drawn cards to the deck (also after the choices,
   from the hand or the discard pile) and the discards to the hand, and is refused

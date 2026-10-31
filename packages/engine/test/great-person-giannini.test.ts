@@ -279,6 +279,33 @@ describe('A. P. Giannini', () => {
     expect(unwrapErr(undoRejection(moved, 'free-1')).kind).toBe('ASSISTED_UNDO_BLOCKED')
   })
 
+  it('refuses the undo while a later build that replaced the free building can still put it back', () => {
+    const state = invested()
+    const built = unwrap(freeBuild(state, firstSquare(state, LIBRARY)))
+    const piece = libraries(built)[0]
+    if (piece === undefined) throw new Error('no library')
+    const gone = { ...built, board: { ...built.board, pieces: built.board.pieces.filter((p) => p.id !== piece.id) } }
+    const replacing = {
+      ...gone,
+      assistedActions: [
+        ...gone.assistedActions,
+        {
+          id: 'later-build',
+          kind: 'build' as const,
+          playerId: CASH1981,
+          turnNumber: 1,
+          phase: 'CM' as const,
+          usageKey: null,
+          at: AT,
+          logId: 'later-build-log',
+          status: 'applied' as const,
+          effect: { kind: 'build', replaced: { piece, historyId: 'h' } } as never,
+        },
+      ],
+    }
+    expect(JSON.stringify(unwrapErr(undoRejection(replacing, 'free-1')))).toContain('Undo that first')
+  })
+
   it('lets the undo through when the building was taken off by hand, so the investment is not stuck', () => {
     const state = invested()
     const built = unwrap(freeBuild(state, firstSquare(state, LIBRARY)))
