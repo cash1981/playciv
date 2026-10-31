@@ -655,15 +655,17 @@ export function freeBuildingSquaresOf(
 }
 
 /**
- * The buildings the player may build for free (A. P. Giannini), with every empty square of their cities where
- * each can stand. Only buildings they have unlocked, the basic form not once its upgrade is, as in
- * {@link cityBuildOptions}; nothing is paid, produced or counted as a city action. A building with none left in the
- * supply or with no legal square is left out.
+ * The buildings the player may build for free (A. P. Giannini), with every square of their cities where each can
+ * stand. Only buildings they have unlocked, the basic form not once its upgrade is, as in {@link cityBuildOptions};
+ * nothing is paid, produced or counted as a city action. The squares are the normal Build's: a limited (star)
+ * building in a city that has one stands only on that one's square and replaces it, and with none left in the supply
+ * a building can only replace one of the same supply. A building with no legal square is left out.
  */
 export function freeBuildingChoicesOf(state: GameState, player: Playerhand): readonly FreeBuildingChoice[] {
   if (player.color === null) return []
   const techs = techViewOf(player)
   const footprints = cityFootprintsOf(state, player.color.toLowerCase())
+  const scene = sceneOf(state)
   const choices: FreeBuildingChoice[] = []
   for (const { assetId, label } of BUILDABLE_BUILDINGS) {
     const upgrade = BUILDING_UPGRADES[assetId]
@@ -671,16 +673,27 @@ export function freeBuildingChoicesOf(state: GameState, player: Playerhand): rea
     if (!isUnlocked(techs, assetId)) continue
     const asset = findBoardAsset(assetId)
     if (asset === undefined) continue
-    if ((remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? Infinity) <= 0) continue
-    const squares = footprints.flatMap((footprint) =>
-      freeBuildingSquaresOf(state, player, footprint.piece.id, assetId).map((square) => ({
+    const item = { kind: 'building', assetId } as const
+    const rules = placementRulesOf(item)
+    // As in Build: with none left in the supply a building can still replace one of the same supply
+    const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
+    const soldOut = remaining !== undefined && remaining <= 0
+    const squares = footprints.flatMap((footprint) => {
+      const outskirts = mapOutskirts(state.board, footprint)
+      const placed = placedSquaresOf(scene, footprint, rules, outskirts, player.playerId, onlyReplacingOf(scene, outskirts, item))
+      const legal = soldOut
+        ? placed.squares.filter((square) => square.replaces?.kind === 'building' && sameSupply(square.replaces.assetId, assetId))
+        : placed.squares
+      return legal.map((square) => ({
         cityPieceId: footprint.piece.id,
         cityLabel: cityLabelOf(state.board, footprint.piece),
         column: square.column,
         row: square.row,
         label: square.label,
-      })),
-    )
+        ...(square.replaces === undefined ? {} : { replaces: square.replaces }),
+        ...(square.note === undefined ? {} : { note: square.note }),
+      }))
+    })
     if (squares.length > 0) choices.push({ assetId, label, squares })
   }
   return choices

@@ -224,14 +224,18 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   building: the `invest` effect carries `giannini: true` and a separate Start of
   Turn action `gianniniBuild` (once a turn, usage key `giannini`) builds it, from the
   buildings the player has unlocked (a basic building whose upgrade is unlocked is
-  left out) on an empty square in the outskirts of one of their cities, with no
-  cost, no production and no replacing. It is not a city action, so it neither asks
+  left out) on a square in the outskirts of one of their cities that Build would
+  offer: a star building (Market, Bank, Temple, Cathedral, Barracks, Academy) is
+  once per city and replaces the one the city has, and a building may replace one
+  of the player's own, exactly as Build does (the replaced piece is taken off first,
+  and a Great Person goes back to the player area). No cost and no production. It is not a city action, so it neither asks
   about a second action nor uses Ada Lovelace. Invest is once a turn, so he gives at
   most one building a turn. The Board Undo refuses the placement like Cousteau's
   Harbors; undoing the investment, or the play that turned him faceup, is refused
-  while the building stands. Undoing the building itself works when the piece has
-  been taken off by hand, so the investment is never stuck, and is refused when it
-  was moved or replaced by a later build or upgrade that is still in force.
+  while the building stands. Undoing the building puts back what it replaced, and
+  works when the piece has been taken off by hand, so the investment is never stuck;
+  it is refused when the piece was moved or replaced by a later build or upgrade
+  that is still in force.
 - Frida Kahlo discards the culture cards the player ticks (none is allowed) and
   draws until the culture hand size from the deck of the area the culture marker is
   in, the level Patronage uses (a Great Person space and the last space are in an

@@ -438,10 +438,14 @@ function GianniniBuild({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX
               {(chosen?.squares ?? []).map((candidate) => (
                 <option key={keyOf(candidate)} value={keyOf(candidate)}>
                   {candidate.cityLabel} — {candidate.label}
+                  {candidate.replaces === undefined ? '' : ` (replaces your ${candidate.replaces.label})`}
                 </option>
               ))}
             </select>
           </div>
+          {square?.replaces !== undefined && (
+            <p className="muted">{square.note ?? `Replaces your ${square.replaces.label}.`}</p>
+          )}
           <button type="submit" className="small" disabled={busy || !valid}>
             Build for free
           </button>

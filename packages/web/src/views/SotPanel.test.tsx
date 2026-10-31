@@ -685,6 +685,50 @@ describe('A. P. Giannini', () => {
     expect(square.value).toBe('')
   })
 
+  it('says what a square replaces, in the option and in a note once it is chosen, and sends the same payload', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const replacing = [
+      {
+        assetId: 'buildings/market',
+        label: 'Market',
+        squares: [
+          {
+            cityPieceId: 'c1',
+            cityLabel: 'City B2',
+            column: 2,
+            row: 1,
+            label: 'C2',
+            replaces: { assetId: 'buildings/library', label: 'Library', kind: 'building' },
+            note: 'Replaces your Library, which is taken off the board and goes back to the supply.',
+          },
+          { cityPieceId: 'c2', cityLabel: 'City F6', column: 5, row: 5, label: 'F6' },
+        ],
+      },
+    ]
+    renderChoices(viewOf(giannini('ready', READY_TEXT, replacing)))
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/market' } })
+    const square = within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement
+    expect(within(square).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Choose a square',
+      'City B2 — C2 (replaces your Library)',
+      'City F6 — F6',
+    ])
+    // A plain square says nothing; the one that replaces says what happens to the old building
+    expect(within(section()).queryByText(/Replaces your Library/)).toBeNull()
+    fireEvent.change(square, { target: { value: 'c2:5:5' } })
+    expect(within(section()).queryByText(/Replaces your Library/)).toBeNull()
+    fireEvent.change(square, { target: { value: 'c1:2:1' } })
+    expect(within(section()).getByText('Replaces your Library, which is taken off the board and goes back to the supply.')).toBeTruthy()
+    fireEvent.click(within(section()).getByRole('button', { name: 'Build for free' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'gianniniBuild', expect.any(String), 6, {
+      cityPieceId: 'c1',
+      assetId: 'buildings/market',
+      column: 2,
+      row: 1,
+    })
+  })
+
   it('forgets the square when another building is chosen, and drops a choice that a refresh took away', () => {
     const view = viewOf(giannini('ready', READY_TEXT))
     const { rerender } = renderChoices(view)

@@ -45,11 +45,13 @@ import {
   reverseAdvanceEffect,
 } from './assisted-culture.js'
 import { AREA_LABEL_HEIGHT, findBoardAsset, playerAreas, remainingBoardAssetCount } from './board.js'
+import type { BoardPiece } from './board.js'
 import { cityLimitView, scoutViewsOf } from './assisted-city.js'
 import { cityActionsOf } from './city-actions.js'
 import { RESOURCE_KINDS, resourceName } from './tile-icons.js'
 import type { ResourceKind } from './tile-icons.js'
 import { mapCellOf, pieceColorOf } from './blockade.js'
+import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
 import { buildSquareRefusal, freeBuildingChoicesOf, squareCentre, squareLabel } from './build-options.js'
 import { activeGreatPerson } from './great-person-effects.js'
 import { buildingNameOf } from './building-data.js'
@@ -1135,12 +1137,22 @@ const gianniniBuild: AssistedActionDefinition = {
     const asset = findBoardAsset(assetId)
     if (asset === undefined) return fail(`The ${name} has no artwork to put on the board.`)
     const centre = squareCentre(state.board, { column, row })
-    const placed = placeUnchecked(state, {
+    const stamp = context.at === undefined ? {} : { at: context.at }
+    // As Build does: a limited building's old one is taken off first (a Great Person goes to the player's area), then the new one goes on the empty square
+    let base = state
+    let replaced: { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean } | undefined
+    if (offered.replaces !== undefined) {
+      const cleared = removeReplaced(state, player, offered, stamp)
+      if (!cleared.ok) return fail(cleared.error)
+      base = cleared.value.state
+      replaced = { piece: cleared.value.piece, historyId: cleared.value.historyId, reserved: cleared.value.reserved }
+    }
+    const placed = placeUnchecked(base, {
       playerId: player.playerId,
       assetId,
       x: centre.x - asset.width / 2,
       y: centre.y - asset.height / 2,
-      ...(context.at === undefined ? {} : { at: context.at }),
+      ...stamp,
     })
     const entry = placed?.board.history.at(-1)
     if (placed === undefined || entry === undefined || entry.change.kind !== 'place') {
@@ -1154,13 +1166,13 @@ const gianniniBuild: AssistedActionDefinition = {
     const logged = appendLog(used, {
       username: player.username,
       playerId: player.playerId,
-      publicLog: `${player.username} built ${withArticle(name)} on ${where} for free with ${GIANNINI}`,
+      publicLog: `${player.username} built ${withArticle(name)} on ${where} for free with ${GIANNINI}${replacingText(offered.replaces)}`,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
     })
     return ok({
-      state: countLinesIn(logged, [entry.id]),
+      state: countLinesIn(logged, [entry.id, replaced?.historyId]),
       effect: {
         kind: 'gianniniBuild',
         cityPieceId,
@@ -1169,6 +1181,11 @@ const gianniniBuild: AssistedActionDefinition = {
         square: { column, row, label: where },
         pieceId: entry.change.piece.id,
         historyId: entry.id,
+        ...(replaced === undefined
+          ? {}
+          : replaced.reserved
+            ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
+            : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
       },
       logId: lastLogId(logged),
     })
@@ -1191,15 +1208,21 @@ const gianniniBuild: AssistedActionDefinition = {
       if (holder !== undefined) {
         return blockedBy(`The ${effect.label} on ${effect.square.label} was replaced by a later action (${holder.kind}). Undo that first.`)
       }
+      // What it replaced stands again all the same, unless a Great Person put in reserve has left the player's area
+      const reservedGone = reservedUndoBlock(state, record.playerId, effect)
+      if (reservedGone !== undefined) return blockedBy(reservedGone)
       return ok({
-        state,
-        text: `${player.username}'s free ${effect.label} from ${GIANNINI} was undone: it had already left ${effect.square.label} and the free building can be taken again`,
+        state: putReplacedBack(state, player, effect, at ?? null),
+        text: `${player.username}'s free ${effect.label} from ${GIANNINI} was undone: it had already left ${effect.square.label} and the free building can be taken again${replacedText(effect)}`,
       })
     }
     const cell = mapCellOf(state.board, piece)
     if (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row) {
       return blockedBy(`The ${effect.label} has left ${effect.square.label}. Move it back first.`)
     }
+    // Everything is checked before anything is changed, so a refusal leaves the game as it was
+    const reservedBlock = reservedUndoBlock(state, record.playerId, effect)
+    if (reservedBlock !== undefined) return blockedBy(reservedBlock)
     const removed = removePiece(state, {
       playerId: player.playerId,
       pieceId: effect.pieceId,
@@ -1207,8 +1230,8 @@ const gianniniBuild: AssistedActionDefinition = {
     })
     if (!removed.ok) return blockedBy(`The ${effect.label} on ${effect.square.label} could not be taken off the board.`)
     return ok({
-      state: removed.value,
-      text: `${player.username}'s free ${effect.label} from ${GIANNINI} was undone: it is off ${effect.square.label} and the free building can be taken again`,
+      state: putReplacedBack(removed.value, player, effect, at ?? null),
+      text: `${player.username}'s free ${effect.label} from ${GIANNINI} was undone: it is off ${effect.square.label} and the free building can be taken again${replacedText(effect)}`,
     })
   },
 }

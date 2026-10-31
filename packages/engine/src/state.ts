@@ -24,7 +24,7 @@ import { cityProductionsOf } from './city-production.js'
 import { tradeEstimateOf } from './trade-estimate.js'
 import type { TradeEstimate } from './trade-estimate.js'
 import type { PlacedBuildItem, UnitBuildItem, UnitType, WallsBuildItem } from './build-item.js'
-import type { CityBuildOptions } from './build-options.js'
+import type { CityBuildOptions, ReplacedPiece } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
 import type { CityActionOptions, UpgradeFamilyOption } from './city-actions.js'
@@ -573,6 +573,10 @@ export type AssistedEffect =
       readonly pieceId: string
       /** The board history entry that placed it. */
       readonly historyId: string
+      /** The limited building this one replaced, as `build` keeps it: exactly as it stood, and the entry that removed it. Absent when the square was empty. */
+      readonly replaced?: { readonly piece: BoardPiece; readonly historyId: string }
+      /** The Great Person this one replaced, held in the player's area, as `build` keeps it. Absent when none was replaced. */
+      readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string }
     }
   | {
       /** A city founded in place of a scout (or an army under the Republic). */
@@ -1495,6 +1499,10 @@ export interface FreeBuildingChoice {
     readonly column: number
     readonly row: number
     readonly label: string
+    /** The player's own building, wonder or Great Person on the square, which the free building replaces (a limited building in a city that has one). Absent for an empty square. */
+    readonly replaces?: ReplacedPiece
+    /** Something to tell the player about this square before they pick it. */
+    readonly note?: string
   }[]
 }
 

@@ -1087,7 +1087,14 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       return true
     }
     // A. P. Giannini's free building is its own action: only the vote on its line takes it off
-    if (effect.kind === 'gianniniBuild') return effect.historyId === entry.id
+    // and the limited building or Great Person it replaced, as a build's is
+    if (effect.kind === 'gianniniBuild') {
+      return (
+        effect.historyId === entry.id ||
+        effect.replaced?.historyId === entry.id ||
+        effect.reserved?.historyId === entry.id
+      )
+    }
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
     // A harvest put one resource token in the player's area
