@@ -15,6 +15,23 @@ export const DARWIN_NAME = 'Charles Darwin'
 /** The once-a-turn marker Charles Darwin writes on the turn's record. */
 export const DARWIN_KEY = 'person:Charles Darwin'
 
+/** The applied card action that turned a Great Person faceup and is still in force. */
+export function greatPersonActionIdOf(state: GameState, player: Playerhand, name: string): string | undefined {
+  for (let index = state.assistedActions.length - 1; index >= 0; index -= 1) {
+    const record = state.assistedActions[index]
+    if (
+      record !== undefined &&
+      record.status === 'applied' &&
+      record.playerId === player.playerId &&
+      record.effect.kind === 'playCard' &&
+      record.effect.name === name
+    ) {
+      return record.id
+    }
+  }
+  return undefined
+}
+
 /**
  * Akira Kurosawa: "Each time another player devotes a city to the arts, you gain 1 culture." Pays
  * the faceup holder (never the player who devoted) 1 culture for each city devoted.
@@ -28,7 +45,14 @@ export function payKurosawa(
     cities < 1
       ? []
       : state.players.filter((candidate) => candidate.playerId !== devoter.playerId && activeGreatPerson(state, candidate, KUROSAWA_NAME))
-  const paid = holders.map((holder) => ({ playerId: holder.playerId, culture: cities }))
+  const paid = holders.map((holder) => {
+    const cardActionId = greatPersonActionIdOf(state, holder, KUROSAWA_NAME)
+    return {
+      playerId: holder.playerId,
+      culture: cities,
+      ...(cardActionId === undefined ? {} : { cardActionId }),
+    }
+  })
   const next = holders.reduce(
     (current, holder) =>
       withPlayerHand(current, {

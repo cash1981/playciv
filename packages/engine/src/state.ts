@@ -848,6 +848,8 @@ export type AssistedEffect =
       readonly cityLabel: string
       /** The culture added to the player's stock, which an undo takes off again. */
       readonly culture: number
+      /** The Charles Darwin play that turned this city's culture into trade. */
+      readonly darwinActivationId?: string
       /** The trade added instead, when Charles Darwin turned the city's culture into trade. */
       readonly trade?: number
       /** The once-per-turn marker Charles Darwin wrote, so an undo frees it. */
@@ -885,6 +887,8 @@ export type AssistedEffect =
 export interface KurosawaPayment {
   readonly playerId: string
   readonly culture: number
+  /** The Akira Kurosawa play that caused this payment. */
+  readonly cardActionId?: string
 }
 
 /** The wonder a wonder build drew into the market, for its undo: the card, the piece that was placed and the history entry that placed it. */
@@ -912,6 +916,10 @@ export interface AssistedActionRecord {
   readonly logId: string
   readonly status: 'applied' | 'undone'
   readonly effect: AssistedEffect
+  /** The Ada Lovelace play whose extra city action this record consumed. */
+  readonly lovelaceCreditId?: string
+  /** Number of assisted records already present when this action was undone, for legacy dependency inference. */
+  readonly undoneAtActionCount?: number
   /**
    * Set when the card had already been used this turn and the player confirmed
    * using it again. The record then shares the first use's `usageKey`, which is

@@ -23,13 +23,13 @@ import { mapCellOf } from '../src/blockade.js'
 import { describeError } from '../src/errors.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
-import { scoutViewsOf } from '../src/assisted-city.js'
+import { foundCity, scoutViewsOf } from '../src/assisted-city.js'
 import { cityActionsOf } from '../src/city-actions.js'
 import { cityProductionsOf } from '../src/city-production.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { scoutAssignmentsOf } from '../src/sot.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import type { AssistedActionKind, GameState } from '../src/state.js'
+import type { AssistedActionKind, AssistedActionRecord, GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 
 import { AT, me, put, sotTurn, withAmerica } from './sot-fixture.js'
@@ -206,6 +206,44 @@ describe('founding a city', () => {
     expect(result.assistedActions[0]).toMatchObject({ kind: 'foundCity', phase: 'SOT', usageKey: null, status: 'applied' })
     // The city counts and the supply is used
     expect(toPlayerView(result, CASH1981).you?.cityCount).toBe(1)
+  })
+
+  it('does not undo a city while Garcia still depends on it', () => {
+    const state = withScout()
+    const founded = unwrap(found(state, scoutOf(state).id))
+    const city = cityAt(founded, 1, 1)
+    const foundingRecord = founded.assistedActions.find((record) => record.kind === 'foundCity')
+    const jerry = founded.items.find((item) => item.kind === 'greatperson' && item.name === 'Jerry Garcia')
+    if (city === undefined || foundingRecord === undefined || jerry === undefined) throw new Error('incomplete city fixture')
+    const garcia: AssistedActionRecord = {
+      id: 'garcia',
+      kind: 'playCard',
+      playerId: CASH1981,
+      turnNumber: 1,
+      phase: 'CM',
+      usageKey: null,
+      at: AT,
+      logId: 'garcia-log',
+      status: 'applied',
+      effect: {
+        kind: 'playCard',
+        item: jerry,
+        discarded: false,
+        targets: [],
+        resource: null,
+        name: 'Jerry Garcia',
+        garcia: {
+          capitalPieceId: city.id,
+          cities: [{ cityPieceId: city.id, cityLabel: 'City B2', culture: 0 }],
+        },
+      },
+    }
+    const withGarcia = { ...founded, assistedActions: [...founded.assistedActions, garcia] }
+
+    expect(unwrapErr(foundCity.reverse(withGarcia, me(withGarcia), foundingRecord, null))).toMatchObject({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      reason: expect.stringContaining('was used after it was founded'),
+    })
   })
 
   it('adds the policy note only while the player has fewer policies than cities', () => {

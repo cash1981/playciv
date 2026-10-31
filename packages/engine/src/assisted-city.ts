@@ -233,8 +233,9 @@ export const foundCity: AssistedActionDefinition = {
         other.status === 'applied' &&
         other.id !== record.id &&
         other.kind !== 'assignScout' &&
-        'cityPieceId' in other.effect &&
-        other.effect.cityPieceId === effect.cityPieceId,
+        (('cityPieceId' in other.effect && other.effect.cityPieceId === effect.cityPieceId) ||
+          (other.effect.kind === 'playCard' &&
+            other.effect.garcia?.cities.some((city) => city.cityPieceId === effect.cityPieceId))),
     )
     if (later !== undefined) {
       return blockedBy(`The city on ${effect.square.label} was used after it was founded (${later.kind}). Undo that first.`)

@@ -32,10 +32,12 @@ import {
   PHASE_REASON,
   READY,
   REPEAT_NOTE,
+  CITY_ACTION_LABELS,
   blocked,
   earlierCityActions,
   freeTurnAction,
   lastLogId,
+  lovelaceCreditForAction,
   openCityManagementTurn,
   placeBack,
   playerOf,
@@ -45,7 +47,7 @@ import {
   usedReason,
   withPlayerHand,
 } from './assisted-core.js'
-import { darwinTradeOf, payKurosawa, takeBackKurosawa, useDarwin } from './assisted-arts.js'
+import { DARWIN_NAME, darwinTradeOf, greatPersonActionIdOf, payKurosawa, takeBackKurosawa, useDarwin } from './assisted-arts.js'
 import { playCard } from './assisted-cards.js'
 import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
 import { CITY_ACTIONS } from './assisted-city.js'
@@ -1467,6 +1469,7 @@ const devoteToTheArts: AssistedActionDefinition = {
     const handText = culture === estimate ? '' : ` (set by the player; the estimate was ${estimate})`
     const darwin = payload.darwin === true ? useDarwin(state, player, stats) : undefined
     const kurosawa = payKurosawa(darwin?.state ?? withPlayerHand(state, { ...player, stats }), player, 1)
+    const darwinActivationId = payload.darwin === true ? greatPersonActionIdOf(state, player, DARWIN_NAME) : undefined
     const gained =
       darwin === undefined
         ? `gained ${culture} culture`
@@ -1486,6 +1489,7 @@ const devoteToTheArts: AssistedActionDefinition = {
         cityPieceId: city.cityPieceId,
         cityLabel: city.label,
         culture: payload.darwin === true ? 0 : culture,
+        ...(darwinActivationId === undefined ? {} : { darwinActivationId }),
         ...(darwin === undefined ? {} : { trade: darwinTrade, usedAction: darwin.usedAction }),
         ...(kurosawa.paid.length === 0 ? {} : { kurosawa: kurosawa.paid }),
       },
@@ -1961,6 +1965,17 @@ export function performAssistedAction(
   if (!applied.ok) return applied
 
   const status = turnStatus(state)
+  const effect = applied.value.effect
+  const cityPieceId =
+    effect.kind === 'playCard'
+      ? effect.garcia?.capitalPieceId
+      : CITY_ACTION_LABELS[input.action] !== undefined &&
+          'cityPieceId' in effect &&
+          typeof effect.cityPieceId === 'string'
+        ? effect.cityPieceId
+        : undefined
+  const lovelaceCreditId =
+    cityPieceId === undefined ? undefined : lovelaceCreditForAction(state, player, cityPieceId)
   const record: AssistedActionRecord = {
     id: input.requestId,
     kind: input.action,
@@ -1972,7 +1987,8 @@ export function performAssistedAction(
     at: input.at ?? null,
     logId: applied.value.logId,
     status: 'applied',
-    effect: applied.value.effect,
+    effect,
+    ...(lovelaceCreditId === undefined ? {} : { lovelaceCreditId }),
     ...(repeat ? { confirmedRepeat: true } : {}),
   }
   return ok({ ...applied.value.state, assistedActions: [...applied.value.state.assistedActions, record] })
@@ -2029,7 +2045,9 @@ export function reverseAssistedAction(
   const marked: GameState = {
     ...reversed.value.state,
     assistedActions: reversed.value.state.assistedActions.map((candidate) =>
-      candidate.id === record.id ? { ...candidate, status: 'undone' as const } : candidate,
+      candidate.id === record.id
+        ? { ...candidate, status: 'undone' as const, undoneAtActionCount: state.assistedActions.length }
+        : candidate,
     ),
   }
   // A confirmed repeat shares the first use's key, so the key is freed only when no

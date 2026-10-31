@@ -456,13 +456,22 @@ export const LOVELACE_NAME = 'Ada Lovelace'
 interface CityActionRecord {
   readonly cityPieceId: string
   readonly label: string
+  readonly lovelaceCreditId?: string
 }
 
 /** Jerry Garcia's devotion is the capital's action for the turn (the other cities may still act). */
 const GARCIA_ACTION_LABEL = 'Devote to the Arts (Jerry Garcia)'
 
 /** One step of the player's turn that matters for extra city actions: a city action, or a Lovelace card. */
-type CityStep = { readonly lovelace: true } | (CityActionRecord & { readonly lovelace?: undefined })
+type CityStep =
+  | { readonly lovelace: true }
+  | (CityActionRecord & { readonly lovelace?: undefined })
+
+function cityPieceIdOfRecord(record: AssistedActionRecord): string | undefined {
+  if (record.effect.kind === 'playCard') return record.effect.garcia?.capitalPieceId
+  if (CITY_ACTION_LABELS[record.kind] === undefined || !('cityPieceId' in record.effect)) return undefined
+  return typeof record.effect.cityPieceId === 'string' ? record.effect.cityPieceId : undefined
+}
 
 /** The player's city actions and Ada Lovelace plays of the current turn that have not been undone, oldest first. */
 function cityStepsThisTurn(state: GameState, player: Playerhand): readonly CityStep[] {
@@ -472,11 +481,27 @@ function cityStepsThisTurn(state: GameState, player: Playerhand): readonly CityS
     if (record.status !== 'applied' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
     if (effect.kind === 'playCard') {
       if (effect.name === LOVELACE_NAME) return [{ lovelace: true }]
-      return effect.garcia === undefined ? [] : [{ cityPieceId: effect.garcia.capitalPieceId, label: GARCIA_ACTION_LABEL }]
+      const cityPieceId = effect.garcia?.capitalPieceId
+      return cityPieceId === undefined
+        ? []
+        : [
+            {
+              cityPieceId,
+              label: GARCIA_ACTION_LABEL,
+              ...(record.lovelaceCreditId === undefined ? {} : { lovelaceCreditId: record.lovelaceCreditId }),
+            },
+          ]
     }
     const label = CITY_ACTION_LABELS[record.kind]
-    if (label === undefined || !('cityPieceId' in effect) || effect.cityPieceId === null) return []
-    return [{ cityPieceId: effect.cityPieceId, label }]
+    const cityPieceId = cityPieceIdOfRecord(record)
+    if (label === undefined || cityPieceId === undefined) return []
+    return [
+      {
+        cityPieceId,
+        label,
+        ...(record.lovelaceCreditId === undefined ? {} : { lovelaceCreditId: record.lovelaceCreditId }),
+      },
+    ]
   })
 }
 
@@ -495,24 +520,98 @@ export function cityActionsTakenThisTurn(state: GameState, player: Playerhand, c
 
 
 /**
- * The extra city actions Ada Lovelace has given this turn that no action has used yet. The turn is
- * replayed in order: an action that is not its city's first uses a credit if one has been played by then,
- * so a second action confirmed before her card was played stays that player's own and uses none. A city's
- * second action is asked about unless a credit is left.
+ * The extra city actions Ada Lovelace has given this turn that no action has used yet. The action timeline is
+ * replayed with each undo at its recorded action count, so legacy actions without a credit link keep the
+ * credit they consumed even after another action is undone. An older undo without an action count is
+ * conservatively placed immediately after its action.
  */
-export function extraCityActionsLeft(state: GameState, player: Playerhand): number {
-  let left = 0
-  const acted = new Set<string>()
-  for (const step of cityStepsThisTurn(state, player)) {
-    if (step.lovelace === true) {
-      left += 1
-    } else {
-      if (acted.has(step.cityPieceId) && left > 0) left -= 1
-      acted.add(step.cityPieceId)
+function cityActionCreditState(state: GameState, player: Playerhand): {
+  readonly available: ReadonlySet<string>
+  readonly consumed: ReadonlySet<string>
+  readonly acted: ReadonlySet<string>
+} {
+  const credits = new Set<string>()
+  const activeCredits = new Set<string>()
+  const consumed = new Set<string>()
+  const acted = new Map<string, number>()
+  const activeActions = new Map<
+    string,
+    | { readonly kind: 'credit' }
+    | { readonly kind: 'city'; readonly cityPieceId: string; readonly creditId?: string }
+  >()
+  const undoAt = new Map<number, string[]>()
+  const currentTurn = turnStatus(state).currentTurn
+
+  state.assistedActions.forEach((record, index) => {
+    if (record.status !== 'undone') return
+    const undoIndex = Math.max(index + 1, Math.min(record.undoneAtActionCount ?? index + 1, state.assistedActions.length))
+    const ids = undoAt.get(undoIndex) ?? []
+    ids.push(record.id)
+    undoAt.set(undoIndex, ids)
+  })
+
+  for (let index = 0; index <= state.assistedActions.length; index += 1) {
+    for (const id of undoAt.get(index) ?? []) {
+      const active = activeActions.get(id)
+      if (active === undefined) continue
+      activeActions.delete(id)
+      if (active.kind === 'credit') {
+        activeCredits.delete(id)
+        credits.delete(id)
+        consumed.delete(id)
+      } else {
+        const count = acted.get(active.cityPieceId) ?? 0
+        if (count <= 1) acted.delete(active.cityPieceId)
+        else acted.set(active.cityPieceId, count - 1)
+        if (active.creditId !== undefined) {
+          consumed.delete(active.creditId)
+          if (activeCredits.has(active.creditId)) credits.add(active.creditId)
+        }
+      }
     }
+
+    if (index === state.assistedActions.length) break
+    const record = state.assistedActions[index]
+    if (record === undefined || record.playerId !== player.playerId || record.turnNumber !== currentTurn) continue
+    const effect = record.effect
+    if (effect.kind === 'playCard' && effect.name === LOVELACE_NAME) {
+      activeCredits.add(record.id)
+      credits.add(record.id)
+      activeActions.set(record.id, { kind: 'credit' })
+      continue
+    }
+
+    const cityPieceId = cityPieceIdOfRecord(record)
+    if (cityPieceId === undefined) continue
+    const requestedCredit =
+      record.lovelaceCreditId ??
+      ((acted.get(cityPieceId) ?? 0) > 0 ? credits.values().next().value : undefined)
+    const creditId =
+      requestedCredit !== undefined && credits.delete(requestedCredit) ? requestedCredit : undefined
+    if (creditId !== undefined) consumed.add(creditId)
+    acted.set(cityPieceId, (acted.get(cityPieceId) ?? 0) + 1)
+    activeActions.set(record.id, {
+      kind: 'city',
+      cityPieceId,
+      ...(creditId === undefined ? {} : { creditId }),
+    })
   }
-  return left
+  return { available: credits, consumed, acted: new Set(acted.keys()) }
 }
+
+export function extraCityActionsLeft(state: GameState, player: Playerhand): number {
+  return cityActionCreditState(state, player).available.size
+}
+
+/** The Lovelace play whose credit an additional action of this city would consume. */
+export function lovelaceCreditForAction(state: GameState, player: Playerhand, cityPieceId: string): string | undefined {
+  const history = cityActionCreditState(state, player)
+  return history.acted.has(cityPieceId) ? history.available.values().next().value : undefined
+}
+
+/** Whether this Lovelace credit was consumed, including by an older unlinked action record. */
+export const lovelaceCreditWasUsed = (state: GameState, player: Playerhand, creditId: string): boolean =>
+  cityActionCreditState(state, player).consumed.has(creditId)
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
 export const LOVELACE_ACTION_NOTE = ' (an extra city action from Ada Lovelace)'

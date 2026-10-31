@@ -14,11 +14,16 @@
  */
 
 import { tradeCeilingOf } from './limits.js'
-import { payKurosawa, takeBackKurosawa } from './assisted-arts.js'
-import { cityActionsOf, ownCityFootprint } from './city-actions.js'
-import { isCapital } from './city-defence.js'
-import { LOVELACE_ACTION_NOTE, LOVELACE_NAME, cityActionsTakenThisTurn, extraCityActionsLeft } from './assisted-core.js'
-import { investableCoinsOf } from './sot.js'
+import { DARWIN_KEY, DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
+import { cityActionsOf } from './city-actions.js'
+import {
+  LOVELACE_ACTION_NOTE,
+  LOVELACE_NAME,
+  cityActionsTakenThisTurn,
+  extraCityActionsLeft,
+  lovelaceCreditWasUsed,
+} from './assisted-core.js'
+import { capitalOf, investableCoinsOf } from './sot.js'
 import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
@@ -487,10 +492,8 @@ function automate(
       // cities may still act (the card's text). The scouts' squares are not sent, so the figure can be
       // corrected by hand on the counter.
       const cities = cityActionsOf(state, player)
-      const capital = cities.find((city) => {
-        const piece = ownCityFootprint(state, player, city.cityPieceId)?.piece
-        return piece !== undefined && isCapital(piece)
-      })
+      const capitalPiece = capitalOf(state, player)
+      const capital = capitalPiece === undefined ? undefined : cities.find((city) => city.cityPieceId === capitalPiece.id)
       if (capital === undefined) return err('You have no capital on the map, so there is no city action for Jerry Garcia to take.')
       const devoted = cities.map((city) => ({
         cityPieceId: city.cityPieceId,
@@ -1067,9 +1070,37 @@ export const playCard: AssistedActionDefinition = {
     if (effect.kind !== 'playCard') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
 
-    // Her extra city action cannot be taken away once a city action has used it
-    if (effect.name === LOVELACE_NAME && record.turnNumber === turnStatus(state).currentTurn && extraCityActionsLeft(state, player) < 1) {
+    // Older records lack the link, so their credit use is inferred in action order
+    if (
+      effect.name === LOVELACE_NAME &&
+      record.turnNumber === turnStatus(state).currentTurn &&
+      lovelaceCreditWasUsed(state, player, record.id)
+    ) {
       return blockedBy(`The extra city action from ${effect.name} has already been used. Undo that city action first.`)
+    }
+
+    const activationIndex = state.assistedActions.findIndex((other) => other.id === record.id)
+    const dependentAction = state.assistedActions.find(
+      (other, index) =>
+        other.status === 'applied' &&
+        other.id !== record.id &&
+        ((effect.name === DARWIN_NAME &&
+          other.effect.kind === 'devoteToTheArts' &&
+          (other.effect.darwinActivationId === record.id ||
+            (other.effect.darwinActivationId === undefined &&
+              other.playerId === record.playerId &&
+              other.effect.usedAction?.key === DARWIN_KEY &&
+              index > activationIndex))) ||
+          (effect.name === KUROSAWA_NAME &&
+            'kurosawa' in other.effect &&
+            other.effect.kurosawa?.some(
+              (payment) =>
+                payment.playerId === record.playerId &&
+                (payment.cardActionId === record.id || (payment.cardActionId === undefined && index > activationIndex)),
+            ))),
+    )
+    if (dependentAction !== undefined) {
+      return blockedBy(`${effect.name} has already affected a devotion. Undo that devotion first.`)
     }
 
     // What the game did besides logging goes first, checked before anything changes
