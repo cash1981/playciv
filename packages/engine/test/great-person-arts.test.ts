@@ -183,14 +183,49 @@ describe('Ada Lovelace', () => {
     expect(cityActionsOf(undone, me(undone)).some((option) => option.extraAction)).toBe(false)
   })
 
-  it('does not mistake a manually confirmed second action for hers', () => {
+  it("does not use her credit for a second action confirmed before her card was played", () => {
     const card = withCardInHand(scene(), 'Ada Lovelace')
     const city = capitalId(card.state)
     const first = unwrap(devote(card.state, 'a1', city))
     const confirmed = unwrap(devote(first, 'a2', city, { confirmed: true }))
     const played = unwrap(play(confirmed, 'l1', card.itemId))
-    // The confirmed one came first and stays a confirmed one, so her action is unspent
-    expect(cityActionsOf(played, me(played)).some((option) => option.extraAction)).toBe(false)
+    expect(cityActionsOf(played, me(played)).every((option) => option.extraAction)).toBe(true)
+    expect(unwrap(devote(played, 'a3', city)).log.at(-1)?.publicLog).toContain('an extra city action from Ada Lovelace')
+  })
+
+  it('cannot be undone once an action has used her extra action, and can after that action is undone', () => {
+    const card = withCardInHand(scene(), 'Ada Lovelace')
+    const city = capitalId(card.state)
+    const first = unwrap(devote(card.state, 'a1', city))
+    const played = unwrap(play(first, 'l1', card.itemId))
+    const used = unwrap(devote(played, 'a2', city))
+
+    const entry = used.log.find((candidate) => candidate.assistedActionId === 'l1')
+    if (entry === undefined) throw new Error('no log line for Lovelace')
+    let pending = unwrap(initiateUndo(used, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of OTHERS.slice(0, -1)) pending = unwrap(vote(pending, { logId: entry.id, playerId, vote: true, at: AT }))
+    const refused = vote(pending, { logId: entry.id, playerId: OTHERS[2] as string, vote: true, at: AT })
+    expect(JSON.stringify(unwrapErr(refused))).toContain('already been used')
+
+    const freed = undoByVote(used, 'a2')
+    expect(cityActionsOf(freed, me(freed)).every((option) => option.extraAction)).toBe(true)
+    expect(me(undoByVote(freed, 'l1')).items.some((item) => item.id === card.itemId)).toBe(true)
+  })
+
+  it("is used up by Garcia's play on a capital that has already acted, which the log says", () => {
+    const lovelace = withCardInHand(scene(), 'Ada Lovelace')
+    const garcia = withCardInHand(lovelace.state, 'Jerry Garcia')
+    const first = unwrap(devote(garcia.state, 'a1', capitalId(garcia.state)))
+    const credit = unwrap(play(first, 'l1', lovelace.itemId))
+    const devoted = unwrap(play(credit, 'g1', garcia.itemId))
+    expect(devoted.log.at(-1)?.publicLog).toContain('an extra city action from Ada Lovelace')
+    expect(cityActionsOf(devoted, me(devoted)).some((option) => option.extraAction)).toBe(false)
+  })
+
+  it('cannot be played outside City Management', () => {
+    const card = withCardInHand(firstCivGame(), 'Ada Lovelace')
+    const listed = playableCardsOf(card.state, me(card.state)).find((candidate) => candidate.itemId === card.itemId)
+    expect(listed?.status).toBe('wrong-phase')
   })
 })
 

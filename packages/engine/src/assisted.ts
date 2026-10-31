@@ -1448,7 +1448,7 @@ const devoteToTheArts: AssistedActionDefinition = {
     }
     if (payload.darwin !== undefined && typeof payload.darwin !== 'boolean') return err(failed('darwin must be true or false.'))
     if (payload.darwin === true) {
-      if (option.darwin === null) return err(failed('Charles Darwin must be faceup in your hand, with a Scientist token on the map that is not blockaded.'))
+      if (option.darwin === null) return err(failed('Charles Darwin must be faceup in your hand, and not blockaded.'))
       if (option.darwin === 'used') return err(rejected('devoteToTheArts', blocked('used', 'Charles Darwin can turn culture into trade only once each turn.')))
     }
     const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)

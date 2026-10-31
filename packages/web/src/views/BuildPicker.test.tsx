@@ -164,7 +164,7 @@ function cityProduction(overrides: Partial<CityProduction> = {}): CityProduction
 
 function viewOf(
   build: readonly CityBuildOptions[] | undefined,
-  extra: { rev?: number; spectator?: boolean; theirs?: readonly CityProduction[]; acted?: readonly string[] } = {},
+  extra: { rev?: number; spectator?: boolean; theirs?: readonly CityProduction[]; acted?: readonly string[]; extraAction?: boolean } = {},
 ): PlayerView {
   return {
     rev: extra.rev ?? 7,
@@ -186,6 +186,7 @@ function viewOf(
                     devoteToTheArts: { status: 'ready', reason: 'Ready.', culture: 1, parts: [], notes: [], scouts: [] },
                     harvest: { status: 'unavailable', reason: 'Nothing to harvest.', choices: [], notes: [] },
                     actedThisTurn: extra.acted,
+                    extraAction: extra.extraAction ?? false,
                   },
                 ],
               }),
@@ -1474,6 +1475,18 @@ describe('a second action of the same city this turn', () => {
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(ask).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[4]).toBe(true)
+  })
+
+  it("asks nothing when Ada Lovelace's extra city action is left", async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()], { acted: ['Harvest'], extraAction: true })} />)
+    fireEvent.click(buildButton())
+    choose('Infantry unit')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).not.toHaveBeenCalled()
+    expect(send.mock.calls[0]).toHaveLength(4)
   })
 
   it('asks nothing of a city that has not acted, and sends no confirmedRepeat', async () => {

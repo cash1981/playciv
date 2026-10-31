@@ -45,7 +45,8 @@ all-city devote and Darwin on a Garcia play (no choice UI for them yet); enforci
 - `packages/engine/src/{assisted-arts,assisted,assisted-core,assisted-cards,card-timing,city-actions,state}.ts`
 - `packages/engine/test/`
 - `packages/server/src/routes/play.ts`, `packages/server/test/`
-- `packages/web/src/views/{CityGather,CityCard,BuildPicker}.tsx`, `packages/web/src/lib/api.ts`
+- `packages/web/src/views/{CityGather,CityCard,BuildPicker}.tsx` and their tests, `packages/web/src/lib/api.ts`
+- `packages/engine/src/city-defence.ts` (exports `isCapital`)
 - `docs/agents/`
 
 ## Acceptance criteria

@@ -450,6 +450,8 @@ export const CITY_ACTION_LABELS: Readonly<Partial<Record<AssistedActionKind, str
   harvest: 'Harvest',
 }
 
+export const LOVELACE_NAME = 'Ada Lovelace'
+
 /** One city action of the turn that is still in force: the city it counts against and what it is called. */
 interface CityActionRecord {
   readonly cityPieceId: string
@@ -459,13 +461,17 @@ interface CityActionRecord {
 /** Jerry Garcia's devotion is the capital's action for the turn (the other cities may still act). */
 const GARCIA_ACTION_LABEL = 'Devote to the Arts (Jerry Garcia)'
 
-/** The player's city actions of the current turn that have not been undone, oldest first. */
-function cityActionRecordsThisTurn(state: GameState, player: Playerhand): readonly CityActionRecord[] {
+/** One step of the player's turn that matters for extra city actions: a city action, or a Lovelace card. */
+type CityStep = { readonly lovelace: true } | (CityActionRecord & { readonly lovelace?: undefined })
+
+/** The player's city actions and Ada Lovelace plays of the current turn that have not been undone, oldest first. */
+function cityStepsThisTurn(state: GameState, player: Playerhand): readonly CityStep[] {
   const turn = turnStatus(state).currentTurn
-  return state.assistedActions.flatMap((record): readonly CityActionRecord[] => {
+  return state.assistedActions.flatMap((record): readonly CityStep[] => {
     const effect = record.effect
     if (record.status !== 'applied' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
     if (effect.kind === 'playCard') {
+      if (effect.name === LOVELACE_NAME) return [{ lovelace: true }]
       return effect.garcia === undefined ? [] : [{ cityPieceId: effect.garcia.capitalPieceId, label: GARCIA_ACTION_LABEL }]
     }
     const label = CITY_ACTION_LABELS[record.kind]
@@ -473,6 +479,9 @@ function cityActionRecordsThisTurn(state: GameState, player: Playerhand): readon
     return [{ cityPieceId: effect.cityPieceId, label }]
   })
 }
+
+const cityActionRecordsThisTurn = (state: GameState, player: Playerhand): readonly CityActionRecord[] =>
+  cityStepsThisTurn(state, player).flatMap((step) => (step.lovelace === true ? [] : [step]))
 
 /**
  * The city actions this city has taken this turn that are still in force (not undone), by name, oldest
@@ -484,26 +493,25 @@ export function cityActionsTakenThisTurn(state: GameState, player: Playerhand, c
     .map((record) => record.label)
 }
 
-export const LOVELACE_NAME = 'Ada Lovelace'
 
 /**
- * The extra city actions Ada Lovelace has given this turn that no action has used yet: the cards of
- * hers played this turn that were not undone, less the actions that came after a city's first. A city's
- * second action is asked about unless one is left.
+ * The extra city actions Ada Lovelace has given this turn that no action has used yet. The turn is
+ * replayed in order: an action that is not its city's first uses a credit if one has been played by then,
+ * so a second action confirmed before her card was played stays that player's own and uses none. A city's
+ * second action is asked about unless a credit is left.
  */
 export function extraCityActionsLeft(state: GameState, player: Playerhand): number {
-  const turn = turnStatus(state).currentTurn
-  const credits = state.assistedActions.filter(
-    (record) =>
-      record.status === 'applied' &&
-      record.playerId === player.playerId &&
-      record.turnNumber === turn &&
-      record.effect.kind === 'playCard' &&
-      record.effect.name === LOVELACE_NAME,
-  ).length
-  const records = cityActionRecordsThisTurn(state, player)
-  const extras = records.length - new Set(records.map((record) => record.cityPieceId)).size
-  return Math.max(0, credits - extras)
+  let left = 0
+  const acted = new Set<string>()
+  for (const step of cityStepsThisTurn(state, player)) {
+    if (step.lovelace === true) {
+      left += 1
+    } else {
+      if (acted.has(step.cityPieceId) && left > 0) left -= 1
+      acted.add(step.cityPieceId)
+    }
+  }
+  return left
 }
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'

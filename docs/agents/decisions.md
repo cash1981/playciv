@@ -195,20 +195,24 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   board gives each city (scouts' squares are not sent), as the capital's city
   action: the capital counts as having acted (named "Devote to the Arts (Jerry
   Garcia)"), the other cities may still act with no question. A capital is a
-  `capital` piece or a metropolis; without one the play is refused. If the capital
-  had already acted the log says so; it is not refused, like any second action.
+  `capital` piece or a metropolis; without one the play is refused. Unlike another
+  second action, a Garcia play on a capital that has already acted is not refused
+  or asked about (a card play has no such question); the log says so, or says the
+  action came from Ada Lovelace when her credit is left.
   Ada Lovelace is an "extra city action" credit derived from the applied records
-  of the turn: her plays that were not undone, less the actions that came after a
-  city's first. While one is left a city's second action is taken with no question
-  (`extraAction` on the city options, own view) and the log says it came from her;
-  a manually confirmed second action made before her play is not taken for hers.
-  Anarchy is not enforced for the capital anywhere, so her anarchy clause needs
-  nothing.
+  of the turn, replayed in order: each of her plays adds a credit, and a city
+  action that is not its city's first uses one if one has been played by then. While
+  one is left a city's second action is taken with no question (`extraAction` on
+  the city options, own view) and the log says it came from her. A second action
+  confirmed before she was played stays the player's own and uses no credit. Her
+  play cannot be undone in the turn once an action has used the credit; undo that
+  action first. Anarchy is not enforced for the capital anywhere, so her anarchy
+  clause needs nothing.
 - Akira Kurosawa, faceup and not blockaded, pays his holder 1 culture for every
   city another player devotes (also each city of Garcia's play), in the same log
   line; the holder's own devotions pay nothing. Undoing the devotion takes the
   culture back from the holder as far as it is still there and the undo line says
-  when it was spent. Charles Darwin, faceup, adds a box to Devote to the Arts
+  when it was spent. Charles Darwin, faceup and not blockaded, adds a box to Devote to the Arts
   (`darwin` on the option, `null` without the card): the city's culture, with the
   typed number if any, becomes the same amount of trade up to the end of the trade
   track, once each turn (`person:Charles Darwin` on the turn record). Undo returns

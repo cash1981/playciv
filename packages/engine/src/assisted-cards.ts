@@ -17,7 +17,7 @@ import { tradeCeilingOf } from './limits.js'
 import { payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf, ownCityFootprint } from './city-actions.js'
 import { isCapital } from './city-defence.js'
-import { cityActionsTakenThisTurn } from './assisted-core.js'
+import { LOVELACE_ACTION_NOTE, LOVELACE_NAME, cityActionsTakenThisTurn, extraCityActionsLeft } from './assisted-core.js'
 import { investableCoinsOf } from './sot.js'
 import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
@@ -515,7 +515,11 @@ function automate(
         said:
           `, devoting ${devoted.length} ${devoted.length === 1 ? 'city' : 'cities'} to the arts as the action of ${capital.label} ` +
           `and gaining ${culture} culture (${list})` +
-          (acted.length === 0 ? '' : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
+          (acted.length === 0
+            ? ''
+            : extraCityActionsLeft(state, player) > 0
+              ? LOVELACE_ACTION_NOTE
+              : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
           kurosawa.said,
       })
     }
@@ -1062,6 +1066,11 @@ export const playCard: AssistedActionDefinition = {
     const effect = record.effect
     if (effect.kind !== 'playCard') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
+
+    // Her extra city action cannot be taken away once a city action has used it
+    if (effect.name === LOVELACE_NAME && record.turnNumber === turnStatus(state).currentTurn && extraCityActionsLeft(state, player) < 1) {
+      return blockedBy(`The extra city action from ${effect.name} has already been used. Undo that city action first.`)
+    }
 
     // What the game did besides logging goes first, checked before anything changes
     const drewCard = effect.drew === undefined ? undefined : player.items.find((candidate) => candidate.id === effect.drew?.itemId)
