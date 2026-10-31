@@ -199,14 +199,14 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   second action, a Garcia play on a capital that has already acted is not refused
   or asked about (a card play has no such question); the log says so, or says the
   action came from Ada Lovelace when her credit is left.
-  Ada Lovelace is an "extra city action" credit derived from the applied records
-  of the turn, replayed in order: each of her plays adds a credit, and a city
-  action that is not its city's first uses one if one has been played by then. While
-  one is left a city's second action is taken with no question (`extraAction` on
-  the city options, own view) and the log says it came from her. A second action
-  confirmed before she was played stays the player's own and uses no credit. Her
-  play cannot be undone in the turn once an action has used the credit; undo that
-  action first. Anarchy is not enforced for the capital anywhere, so her anarchy
+  Ada Lovelace is an "extra city action" credit: a city action that is not its
+  city's first, taken after her play, carries her play's id (`lovelaceCreditId` on
+  the record). While a play of hers this turn has no such action a city's second
+  action is taken with no question (`extraAction` on the city options, own view)
+  and the log says it came from her. A second action confirmed before she was
+  played carries no id and uses no credit; undoing an action frees only its own
+  credit. Her play cannot be undone while an action that carries its id is in
+  force; undo that action first. Anarchy is not enforced for the capital anywhere, so her anarchy
   clause needs nothing.
 - Akira Kurosawa, faceup and not blockaded, pays his holder 1 culture for every
   city another player devotes (also each city of Garcia's play), in the same log
@@ -217,6 +217,9 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   typed number if any, becomes the same amount of trade up to the end of the trade
   track, once each turn (`person:Charles Darwin` on the turn record). Undo returns
   culture and trade and frees him; it is blocked if that trade has been spent.
+  A devotion that Darwin or Kurosawa changed names the card play that made it so
+  (`darwinActivationId`, `cardActionId` on the payment), and that card play cannot
+  be undone until the devotion is.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

@@ -918,8 +918,6 @@ export interface AssistedActionRecord {
   readonly effect: AssistedEffect
   /** The Ada Lovelace play whose extra city action this record consumed. */
   readonly lovelaceCreditId?: string
-  /** Number of assisted records already present when this action was undone, for legacy dependency inference. */
-  readonly undoneAtActionCount?: number
   /**
    * Set when the card had already been used this turn and the player confirmed
    * using it again. The record then shares the first use's `usageKey`, which is

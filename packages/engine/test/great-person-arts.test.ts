@@ -92,12 +92,6 @@ function undoRejection(state: GameState, requestId: string) {
   return vote(pending, { logId: entry.id, playerId: OTHERS[2] as string, vote: true, at: AT })
 }
 
-function withoutField<T extends object>(value: T, field: keyof T): T {
-  const copy = { ...value }
-  Reflect.deleteProperty(copy, field)
-  return copy
-}
-
 const devote = (
   state: GameState,
   requestId: string,
@@ -288,79 +282,7 @@ describe('Ada Lovelace', () => {
     expect(JSON.stringify(unwrapErr(undoRejection(secondPlayed, 'l1')))).toContain('already been used')
   })
 
-  it('keeps older consumers attached to their original credits when another consumer is undone', () => {
-    const firstCard = withCardInHand(scene(), 'Ada Lovelace')
-    const owner = firstCard.state.players.find((candidate) => candidate.playerId === CASH1981)
-    const card = owner?.items.find((item) => item.id === firstCard.itemId)
-    if (card === undefined) throw new Error('no Lovelace card')
-    const secondId = `${card.id}-copy`
-    const withSecondCard = {
-      ...firstCard.state,
-      players: firstCard.state.players.map((candidate) =>
-        candidate.playerId === CASH1981
-          ? { ...candidate, items: [...candidate.items, { ...card, id: secondId }] }
-          : candidate,
-      ),
-    }
-    const city = capitalId(withSecondCard)
-    const first = unwrap(devote(withSecondCard, 'a1', city))
-    const firstPlayed = unwrap(play(first, 'l1', firstCard.itemId))
-    const firstConsumer = unwrap(devote(firstPlayed, 'a2', city))
-    const secondPlayed = unwrap(play(firstConsumer, 'l2', secondId))
-    const secondConsumer = unwrap(devote(secondPlayed, 'a3', city))
-    const legacy = {
-      ...secondConsumer,
-      assistedActions: secondConsumer.assistedActions.map((record) =>
-        record.id === 'a2' || record.id === 'a3' ? withoutField(record, 'lovelaceCreditId') : record,
-      ),
-    }
-    const firstConsumerUndone = undoByVote(legacy, 'a2')
-
-    expect(me(undoByVote(firstConsumerUndone, 'l1')).items.some((item) => item.id === firstCard.itemId)).toBe(true)
-    expect(JSON.stringify(unwrapErr(undoRejection(firstConsumerUndone, 'l2')))).toContain('already been used')
-  })
-
-  it('does not expose a legacy credit after a consumer without undo chronology is undone', () => {
-    const card = withCardInHand(scene(), 'Ada Lovelace')
-    const city = capitalId(card.state)
-    const first = unwrap(devote(card.state, 'a1', city))
-    const played = unwrap(play(first, 'l1', card.itemId))
-    const consumed = unwrap(devote(played, 'a2', city))
-    const undone = undoByVote(consumed, 'a2')
-    const legacy = {
-      ...undone,
-      assistedActions: undone.assistedActions.map((record) =>
-        record.id === 'a2' ? withoutField(record, 'undoneAtActionCount') : record,
-      ),
-    }
-    const next = unwrap(devote(legacy, 'a3', city))
-
-    expect(cityActionsOf(next, me(next)).some((option) => option.extraAction)).toBe(false)
-    expect(JSON.stringify(unwrapErr(undoRejection(next, 'l1')))).toContain('already been used')
-  })
-
-  it('keeps older unlinked records protected after an earlier city action is undone', () => {
-    const card = withCardInHand(scene(), 'Ada Lovelace')
-    const city = capitalId(card.state)
-    const first = unwrap(devote(card.state, 'a1', city))
-    const played = unwrap(play(first, 'l1', card.itemId))
-    const consumed = unwrap(devote(played, 'a2', city))
-    const legacy = {
-      ...consumed,
-      assistedActions: consumed.assistedActions.map((record) => {
-        if (record.id !== 'a2') return record
-        const unlinked = { ...record }
-        Reflect.deleteProperty(unlinked, 'lovelaceCreditId')
-        return unlinked
-      }),
-    }
-    const earlierUndone = undoByVote(legacy, 'a1')
-
-    expect(cityActionsOf(earlierUndone, me(earlierUndone)).some((option) => option.extraAction)).toBe(false)
-    expect(JSON.stringify(unwrapErr(undoRejection(earlierUndone, 'l1')))).toContain('already been used')
-  })
-
-  it('does not infer a legacy credit use from a city action undone before Lovelace was played', () => {
+  it('gives the credit back to an action taken after an earlier action was undone, before her play', () => {
     const card = withCardInHand(scene(), 'Ada Lovelace')
     const city = capitalId(card.state)
     const first = unwrap(devote(card.state, 'a1', city))
@@ -372,7 +294,7 @@ describe('Ada Lovelace', () => {
     expect(me(undoByVote(action, 'l1')).items.some((item) => item.id === card.itemId)).toBe(true)
   })
 
-  it('does not infer a legacy credit use when the earlier action was undone before the later action', () => {
+  it('keeps her credit for the next action when an earlier action is undone after her play', () => {
     const card = withCardInHand(scene(), 'Ada Lovelace')
     const city = capitalId(card.state)
     const first = unwrap(devote(card.state, 'a1', city))
@@ -433,23 +355,8 @@ describe('Akira Kurosawa', () => {
       }),
     )
     const devoted = unwrap(devote(played, 'k1', capitalId(played)))
-    const legacy = {
-      ...devoted,
-      assistedActions: devoted.assistedActions.map((record) =>
-        record.id === 'k1' && record.effect.kind === 'devoteToTheArts' && record.effect.kurosawa !== undefined
-          ? {
-              ...record,
-              effect: {
-                ...record.effect,
-                kurosawa: record.effect.kurosawa.map((payment) => withoutField(payment, 'cardActionId')),
-              },
-            }
-          : record,
-      ),
-    }
 
     expect(JSON.stringify(unwrapErr(undoRejection(devoted, 'k0')))).toContain('Undo that devotion first')
-    expect(JSON.stringify(unwrapErr(undoRejection(legacy, 'k0')))).toContain('Undo that devotion first')
     const reversed = undoByVote(devoted, 'k1')
     expect(undoByVote(reversed, 'k0').players.find((candidate) => candidate.playerId === KARANDRAS1)?.items).toContainEqual(
       expect.objectContaining({ id: card.itemId, hidden: true }),
@@ -533,17 +440,7 @@ describe('Charles Darwin', () => {
     const card = withCardInHand(scene(), 'Charles Darwin')
     const played = unwrap(play(card.state, 'd0', card.itemId))
     const devoted = unwrap(devote(played, 'd1', capitalId(played), { darwin: true }))
-    const legacy = {
-      ...devoted,
-      assistedActions: devoted.assistedActions.map((record) =>
-        record.id === 'd1' && record.effect.kind === 'devoteToTheArts'
-          ? { ...record, effect: withoutField(record.effect, 'darwinActivationId') }
-          : record,
-      ),
-    }
-
     expect(JSON.stringify(unwrapErr(undoRejection(devoted, 'd0')))).toContain('Undo that devotion first')
-    expect(JSON.stringify(unwrapErr(undoRejection(legacy, 'd0')))).toContain('Undo that devotion first')
     const reversed = undoByVote(devoted, 'd1')
     expect(undoByVote(reversed, 'd0').players.find((candidate) => candidate.playerId === CASH1981)?.items).toContainEqual(
       expect.objectContaining({ id: card.itemId, hidden: true }),

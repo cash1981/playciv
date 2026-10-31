@@ -14,7 +14,7 @@
  */
 
 import { tradeCeilingOf } from './limits.js'
-import { DARWIN_KEY, DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
+import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
 import {
   LOVELACE_ACTION_NOTE,
@@ -1070,34 +1070,19 @@ export const playCard: AssistedActionDefinition = {
     if (effect.kind !== 'playCard') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
 
-    // Older records lack the link, so their credit use is inferred in action order
-    if (
-      effect.name === LOVELACE_NAME &&
-      record.turnNumber === turnStatus(state).currentTurn &&
-      lovelaceCreditWasUsed(state, player, record.id)
-    ) {
+    // Her extra city action cannot be taken away while a city action that used it is in force
+    if (effect.name === LOVELACE_NAME && lovelaceCreditWasUsed(state, record.id)) {
       return blockedBy(`The extra city action from ${effect.name} has already been used. Undo that city action first.`)
     }
 
-    const activationIndex = state.assistedActions.findIndex((other) => other.id === record.id)
+    // A devotion that Darwin or Kurosawa changed names the card play that made it so
     const dependentAction = state.assistedActions.find(
-      (other, index) =>
+      (other) =>
         other.status === 'applied' &&
-        other.id !== record.id &&
-        ((effect.name === DARWIN_NAME &&
-          other.effect.kind === 'devoteToTheArts' &&
-          (other.effect.darwinActivationId === record.id ||
-            (other.effect.darwinActivationId === undefined &&
-              other.playerId === record.playerId &&
-              other.effect.usedAction?.key === DARWIN_KEY &&
-              index > activationIndex))) ||
+        ((effect.name === DARWIN_NAME && other.effect.kind === 'devoteToTheArts' && other.effect.darwinActivationId === record.id) ||
           (effect.name === KUROSAWA_NAME &&
             'kurosawa' in other.effect &&
-            other.effect.kurosawa?.some(
-              (payment) =>
-                payment.playerId === record.playerId &&
-                (payment.cardActionId === record.id || (payment.cardActionId === undefined && index > activationIndex)),
-            ))),
+            other.effect.kurosawa?.some((payment) => payment.cardActionId === record.id) === true)),
     )
     if (dependentAction !== undefined) {
       return blockedBy(`${effect.name} has already affected a devotion. Undo that devotion first.`)

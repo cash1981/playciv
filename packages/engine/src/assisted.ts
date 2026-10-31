@@ -32,7 +32,7 @@ import {
   PHASE_REASON,
   READY,
   REPEAT_NOTE,
-  CITY_ACTION_LABELS,
+  cityActionOf,
   blocked,
   earlierCityActions,
   freeTurnAction,
@@ -1966,16 +1966,9 @@ export function performAssistedAction(
 
   const status = turnStatus(state)
   const effect = applied.value.effect
-  const cityPieceId =
-    effect.kind === 'playCard'
-      ? effect.garcia?.capitalPieceId
-      : CITY_ACTION_LABELS[input.action] !== undefined &&
-          'cityPieceId' in effect &&
-          typeof effect.cityPieceId === 'string'
-        ? effect.cityPieceId
-        : undefined
+  const cityAction = cityActionOf({ kind: input.action, effect })
   const lovelaceCreditId =
-    cityPieceId === undefined ? undefined : lovelaceCreditForAction(state, player, cityPieceId)
+    cityAction === undefined ? undefined : lovelaceCreditForAction(state, player, cityAction.cityPieceId)
   const record: AssistedActionRecord = {
     id: input.requestId,
     kind: input.action,
@@ -2045,9 +2038,7 @@ export function reverseAssistedAction(
   const marked: GameState = {
     ...reversed.value.state,
     assistedActions: reversed.value.state.assistedActions.map((candidate) =>
-      candidate.id === record.id
-        ? { ...candidate, status: 'undone' as const, undoneAtActionCount: state.assistedActions.length }
-        : candidate,
+      candidate.id === record.id ? { ...candidate, status: 'undone' as const } : candidate,
     ),
   }
   // A confirmed repeat shares the first use's key, so the key is freed only when no
