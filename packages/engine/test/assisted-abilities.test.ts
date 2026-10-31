@@ -15,6 +15,7 @@ import { ABILITY_ACTIONS, ABILITY_KINDS } from '../src/assisted-abilities.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
 import { coinSourcesOf } from '../src/coins.js'
 import { cultureMarkerOf } from '../src/culture-track.js'
+import { tradeCeilingOf } from '../src/limits.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { AssistedActionKind, GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
@@ -218,6 +219,21 @@ describe("Lorenzo de' Medici and Alan Turing", () => {
     const built = put(put(base, CASH1981, 'figures/redarmy', 2, 2), CASH1981, 'figures/redarmy', 3, 2)
     const less = unwrap(act(built, 'sot:turing'))
     expect(me(less).stats).toMatchObject({ trade: 2, culture: 2 })
+  })
+
+  it('Jim Henson gives culture and trade equal to his wound markers', () => {
+    const base = withPerson(sotTurn({ culture: 0, trade: 0 }), 'Jim Henson')
+    const wounded = { ...base, players: base.players.map((hand) => (hand.playerId === CASH1981 ? { ...hand, hensonWounds: 3 } : hand)) }
+    expect(me(unwrap(act(wounded, 'sot:henson'))).stats).toMatchObject({ trade: 3, culture: 3 })
+    expect(playableCardsOf(wounded, me(wounded)).map((card) => card.name)).not.toContain('Jim Henson')
+  })
+
+  it('Jim Henson stops the trade at the end of the track and keeps the culture', () => {
+    const ceiling = tradeCeilingOf(me(sotTurn()).civilization?.name)
+    const base = withPerson(sotTurn({ culture: 0, trade: ceiling - 1 }), 'Jim Henson')
+    const wounded = { ...base, players: base.players.map((hand) => (hand.playerId === CASH1981 ? { ...hand, hensonWounds: 3 } : hand)) }
+    const used = unwrap(act(wounded, 'sot:henson'))
+    expect(me(used).stats).toMatchObject({ trade: ceiling, culture: 3 })
   })
 
   it('cannot be used while every Scientist figure of the player is blockaded', () => {

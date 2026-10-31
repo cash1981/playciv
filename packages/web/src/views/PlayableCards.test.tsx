@@ -310,6 +310,51 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], convert: { from: 'trade', amount: 4 } })
   })
 
+  it('asks Jacques Cousteau where the Harbors go, at most three, and sends the squares', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const squares = [
+      { cityPieceId: 'p1', cityLabel: 'City at B2', column: 2, row: 0, label: 'C1' },
+      { cityPieceId: 'p1', cityLabel: 'City at B2', column: 3, row: 0, label: 'D1' },
+      { cityPieceId: 'p1', cityLabel: 'City at B2', column: 4, row: 0, label: 'E1' },
+      { cityPieceId: 'p1', cityLabel: 'City at B2', column: 5, row: 0, label: 'F1' },
+    ]
+    const cousteau = card({ name: 'Jacques Cousteau', timings: ['SOT'], targets: { kind: 'none' }, prompt: '', harbors: squares })
+    renderControl(viewWith([cousteau]), cousteau)
+    fireEvent.click(playButton('Jacques Cousteau'))
+    expect(confirmButton().disabled).toBe(true)
+    for (const label of ['C1', 'D1', 'E1']) fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(`^${label}`) }))
+    expect((screen.getByRole('checkbox', { name: /^F1/ }) as HTMLInputElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: /^E1/ }))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({
+      itemId: 'c1',
+      targets: [],
+      harbors: [
+        { cityPieceId: 'p1', column: 2, row: 0 },
+        { cityPieceId: 'p1', column: 3, row: 0 },
+      ],
+    })
+  })
+
+  it('forgets ticked Harbor squares that a refresh took away', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const square = (column: number, label: string) => ({ cityPieceId: 'p1', cityLabel: 'City at B2', column, row: 0, label })
+    const first = card({ name: 'Jacques Cousteau', timings: ['SOT'], targets: { kind: 'none' }, prompt: '', harbors: [square(2, 'C1'), square(3, 'D1'), square(4, 'E1'), square(5, 'F1')] })
+    const { rerender } = renderControl(viewWith([first]), first)
+    fireEvent.click(playButton('Jacques Cousteau'))
+    for (const label of ['C1', 'D1', 'E1']) fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(`^${label}`) }))
+
+    const later = { ...first, harbors: [square(5, 'F1')] }
+    rerender(<PlayCardControl card={later} gameId="g1" view={viewWith([later])} busy={false} readOnly={false} run={run} />)
+    expect((screen.getByRole('checkbox', { name: /^F1/ }) as HTMLInputElement).disabled).toBe(false)
+    expect(confirmButton().disabled).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: /^F1/ }))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], harbors: [{ cityPieceId: 'p1', column: 5, row: 0 }] })
+  })
+
   it('closes the form on Cancel without sending anything', () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     renderControl(viewWith([card()]), card())

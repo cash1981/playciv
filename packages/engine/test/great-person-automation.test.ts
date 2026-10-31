@@ -6,13 +6,14 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece } from '../src/actions/board.js'
+import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { drawWonderToBoard } from '../src/actions/draw.js'
 import { chooseTech, removeTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { spendResource, returnResource } from '../src/assisted-resources.js'
+import { playableCardsOf } from '../src/assisted-cards.js'
 import { buildOptionsOf } from '../src/build-options.js'
 import type { BuildPayload } from '../src/build-options.js'
 import { cultureMarkerLevelOf, toPlayerView } from '../src/state.js'
@@ -21,7 +22,7 @@ import { findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import { SQUARE_SIZE } from '../src/board.js'
 import type { GameState, Playerhand } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
-import { unwrap } from '../src/result.js'
+import { unwrap, unwrapErr } from '../src/result.js'
 
 import { startOfTurn, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { withCivilization, withMarkerAt, withStats } from './culture-advance-fixture.js'
@@ -314,6 +315,83 @@ describe('Michelangelo', () => {
     const undone = undoByVote(built, 'build-1')
     expect(me(undone).wonderDiscount).toBe(5)
     expect(me(undone).stats.trade).toBe(60)
+  })
+})
+
+describe('Jim Henson', () => {
+  const wonderBuild = (state: GameState): GameState => {
+    const options = buildOptionsOf(state, me(state))[0]
+    const wonder = options?.choices.find((choice) => choice.item.kind === 'wonder')
+    const target = wonder?.squares[0]
+    if (wonder === undefined || target === undefined) throw new Error('no wonder to build')
+    const payload: BuildPayload = { cityPieceId: placedCity(state).id, item: { kind: 'wonder', assetId: wonder.assetId }, target, rush: true }
+    return unwrap(performAssistedAction(state, { playerId: CASH1981, action: 'build', requestId: 'henson-build', at: AT, payload }))
+  }
+
+  it('takes a wound marker for a wonder built while faceup, and gives it back on undo', () => {
+    const market = unwrap(drawWonderToBoard(withStats(cityManagement(scene()), { trade: 60 }), CASH1981, 'ANCIENT_WONDERS'))
+    const card = withCardInHand(market, 'Jim Henson')
+    const faceup = revealed(card.state, card.itemId)
+    const built = wonderBuild(faceup)
+    expect(me(built).hensonWounds).toBe(1)
+    expect(built.log.find((entry) => entry.assistedActionId === 'henson-build')?.publicLog).toContain('Jim Henson took a wound marker')
+    expect(me(undoByVote(built, 'henson-build')).hensonWounds).toBe(0)
+  })
+
+  it('takes no wound marker while hidden', () => {
+    const market = unwrap(drawWonderToBoard(withStats(cityManagement(scene()), { trade: 60 }), CASH1981, 'ANCIENT_WONDERS'))
+    const card = withCardInHand(market, 'Jim Henson')
+    expect(me(wonderBuild(card.state)).hensonWounds).toBe(0)
+  })
+})
+
+describe('Jacques Cousteau', () => {
+  const coastal = () => {
+    const card = withCardInHand(scene(), 'Jacques Cousteau')
+    return { ...card, city: placedCity(card.state) }
+  }
+  const playHarbors = (state: GameState, itemId: string, harbors: readonly { cityPieceId: string; column: number; row: number }[], id = 'cousteau-1') =>
+    performAssistedAction(state, { playerId: CASH1981, action: 'playCard', requestId: id, at: AT, payload: { itemId, targets: [], harbors } })
+
+  it('lists the squares where a free Harbor can go, to its owner', () => {
+    const { state, itemId, city } = coastal()
+    const listed = playableCardsOf(state, me(state)).find((card) => card.itemId === itemId)
+    expect(listed?.harbors).toEqual([expect.objectContaining({ cityPieceId: city.id, column: 2, row: 0, label: 'C1' })])
+  })
+
+  it('builds a Harbor for free without the tech, discards the card, and takes it all back on undo', () => {
+    const { state, itemId, city } = coastal()
+    const played = unwrap(playHarbors(state, itemId, [{ cityPieceId: city.id, column: 2, row: 0 }]))
+    const harbor = played.board.pieces.find((piece) => piece.assetId === 'buildings/harbor')
+    expect(harbor).toBeDefined()
+    expect(played.discardedItems.some((item) => item.id === itemId)).toBe(true)
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Jacques Cousteau (start of turn) and discarded it, building a Harbor for free on C1')
+    expect(me(played).stats.trade).toBe(me(state).stats.trade)
+
+    const undone = undoByVote(played, 'cousteau-1')
+    expect(undone.board.pieces.some((piece) => piece.assetId === 'buildings/harbor')).toBe(false)
+    expect(me(undone).items.some((item) => item.id === itemId)).toBe(true)
+    expect(undone.discardedItems.some((item) => item.id === itemId)).toBe(false)
+  })
+
+  it('keeps the board Undo from taking a Harbor off alone, before or after the vote', () => {
+    const { state, itemId, city } = coastal()
+    const played = unwrap(playHarbors(state, itemId, [{ cityPieceId: city.id, column: 2, row: 0 }]))
+    expect(unwrapErr(undoLastBoardChange(played, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+
+    const undone = undoByVote(played, 'cousteau-1')
+    expect(undone.board.redo).toEqual([])
+    expect(undoLastBoardChange(undone, CASH1981).ok).toBe(false)
+  })
+
+  it('refuses no square, more than three, the same square twice, and a square that cannot take a Harbor', () => {
+    const { state, itemId, city } = coastal()
+    const at = (column: number, row: number) => ({ cityPieceId: city.id, column, row })
+    expect(playHarbors(state, itemId, []).ok).toBe(false)
+    expect(playHarbors(state, itemId, [at(2, 0), at(2, 0)]).ok).toBe(false)
+    expect(playHarbors(state, itemId, [at(2, 0), at(0, 0), at(1, 0), at(2, 1)]).ok).toBe(false)
+    expect(JSON.stringify(playHarbors(state, itemId, [at(0, 2)]))).toContain('Harbor')
+    expect(playHarbors(state, itemId, [{ cityPieceId: 'nobody', column: 2, row: 0 }]).ok).toBe(false)
   })
 })
 

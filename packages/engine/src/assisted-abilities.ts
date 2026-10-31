@@ -60,6 +60,7 @@ import { cultureMarkerOf, rewardDrawCount } from './culture-track.js'
 import type { CultureLevel } from './culture-track.js'
 import { itemName } from './item.js'
 import type { GreatPersonItem, HutItem, Item } from './item.js'
+import { tradeCeilingOf } from './limits.js'
 import { appendLog } from './log.js'
 import { err, ok } from './result.js'
 import { SHEET_LABEL } from './sheet-name.js'
@@ -320,6 +321,22 @@ const STAT_GAINS: readonly StatGainSpec[] = [
         trade: pairs,
         culture: pairs,
         text: `1 trade and 1 culture for every 2 armies you have not built (${unbuiltArmies(state, player)} in your supply)`,
+      }
+    },
+  },
+  {
+    kind: kindOf('henson'),
+    label: 'Jim Henson',
+    group: PEOPLE,
+    usageKey: 'person:henson',
+    block: personBlock('Jim Henson'),
+    gain(_state, player) {
+      // The trade track ends at its ceiling: only the room left is added, and undo takes back that much
+      const room = Math.max(0, tradeCeilingOf(player.civilization?.name) - player.stats.trade)
+      return {
+        trade: Math.min(player.hensonWounds, room),
+        culture: player.hensonWounds,
+        text: `culture and trade equal to the wound markers on Jim Henson (${player.hensonWounds})`,
       }
     },
   },

@@ -132,6 +132,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     wonderDiscount: 0,
     freeAdvances: 0,
     freeAdvancesTurn: 0,
+    hensonWounds: 0,
     curieSubstitute: null,
   }
 }

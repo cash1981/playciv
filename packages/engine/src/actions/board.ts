@@ -1082,6 +1082,10 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'playCard' && effect.cardMove?.moves.some((move) => move.historyId === entry.id) === true) {
       return true
     }
+    // Cousteau's Harbors were built as part of playing the card: the board Undo must not take one alone
+    if (effect.kind === 'playCard' && effect.harbors?.some((harbor) => harbor.historyId === entry.id) === true) {
+      return true
+    }
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
     // A harvest put one resource token in the player's area

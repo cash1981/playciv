@@ -107,6 +107,7 @@ import { WONDERS_IN_ERA, WONDERS_PER_ERA, WONDER_ERAS } from './wonder-data.js'
 import type { WonderEra } from './wonder-data.js'
 import { BUILDING_PROGRAM_ASSET_ID } from './city-production.js'
 import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
+import { activeGreatPerson } from './great-person-effects.js'
 import type { EngineError } from './errors.js'
 import { MAX_DEVOTE_CULTURE } from './limits.js'
 import { itemName } from './item.js'
@@ -930,9 +931,12 @@ const build: AssistedActionDefinition = {
     // Michelangelo's discount is one-shot and is used up by this wonder build.
     const wonderDiscount =
       payload.item.kind === 'wonder' ? paying.wonderDiscount : 0
+    // Jim Henson, while faceup, takes a wound marker for every wonder built
+    const hensonWound = payload.item.kind === 'wonder' && activeGreatPerson(board, paying, 'Jim Henson')
     const paid = withPlayerHand(board, {
       ...paying,
       wonderDiscount: paying.wonderDiscount - wonderDiscount,
+      ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
       stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
     })
     const where =
@@ -959,6 +963,7 @@ const build: AssistedActionDefinition = {
         (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
         (removal === null ? '' : ', using up the Building Program marker') +
         (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
+        (hensonWound ? ', and Jim Henson took a wound marker' : '') +
         again.note,
       privateLog: '',
       createdAt: context.at ?? null,
@@ -1057,6 +1062,7 @@ const build: AssistedActionDefinition = {
         marker: removal,
         ...(caravan === undefined ? {} : { caravan }),
         ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
+        ...(hensonWound ? { hensonWound: true as const } : {}),
       },
       logId,
     })
@@ -1197,13 +1203,11 @@ const build: AssistedActionDefinition = {
       const withOld = putReplacedBack(returned, refunded, effect, at)
       const withMarker = markersBack(withOld, refunded, effect, at)
       const restoredPlayer = playerOf(withMarker, record.playerId) ?? refunded
-      const restored =
-        effect.wonderDiscount === undefined
-          ? withMarker
-          : withPlayerHand(withMarker, {
-              ...restoredPlayer,
-              wonderDiscount: restoredPlayer.wonderDiscount + effect.wonderDiscount,
-            })
+      const restored = withPlayerHand(withMarker, {
+        ...restoredPlayer,
+        wonderDiscount: restoredPlayer.wonderDiscount + (effect.wonderDiscount ?? 0),
+        hensonWounds: Math.max(0, restoredPlayer.hensonWounds - (effect.hensonWound === true ? 1 : 0)),
+      })
       return ok({
         state: restored,
         text:
@@ -2030,11 +2034,12 @@ export function reverseAssistedAction(
   if (effect.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }
-  // Galileo's undo wrote the reverse moves itself. Keep the board Undo from walking past them into
+  // Galileo's (and Cousteau's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
   // the forward moves, which would teleport the already-restored figures to the destination again.
   if (
     effect.kind === 'steamPower' ||
-    (effect.kind === 'playCard' && (effect.galileo !== undefined || effect.cardMove !== undefined))
+    (effect.kind === 'playCard' &&
+      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined))
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }

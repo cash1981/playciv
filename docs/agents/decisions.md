@@ -183,6 +183,14 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   "In effect" with no Use button, and a second play is refused. William Shakespeare
   is in effect as soon as he is faceup, because his skip is a choice of the advance
   buttons. Undoing the play makes the Use button return.
+- Jim Henson keeps his wound markers as `hensonWounds` on the hand: a wonder built
+  with him faceup (and his type not blockaded) adds one, the public line says so,
+  and undoing the build takes it off. His Start of Turn button gives the same
+  amount of culture and trade; he has no Play button. Jacques Cousteau builds 1 to
+  3 Harbors for free in Start of Turn: the player picks squares from the engine's
+  list (empty water squares in the outskirts of their cities, no unlock or
+  production needed, no limit of one a city since the card does not name one; a replacement is not offered), the card is
+  discarded, and one undo removes the Harbors again.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.
