@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### great-person-trade
+
+- **Owner:** Claude Code (Sonnet 5.5)
+- **Branch:** `feat/great-person-trade`
+- **Brief:** `docs/agents/tasks/great-person-trade.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/assisted-{cards,sot,core}.ts`, `assisted.ts`, `build-options.ts`, `card-timing.ts`, `state.ts`, `actions/board.ts`, `packages/server/src/routes/`, `packages/web/src/views/{PlayableCards,SotPanel}.tsx`, `packages/web/src/lib/api.ts`
+- **Notes:** stacked on `feat/great-person-arts` (PR #328); `state.ts` only for effect and view types.
 
 ## Format
 
