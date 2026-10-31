@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece } from '../src/actions/board.js'
+import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { drawWonderToBoard } from '../src/actions/draw.js'
 import { chooseTech, removeTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
@@ -22,7 +22,7 @@ import { findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import { SQUARE_SIZE } from '../src/board.js'
 import type { GameState, Playerhand } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
-import { unwrap } from '../src/result.js'
+import { unwrap, unwrapErr } from '../src/result.js'
 
 import { startOfTurn, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { withCivilization, withMarkerAt, withStats } from './culture-advance-fixture.js'
@@ -372,6 +372,16 @@ describe('Jacques Cousteau', () => {
     expect(undone.board.pieces.some((piece) => piece.assetId === 'buildings/harbor')).toBe(false)
     expect(me(undone).items.some((item) => item.id === itemId)).toBe(true)
     expect(undone.discardedItems.some((item) => item.id === itemId)).toBe(false)
+  })
+
+  it('keeps the board Undo from taking a Harbor off alone, before or after the vote', () => {
+    const { state, itemId, city } = coastal()
+    const played = unwrap(playHarbors(state, itemId, [{ cityPieceId: city.id, column: 2, row: 0 }]))
+    expect(unwrapErr(undoLastBoardChange(played, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+
+    const undone = undoByVote(played, 'cousteau-1')
+    expect(undone.board.redo).toEqual([])
+    expect(undoLastBoardChange(undone, CASH1981).ok).toBe(false)
   })
 
   it('refuses no square, more than three, the same square twice, and a square that cannot take a Harbor', () => {

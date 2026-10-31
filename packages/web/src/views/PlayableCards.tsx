@@ -117,7 +117,10 @@ export function PlayCardControl({
   const convertWhole = Number(convertAmount)
   const convertValid = conversion === null || (Number.isInteger(convertWhole) && convertWhole >= 1 && convertWhole <= convertHeld)
   const harborChoices = card.harbors ?? null
-  const harborsValid = harborChoices === null || (harborKeys.length >= 1 && harborKeys.length <= 3)
+  // A live refresh can take a square away: only the ticked squares still on offer count
+  const chosenHarborKeys =
+    harborChoices === null ? [] : harborKeys.filter((key) => harborChoices.some((choice) => harborKeyOf(choice) === key))
+  const harborsValid = harborChoices === null || (chosenHarborKeys.length >= 1 && chosenHarborKeys.length <= 3)
   const isGalileo = card.name === GALILEO_NAME
   const cardMove = card.mapMove ?? null
   const isMapMove = isGalileo || cardMove !== null
@@ -238,7 +241,7 @@ export function PlayCardControl({
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...harborKeys].sort().join('|')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -254,7 +257,7 @@ export function PlayCardControl({
             ? {}
             : {
                 harbors: harborChoices
-                  .filter((choice) => harborKeys.includes(harborKeyOf(choice)))
+                  .filter((choice) => chosenHarborKeys.includes(harborKeyOf(choice)))
                   .map((choice) => ({ cityPieceId: choice.cityPieceId, column: choice.column, row: choice.row })),
               }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
@@ -667,15 +670,15 @@ export function PlayCardControl({
               )}
               {harborChoices.map((choice) => {
                 const key = harborKeyOf(choice)
-                const checked = harborKeys.includes(key)
+                const checked = chosenHarborKeys.includes(key)
                 return (
                   <label key={key} className="play-card-target">
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={disabled || (!checked && harborKeys.length >= 3)}
+                      disabled={disabled || (!checked && chosenHarborKeys.length >= 3)}
                       onChange={() =>
-                        setHarborKeys(checked ? harborKeys.filter((other) => other !== key) : [...harborKeys, key])
+                        setHarborKeys(checked ? chosenHarborKeys.filter((other) => other !== key) : [...chosenHarborKeys, key])
                       }
                     />{' '}
                     {choice.label} ({choice.cityLabel})
