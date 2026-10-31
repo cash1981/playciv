@@ -9,15 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### great-person-zheng-he
-
-- **Owner:** Claude Code (Sonnet 5.5)
-- **Branch:** `feat/zheng-he`
-- **Brief:** `docs/agents/tasks/great-person-zheng-he.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/zheng-he.ts`, `packages/engine/src/assisted-cards.ts`, `packages/engine/src/actions/draw.ts`, `packages/engine/src/state.ts`, `packages/engine/src/card-timing.ts`
-- **Notes:** adds `GameState.underTokens` (hidden).
-
+_None._
 
 ## Format
 
