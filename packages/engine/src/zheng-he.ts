@@ -6,7 +6,7 @@
  * the deck, whichever piece it was. To make a look worth something the item is fixed to the piece: the
  * first look takes the top hut or village out of the deck and sets it under each piece that has none
  * (`GameState.underTokens`). A shuffle then cannot change what lies there, so nothing the player saw
- * becomes stale. When the piece leaves the map a draw gets its item first, on top of the deck.
+ * becomes stale. When the piece has left the map, a draw of that sheet gets its item first.
  */
 
 import { mapCellOf } from './blockade.js'
@@ -44,22 +44,21 @@ export function mapTokensOf(state: GameState): readonly { readonly piece: BoardP
 }
 
 /**
- * Gives the items under the pieces that have left the map (collected into an area, or taken off) back to
- * the deck, on top of their sheet, so the next draw gives what was under the piece. Nothing changes when
- * no look was ever made.
+ * The next draw of `sheetName` when an item lies under a piece that has left the map (collected or taken
+ * off): that one item goes on top of its sheet, so the draw gives what was under the piece. Every other
+ * item stays under its piece, out of the reach of a shuffle and of a later board undo that puts its piece
+ * back. Nothing changes when no look was ever made.
  */
-export function releaseLooseTokens(state: GameState): GameState {
+export function releaseLooseToken(state: GameState, sheetName: SheetName): GameState {
   const under = state.underTokens ?? []
   if (under.length === 0) return state
   const onMap = new Set(mapTokensOf(state).map((token) => token.piece.id))
-  const loose = under.filter((token) => !onMap.has(token.pieceId))
-  if (loose.length === 0) return state
+  const loose = under.find((token) => token.item.sheetName === sheetName && !onMap.has(token.pieceId))
+  if (loose === undefined) return state
+  const top = state.items.findIndex((item) => item.sheetName === sheetName)
   const items = [...state.items]
-  for (const token of loose) {
-    const top = items.findIndex((item) => item.sheetName === token.item.sheetName)
-    items.splice(top < 0 ? items.length : top, 0, { ...token.item, hidden: true, ownerId: null })
-  }
-  return { ...state, items, underTokens: under.filter((token) => onMap.has(token.pieceId)) }
+  items.splice(top < 0 ? items.length : top, 0, { ...loose.item, hidden: true, ownerId: null })
+  return { ...state, items, underTokens: under.filter((token) => token !== loose) }
 }
 
 export interface TokenLook {

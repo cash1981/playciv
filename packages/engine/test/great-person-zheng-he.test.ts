@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw } from '../src/actions/draw.js'
-import { placePiece, removePiece } from '../src/actions/board.js'
+import { movePiece, placePiece, removePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
 import { shuffleDeckTwice } from '../src/assisted-culture.js'
@@ -127,6 +127,53 @@ describe('Zheng He', () => {
     expect(collected.underTokens?.map((token) => token.pieceId)).toEqual([hutPieceId, villagePieceId])
   })
 
+  it('gives one item for each draw and keeps the rest under their pieces, out of reach of a shuffle', () => {
+    const base = scene()
+    const asset = findBoardAsset('resources/hut')
+    if (asset === undefined) throw new Error('missing hut asset')
+    const withSecond = unwrap(
+      placePiece(base.state, {
+        playerId: CASH1981,
+        assetId: 'resources/hut',
+        x: Math.round(3 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2),
+        y: Math.round(mapTop(base.state.board) + 2 * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    const secondPieceId = (withSecond.board.pieces.at(-1) as { id: string }).id
+    const first = topOf(withSecond, 'HUTS')
+    const second = topOf(withSecond, 'HUTS', 1)
+    const played = unwrap(play(withSecond, base.cardId))
+    expect(privateLines(played)).toContain(`Zheng He: the hut on D3 is ${itemName(second)}`)
+    let gone = unwrap(removePiece(played, { playerId: CASH1981, pieceId: base.hutPieceId }))
+    gone = unwrap(removePiece(gone, { playerId: CASH1981, pieceId: secondPieceId }))
+    const taken = unwrap(draw(gone, { playerId: CASH1981, sheetName: 'HUTS', confirmedOutOfTurn: true }))
+    expect(me(taken).items.at(-1)?.id).toBe(first.id)
+    // The other is still under its piece, so a shuffle of the whole deck cannot touch it
+    expect(taken.underTokens?.some((token) => token.item.id === second.id)).toBe(true)
+    expect(drawn(shuffleDeckTwice(taken), 'HUTS').id).toBe(second.id)
+  })
+
+  it('keeps the identity when a removed piece is put back by a board undo after another sheet was drawn', () => {
+    const { state, cardId, hutPieceId } = scene()
+    const played = unwrap(play(state, cardId))
+    const removed = unwrap(removePiece(played, { playerId: CASH1981, pieceId: hutPieceId }))
+    const other = unwrap(draw(removed, { playerId: CASH1981, sheetName: 'VILLAGES', confirmedOutOfTurn: true }))
+    expect(other.underTokens?.some((token) => token.pieceId === hutPieceId)).toBe(true)
+    const back = unwrap(undoLastBoardChange(other, CASH1981))
+    expect(back.board.pieces.some((piece) => piece.id === hutPieceId)).toBe(true)
+    expect(back.underTokens?.some((token) => token.pieceId === hutPieceId)).toBe(true)
+  })
+
+  it('follows a piece moved to another square, and the next look names the new square', () => {
+    const { state, cardId, hutPieceId } = scene()
+    const hut = topOf(state, 'HUTS')
+    const played = unwrap(play(state, cardId))
+    const piece = played.board.pieces.find((candidate) => candidate.id === hutPieceId)
+    if (piece === undefined) throw new Error('no hut piece')
+    const moved = unwrap(movePiece(played, { playerId: CASH1981, pieceId: hutPieceId, x: piece.x + SQUARE_SIZE, y: piece.y, snap: false }))
+    expect(lookUnderTokens(moved, []).lines[0]).toBe(`Zheng He: the hut on D2 is ${itemName(hut)}`)
+  })
+
   it('is not changed by a shuffle of the deck', () => {
     const { state, cardId, hutPieceId } = scene()
     const hut = topOf(state, 'HUTS')
@@ -162,6 +209,24 @@ describe('Zheng He', () => {
     expect(again.bound).toEqual([])
     expect(again.state.items).toEqual(first.items)
     expect(again.lines).toEqual(privateLines(first))
+  })
+
+  it('reads what it can when the deck has fewer huts than tokens', () => {
+    const { state, cardId } = scene()
+    const asset = findBoardAsset('resources/hut')
+    if (asset === undefined) throw new Error('missing hut asset')
+    const two = unwrap(
+      placePiece(state, {
+        playerId: CASH1981,
+        assetId: 'resources/hut',
+        x: Math.round(3 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2),
+        y: Math.round(mapTop(state.board) + 2 * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    const onlyOne = { ...two, items: two.items.filter((item) => item.sheetName !== 'HUTS' || item.id === topOf(two, 'HUTS').id) }
+    const lines = privateLines(unwrap(play(onlyOne, cardId)))
+    expect(lines.filter((line) => line.includes('cannot be read'))).toEqual(['Zheng He: the hut on D3 cannot be read, no huts are left in the deck'])
+    expect(lines.some((line) => line.startsWith('Zheng He: the hut on C2 is '))).toBe(true)
   })
 
   it('says so when the deck has no hut left for a token, and when there is nothing to see', () => {
@@ -208,7 +273,7 @@ describe('Zheng He', () => {
     const { state, cardId } = scene()
     const hut = topOf(state, 'HUTS')
     const played = unwrap(play(state, cardId))
-    for (const viewer of [CASH1981, ...OTHERS]) {
+    for (const viewer of [CASH1981, ...OTHERS, 'player-nobody']) {
       const text = JSON.stringify(toPlayerView(played, viewer))
       expect(text).not.toContain('underTokens')
       expect(text).not.toContain('zhengHe')

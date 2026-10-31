@@ -1509,7 +1509,7 @@ export const playCard: AssistedActionDefinition = {
     }
 
     // What Zheng He's player saw is worth nothing after this: the tokens still set aside go back to the deck and the
-    // two decks are shuffled, also what an earlier draw released on top of them
+    // decks they came from are shuffled, also an item an earlier draw has put on top of them
     if (effect.zhengHe !== undefined) {
       current = putBackTokens(current, effect.zhengHe.bound)
       for (const sheetName of new Set(effect.zhengHe.bound.map((token) => token.item.sheetName))) {
