@@ -220,6 +220,22 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   A devotion that Darwin or Kurosawa changed names the card play that made it so
   (`darwinActivationId`, `cardActionId` on the payment), and that card play cannot
   be undone until the devotion is.
+- A. P. Giannini, faceup and not blockaded when the coin is invested, gives a free
+  building: the `invest` effect carries `giannini: true` and a separate Start of
+  Turn action `gianniniBuild` (once a turn, usage key `giannini`) builds it, from the
+  buildings the player has unlocked (a basic building whose upgrade is unlocked is
+  left out) on an empty square in the outskirts of one of their cities, with no
+  cost, no production and no replacing. It is not a city action, so it neither asks
+  about a second action nor uses Ada Lovelace. Invest is once a turn, so he gives at
+  most one building a turn. The Board Undo refuses the placement like Cousteau's
+  Harbors; undoing the investment is refused while the building stands.
+- Frida Kahlo discards the culture cards the player ticks (none is allowed) and
+  draws until the culture hand size from the deck of the space the culture marker is
+  on (levels I to III; refused on the start, a Great Person space and the Victory
+  space, and the card stays). If the deck runs out the discard pile is reshuffled,
+  which can deal a just discarded card back. The public line gives counts only; the
+  names are in the player's private log. Undo returns the drawn cards to the deck
+  and the discards to the hand, and is refused when either has left its place.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.
