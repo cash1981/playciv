@@ -183,6 +183,8 @@ export interface DevoteToTheArtsPayload {
   readonly cityPieceId: string
   readonly scoutPieceIds?: readonly string[]
   readonly culture?: number
+  /** Charles Darwin: turn all of the city's culture into trade. */
+  readonly darwin?: boolean
 }
 
 /** What `harvest` carries: the city, the resource, and the scout when the resource is under one rather than in the outskirts. */
@@ -448,30 +450,83 @@ export const CITY_ACTION_LABELS: Readonly<Partial<Record<AssistedActionKind, str
   harvest: 'Harvest',
 }
 
+export const LOVELACE_NAME = 'Ada Lovelace'
+
+/** One city action of the turn that is still in force: the city it counts against and what it is called. */
+interface CityActionRecord {
+  readonly cityPieceId: string
+  readonly label: string
+}
+
+/** Jerry Garcia's devotion is the capital's action for the turn (the other cities may still act). */
+const GARCIA_ACTION_LABEL = 'Devote to the Arts (Jerry Garcia)'
+
+/** The city a record is an action of, with its name: a city action, or Jerry Garcia's play for the capital. */
+export function cityActionOf(record: Pick<AssistedActionRecord, 'kind' | 'effect'>): CityActionRecord | undefined {
+  const effect = record.effect
+  if (effect.kind === 'playCard') {
+    return effect.garcia === undefined ? undefined : { cityPieceId: effect.garcia.capitalPieceId, label: GARCIA_ACTION_LABEL }
+  }
+  const label = CITY_ACTION_LABELS[record.kind]
+  if (label === undefined || !('cityPieceId' in effect) || effect.cityPieceId === null) return undefined
+  return { cityPieceId: effect.cityPieceId, label }
+}
+
+/** The player's city actions of the current turn that have not been undone, oldest first. */
+function cityActionRecordsThisTurn(state: GameState, player: Playerhand): readonly CityActionRecord[] {
+  const turn = turnStatus(state).currentTurn
+  return state.assistedActions.flatMap((record) => {
+    const action = cityActionOf(record)
+    return action === undefined || record.status !== 'applied' || record.playerId !== player.playerId || record.turnNumber !== turn
+      ? []
+      : [action]
+  })
+}
+
 /**
  * The city actions this city has taken this turn that are still in force (not undone), by name, oldest
  * first. A city may take one a turn as a rule; the game does not forbid more, it asks first.
  */
 export function cityActionsTakenThisTurn(state: GameState, player: Playerhand, cityPieceId: string): readonly string[] {
-  const turn = turnStatus(state).currentTurn
-  return state.assistedActions.flatMap((record) => {
-    const label = CITY_ACTION_LABELS[record.kind]
-    const effect = record.effect
-    if (
-      label === undefined ||
-      record.status !== 'applied' ||
-      record.playerId !== player.playerId ||
-      record.turnNumber !== turn ||
-      !('cityPieceId' in effect) ||
-      effect.cityPieceId !== cityPieceId
-    ) {
-      return []
-    }
-    return [label]
-  })
+  return cityActionRecordsThisTurn(state, player)
+    .filter((record) => record.cityPieceId === cityPieceId)
+    .map((record) => record.label)
 }
 
+/**
+ * The Ada Lovelace plays of this turn, still in force, that no city action has used: the ids of the
+ * credits left. An action that used one carries its id as `lovelaceCreditId`, so undoing that action
+ * frees it again and an action taken before her card was played used none.
+ */
+function lovelaceCreditsLeft(state: GameState, player: Playerhand): readonly string[] {
+  const turn = turnStatus(state).currentTurn
+  const used = new Set(state.assistedActions.flatMap((record) => (record.status === 'applied' && record.lovelaceCreditId !== undefined ? [record.lovelaceCreditId] : [])))
+  return state.assistedActions.flatMap((record) =>
+    record.status === 'applied' &&
+    record.playerId === player.playerId &&
+    record.turnNumber === turn &&
+    record.effect.kind === 'playCard' &&
+    record.effect.name === LOVELACE_NAME &&
+    !used.has(record.id)
+      ? [record.id]
+      : [],
+  )
+}
+
+/** The extra city actions Ada Lovelace has given this turn that no action has used yet. */
+export const extraCityActionsLeft = (state: GameState, player: Playerhand): number => lovelaceCreditsLeft(state, player).length
+
+/** The Lovelace play whose credit an action of this city would use: only a city that has already acted uses one. */
+export function lovelaceCreditForAction(state: GameState, player: Playerhand, cityPieceId: string): string | undefined {
+  return cityActionsTakenThisTurn(state, player, cityPieceId).length === 0 ? undefined : lovelaceCreditsLeft(state, player)[0]
+}
+
+/** Whether a city action still in force used this Lovelace play's credit. */
+export const lovelaceCreditWasUsed = (state: GameState, creditId: string): boolean =>
+  state.assistedActions.some((record) => record.status === 'applied' && record.lovelaceCreditId === creditId)
+
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
+export const LOVELACE_ACTION_NOTE = ' (an extra city action from Ada Lovelace)'
 
 /**
  * What the city's earlier actions this turn mean for one more: nothing to say, a note for the log
@@ -485,6 +540,7 @@ export function earlierCityActions(
 ): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
   const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
   if (taken.length === 0) return { refusal: undefined, note: '' }
+  if (extraCityActionsLeft(state, player) > 0) return { refusal: undefined, note: LOVELACE_ACTION_NOTE }
   if (confirmed) return { refusal: undefined, note: SECOND_ACTION_NOTE }
   return {
     refusal: blocked(

@@ -186,7 +186,7 @@ function parseStartBuildingProgramPayload(body: Record<string, unknown>): StartB
   return { cityPieceId }
 }
 
-const DEVOTE_FIELDS = ['cityPieceId', 'scoutPieceIds', 'culture'] as const
+const DEVOTE_FIELDS = ['cityPieceId', 'scoutPieceIds', 'culture', 'darwin'] as const
 const HARVEST_FIELDS = ['cityPieceId', 'resource', 'scoutPieceId'] as const
 
 /** More scouts than a player owns (two a colour, one white) cannot be named, so a longer list is a mistake. */
@@ -194,7 +194,7 @@ const MAX_SCOUTS = 6
 
 /**
  * The `devoteToTheArts` payload, or a sentence saying what is wrong with it: the city, the
- * scouts whose squares are sent to it and the culture typed by hand, the last two optional.
+ * scouts whose squares are sent to it, the culture typed by hand and whether Charles Darwin turns it into trade, the last three optional.
  * Whether the city and scouts are the player's, and what the estimate is, is the engine's decision.
  */
 function parseDevotePayload(body: Record<string, unknown>): DevoteToTheArtsPayload | string {
@@ -220,10 +220,13 @@ function parseDevotePayload(body: Record<string, unknown>): DevoteToTheArtsPaylo
   ) {
     return `culture must be a whole number from 0 to ${MAX_DEVOTE_CULTURE}`
   }
+  const darwin = body['darwin']
+  if (darwin !== undefined && typeof darwin !== 'boolean') return 'darwin must be true or false'
   return {
     cityPieceId,
     ...(scoutPieceIds === undefined ? {} : { scoutPieceIds: scoutPieceIds as string[] }),
     ...(culture === undefined ? {} : { culture: culture as number }),
+    ...(darwin === undefined ? {} : { darwin }),
   }
 }
 

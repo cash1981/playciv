@@ -42,7 +42,7 @@ export interface CityDefence {
 }
 
 const isMetropolis = (city: BoardPiece): boolean => city.assetId.includes('metropolis')
-const isCapital = (city: BoardPiece): boolean => isMetropolis(city) || city.assetId.includes('capital')
+export const isCapital = (city: BoardPiece): boolean => isMetropolis(city) || city.assetId.includes('capital')
 const isWalled = (city: BoardPiece): boolean => city.assetId.includes('walled')
 
 /** The defender's city an attacking army stands on, if the battle is for one. */

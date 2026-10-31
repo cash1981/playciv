@@ -401,7 +401,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     // its outcome is not known yet, so this click says nothing and sends nothing.
     if (isPressInFlight(key)) return
     // A yes given when the picker was opened stands; a city that has acted since is asked now
-    const acted = view.you?.cityActions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.actedThisTurn ?? []
+    const own = view.you?.cityActions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)
+    const acted = own?.extraAction === true ? [] : (own?.actedThisTurn ?? [])
     const again = resolveAgain(plan.cityLabel, acted, flow.confirmedAgain)
     if (again === null) return
     let failure: unknown = null

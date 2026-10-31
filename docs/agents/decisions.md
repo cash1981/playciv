@@ -191,6 +191,35 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   list (empty water squares in the outskirts of their cities, no unlock or
   production needed, no limit of one a city since the card does not name one; a replacement is not offered), the card is
   discarded, and one undo removes the Harbors again.
+- Jerry Garcia devotes every city of the player in one play, for the culture the
+  board gives each city (scouts' squares are not sent), as the capital's city
+  action: the capital counts as having acted (named "Devote to the Arts (Jerry
+  Garcia)"), the other cities may still act with no question. A capital is a
+  `capital` piece or a metropolis; without one the play is refused. Unlike another
+  second action, a Garcia play on a capital that has already acted is not refused
+  or asked about (a card play has no such question); the log says so, or says the
+  action came from Ada Lovelace when her credit is left.
+  Ada Lovelace is an "extra city action" credit: a city action that is not its
+  city's first, taken after her play, carries her play's id (`lovelaceCreditId` on
+  the record). While a play of hers this turn has no such action a city's second
+  action is taken with no question (`extraAction` on the city options, own view)
+  and the log says it came from her. A second action confirmed before she was
+  played carries no id and uses no credit; undoing an action frees only its own
+  credit. Her play cannot be undone while an action that carries its id is in
+  force; undo that action first. Anarchy is not enforced for the capital anywhere, so her anarchy
+  clause needs nothing.
+- Akira Kurosawa, faceup and not blockaded, pays his holder 1 culture for every
+  city another player devotes (also each city of Garcia's play), in the same log
+  line; the holder's own devotions pay nothing. Undoing the devotion takes the
+  culture back from the holder as far as it is still there and the undo line says
+  when it was spent. Charles Darwin, faceup and not blockaded, adds a box to Devote to the Arts
+  (`darwin` on the option, `null` without the card): the city's culture, with the
+  typed number if any, becomes the same amount of trade up to the end of the trade
+  track, once each turn (`person:Charles Darwin` on the turn record). Undo returns
+  culture and trade and frees him; it is blocked if that trade has been spent.
+  A devotion that Darwin or Kurosawa changed names the card play that made it so
+  (`darwinActivationId`, `cardActionId` on the payment), and that card play cannot
+  be undone until the devotion is.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

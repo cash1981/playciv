@@ -680,6 +680,13 @@ export type AssistedEffect =
       readonly curieSubstitute?: string
       /** A once-per-turn marker the card wrote (Captain James Cook), so an undo frees it. */
       readonly usedAction?: { readonly key: string; readonly turnNumber: number }
+      /** Jerry Garcia: the capital whose action it was and each city devoted, with the culture the estimate gave it. */
+      readonly garcia?: {
+        readonly capitalPieceId: string
+        readonly cities: readonly { readonly cityPieceId: string; readonly cityLabel: string; readonly culture: number }[]
+      }
+      /** The culture Akira Kurosawa's holders gained because this devotion was made. */
+      readonly kurosawa?: readonly KurosawaPayment[]
       /** A movement culture card: the source and destination, and each moved figure. */
       readonly cardMove?: {
         readonly card: string
@@ -841,6 +848,14 @@ export type AssistedEffect =
       readonly cityLabel: string
       /** The culture added to the player's stock, which an undo takes off again. */
       readonly culture: number
+      /** The Charles Darwin play that turned this city's culture into trade. */
+      readonly darwinActivationId?: string
+      /** The trade added instead, when Charles Darwin turned the city's culture into trade. */
+      readonly trade?: number
+      /** The once-per-turn marker Charles Darwin wrote, so an undo frees it. */
+      readonly usedAction?: { readonly key: string; readonly turnNumber: number }
+      /** The culture Akira Kurosawa's holders gained because of this devotion. */
+      readonly kurosawa?: readonly KurosawaPayment[]
     }
   | {
       readonly kind: 'harvest'
@@ -868,6 +883,14 @@ export type AssistedEffect =
       }[]
     }
 
+/** Culture Akira Kurosawa gave his holder for another player's devotion, kept for the undo. */
+export interface KurosawaPayment {
+  readonly playerId: string
+  readonly culture: number
+  /** The Akira Kurosawa play that caused this payment. */
+  readonly cardActionId?: string
+}
+
 /** The wonder a wonder build drew into the market, for its undo: the card, the piece that was placed and the history entry that placed it. */
 export interface DrawnWonder {
   readonly item: Item
@@ -893,6 +916,8 @@ export interface AssistedActionRecord {
   readonly logId: string
   readonly status: 'applied' | 'undone'
   readonly effect: AssistedEffect
+  /** The Ada Lovelace play whose extra city action this record consumed. */
+  readonly lovelaceCreditId?: string
   /**
    * Set when the card had already been used this turn and the player confirmed
    * using it again. The record then shares the first use's `usageKey`, which is

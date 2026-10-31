@@ -170,10 +170,12 @@ export function DevotePanel({
   const { sending, message, press } = useCityActionPress(run, view)
   const [sent, setSent] = useState<readonly string[]>([])
   const [typed, setTyped] = useState<string | null>(null)
+  const [darwin, setDarwin] = useState(false)
   const inputId = useId()
   const errorId = useId()
   if (view.you === null) return null
   const playerId = view.you.playerId
+  const useDarwin = darwin && options.darwin === 'ready'
 
   const chosen = options.scouts.filter((scout) => sent.includes(scout.pieceId))
   const total = options.culture + chosen.reduce((sum, scout) => sum + scout.culture, 0)
@@ -186,11 +188,12 @@ export function DevotePanel({
     const again = resolveAgain(city.label, acted, confirmedAgain)
     if (again === null) return
     const scoutPieceIds = chosen.map((scout) => scout.pieceId)
-    const key = `${gameId}:${playerId}:devoteToTheArts:${city.pieceId}:${scoutPieceIds.join('+')}:${amount}`
+    const key = `${gameId}:${playerId}:devoteToTheArts:${city.pieceId}:${scoutPieceIds.join('+')}:${amount}:${useDarwin ? 'darwin' : ''}`
     void press(key, (requestId) =>
       api.devoteToTheArts(gameId, requestId, view.rev, city.pieceId, {
         scoutPieceIds,
         ...(amount === total ? {} : { culture: amount }),
+        ...(useDarwin ? { darwin: true } : {}),
         ...(again ? { confirmedRepeat: true } : {}),
       }),
     ).then((done) => {
@@ -257,6 +260,21 @@ export function DevotePanel({
           Type a whole number from 0 to {MAX_DEVOTE_CULTURE}.
         </p>
       )}
+      {options.darwin !== null && (
+        <label className="gather-scout">
+          <input
+            type="checkbox"
+            checked={useDarwin}
+            disabled={busy || sending || options.darwin === 'used'}
+            onChange={(event) => setDarwin(event.target.checked)}
+          />
+          <span>
+            {options.darwin === 'used'
+              ? 'Charles Darwin has been used this turn'
+              : 'Turn this culture into trade with Charles Darwin (once each turn)'}
+          </span>
+        </label>
+      )}
       <ul className="gather-notes muted" aria-label="What is not counted">
         {options.notes.map((note) => (
           <li key={note}>{note}</li>
@@ -269,7 +287,7 @@ export function DevotePanel({
       )}
       <div className="build-bar-buttons">
         <button type="button" className="small primary" disabled={busy || sending || amount === null} onClick={confirm}>
-          {amount === null ? 'Devote' : `Devote and take ${amount} culture`}
+          {amount === null ? 'Devote' : `Devote and take ${amount} ${useDarwin ? 'trade' : 'culture'}`}
         </button>
         <button type="button" className="small" onClick={onClose}>
           Cancel

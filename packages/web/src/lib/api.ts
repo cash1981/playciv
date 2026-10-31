@@ -875,14 +875,19 @@ export const api = {
   /**
    * Devote one of the viewer's cities to the arts (assisted city action). `scoutPieceIds` are the
    * scouts whose squares are sent to the city; `culture` is a number typed by hand instead of the
-   * estimate. Both are left out when not given.
+   * estimate; `darwin` has Charles Darwin turn the city's culture into trade. All are left out when not given.
    */
   devoteToTheArts: (
     gameId: string,
     requestId: string,
     rev: number,
     cityPieceId: string,
-    extra: { readonly scoutPieceIds?: readonly string[]; readonly culture?: number; readonly confirmedRepeat?: boolean } = {},
+    extra: {
+      readonly scoutPieceIds?: readonly string[]
+      readonly culture?: number
+      readonly darwin?: boolean
+      readonly confirmedRepeat?: boolean
+    } = {},
   ) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
       action: 'devoteToTheArts',
@@ -892,6 +897,7 @@ export const api = {
       ...(extra.confirmedRepeat === true ? { confirmedRepeat: true } : {}),
       ...(extra.scoutPieceIds === undefined || extra.scoutPieceIds.length === 0 ? {} : { scoutPieceIds: extra.scoutPieceIds }),
       ...(extra.culture === undefined ? {} : { culture: extra.culture }),
+      ...(extra.darwin === true ? { darwin: true } : {}),
     }),
   /** Harvest one resource token with one of the viewer's cities; `scoutPieceId` when it is under a scout. */
   harvest: (

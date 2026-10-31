@@ -231,9 +231,10 @@ describe('the city actions in the projection', () => {
         cityPieceId: table.cityId,
         label: 'City B2',
         startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
-        devoteToTheArts: expect.objectContaining({ status: 'ready', culture: 2 }),
+        devoteToTheArts: expect.objectContaining({ status: 'ready', culture: 2, darwin: null }),
         harvest: expect.objectContaining({ status: 'ready' }),
         actedThisTurn: [],
+        extraAction: false,
       },
     ])
     expect(mine.you?.upgradeOptions).toEqual([
@@ -1054,6 +1055,16 @@ describe('the devote and harvest payloads', () => {
         'culture must be a whole number from 0 to 99',
       )
     }
+  })
+
+  it('devoteToTheArts wants darwin to be true or false, and the engine refuses it without the faceup card', async () => {
+    for (const [index, darwin] of ['yes', 1, null].entries()) {
+      expect(await refused(`DDarwin${index}`, (table, rev) => devoteBody(table, 'd-1', rev, { darwin }))).toContain('darwin must be true or false')
+    }
+    const table = await buildTable('DevoteDarwin')
+    const response = await post(table.starter, actions(table), devoteBody(table, 'd-1', await revOf(table), { darwin: true }))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ message: expect.stringContaining('Charles Darwin must be faceup') })
   })
 
   it('devoteToTheArts takes no other field', async () => {
