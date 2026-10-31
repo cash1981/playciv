@@ -210,6 +210,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Frank Lloyd Wright', 'gains trade and culture equal to the buildings in your cities'],
   ['Andrew Carnegie', 'earns one free culture advance for every 3 coins you have, made one space at a time with the Advance buttons'],
   ['Jacques Cousteau', 'builds up to 3 Harbors in your cities for free, on the squares you choose'],
+  ['Zheng He', 'shows you, in your own log, what lies under every hut and village token on the map and what the other players hold; the tokens on the map keep what you saw'],
   ['Frida Kahlo', 'discards the culture cards you choose, then draws culture cards from the deck of the area your culture marker is in until your hand is full'],
   ['A. P. Giannini', 'lets you build an unlocked building for free in one of your cities each time you invest a coin, from the Start of Turn tab while the card is faceup'],
   ['Jerry Garcia', "devotes every one of your cities to the arts as your capital's action, for the culture each city's board gives, the other cities may still act"],

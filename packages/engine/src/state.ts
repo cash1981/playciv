@@ -7,7 +7,7 @@
  * away.
  */
 
-import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
+import type { HutItem, Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement, VillageItem } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
@@ -718,6 +718,8 @@ export type AssistedEffect =
       }
       /** The culture Akira Kurosawa's holders gained because this devotion was made. */
       readonly kurosawa?: readonly KurosawaPayment[]
+      /** Zheng He: the tokens given an identity by his look, so an undo can put them back in the deck. Never projected. */
+      readonly zhengHe?: { readonly bound: readonly UnderToken[] }
       /** A movement culture card: the source and destination, and each moved figure. */
       readonly cardMove?: {
         readonly card: string
@@ -915,6 +917,15 @@ export type AssistedEffect =
     }
 
 /** Culture Akira Kurosawa gave his holder for another player's devotion, kept for the undo. */
+/**
+ * What lies under a hut or village piece on the map once Zheng He's player has looked: the item, taken out
+ * of the deck so that a shuffle cannot change it. Server only, never projected.
+ */
+export interface UnderToken {
+  readonly pieceId: string
+  readonly item: HutItem | VillageItem
+}
+
 export interface KurosawaPayment {
   readonly playerId: string
   readonly culture: number
@@ -1034,6 +1045,11 @@ export interface GameState {
   readonly items: readonly Item[]
   /** Java: `PBF.discardedItems` — what a reshuffle draws back from. */
   readonly discardedItems: readonly Item[]
+  /**
+   * Hut and village items set aside under the pieces on the map by Zheng He's look (`zheng-he.ts`). Server
+   * only: a projection must never carry it. Absent until a first look.
+   */
+  readonly underTokens?: readonly UnderToken[]
   readonly players: readonly Playerhand[]
   /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]

@@ -250,6 +250,17 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   discard does. Undo returns the drawn cards to the deck (also after the choices,
   from the hand or the discard pile) and the discards to the hand, and is refused
   when a kept card has left the hand or a discard has left the pile.
+- Zheng He (human, #301) writes one private line for each hut or village piece on a map
+  square (square and name) and for each hut or village item another player holds. The
+  pieces on the map are anonymous and a draw takes the top card, so the look fixes the
+  items: the top item of the sheet is taken out of the deck and set under each piece
+  without one (`GameState.underTokens`, never projected). A shuffle (an item undo, Frida
+  Kahlo) cannot change what was seen, so no new message is needed. A draw of huts or
+  villages first puts back, on top of its sheet, the item under any piece that has left
+  the map (collected or removed); an item under a piece still on the map is never
+  drawn. A token placed after the look stays anonymous. Undoing the card puts the items
+  still under a piece back, shuffles the two decks twice and says so privately; an item
+  a draw already released stays where it went.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.
