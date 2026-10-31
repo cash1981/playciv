@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
+import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, cityActionsTakenThisTurn, performAssistedAction } from '../src/assisted.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
@@ -138,6 +139,29 @@ describe('A. P. Giannini', () => {
     expect(toPlayerView(state, CASH1981).you?.startOfTurn?.giannini).toMatchObject({ status: 'unavailable', choices: [] })
   })
 
+  it('is not offered once Start of Turn is over', () => {
+    const state = unwrap(markPhasesDone(invested(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    expect(status(state).status).toBe('wrong-phase')
+  })
+
+  it('cannot have his card undone while the free building stands, and can after the building is undone', () => {
+    const card = withCardInHand(scene(), 'A. P. Giannini')
+    const faceup = unwrap(
+      performAssistedAction(card.state, {
+        playerId: CASH1981,
+        action: 'playCard',
+        requestId: 'play-g',
+        at: AT,
+        payload: { itemId: card.itemId, targets: [] },
+      }),
+    )
+    const built = unwrap(freeBuild(unwrap(invest(faceup)), firstSquare(unwrap(invest(faceup)), LIBRARY)))
+    expect(JSON.stringify(unwrapErr(undoRejection(built, 'play-g')))).toContain('Undo that building first')
+    const buildingUndone = undoByVote(built, 'free-1')
+    const investUndone = undoByVote(buildingUndone, 'inv-1')
+    expect(me(undoByVote(investUndone, 'play-g')).items.some((item) => item.id === card.itemId)).toBe(true)
+  })
+
   it('has no section at all while his card is not faceup', () => {
     const hidden = withCardInHand(scene(), 'A. P. Giannini').state
     expect(toPlayerView(hidden, CASH1981).you?.startOfTurn?.giannini).toBeNull()
@@ -246,15 +270,25 @@ describe('A. P. Giannini', () => {
     expect(libraries(again)).toHaveLength(1)
   })
 
-  it('refuses to undo the building once it has been moved or taken off by hand', () => {
+  it('refuses to undo the building once it has been moved', () => {
     const state = invested()
     const built = unwrap(freeBuild(state, firstSquare(state, LIBRARY)))
     const piece = libraries(built)[0]
     if (piece === undefined) throw new Error('no library')
     const moved = { ...built, board: { ...built.board, pieces: built.board.pieces.map((p) => (p.id === piece.id ? { ...p, x: p.x + 4 * SQUARE_SIZE } : p)) } }
     expect(unwrapErr(undoRejection(moved, 'free-1')).kind).toBe('ASSISTED_UNDO_BLOCKED')
+  })
+
+  it('lets the undo through when the building was taken off by hand, so the investment is not stuck', () => {
+    const state = invested()
+    const built = unwrap(freeBuild(state, firstSquare(state, LIBRARY)))
+    const piece = libraries(built)[0]
+    if (piece === undefined) throw new Error('no library')
     const gone = { ...built, board: { ...built.board, pieces: built.board.pieces.filter((p) => p.id !== piece.id) } }
-    expect(unwrapErr(undoRejection(gone, 'free-1')).kind).toBe('ASSISTED_UNDO_BLOCKED')
+    const undone = undoByVote(gone, 'free-1')
+    expect(status(undone).status).toBe('ready')
+    const investUndone = undoByVote(undone, 'inv-1')
+    expect(me(investUndone).stats.coinSources.sheet).toBe(2)
   })
 
   it('refuses to undo the invest while the free building stands, and allows it once the building is undone', () => {

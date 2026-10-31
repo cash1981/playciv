@@ -32,12 +32,14 @@ import {
   countLinesIn,
   drawCandidates,
   freeAdvancesLeft,
+  livePendingRewards,
   performAdvance,
   reverseAdvanceEffect,
   shuffleSheetTwice,
 } from './assisted-culture.js'
 import { CULTURE_VICTORY_STEP, findBoardAsset, remainingBoardAssetCount } from './board.js'
-import { cultureMarkerOf, cultureSpaceAt } from './culture-track.js'
+import { cultureMarkerOf, rewardDrawCount } from './culture-track.js'
+import { levelOfMarker } from './assisted-sot.js'
 import { cultureCardsHeld, cultureHandSizeOf } from './culture-hand.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import { buildSquareRefusal, freeBuildingSquaresOf, squareCentre, squareLabel, unitSheetOf } from './build-options.js'
@@ -90,7 +92,7 @@ import type { Result } from './result.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
-import type { AssistedEffect, GameState, Playerhand } from './state.js'
+import type { AssistedEffect, GameState, PendingReward, Playerhand } from './state.js'
 import { withPlayer } from './state.js'
 import type { PlayCardPayload } from './assisted-core.js'
 import type { TechGrant } from './state.js'
@@ -291,6 +293,7 @@ const waitingCardIds = (player: Playerhand): ReadonlySet<string> =>
   new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
 
 const FRIDA = 'Frida Kahlo'
+const GIANNINI_NAME = 'A. P. Giannini'
 
 /** The culture cards of the hand that are the player's own: not the ones still being chosen between. */
 function cultureCardsOf(player: Playerhand): readonly Item[] {
@@ -620,14 +623,16 @@ function automate(
     case 'Frida Kahlo': {
       const marker = cultureMarkerOf(state, player)
       if (marker === undefined) return err('Your leader marker is not on the culture track, so there is no culture deck to draw from.')
-      const space = cultureSpaceAt(marker.step)
-      if (space === undefined) return err('Your leader marker is still at the start of the culture track, so there is no culture deck to draw from.')
-      // Space 21 is the Culture Victory panel: the ladder lists it as a level III event, but it has no deck
-      if (marker.step >= CULTURE_VICTORY_STEP) return err('Your leader marker is on the Culture Victory space, which has no culture deck to draw from.')
-      if (space.kind !== 'event') return err('Your leader marker is on a Great Person space, which has no culture deck to draw from.')
-      const sheetName = levelSheet(space.level)
+      // The start space belongs to no level; every other space, a Great Person space and the last one included, is in
+      // the area of a level, as for Patronage
+      if (marker.step < 1) return err('Your leader marker is still at the start of the culture track, so there is no culture deck to draw from.')
+      const level = levelOfMarker(marker.step)
+      const sheetName = levelSheet(level)
       const deck = `the ${SHEET_LABEL[sheetName]} deck`
 
+      if (livePendingRewards(player).length > 0) {
+        return err('Choose the card to keep from your last draw first.')
+      }
       const wanted = payload?.discard ?? []
       if (!Array.isArray(wanted) || new Set(wanted).size !== wanted.length) {
         return err('Choose each culture card to discard once.')
@@ -656,19 +661,56 @@ function automate(
           ...(discarding.length === 0 ? {} : { privateSaid: `${player.username} discarded ${discarding.map(itemName).join(', ')} with ${FRIDA}` }),
         })
       }
-      const taken = drawCandidates(discarded, sheetName, room)
-      if (!taken.ok) return err(`No ${SHEET_LABEL[sheetName]} cards are left in the deck or the discard pile.`)
-      const cards = taken.value.items.map((card): Item => ({ ...card, ownerId: player.playerId, hidden: true }))
-      const drawer = playerOf(taken.value.state, player.playerId) ?? holder
-      const drawnText = `drawing ${cards.length} from ${deck}${cards.length < room ? ' (no more cards were left)' : ''}`
+      // Every card of the hand is a draw of its own, which with Mysticism takes an extra card to choose from
+      const count = rewardDrawCount(discarded, holder, 'event')
+      let working = discarded
+      const groups: Item[][] = []
+      for (let draw = 0; draw < room; draw += 1) {
+        const taken = drawCandidates(working, sheetName, count)
+        if (!taken.ok) {
+          if (groups.length === 0) return err(`No ${SHEET_LABEL[sheetName]} cards are left in the deck or the discard pile.`)
+          break
+        }
+        working = taken.value.state
+        const items = taken.value.items.map((card): Item => ({ ...card, ownerId: player.playerId, hidden: true }))
+        if (items.length > 0) groups.push(items)
+      }
+      const cards = groups.flat()
+      // A draw with one card has no choice: that card is kept
+      const keptAtOnce = groups.flatMap((items) => (items.length === 1 ? items.map((card) => card.id) : []))
+      // The second choice is `<request id>:2`, so the record of the card still finds both
+      const rewards = groups.flatMap((items, draw): readonly PendingReward[] =>
+        items.length < 2
+          ? []
+          : [
+              {
+                id: draw === 0 ? requestId : `${requestId}:${draw + 1}`,
+                kind: 'event',
+                level,
+                step: marker.step,
+                candidateIds: items.map((card) => card.id),
+                keep: 1,
+              },
+            ],
+      )
+      const drawer = playerOf(working, player.playerId) ?? holder
+      const drawnText =
+        `drawing ${cards.length} from ${deck}` +
+        (rewards.length === 0 ? '' : ', keeping one of each pair') +
+        (groups.length < room ? ' (no more cards were left)' : '')
       return ok({
-        state: withPlayerHand(taken.value.state, { ...drawer, items: [...drawer.items, ...cards] }),
-        extra: effectOf(cards.map((card) => card.id)),
+        state: withPlayerHand(working, {
+          ...drawer,
+          items: [...drawer.items, ...cards],
+          pendingRewards: [...livePendingRewards(drawer), ...rewards],
+        }),
+        extra: { frida: { discarded: discarding, drawn: cards.map((card) => card.id), kept: keptAtOnce, sheetName } },
         said: `, ${thrownText === '' ? '' : `${thrownText} and `}${drawnText}`,
         privateSaid:
           `${player.username} ` +
           (discarding.length === 0 ? '' : `discarded ${discarding.map(itemName).join(', ')} and `) +
-          `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}`,
+          `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
+          (rewards.length === 0 ? '' : ', keeps one of each pair'),
       })
     }
     case 'Orville Wright': {
@@ -1188,18 +1230,29 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${effect.name} has already affected a devotion. Undo that devotion first.`)
     }
 
+    // His free building came with his being faceup when the coin was invested
+    if (
+      effect.name === GIANNINI_NAME &&
+      state.assistedActions.some((other) => other.status === 'applied' && other.kind === 'gianniniBuild' && other.playerId === record.playerId)
+    ) {
+      return blockedBy(`${effect.name} has already given a free building. Undo that building first.`)
+    }
+
     // What the game did besides logging goes first, checked before anything changes
     const drewCard = effect.drew === undefined ? undefined : player.items.find((candidate) => candidate.id === effect.drew?.itemId)
     if (effect.drew !== undefined && drewCard === undefined) {
       return blockedBy(`The unit card ${effect.name} gave is no longer in ${player.username}'s hand.`)
     }
     if (effect.frida !== undefined) {
-      const { drawn, discarded } = effect.frida
-      if (drawn.some((id) => !player.items.some((candidate) => candidate.id === id))) {
+      const { drawn, discarded, kept = [] } = effect.frida
+      const inHand = (id: string): boolean => player.items.some((candidate) => candidate.id === id)
+      const inPile = (id: string): boolean => state.discardedItems.some((candidate) => candidate.id === id)
+      // A card kept has to be in the hand; the others wait there for the choice or were put in the discard pile by it
+      if (kept.some((id) => !inHand(id)) || drawn.some((id) => !kept.includes(id) && !inHand(id) && !inPile(id))) {
         return blockedBy(`A culture card ${effect.name} drew is no longer in ${player.username}'s hand, so it cannot be undone.`)
       }
-      // A discard reshuffled into the deck and drawn again is in the hand, and goes back with the drawn cards
-      if (discarded.some((card) => !drawn.includes(card.id) && !state.discardedItems.some((candidate) => candidate.id === card.id))) {
+      // A discard reshuffled into the deck and drawn again is among the drawn cards, and goes back with them
+      if (discarded.some((card) => !drawn.includes(card.id) && !inPile(card.id))) {
         return blockedBy(`A culture card ${effect.name} discarded is no longer in the discard pile, so it cannot be undone.`)
       }
     }
@@ -1346,10 +1399,20 @@ export const playCard: AssistedActionDefinition = {
     }
     if (effect.frida !== undefined) {
       const { drawn, discarded, sheetName } = effect.frida
-      // The drawn cards go back to the deck first: a discard that was reshuffled and drawn again is among them
-      const returning = hand.items.filter((candidate) => drawn.includes(candidate.id))
+      // The drawn cards go back to the deck first, from the hand or, once the choice was made, the discard pile; a
+      // discard that was reshuffled and drawn again is among them
+      const returning = [
+        ...hand.items.filter((candidate) => drawn.includes(candidate.id)),
+        ...current.discardedItems.filter((candidate) => drawn.includes(candidate.id)),
+      ]
+      const ownsChoice = (id: string): boolean => id === record.id || id.startsWith(`${record.id}:`)
       current = {
-        ...withPlayerHand(current, { ...hand, items: hand.items.filter((candidate) => !drawn.includes(candidate.id)) }),
+        ...withPlayerHand(current, {
+          ...hand,
+          items: hand.items.filter((candidate) => !drawn.includes(candidate.id)),
+          pendingRewards: hand.pendingRewards.filter((reward) => !ownsChoice(reward.id)),
+        }),
+        discardedItems: current.discardedItems.filter((candidate) => !drawn.includes(candidate.id)),
         items: [...current.items, ...returning.map((card) => ({ ...card, hidden: true, ownerId: null }))],
       }
       const restored = discarded.map((card) => card.id)

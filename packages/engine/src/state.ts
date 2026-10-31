@@ -695,7 +695,10 @@ export type AssistedEffect =
        */
       readonly frida?: {
         readonly discarded: readonly Item[]
+        /** Every card drawn: with Mysticism two for each place in the hand, one of which is kept. */
         readonly drawn: readonly string[]
+        /** The drawn cards kept so far: the draws with no choice at once, the others as the player chooses. */
+        readonly kept?: readonly string[]
         readonly sheetName: SheetName
       }
       /** The free culture advances the card banked for the Advance buttons (Andrew Carnegie). */

@@ -50,8 +50,8 @@ function withCultureCards(state: GameState, sheetName: Item['sheetName'], count:
 }
 
 /** Step 8 is a level II culture event space; the hand holds two level I cards and Frida. */
-function scene(options: { readonly step?: number; readonly culture?: number } = {}) {
-  const held = withCultureCards(advanceTurn({ step: options.step ?? 8 }), 'CULTURE_1', options.culture ?? 2)
+function scene(options: { readonly step?: number; readonly culture?: number; readonly techs?: readonly string[] } = {}) {
+  const held = withCultureCards(advanceTurn({ step: options.step ?? 8, ...(options.techs === undefined ? {} : { techs: options.techs }) }), 'CULTURE_1', options.culture ?? 2)
   const frida = withCardInHand(held.state, 'Frida Kahlo')
   return { state: frida.state, fridaId: frida.itemId, hand: held.cards }
 }
@@ -167,18 +167,26 @@ describe('Frida Kahlo', () => {
     expect(me(frida.state).items.some((item) => item.id === frida.itemId)).toBe(true)
   })
 
-  it('refuses a marker at the start, on a Great Person space and on the Culture Victory space', () => {
-    const cases: readonly [number, string][] = [
-      [0, 'start of the culture track'],
-      [3, 'Great Person space'],
-      [21, 'Culture Victory'],
+  it('refuses a marker at the start, where there is no level, and keeps the card', () => {
+    const { state, fridaId } = scene({ step: 0 })
+    expect(JSON.stringify(unwrapErr(play(state, fridaId, [])))).toContain('start of the culture track')
+    expect(me(state).items.some((item) => item.id === fridaId)).toBe(true)
+    expect(state.discardedItems.some((item) => item.id === fridaId)).toBe(false)
+  })
+
+  it('draws from the deck of the area a Great Person space or the last space is in, as Patronage does', () => {
+    const cases: readonly [number, Item['sheetName']][] = [
+      [3, 'CULTURE_1'],
+      [7, 'CULTURE_1'],
+      [12, 'CULTURE_2'],
+      [18, 'CULTURE_3'],
+      [21, 'CULTURE_3'],
     ]
-    for (const [step, words] of cases) {
-      const { state, fridaId } = scene({ step })
-      const refused = unwrapErr(play(state, fridaId, []))
-      expect(JSON.stringify(refused)).toContain(words)
-      expect(me(state).items.some((item) => item.id === fridaId)).toBe(true)
-      expect(state.discardedItems.some((item) => item.id === fridaId)).toBe(false)
+    for (const [step, sheet] of cases) {
+      const { state, fridaId, hand } = scene({ step })
+      const played = unwrap(play(state, fridaId, [hand[0]?.id as string]))
+      const drawn = me(played).items.filter((item) => item.sheetName === sheet && !hand.some((card) => card.id === item.id))
+      expect(drawn.length).toBeGreaterThan(0)
     }
   })
 
@@ -225,7 +233,7 @@ describe('Frida Kahlo', () => {
     }
     const listed = playableCardsOf(waiting, me(waiting)).find((card) => card.itemId === fridaId)
     expect(listed?.cultureHand).toEqual([])
-    expect(JSON.stringify(unwrapErr(play(waiting, fridaId, [hand[0]?.id as string])))).toContain('your own hand')
+    expect(JSON.stringify(unwrapErr(play(waiting, fridaId, [hand[0]?.id as string])))).toContain('Choose the card to keep')
   })
 
   it('is played at any time, also before City Management opens', () => {
@@ -328,5 +336,66 @@ describe('Frida Kahlo', () => {
       expect(serialised).not.toContain('"cultureHand"')
       for (const card of hand) expect(serialised).not.toContain(itemName(card))
     }
+  })
+
+  describe('with Mysticism', () => {
+    const mysticism = () => scene({ step: 8, techs: ['Mysticism'] })
+    const choose = (state: GameState, rewardId: string, itemId: string, requestId: string) =>
+      performAssistedAction(state, { playerId: CASH1981, action: 'chooseReward', requestId, at: AT, payload: { rewardId, itemId } })
+
+    it('draws a pair for every place in the hand, and the player keeps one of each', () => {
+      const { state, fridaId, hand } = mysticism()
+      const played = unwrap(play(state, fridaId, idsOf(hand)))
+      const pending = me(played).pendingRewards
+      expect(pending).toHaveLength(2)
+      expect(pending.map((reward) => reward.id)).toEqual(['f1', 'f1:2'])
+      expect(pending.every((reward) => reward.candidateIds.length === 2 && reward.level === 2)).toBe(true)
+      expect(played.log.find((line) => line.assistedActionId === 'f1')?.publicLog).toContain('keeping one of each pair')
+
+      const first = unwrap(choose(played, 'f1', pending[0]?.candidateIds[0] as string, 'c1'))
+      const second = unwrap(choose(first, 'f1:2', pending[1]?.candidateIds[1] as string, 'c2'))
+      expect(me(second).pendingRewards).toHaveLength(0)
+      expect(cultureCardsHeld(me(second))).toBe(2)
+    })
+
+    it('waits for the choices before it can be played again', () => {
+      const { state, fridaId, hand } = mysticism()
+      const played = unwrap(play(state, fridaId, idsOf(hand)))
+      // The first Frida goes back to the hand, as another copy of the card would be
+      const again = played.discardedItems.find((item) => item.id === fridaId)
+      if (again === undefined) throw new Error('Frida is not in the discard pile')
+      const more: GameState = {
+        ...played,
+        discardedItems: played.discardedItems.filter((item) => item.id !== fridaId),
+        players: played.players.map((candidate) =>
+          candidate.playerId === CASH1981 ? { ...candidate, items: [...candidate.items, { ...again, hidden: true }] } : candidate,
+        ),
+      }
+      expect(JSON.stringify(unwrapErr(play(more, fridaId, [], 'f2')))).toContain('Choose the card to keep')
+    })
+
+    it('is undone after the choices: kept and rejected cards go back to the deck, the discards to the hand', () => {
+      const { state, fridaId, hand } = mysticism()
+      const before = deckIds(state, 'CULTURE_2')
+      const played = unwrap(play(state, fridaId, idsOf(hand)))
+      const pending = me(played).pendingRewards
+      const first = unwrap(choose(played, 'f1', pending[0]?.candidateIds[0] as string, 'c1'))
+      const second = unwrap(choose(first, 'f1:2', pending[1]?.candidateIds[0] as string, 'c2'))
+
+      const undone = undoByVote(second, 'f1')
+      expect([...deckIds(undone, 'CULTURE_2')].sort()).toEqual([...before].sort())
+      expect([...idsOf(me(undone).items.filter((item) => item.sheetName === 'CULTURE_1'))].sort()).toEqual([...idsOf(hand)].sort())
+      expect(me(undone).items.some((item) => item.id === fridaId)).toBe(true)
+      expect(me(undone).pendingRewards).toHaveLength(0)
+    })
+
+    it('is undone before the choices too, dropping the waiting choices', () => {
+      const { state, fridaId, hand } = mysticism()
+      const played = unwrap(play(state, fridaId, idsOf(hand)))
+      expect(me(played).pendingRewards).toHaveLength(2)
+      const undone = undoByVote(played, 'f1')
+      expect(me(undone).pendingRewards).toHaveLength(0)
+      expect(cultureCardsHeld(me(undone))).toBe(2)
+    })
   })
 })

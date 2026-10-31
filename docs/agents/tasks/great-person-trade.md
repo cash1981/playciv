@@ -28,14 +28,15 @@ Issue #301, next batch. The human: "ok kjør på med 1" (Giannini + Frida).
 
 - `packages/engine/src/` (`assisted-cards`, `assisted-sot`, `assisted-core`, `assisted`, `build-options`, `card-timing`, `state`, `actions/board`), `packages/engine/test/`
 - `packages/server/src/routes/` and `packages/server/test/`
-- `packages/web/src/views/{PlayableCards,SotPanel}.tsx` and their tests, `packages/web/src/lib/api.ts`
+- `packages/web/src/views/{PlayableCards,SotPanel,PhaseTabs}.tsx` and their tests
+- `packages/engine/src/index.ts`
 - `docs/agents/`
 
 ## Acceptance criteria
 
 - [ ] Engine tests per card: effect, undo, repeat, wrong phase, projection
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass
-- [ ] Hidden information: discarded and drawn cards stay out of other views; `sot.giannini` and `cultureHand` own view only
+- [ ] Hidden information: drawn cards stay out of other views (discarded ones go to the public discard pile like any discard); `sot.giannini` and `cultureHand` own view only
 - [ ] Browser check: Giannini free build after an invest, Frida discard and draw
 
 ## Open questions

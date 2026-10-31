@@ -993,6 +993,9 @@ function withKeptCard(
   if (effect.kind === 'cultureAdvance') return { ...record, effect: { ...effect, kept, ...extra } }
   if (effect.kind === 'patronage') return { ...record, effect: { ...effect, kept } }
   if (effect.kind === 'sotDraw') return { ...record, effect: { ...effect, kept: [...(effect.kept ?? []), kept] } }
+  if (effect.kind === 'playCard' && effect.frida !== undefined) {
+    return { ...record, effect: { ...effect, frida: { ...effect.frida, kept: [...(effect.frida.kept ?? []), kept] } } }
+  }
   if ('advance' in effect && effect.advance !== null && effect.advance !== undefined) {
     return { ...record, effect: { ...effect, advance: { ...effect.advance, kept, ...extra } } }
   }

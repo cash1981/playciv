@@ -228,14 +228,23 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   cost, no production and no replacing. It is not a city action, so it neither asks
   about a second action nor uses Ada Lovelace. Invest is once a turn, so he gives at
   most one building a turn. The Board Undo refuses the placement like Cousteau's
-  Harbors; undoing the investment is refused while the building stands.
+  Harbors; undoing the investment, or the play that turned him faceup, is refused
+  while the building stands. Undoing the building itself works when the piece has
+  been taken off by hand, so the investment is never stuck, and is refused when it
+  was moved.
 - Frida Kahlo discards the culture cards the player ticks (none is allowed) and
-  draws until the culture hand size from the deck of the space the culture marker is
-  on (levels I to III; refused on the start, a Great Person space and the Victory
-  space, and the card stays). If the deck runs out the discard pile is reshuffled,
-  which can deal a just discarded card back. The public line gives counts only; the
-  names are in the player's private log. Undo returns the drawn cards to the deck
-  and the discards to the hand, and is refused when either has left its place.
+  draws until the culture hand size from the deck of the area the culture marker is
+  in, the level Patronage uses (a Great Person space and the last space are in an
+  area; only the start space has none and is refused, and the card stays). With
+  Mysticism every place in the hand is a draw of two with one kept, a pending choice
+  each (`<request id>`, `<request id>:2`, as Cristo Redentor does), and she waits
+  for an earlier choice. If the deck runs out the discard pile is reshuffled, which
+  can deal a just discarded card back. The public line gives counts only and the
+  names of drawn cards are in the player's private log; the cards she discards go
+  to the public discard pile and show in the Revealed and Discarded list, as any
+  discard does. Undo returns the drawn cards to the deck (also after the choices,
+  from the hand or the discard pile) and the discards to the hand, and is refused
+  when a kept card has left the hand or a discard has left the pile.
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
 - The palette uses a single `coin1` marker named Coin.
 - Reference dialogs move focus with `preventScroll` so `?` never scrolls the page.

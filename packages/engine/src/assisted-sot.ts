@@ -1048,7 +1048,7 @@ const GIANNINI = 'A. P. Giannini'
 const GIANNINI_KEY = 'giannini'
 
 /** "a Library", "an Aqueduct". */
-const withArticle = (name: string): string => `${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name}`
+const withArticle = (name: string): string => `${/^[AEIO]|^U(?!ni)/.test(name) ? 'an' : 'a'} ${name}`
 
 const gianniniPayloadOf = (payload: AssistedPayload | undefined): GianniniBuildPayload | undefined =>
   payload !== undefined && 'cityPieceId' in payload && 'assetId' in payload && 'column' in payload && 'row' in payload
@@ -1179,8 +1179,12 @@ const gianniniBuild: AssistedActionDefinition = {
     if (effect.kind !== 'gianniniBuild') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
     const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
+    // A building taken off the board by hand is already gone: the undo gives the free building back all the same
     if (piece === undefined) {
-      return blockedBy(`The ${effect.label} on ${effect.square.label} is no longer on the board, so the free building cannot be undone.`)
+      return ok({
+        state,
+        text: `${player.username}'s free ${effect.label} from ${GIANNINI} was undone: it had already left ${effect.square.label} and the free building can be taken again`,
+      })
     }
     const cell = mapCellOf(state.board, piece)
     if (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row) {
