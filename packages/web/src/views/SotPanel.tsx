@@ -55,6 +55,7 @@ export function StartOfTurnChoices({ gameId, view, busy, readOnly, run }: Props)
       <GovernmentChange {...common} />
       {sot.feudalism !== null && <FeudalismHarvest {...common} feudalism={sot.feudalism} />}
       <Invest {...common} />
+      <GianniniBuild {...common} />
       <ScoutsAndCities {...common} />
       <MetropolisHint view={view} />
     </>
@@ -348,6 +349,110 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
           </button>
           <span className="tag">Used</span>
           <HelpHint label="Invest a coin">{invest.reason}</HelpHint>
+        </div>
+      )}
+    </section>
+  )
+}
+
+const GIANNINI_TITLE = 'A. P. Giannini: a free building'
+
+/**
+ * A. P. Giannini's free building after an invest: one building he has unlocked, on a square of one of the player's
+ * cities. A choice that a refresh takes away is dropped, not sent.
+ */
+function GianniniBuild({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
+  const { giannini } = sot
+  const [assetId, setAssetId] = useState('')
+  const [squareKey, setSquareKey] = useState('')
+  const squareId = useId()
+  const playerId = view.you?.playerId ?? ''
+  if (giannini === null || (giannini.status !== 'ready' && giannini.status !== 'used')) return null
+
+  const chosen = giannini.choices.find((choice) => choice.assetId === assetId)
+  const keyOf = (square: { readonly cityPieceId: string; readonly column: number; readonly row: number }): string =>
+    `${square.cityPieceId}:${square.column}:${square.row}`
+  const square = chosen?.squares.find((candidate) => keyOf(candidate) === squareKey)
+  const valid = chosen !== undefined && square !== undefined
+
+  const press = (): void => {
+    if (chosen === undefined || square === undefined) return
+    const key = `${gameId}:${playerId}:gianniniBuild:${chosen.assetId}:${keyOf(square)}`
+    void pressOnce(
+      key,
+      run,
+      (requestId) =>
+        api.actionWithArgs(gameId, 'gianniniBuild', requestId, view.rev, {
+          cityPieceId: square.cityPieceId,
+          assetId: chosen.assetId,
+          column: square.column,
+          row: square.row,
+        }),
+      view,
+    ).then((done) => {
+      if (done) {
+        setAssetId('')
+        setSquareKey('')
+      }
+    })
+  }
+
+  return (
+    <section className="phase-group sot-giannini" aria-label={GIANNINI_TITLE}>
+      <h3 className="phase-group-title">{GIANNINI_TITLE}</h3>
+      {giannini.status === 'ready' ? (
+        <form
+          className="sot-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            press()
+          }}
+        >
+          <label>
+            Building{' '}
+            <select
+              value={chosen === undefined ? '' : chosen.assetId}
+              disabled={busy}
+              onChange={(event) => {
+                setAssetId(event.target.value)
+                setSquareKey('')
+              }}
+            >
+              <option value="">Choose a building</option>
+              {giannini.choices.map((choice) => (
+                <option key={choice.assetId} value={choice.assetId}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="sot-field">
+            <label htmlFor={squareId}>Square</label>
+            <select
+              id={squareId}
+              value={square === undefined ? '' : squareKey}
+              disabled={busy || chosen === undefined}
+              onChange={(event) => setSquareKey(event.target.value)}
+            >
+              <option value="">Choose a square</option>
+              {(chosen?.squares ?? []).map((candidate) => (
+                <option key={keyOf(candidate)} value={keyOf(candidate)}>
+                  {candidate.cityLabel} — {candidate.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" className="small" disabled={busy || !valid}>
+            Build for free
+          </button>
+        </form>
+      ) : (
+        <div className="assisted-action">
+          <button type="button" className="small" disabled title={giannini.reason}>
+            Build for free
+          </button>
+          <span className="tag">Used</span>
+          <HelpHint label={GIANNINI_TITLE}>{giannini.reason}</HelpHint>
         </div>
       )}
     </section>

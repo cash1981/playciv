@@ -70,6 +70,7 @@ export type {
   DevoteToTheArtsPayload,
   FeudalismHarvestPayload,
   FoundCityPayload,
+  GianniniBuildPayload,
   GovernmentPayload,
   HarvestPayload,
   InvestPayload,

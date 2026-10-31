@@ -20,7 +20,7 @@
  * only call each other inside functions, never while the modules load.
  */
 
-import { CARAVAN_PRODUCTION } from './disband.js'
+import { CARAVAN_PRODUCTION, cityLabelOf } from './disband.js'
 import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
@@ -49,7 +49,7 @@ import { cityProductionsOf } from './city-production.js'
 import type { CityProduction } from './city-production.js'
 import { SHUFFLABLE_ITEMS } from './sheet-name.js'
 import type { SheetName } from './sheet-name.js'
-import type { GameState, Playerhand } from './state.js'
+import type { FreeBuildingChoice, GameState, Playerhand } from './state.js'
 import { BUILDING_TERRAIN, CATEGORY_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
@@ -652,6 +652,38 @@ export function freeBuildingSquaresOf(
     onlyReplacingOf(scene, outskirts, item),
   )
   return squares.filter((square) => square.replaces === undefined)
+}
+
+/**
+ * The buildings the player may build for free (A. P. Giannini), with every empty square of their cities where
+ * each can stand. Only buildings they have unlocked, the basic form not once its upgrade is, as in
+ * {@link cityBuildOptions}; nothing is paid, produced or counted as a city action. A building with none left in the
+ * supply or with no legal square is left out.
+ */
+export function freeBuildingChoicesOf(state: GameState, player: Playerhand): readonly FreeBuildingChoice[] {
+  if (player.color === null) return []
+  const techs = techViewOf(player)
+  const footprints = cityFootprintsOf(state, player.color.toLowerCase())
+  const choices: FreeBuildingChoice[] = []
+  for (const { assetId, label } of BUILDABLE_BUILDINGS) {
+    const upgrade = BUILDING_UPGRADES[assetId]
+    if (upgrade !== undefined && isUnlocked(techs, upgrade)) continue
+    if (!isUnlocked(techs, assetId)) continue
+    const asset = findBoardAsset(assetId)
+    if (asset === undefined) continue
+    if ((remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? Infinity) <= 0) continue
+    const squares = footprints.flatMap((footprint) =>
+      freeBuildingSquaresOf(state, player, footprint.piece.id, assetId).map((square) => ({
+        cityPieceId: footprint.piece.id,
+        cityLabel: cityLabelOf(state.board, footprint.piece),
+        column: square.column,
+        row: square.row,
+        label: square.label,
+      })),
+    )
+    if (squares.length > 0) choices.push({ assetId, label, squares })
+  }
+  return choices
 }
 
 // ---------------------------------------------------------------------------

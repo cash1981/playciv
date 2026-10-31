@@ -251,6 +251,14 @@ export interface InvestPayload {
   readonly card: InvestmentCard
 }
 
+/** What `gianniniBuild` carries: the city, the building and the empty square for A. P. Giannini's free building. */
+export interface GianniniBuildPayload {
+  readonly cityPieceId: string
+  readonly assetId: string
+  readonly column: number
+  readonly row: number
+}
+
 /** What `communism` carries: the square whose figures may not leave this turn. */
 export interface CommunismPayload {
   readonly square: CardSquare
@@ -289,6 +297,7 @@ export type AssistedPayload =
   | PlayCardPayload
   | GovernmentPayload
   | InvestPayload
+  | GianniniBuildPayload
   | CommunismPayload
   | SteamPowerPayload
   | FeudalismHarvestPayload

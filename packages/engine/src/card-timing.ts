@@ -211,6 +211,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Andrew Carnegie', 'earns one free culture advance for every 3 coins you have, made one space at a time with the Advance buttons'],
   ['Jacques Cousteau', 'builds up to 3 Harbors in your cities for free, on the squares you choose'],
   ['Frida Kahlo', 'discards the culture cards you choose, then draws culture cards from the deck of the area your culture marker is in until your hand is full'],
+  ['A. P. Giannini', 'lets you build an unlocked building for free in one of your cities each time you invest a coin, from the Start of Turn tab while the card is faceup'],
   ['Jerry Garcia', "devotes every one of your cities to the arts as your capital's action, for the culture each city's board gives, the other cities may still act"],
   ['Ada Lovelace', 'gives one extra city action this turn: a second action of a city is taken without the question'],
   ['Akira Kurosawa', 'gains you 1 culture each time another player devotes a city to the arts, while the card is faceup'],

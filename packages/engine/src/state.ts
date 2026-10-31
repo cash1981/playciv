@@ -432,6 +432,7 @@ export type AssistedActionKind =
   | 'feudalismHarvest'
   | 'switchGovernment'
   | 'invest'
+  | 'gianniniBuild'
   | 'foundCity'
   | 'assignScout'
   | 'devoteToTheArts'
@@ -558,6 +559,20 @@ export type AssistedEffect =
       readonly grantId: string | null
       /** The free advance an Arab investment gave, or `null`. */
       readonly advance: CultureAdvanceEffect | null
+      /** A. P. Giannini was faceup and active when the coin was invested: one free building is owed (`gianniniBuild`). */
+      readonly giannini?: true
+    }
+  | {
+      /** A. P. Giannini's free building after an invest: the city, the building and the square, and the piece it put on the board. */
+      readonly kind: 'gianniniBuild'
+      readonly cityPieceId: string
+      readonly assetId: string
+      /** The building's display name, for the log and the undo. */
+      readonly label: string
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      readonly pieceId: string
+      /** The board history entry that placed it. */
+      readonly historyId: string
     }
   | {
       /** A city founded in place of a scout (or an army under the Republic). */
@@ -1467,6 +1482,19 @@ export interface ScoutView {
   }
 }
 
+/** A building the player may build for free, with every square in their cities where it can stand. */
+export interface FreeBuildingChoice {
+  readonly assetId: string
+  readonly label: string
+  readonly squares: readonly {
+    readonly cityPieceId: string
+    readonly cityLabel: string
+    readonly column: number
+    readonly row: number
+    readonly label: string
+  }[]
+}
+
 export interface StartOfTurnView {
   readonly government: NowAnswer & {
     readonly current: Government
@@ -1505,6 +1533,11 @@ export interface StartOfTurnView {
     /** Every coin the player has, printed ones included. */
     readonly totalCoins: number
   }
+  /**
+   * A. P. Giannini's free building after an invest, `null` unless his card is faceup and active. The choices
+   * name the viewer's own cities and the buildings they have unlocked: own view only.
+   */
+  readonly giannini: (NowAnswer & { readonly choices: readonly FreeBuildingChoice[] }) | null
   /** The cities the player has and may have: building one needs fewer than the limit. */
   readonly cityLimit: { readonly have: number; readonly max: number }
   /** The player's own cities on the map, for choosing where a scout sends its square. */

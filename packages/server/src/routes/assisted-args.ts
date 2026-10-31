@@ -8,7 +8,7 @@
  * `upgradeBuildings`) keep their own top-level fields in `play.ts`.
  */
 
-import { isGovernment } from '@civ/engine'
+import { BUILDABLE_BUILDING_IDS, isGovernment } from '@civ/engine'
 import type {
   AssignScoutPayload,
   AssistedPayload,
@@ -17,6 +17,7 @@ import type {
   FoundCityPayload,
   GovernmentPayload,
   FeudalismHarvestPayload,
+  GianniniBuildPayload,
   InvestPayload,
   InvestmentCard,
   PlayCardPayload,
@@ -206,6 +207,21 @@ function parseInvest(args: Record<string, unknown>): InvestPayload | string {
   return { source, card: card as InvestmentCard }
 }
 
+function parseGianniniBuild(args: Record<string, unknown>): GianniniBuildPayload | string {
+  const extra = extraKeys(args, ['cityPieceId', 'assetId', 'column', 'row'])
+  if (extra.length > 0) return `gianniniBuild takes only cityPieceId, assetId, column and row, not ${extra.join(', ')}`
+  const { cityPieceId, assetId, column, row } = args
+  if (!isId(cityPieceId)) return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  if (typeof assetId !== 'string' || !BUILDABLE_BUILDING_IDS.includes(assetId)) return 'assetId must be one of the buildings'
+  if (
+    typeof column !== 'number' || !Number.isInteger(column) || column < 0 || column > 999 ||
+    typeof row !== 'number' || !Number.isInteger(row) || row < 0 || row > 999
+  ) {
+    return 'column and row must be whole numbers'
+  }
+  return { cityPieceId, assetId, column, row }
+}
+
 function parseHarvest(args: Record<string, unknown>): FeudalismHarvestPayload | string {
   const extra = extraKeys(args, ['cityPieceId', 'resource'])
   if (extra.length > 0) return `feudalismHarvest takes only cityPieceId and resource, not ${extra.join(', ')}`
@@ -240,6 +256,7 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['steamPower', parseSteamPower],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
+  ['gianniniBuild', parseGianniniBuild],
   ['feudalismHarvest', parseHarvest],
   ['foundCity', parseFoundCity],
   ['assignScout', parseAssignScout],

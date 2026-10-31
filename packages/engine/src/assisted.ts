@@ -1259,7 +1259,8 @@ const startPayloadOf = (payload: AssistedPayload | undefined): StartBuildingProg
   typeof payload.cityPieceId === 'string' &&
   !('item' in payload) &&
   !('resource' in payload) &&
-  !('scoutPieceId' in payload)
+  !('scoutPieceId' in payload) &&
+  !('assetId' in payload)
     ? { cityPieceId: payload.cityPieceId }
     : undefined
 
@@ -1388,7 +1389,7 @@ const startBuildingProgram: AssistedActionDefinition = {
 
 /** The `devoteToTheArts` payload, or `undefined` when the payload is another action's or missing. */
 const devotePayloadOf = (payload: AssistedPayload | undefined): DevoteToTheArtsPayload | undefined =>
-  payload !== undefined && 'cityPieceId' in payload && !('item' in payload) && !('resource' in payload) && !('scoutPieceId' in payload)
+  payload !== undefined && 'cityPieceId' in payload && !('item' in payload) && !('resource' in payload) && !('scoutPieceId' in payload) && !('assetId' in payload)
     ? (payload as DevoteToTheArtsPayload)
     : undefined
 
@@ -2082,12 +2083,13 @@ export function reverseAssistedAction(
   if (effect.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }
-  // Galileo's (and Cousteau's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
+  // Galileo's (and Cousteau's, and Giannini's free building's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
   // the forward moves, which would teleport the already-restored figures to the destination again.
   if (
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
-      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined))
+      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
+    effect.kind === 'gianniniBuild'
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }
