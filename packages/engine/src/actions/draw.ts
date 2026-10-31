@@ -42,6 +42,7 @@ import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
 import { turnHolder } from '../turn.js'
+import { TOKEN_SHEET_NAMES, releaseLooseToken } from '../zheng-he.js'
 
 type DrawResult = Result<GameState, EngineError>
 
@@ -88,7 +89,9 @@ export interface DrawInput {
  * hand, and logs it. If the deck has none of that type left it is reshuffled
  * from `discardedItems` and the draw is tried once more.
  */
-export function draw(state: GameState, input: DrawInput): DrawResult {
+export function draw(original: GameState, input: DrawInput): DrawResult {
+  // What lies under a hut or village piece that has left the map is the next of its sheet to be drawn
+  const state = TOKEN_SHEET_NAMES.includes(input.sheetName) ? releaseLooseToken(original, input.sheetName) : original
   const found = requirePlayer(state, input.playerId)
   if (!found.ok) return found
   const turn = requireTurn(state, found.value, input.confirmedOutOfTurn)

@@ -60,4 +60,5 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 
 - Jim Henson's wound markers are kept on the hand (`hensonWounds`), not on the card: if the card changes hands or is discarded and drawn again, the count stays with the player. Wonders put on the board by hand add no wound.
 - A. P. Giannini's Start of Turn section stays hidden when no building can be placed, with no explanation. Frida Kahlo is listed as ready on the culture start space and refuses only when played.
+- Zheng He's look is a list in the private log; the map shows no marker on the squares it read. A piece collected into an area is not listed by a later look, though its item stays under it until the next draw of that sheet. That draw gives the item to whoever draws, and an undone draw puts the item in the shuffled deck, so the earlier lines can then be stale.
 - Jerry Garcia's all-city devotion counts no scout's square and offers no Charles Darwin conversion; a figure can be corrected on the culture counter by hand.

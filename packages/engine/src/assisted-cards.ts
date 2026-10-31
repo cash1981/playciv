@@ -16,6 +16,7 @@
 import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
+import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
   LOVELACE_NAME,
@@ -351,11 +352,14 @@ interface Automated {
     | 'cardMove'
     | 'garcia'
     | 'kurosawa'
+    | 'zhengHe'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
   /** A line for the player's own log, naming cards the public line must not. */
   readonly privateSaid?: string
+  /** More lines for the player's own log, one entry each (Zheng He's look). */
+  readonly privateLines?: readonly string[]
 }
 
 /** The current turn's record, or a fresh one when the player has not written anything yet. */
@@ -711,6 +715,15 @@ function automate(
           (discarding.length === 0 ? '' : `discarded ${discarding.map(itemName).join(', ')} and `) +
           `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
+      })
+    }
+    case 'Zheng He': {
+      const look = lookUnderTokens(state, state.players.filter((candidate) => candidate.playerId !== player.playerId))
+      return ok({
+        state: look.state,
+        extra: { zhengHe: { bound: look.bound } },
+        said: ", looking under the hut and village tokens on the map and in the other players' hands",
+        privateLines: look.lines,
       })
     }
     case 'Orville Wright': {
@@ -1183,15 +1196,15 @@ export const playCard: AssistedActionDefinition = {
     })
     const logId = lastLogId(logged)
     // Names of cards go to the player's own log only, after the public line the undo is tied to
-    const withPrivate =
-      automated.value?.privateSaid === undefined
-        ? logged
-        : appendLog(logged, {
-            username: player.username,
-            playerId: player.playerId,
-            privateLog: automated.value.privateSaid,
-            createdAt: context.at ?? null,
-          })
+    const privateLines = [
+      ...(automated.value?.privateSaid === undefined ? [] : [automated.value.privateSaid]),
+      ...(automated.value?.privateLines ?? []),
+    ]
+    const withPrivate = privateLines.reduce(
+      (log, line) =>
+        appendLog(log, { username: player.username, playerId: player.playerId, privateLog: line, createdAt: context.at ?? null }),
+      logged,
+    )
     return ok({
       state: countLinesIn(withPrivate, (automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId)),
       effect: {
@@ -1493,6 +1506,24 @@ export const playCard: AssistedActionDefinition = {
           coinSources: withCoinSource(hand.stats.coinSources, source, hand.stats.coinSources[source] + 1),
         },
       }
+    }
+
+    // What Zheng He's player saw is worth nothing after this: the tokens still set aside go back to the deck and the
+    // decks they came from are shuffled, also an item an earlier draw has put on top of them
+    if (effect.zhengHe !== undefined) {
+      current = putBackTokens(current, effect.zhengHe.bound)
+      for (const sheetName of new Set(effect.zhengHe.bound.map((token) => token.item.sheetName))) {
+        current = shuffleSheetTwice(current, sheetName)
+      }
+      if (effect.zhengHe.bound.length > 0) {
+        current = appendLog(current, {
+          username: player.username,
+          playerId: player.playerId,
+          privateLog: `${ZHENG_HE_NAME}: the look was undone and the huts and villages were reshuffled, so what you saw no longer holds`,
+          createdAt: at ?? null,
+        })
+      }
+      hand = playerOf(current, player.playerId) ?? hand
     }
 
     // Akira Kurosawa's culture goes back from the holder, as far as it is still there
