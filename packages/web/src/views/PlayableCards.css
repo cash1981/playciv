@@ -46,6 +46,12 @@
   padding: 0.2rem 0;
 }
 
+/* The global input rule makes a field full width; a checkbox keeps its own size beside its label. */
+.play-card-target input {
+  width: auto;
+  margin: 0 0.25rem 0 0;
+}
+
 .play-card-targets p,
 .play-card-note {
   margin: 0.25rem 0 0;
