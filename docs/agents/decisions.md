@@ -256,9 +256,11 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   items: the top item of the sheet is taken out of the deck and set under each piece
   without one (`GameState.underTokens`, never projected). A shuffle (an item undo, Frida
   Kahlo) cannot change what was seen, so no new message is needed. Draw Hut and Draw
-  Village ask which token the draw is from when such pieces lie on the board: one
-  button per piece (a map square by its label, a piece in an area by that area, numbered
-  when there are several), or "Random hut (not from a token)" (a card, a village marker).
+  Village ask which token the draw is from when there are tokens to choose (`drawTokens`
+  in the view): a button for every piece on a map square, and for a moved piece that
+  still has an item under it, named by the square it was read on ("C2 (in cash1981's
+  area)"); a moved piece with nothing under it is the same as a random draw and is not
+  listed. The last button is "Random hut (not from a token)" (a card, a village marker).
   A chosen token gives the item under it (the top card when nobody has looked) and its
   piece stays where it is, to be moved by hand (`DrawInput.fromPieceId`); a public line
   says where. A draw with no piece never gives an item under a piece still on the board,

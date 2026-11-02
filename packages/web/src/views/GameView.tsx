@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType, boardTokensOf } from '@civ/engine'
+import { arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -915,7 +915,7 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   // A hut or village: when tokens lie on the board the player says which one the draw is from
   const [choosing, setChoosing] = useState<SheetName | null>(null)
   const tokensOf = (sheet: SheetName) =>
-    sheet === 'HUTS' || sheet === 'VILLAGES' ? boardTokensOf(view.board, view.boardAreas).filter((token) => token.sheet === sheet) : []
+    sheet === 'HUTS' || sheet === 'VILLAGES' ? view.drawTokens.filter((token) => token.sheet === sheet) : []
   const request = (sheet: SheetName): void => {
     if (tokensOf(sheet).length > 0) setChoosing(sheet)
     else draw(sheet)
@@ -979,11 +979,11 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
           <span className="muted">{choosing === 'VILLAGES' ? 'Village' : 'Hut'} from:</span>
           {tokensOf(choosing).map((token) => (
             <button
-              key={token.piece.id}
+              key={token.pieceId}
               className="small"
               disabled={busy}
               title="You get what lies under this token. The token stays where it is: move it yourself"
-              onClick={() => draw(choosing, { fromPieceId: token.piece.id })}
+              onClick={() => draw(choosing, { fromPieceId: token.pieceId })}
             >
               {token.label}
             </button>

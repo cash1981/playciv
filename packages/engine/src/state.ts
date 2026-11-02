@@ -9,6 +9,7 @@
 
 import type { HutItem, Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement, VillageItem } from './item.js'
 import { isUnit } from './item.js'
+import { drawTokensOf } from './zheng-he.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
 import { boardAreas } from './board.js'
@@ -924,6 +925,16 @@ export type AssistedEffect =
 export interface UnderToken {
   readonly pieceId: string
   readonly item: HutItem | VillageItem
+  /** The map square the piece lay on when the player looked ("C2"), so a piece moved away can still be told apart. */
+  readonly square?: string
+}
+
+/** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
+export interface DrawTokenView {
+  readonly pieceId: string
+  readonly sheet: SheetName
+  /** What the button says: the square ("J6"), or "C2 (in cash1981's area)" for a piece that was read on C2 and moved. */
+  readonly label: string
 }
 
 export interface KurosawaPayment {
@@ -1656,6 +1667,8 @@ export interface PlayerView {
   readonly winner: string | null
   readonly numberOfItemsInDeck: number
   readonly numberOfDiscardedItems: number
+  /** The hut and village pieces Draw Hut and Draw Village can be made from: every one on a map square, and a moved one that has something under it. */
+  readonly drawTokens: readonly DrawTokenView[]
   readonly you: PlayerViewSelf | null
   readonly opponents: readonly OpaquePlayerhand[]
   /** Whose turn it is and which phase they should be working on. */
@@ -1827,6 +1840,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     winner: state.winner,
     numberOfItemsInDeck: state.items.length,
     numberOfDiscardedItems: state.discardedItems.length,
+    drawTokens: drawTokensOf(state),
     you,
     opponents: state.players
       .filter((player) => player.playerId !== viewerId)

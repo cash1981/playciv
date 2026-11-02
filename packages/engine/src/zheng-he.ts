@@ -6,18 +6,18 @@
  * the deck, whichever piece it was. To make a look worth something the item is fixed to the piece: the
  * first look takes the top hut or village out of the deck and sets it under each piece that has none
  * (`GameState.underTokens`). A shuffle then cannot change what lies there, so nothing the player saw
- * becomes stale. When the piece has left the map, a draw of that sheet gets its item first.
+ * becomes stale. A draw from the piece gets its item (a piece that is gone from the board gives it to the next draw of its sheet).
  */
 
 import { mapCellOf } from './blockade.js'
-import { areaAt, boardAreas } from './board.js'
+import { WONDERS_AREA_ID, areaAt, boardAreas } from './board.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import type { Cell } from './blockade.js'
 import { itemName } from './item.js'
 import type { HutItem, Item, VillageItem } from './item.js'
 import type { SheetName } from './sheet-name.js'
-import type { GameState, Playerhand, UnderToken } from './state.js'
+import type { DrawTokenView, GameState, Playerhand, UnderToken } from './state.js'
 
 export const ZHENG_HE_NAME = 'Zheng He'
 
@@ -51,50 +51,54 @@ export function mapTokensOf(board: Board): readonly MapToken[] {
   return found.sort((a, b) => a.cell.row - b.cell.row || a.cell.column - b.cell.column || a.piece.id.localeCompare(b.piece.id))
 }
 
-/** A hut or village piece anywhere on the board, and where it lies. */
+/** A hut or village piece a draw can be made from, and where it lies. */
 export interface BoardToken {
   readonly piece: BoardPiece
   readonly sheet: SheetName
-  /** The map square, or `null` for a piece elsewhere (in a player's area). */
-  readonly cell: Cell | null
-  /** What a button says: the square ("J6"), or the area ("cash1981's area", numbered when it holds several). */
+  /** What a button says: the square ("J6"), or "C2 (in cash1981's area)" for a piece read on C2 and moved. */
   readonly label: string
   /** What the log says after "the token": "on J6", "in cash1981's area" or "off the map". */
   readonly phrase: string
 }
 
 /**
- * Every hut and village piece on the board: the ones on a map square first (top row first, left to right), then the
- * others by area. A piece lies in a player's area when it was collected there.
+ * The pieces a draw of huts or villages can be made from: every one on a map square (top row first, left to right),
+ * then those moved away that still have an item under them, which are the ones Zheng He's look read. A moved piece
+ * with nothing under it is the same as a random draw, so it is left out; that also leaves out a piece already drawn
+ * from, and the squares the others were read on tell the rest apart.
  */
-export function boardTokensOf(board: Board, areas: readonly BoardArea[]): readonly BoardToken[] {
+export function boardTokensOf(board: Board, areas: readonly BoardArea[], under: readonly UnderToken[]): readonly BoardToken[] {
   const onMap = mapTokensOf(board).map((token): BoardToken => ({
     piece: token.piece,
     sheet: token.sheet,
-    cell: token.cell,
     label: squareLabel(token.cell),
     phrase: `on ${squareLabel(token.cell)}`,
   }))
   const mapIds = new Set(onMap.map((token) => token.piece.id))
-  const elsewhere: BoardToken[] = []
-  const counts = new Map<string, number>()
-  for (const piece of board.pieces) {
-    const sheet = TOKEN_SHEETS.get(piece.assetId)
-    if (sheet === undefined || mapIds.has(piece.id)) continue
+  const moved: BoardToken[] = []
+  for (const token of under) {
+    const piece = board.pieces.find((candidate) => candidate.id === token.pieceId)
+    const sheet = piece === undefined ? undefined : TOKEN_SHEETS.get(piece.assetId)
+    if (piece === undefined || sheet === undefined || mapIds.has(piece.id)) continue
     const area = areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2)
-    const place = area === undefined ? 'off the map' : `${area.username}'s area`
-    const number = (counts.get(`${sheet}:${place}`) ?? 0) + 1
-    counts.set(`${sheet}:${place}`, number)
-    elsewhere.push({ piece, sheet, cell: null, label: place, phrase: area === undefined ? place : `in ${place}` })
+    const place = area === undefined ? 'off the map' : area.playerId === WONDERS_AREA_ID ? 'the Wonders area' : `${area.username}'s area`
+    moved.push({
+      piece,
+      sheet,
+      label: `${token.square ?? 'A token'} (${area === undefined ? place : `in ${place}`})`,
+      phrase: area === undefined ? place : `in ${place}`,
+    })
   }
-  // A place that holds several pieces numbers them, so the buttons can be told apart
-  const numbered = elsewhere.map((token) => {
-    const total = counts.get(`${token.sheet}:${token.label}`) ?? 1
-    if (total === 1) return token
-    const position = elsewhere.filter((other) => other.sheet === token.sheet && other.label === token.label).indexOf(token) + 1
-    return { ...token, label: `${token.label} (${position})` }
-  })
-  return [...onMap, ...numbered.sort((a, b) => a.label.localeCompare(b.label) || a.piece.id.localeCompare(b.piece.id))]
+  return [...onMap, ...moved.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))]
+}
+
+/** The tokens of the view: what the Draw panel offers. */
+export function drawTokensOf(state: GameState): readonly DrawTokenView[] {
+  return boardTokensOf(state.board, boardAreas(state.board, state.players), state.underTokens ?? []).map((token) => ({
+    pieceId: token.piece.id,
+    sheet: token.sheet,
+    label: token.label,
+  }))
 }
 
 /**
@@ -121,7 +125,7 @@ export function releaseLooseToken(state: GameState, sheetName: SheetName): GameS
  * `undefined` when the piece is not a hut or village of `sheetName` on the board.
  */
 export function releaseTokenOf(state: GameState, pieceId: string, sheetName: SheetName): { readonly state: GameState; readonly phrase: string } | undefined {
-  const token = boardTokensOf(state.board, boardAreas(state.board, state.players)).find((candidate) => candidate.piece.id === pieceId && candidate.sheet === sheetName)
+  const token = boardTokensOf(state.board, boardAreas(state.board, state.players), state.underTokens ?? []).find((candidate) => candidate.piece.id === pieceId && candidate.sheet === sheetName)
   if (token === undefined) return undefined
   const under = state.underTokens ?? []
   const bound = under.find((candidate) => candidate.pieceId === pieceId)
@@ -159,7 +163,7 @@ export function lookUnderTokens(state: GameState, others: readonly Playerhand[])
       const index = items.findIndex((item) => item.sheetName === sheet)
       const item = items[index]
       if (item !== undefined && isTokenItem(item)) {
-        token = { pieceId: piece.id, item }
+        token = { pieceId: piece.id, item, square: squareLabel(cell) }
         items = items.filter((_, position) => position !== index)
         under.push(token)
         bound.push(token)

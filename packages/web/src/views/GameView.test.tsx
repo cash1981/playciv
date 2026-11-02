@@ -1477,34 +1477,13 @@ describe('the game page (issue #215)', () => {
   })
 
   describe('drawing a hut or a village', () => {
-    const tokenPiece = (assetId: string, id: string, column: number, row: number): BoardPiece => {
-      const board = createBoard()
-      const asset = findBoardAsset(assetId)
-      if (asset === undefined) throw new Error(`missing asset ${assetId}`)
-      return {
-        id,
-        assetId,
-        path: asset.path,
-        label: asset.label,
-        category: 'resource',
-        x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2),
-        y: Math.round(mapTop(board) + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
-        width: asset.width,
-        height: asset.height,
-        rotation: 0,
-        placedBy: 'p1',
-      }
-    }
     const withTokens = (): PlayerView =>
       chatView('Alice', {
-        board: {
-          ...createBoard(),
-          pieces: [
-            tokenPiece('resources/hut', 'hut-j6', 9, 5),
-            tokenPiece('resources/hut', 'hut-c2', 2, 1),
-            tokenPiece('resources/village', 'village-l7', 11, 6),
-          ],
-        },
+        drawTokens: [
+          { pieceId: 'hut-c2', sheet: 'HUTS', label: 'C2' },
+          { pieceId: 'hut-j6', sheet: 'HUTS', label: 'J6' },
+          { pieceId: 'village-l7', sheet: 'VILLAGES', label: 'L7' },
+        ],
       })
 
     it('asks which token the hut is from, listing the huts on the map by square and not the villages', async () => {
@@ -1545,29 +1524,31 @@ describe('the game page (issue #215)', () => {
       await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS'))
     })
 
-    it('lists a token moved into a player area by that area, and draws from it', async () => {
+    it('lists a token moved away by the square it was read on, and draws from it', async () => {
       const draw = vi.spyOn(api, 'draw').mockResolvedValue(withTokens())
-      const board = createBoard()
-      const area = { playerId: 'p1', username: 'Alice', color: 'Red', x: 0, y: 2000, width: 300, height: 300 }
-      const moved = { ...tokenPiece('resources/hut', 'hut-area', 0, 0), x: 40, y: 2040 }
-      const view = chatView('Alice', { board: { ...board, pieces: [tokenPiece('resources/hut', 'hut-j6', 9, 5), moved] }, boardAreas: [area] })
+      const view = chatView('Alice', {
+        drawTokens: [
+          { pieceId: 'hut-j6', sheet: 'HUTS', label: 'J6' },
+          { pieceId: 'hut-c2', sheet: 'HUTS', label: "C2 (in Alice's area)" },
+        ],
+      })
       await renderGame(view)
 
       fireEvent.click(drawButton('Huts'))
       const group = screen.getByRole('group', { name: 'Draw a hut from' })
       expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual([
         'J6',
-        "Alice's area",
+        "C2 (in Alice's area)",
         'Random hut (not from a token)',
         'Cancel',
       ])
-      fireEvent.click(within(group).getByRole('button', { name: "Alice's area" }))
-      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS', false, undefined, { fromPieceId: 'hut-area' }))
+      fireEvent.click(within(group).getByRole('button', { name: "C2 (in Alice's area)" }))
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS', false, undefined, { fromPieceId: 'hut-c2' }))
     })
 
-    it('draws at once when no token of that kind lies on the map', async () => {
-      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Alice', { board: createBoard() }))
-      await renderGame(chatView('Alice', { board: createBoard() }))
+    it('draws at once when no token of that kind lies on the board', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Alice', { drawTokens: [] }))
+      await renderGame(chatView('Alice', { drawTokens: [] }))
 
       fireEvent.click(drawButton('Huts'))
       await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS'))
