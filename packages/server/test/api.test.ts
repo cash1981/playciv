@@ -10,7 +10,7 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { activeTurnStatus, itemName } from '@civ/engine'
+import { SQUARE_SIZE, activeTurnStatus, findBoardAsset, itemName, mapTop, placePiece, unwrap } from '@civ/engine'
 import type { CoinSources, GameState } from '@civ/engine'
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
@@ -568,6 +568,49 @@ describe('draws', () => {
     expect(view.you.items).toHaveLength(1)
     expect(view.you.items[0]?.sheetName).toBe('HUTS')
     expect(view.you.items[0]?.hidden).toBe(true)
+  })
+
+  it('a hut can be drawn from a token on the map, which stays there, and a piece that is no hut token is refused', async () => {
+    const creator = await register('cash1981')
+    const gameId = await createGame(creator, 'Brikkespill', 2)
+    const other = await register('Karandras1')
+    await inject(app, { method: 'POST', url: `/api/games/${gameId}/join`, headers: bearer(other), payload: {} })
+    const state = await repo.findGame(gameId)
+    const starter = state?.players.find((player) => player.yourTurn)
+    const starterToken = starter?.username === 'cash1981' ? creator : other
+    if (state === undefined || starter === undefined) throw new Error('game missing')
+
+    const asset = findBoardAsset('resources/hut')
+    if (asset === undefined) throw new Error('missing hut asset')
+    const placed = unwrap(
+      placePiece(state, {
+        playerId: starter.playerId,
+        assetId: 'resources/hut',
+        x: Math.round(2 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2),
+        y: Math.round(mapTop(state.board) + SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    await repo.saveGame(placed)
+    const pieceId = (placed.board.pieces.at(-1) as { id: string }).id
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/HUTS`,
+      headers: bearer(starterToken),
+      payload: { fromPieceId: pieceId },
+    })
+    expect(drawn.status).toBe(200)
+    const stored = await repo.findGame(gameId)
+    expect(stored?.board.pieces.some((piece) => piece.id === pieceId)).toBe(true)
+    expect(stored?.log.some((entry) => entry.publicLog.endsWith('drew the hut from the token on C2'))).toBe(true)
+
+    const refused = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/VILLAGES`,
+      headers: bearer(starterToken),
+      payload: { fromPieceId: pieceId },
+    })
+    expect(refused.status).toBe(404)
   })
 
   it('whoever does not have the turn gets 403', async () => {

@@ -105,6 +105,9 @@ export interface RevealedPage {
 }
 
 /** The three loot choices exposed by the old client. */
+/** A hut or village draw: from the token on this piece, or not from a token on the map. */
+export type DrawToken = { readonly fromPieceId: string } | { readonly notFromToken: true }
+
 export type LootCategory = 'CULTURE_CARD' | 'HUTS' | 'VILLAGES'
 
 export interface PlayerDto {
@@ -643,10 +646,12 @@ export const api = {
     sheetName: SheetName,
     confirmedOutOfTurn?: boolean,
     confirmedOverLimit?: boolean,
+    token?: DrawToken,
   ) => {
     const confirmed = {
       ...(confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : {}),
       ...(confirmedOverLimit === true ? { confirmedOverLimit: true } : {}),
+      ...(token ?? {}),
     }
     return post<PlayerView>(
       `/api/games/${gameId}/draw/${sheetName}`,

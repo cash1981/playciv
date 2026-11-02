@@ -10,7 +10,7 @@
  */
 
 import { mapCellOf } from './blockade.js'
-import type { BoardPiece } from './board.js'
+import type { Board, BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import type { Cell } from './blockade.js'
 import { itemName } from './item.js'
@@ -32,12 +32,19 @@ const isTokenItem = (item: Item): item is HutItem | VillageItem => item.kind ===
 
 const kindWord = (sheet: SheetName | undefined): string => (sheet === 'VILLAGES' ? 'village' : 'hut')
 
+/** A hut or village piece on a map square. */
+export interface MapToken {
+  readonly piece: BoardPiece
+  readonly cell: Cell
+  readonly sheet: SheetName
+}
+
 /** The hut and village pieces on a map square, top row first and left to right, so the list reads the same every time. */
-export function mapTokensOf(state: GameState): readonly { readonly piece: BoardPiece; readonly cell: Cell; readonly sheet: SheetName }[] {
-  const found: { piece: BoardPiece; cell: Cell; sheet: SheetName }[] = []
-  for (const piece of state.board.pieces) {
+export function mapTokensOf(board: Board): readonly MapToken[] {
+  const found: MapToken[] = []
+  for (const piece of board.pieces) {
     const sheet = TOKEN_SHEETS.get(piece.assetId)
-    const cell = sheet === undefined ? null : mapCellOf(state.board, piece)
+    const cell = sheet === undefined ? null : mapCellOf(board, piece)
     if (sheet !== undefined && cell !== null) found.push({ piece, cell, sheet })
   }
   return found.sort((a, b) => a.cell.row - b.cell.row || a.cell.column - b.cell.column || a.piece.id.localeCompare(b.piece.id))
@@ -52,13 +59,30 @@ export function mapTokensOf(state: GameState): readonly { readonly piece: BoardP
 export function releaseLooseToken(state: GameState, sheetName: SheetName): GameState {
   const under = state.underTokens ?? []
   if (under.length === 0) return state
-  const onMap = new Set(mapTokensOf(state).map((token) => token.piece.id))
+  const onMap = new Set(mapTokensOf(state.board).map((token) => token.piece.id))
   const loose = under.find((token) => token.item.sheetName === sheetName && !onMap.has(token.pieceId))
   if (loose === undefined) return state
   const top = state.items.findIndex((item) => item.sheetName === sheetName)
   const items = [...state.items]
   items.splice(top < 0 ? items.length : top, 0, { ...loose.item, hidden: true, ownerId: null })
   return { ...state, items, underTokens: under.filter((token) => token !== loose) }
+}
+
+/**
+ * A draw from the token on `pieceId`: the item under it goes on top of its sheet, so the draw gives it, and the
+ * piece stays where it is. A token nobody has looked under gives the top card as an anonymous draw does.
+ * `undefined` when the piece is not a hut or village of `sheetName` on a map square.
+ */
+export function releaseTokenOf(state: GameState, pieceId: string, sheetName: SheetName): { readonly state: GameState; readonly cell: Cell } | undefined {
+  const token = mapTokensOf(state.board).find((candidate) => candidate.piece.id === pieceId && candidate.sheet === sheetName)
+  if (token === undefined) return undefined
+  const under = state.underTokens ?? []
+  const bound = under.find((candidate) => candidate.pieceId === pieceId)
+  if (bound === undefined) return { state, cell: token.cell }
+  const top = state.items.findIndex((item) => item.sheetName === sheetName)
+  const items = [...state.items]
+  items.splice(top < 0 ? items.length : top, 0, { ...bound.item, hidden: true, ownerId: null })
+  return { state: { ...state, items, underTokens: under.filter((candidate) => candidate !== bound) }, cell: token.cell }
 }
 
 export interface TokenLook {
@@ -82,7 +106,7 @@ export function lookUnderTokens(state: GameState, others: readonly Playerhand[])
   const under = [...(state.underTokens ?? [])]
   const bound: UnderToken[] = []
   const lines: string[] = []
-  for (const { piece, cell, sheet } of mapTokensOf(state)) {
+  for (const { piece, cell, sheet } of mapTokensOf(state.board)) {
     let token = under.find((candidate) => candidate.pieceId === piece.id)
     if (token === undefined) {
       const index = items.findIndex((item) => item.sheetName === sheet)
