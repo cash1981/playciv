@@ -136,6 +136,13 @@ export function undoGustavus(
   if (drewCards.some((card) => card === undefined || (isUnit(card) && card.inBattle))) {
     return err('A unit card Gustavus Adolphus built is no longer free in the hand (it is in the arena or gone), so it cannot be undone.')
   }
+  // A new unit that fought, in this battle or in the one End battle set aside, is no longer the card's to take back
+  const fought = [state.battle, state.endedBattle?.battle ?? null].flatMap((battle) =>
+    battle === null ? [] : [...battle.arena, ...battle.departedUnits].map((unit) => unit.unit.id),
+  )
+  if (effect.drew.some((drew) => fought.includes(drew.itemId))) {
+    return err('A unit Gustavus Adolphus built has been in the arena, so it cannot be undone.')
+  }
   if (effect.discarded.some((unit) => !state.discardedItems.some((item) => item.id === unit.id))) {
     return err('A unit card Gustavus Adolphus discarded is no longer in the discard pile, so it cannot be undone.')
   }

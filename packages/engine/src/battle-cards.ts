@@ -45,16 +45,16 @@ const killedOf = (battle: Battle, side: BattleSideId): readonly ArenaUnit[] =>
     (unit) => unit.side === side && unit.killed && unit.saved !== true && unit.gustavus !== true,
   )
 
-/** Every unit of a side that has been killed, saved or not. */
-const killedCountOf = (battle: Battle, side: BattleSideId): number =>
-  [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed).length
+/** The ids of every unit of a side that has been killed, saved or not. */
+const killedIdsOf = (battle: Battle, side: BattleSideId): readonly string[] =>
+  [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed).map((unit) => unit.id)
 
-/** Zhukov's wounds the player has earned and not yet dealt: their units killed since the card was played. */
+/** Zhukov's wounds the player has earned and not yet dealt: their units killed since the card was played (a unit Gustavus Adolphus kills is one). */
 export function zhukovOwed(battle: Battle, playerId: string): number {
   const entry = (battle.zhukov ?? []).find((candidate) => candidate.playerId === playerId)
   const side = playerSideOf(battle, playerId)
   if (entry === undefined || side === null) return 0
-  return Math.max(0, killedCountOf(battle, side) - entry.base - entry.dealt)
+  return Math.max(0, killedIdsOf(battle, side).filter((id) => !entry.deadIds.includes(id)).length - entry.dealt)
 }
 
 /** The wounds Zhukov has dealt for the card play `actionId`, in the battle on now or the one set aside. */
@@ -152,7 +152,7 @@ export function applyBattleCard(
     }
   }
   if (name === ZHUKOV) {
-    const entry = { playerId: player.playerId, base: killedCountOf(battle, side), dealt: 0, actionId }
+    const entry = { playerId: player.playerId, deadIds: killedIdsOf(battle, side), dealt: 0, actionId }
     return {
       state: { ...state, battle: { ...battle, zhukov: [...(battle.zhukov ?? []), entry] } },
       effect: { battleId: battle.id, zhukov: true },

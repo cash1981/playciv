@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { initiateBattle, killArenaUnit, placeUnitInArena, setArenaUnitStat, zhukovWound } from '../src/actions/arena.js'
+import { endBattleAction, initiateBattle, killArenaUnit, moveArenaUnit, placeUnitInArena, setArenaUnitStat, zhukovWound } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
@@ -133,6 +133,34 @@ describe('Georgy Zhukov', () => {
     expect(zhukovOwed(dead.battle!, KARANDRAS1)).toBe(0)
   })
 
+  it('counts the units that were dead when he was played by id, so a taken-back kill does not hide a real one', () => {
+    const early = kill(fight([2, 2], [2, 2]), CASH1981, 0)
+    const { state, cardId } = holding(early, ZHUKOV, CASH1981)
+    const played = unwrap(play(state, CASH1981, cardId))
+    const revived = kill(played, CASH1981, 0)
+    expect(revived.battle?.arena.find((unit) => unit.id === unitOf(revived, CASH1981, 0).id)?.killed).toBe(false)
+    expect(zhukovOwed(kill(revived, CASH1981, 1).battle!, CASH1981)).toBe(1)
+  })
+
+  it('counts a killed unit that another unit replaced on its front, and one Nightingale saved', () => {
+    const { state, cardId } = holding(fight([3, 2], [3, 2]), ZHUKOV, CASH1981)
+    const played = unwrap(play(state, CASH1981, cardId))
+    const [dead, mover] = (played.battle?.arena ?? []).filter((unit) => unit.side === 'attacker')
+    let next = unwrap(killArenaUnit(played, { playerId: CASH1981, arenaUnitId: dead!.id }))
+    next = unwrap(moveArenaUnit(next, { playerId: CASH1981, arenaUnitId: mover!.id, position: dead!.position }))
+    expect(next.battle?.departedUnits.some((unit) => unit.id === dead!.id)).toBe(true)
+    expect(zhukovOwed(next.battle!, CASH1981)).toBe(1)
+    const { state: held, cardId: florence } = holding(next, 'Florence Nightingale', CASH1981)
+    const saved = unwrap(play(held, CASH1981, florence, 'g3'))
+    expect(zhukovOwed(saved.battle!, CASH1981)).toBe(1)
+  })
+
+  it('is refused for the controller of the barbarians', () => {
+    const barbarians = unwrap(initiateBattle(firstCivGame(), { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    const controller = barbarians.battle!.defender.playerId
+    expect(statusOf(holding(barbarians, ZHUKOV, controller).state, controller, ZHUKOV).reason).toBe('You are not fighting in this battle.')
+  })
+
   it('refuses a friendly unit, a killed unit, and a player who has not played him', () => {
     const killed = kill(armed().state, CASH1981)
     expect(unwrapErr(zhukovWound(killed, { playerId: CASH1981, arenaUnitId: unitOf(killed, CASH1981, 1).id })).kind).toBe('BATTLE_CARD_REFUSED')
@@ -243,7 +271,24 @@ describe('Gustavus Adolphus', () => {
     expect(JSON.stringify(error)).toContain('no longer free')
   })
 
-  it('does not show the drawn unit cards to the other players', () => {
+  it('cannot be undone once a new unit has fought, not even after End battle', () => {
+    const { state, cardId } = base()
+    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'MOUNTED', 'ARTILLERY']))
+    const fresh = findPlayer(after, CASH1981)!.battlehand.find((unit) => !unit.inBattle)!
+    const fought = unwrap(placeUnitInArena(after, { playerId: CASH1981, unitId: fresh.id, side: 'attacker', position: 4, attack: 1, health: 1 }))
+    const ended = unwrap(endBattleAction(fought, { playerId: CASH1981 }))
+    const entry = ended.log.find((candidate) => candidate.assistedActionId === 'g1')!
+    let next = unwrap(initiateUndo(ended, { logId: entry.id, playerId: CASH1981 }))
+    let error: unknown
+    for (const voter of [KARANDRAS1, ITCHI, CHUL]) {
+      const result = vote(next, { logId: entry.id, playerId: voter, vote: true, at: AT })
+      if (!result.ok) error = result.error
+      else next = result.value
+    }
+    expect(JSON.stringify(error)).toContain('has been in the arena')
+  })
+
+  it('keeps the private lines about the drawn cards out of the other players log', () => {
     const { state, cardId } = base()
     const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'MOUNTED', 'ARTILLERY']))
     const fresh = findPlayer(after, CASH1981)!.battlehand.filter((unit) => !unit.inBattle).map((unit) => unit.id)

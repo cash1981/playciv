@@ -503,7 +503,7 @@ describe('BattlePanel Zhukov', () => {
         zhukov,
       },
     }) as unknown as PlayerView
-  const entry = { playerId: 'me', base: 0, dealt: 0, actionId: 'x' }
+  const entry = { playerId: 'me', deadIds: [], dealt: 0, actionId: 'x' }
 
   it('offers a wound on each living enemy unit while one is owed, and sends the chosen unit', () => {
     vi.mocked(api.zhukovWound).mockResolvedValue(view)

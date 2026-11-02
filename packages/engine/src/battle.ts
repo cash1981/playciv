@@ -136,12 +136,13 @@ export interface BattleCardBonus {
 }
 
 /**
- * Georgy Zhukov was played in this battle: each of the player's units killed after `base` units already were
- * earns a wound on an enemy unit, `dealt` of which have been dealt. `actionId` names the card play.
+ * Georgy Zhukov was played in this battle: each of the player's units killed that was not already dead (`deadIds`,
+ * the units dead when the card was played) earns a wound on an enemy unit, `dealt` of which have been dealt.
+ * `actionId` names the card play.
  */
 export interface ZhukovEntry {
   readonly playerId: string
-  readonly base: number
+  readonly deadIds: readonly string[]
   readonly dealt: number
   readonly actionId: string
 }
