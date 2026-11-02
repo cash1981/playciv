@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### battle-cards
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/battle-cards`
-- **Brief:** `docs/agents/tasks/battle-cards.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/{battle,state,card-timing,assisted-cards,index}.ts`, `packages/engine/src/actions/arena.ts`, `packages/server/src/routes/arena.ts`, `packages/web/src/views/{GameView,PlayableCards}.tsx`, `packages/web/src/lib/api.ts`
-- **Notes:** none
+_None._
 
 ## Format
 

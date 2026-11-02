@@ -231,6 +231,9 @@ describe('after the battle, and against barbarians', () => {
     const held = holding(withStat(state, controller, 'culture', 9), 'Joan of Arc', controller).state
     expect(statusOf(held, controller, 'Joan of Arc').reason).toBe('You are not fighting in this battle.')
     expect(bonusOf(held, controller)).toBe(0)
+    // Even a bonus recorded for the controller does not reach the barbarians
+    const forced = { ...held, battle: { ...held.battle!, cardBonuses: [{ playerId: controller, card: 'Leonidas', amount: 8, actionId: 'x' }] } }
+    expect(bonusOf(forced, controller)).toBe(0)
   })
 })
 
@@ -275,6 +278,16 @@ describe('Sun Tzu', () => {
     const state = withSunTzu(fight(1, 1), KARANDRAS1, 10)
     const once = unwrap(sunTzuPass(state, { playerId: KARANDRAS1 }))
     expect(unwrapErr(sunTzuPass(once, { playerId: KARANDRAS1 })).kind).toBe('BATTLE_CARD_REFUSED')
+  })
+
+  it('is refused while Sun Tzu is one of the cards still being chosen between', () => {
+    const state = withSunTzu(fight(1, 1), KARANDRAS1, 10)
+    const card = findPlayer(state, KARANDRAS1)!.items.find((item) => item.kind === 'greatperson' && item.name === 'Sun Tzu')!
+    const choosing = withPlayer(state, {
+      ...findPlayer(state, KARANDRAS1)!,
+      pendingRewards: [{ id: 'r1', kind: 'GREAT_PERSON', level: 1, step: 1, candidateIds: [card.id], keep: 1 }] as never,
+    })
+    expect(unwrapErr(sunTzuPass(choosing, { playerId: KARANDRAS1 })).kind).toBe('BATTLE_CARD_REFUSED')
   })
 
   it('is refused without the card, without 3 trade and for someone outside the battle', () => {

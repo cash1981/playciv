@@ -456,6 +456,14 @@ describe('BattlePanel battle cards', () => {
     expect(queryByText('Pass with Sun Tzu (3 trade)')).toBeNull()
   })
 
+  it('disables the Sun Tzu pass on the other side\'s battle turn', () => {
+    const { getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView({ ...attacking, turn: 'defender' }, { items: [sunTzu] })} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect((getByText('Pass with Sun Tzu (3 trade)') as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('disables the Sun Tzu pass without 3 trade', () => {
     const { getByText } = render(
       <BattlePanel gameId="game" busy={false} run={run} view={battleView(attacking, { items: [sunTzu], stats: { trade: 2 } })} />,

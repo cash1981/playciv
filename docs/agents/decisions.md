@@ -355,13 +355,14 @@ battle in any phase of the turn, and is listed in every phase tab and in the Bat
 - **Joan of Arc:** the defender only, discarded, adds the unspent culture the player has when playing it (the culture
   is not spent). Refused with no culture. "At the start of a battle" is not enforced, as with Leonidas (the arena
   has no start): she can be played until End battle.
-- **Florence Nightingale:** discarded; every killed unit of the player, also one a later unit replaced on its front, gets `ArenaUnit.saved`, shown as SAVED. Killed
-  units are never discarded by the app, so this is a mark: it still counts as killed for the result, and the card
+- **Florence Nightingale:** discarded; every killed unit of the player, also one a later unit replaced on its
+  front, gets `ArenaUnit.saved`, shown as SAVED. Killed units are never discarded by the app, so this is a mark: it still counts as killed for the result, and the card
   stays in the hand. Refused when none of the player's units is killed.
 - **Sun Tzu:** not a card play but an arena button (`sunTzuPass`, `POST /battle/arena/sun-tzu`): spends 3 trade,
   turns the card faceup (kept), flips the battle turn, once per battle (`Battle.sunTzu`). The button is enabled on the
   player's own battle turn only (the turn itself stays advisory in the engine). A card still being chosen between is
-  refused. It is left out of the list of playable cards. The arena has no assisted undo, so the trade is corrected by hand.
+  refused. It is left out of the list of playable cards. The arena has no assisted undo, so the trade is
+  corrected by hand.
 - Undo of a battle card play (vote) takes the bonus or the mark back from the battle on now, or from the one End battle
   has set aside (so Undo end battle does not bring it back); once that battle is gone only the card returns.
 
