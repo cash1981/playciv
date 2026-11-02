@@ -967,6 +967,10 @@ export function sunTzuPass(state: GameState, input: SunTzuPassInput): ActionResu
   if (card.type !== null && blockadedGreatPersonTypes(state, player).includes(card.type)) {
     return refuse(`Every ${card.type} figure of yours is blockaded, so ${SUN_TZU} cannot be used.`)
   }
+  // A card still being chosen between is not the player's yet
+  if (player.pendingRewards.some((reward) => reward.candidateIds.includes(card.id))) {
+    return refuse(`${SUN_TZU} is one of the cards you are choosing between. Choose the card to keep first.`)
+  }
   if ((battle.sunTzu ?? []).includes(input.playerId)) return refuse(`${SUN_TZU} works once per battle.`)
   if (player.stats.trade < SUN_TZU_COST) {
     return refuse(`${SUN_TZU} costs ${SUN_TZU_COST} trade and you have ${player.stats.trade}.`)

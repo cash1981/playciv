@@ -36,8 +36,9 @@ export function forceOf(battle: Battle, side: BattleSideId): number {
   return [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side).length
 }
 
+/** The killed units of a side not yet saved, also the ones another unit has since replaced on their front. */
 const killedOf = (battle: Battle, side: BattleSideId): readonly ArenaUnit[] =>
-  battle.arena.filter((unit) => unit.side === side && unit.killed && unit.saved !== true)
+  [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed && unit.saved !== true)
 
 /**
  * Why the player cannot play a battle card now, or `undefined` when they can. Leonidas and Joan of Arc are for the
@@ -72,9 +73,16 @@ export function battleCardBlock(state: GameState, player: Playerhand, name: stri
   }
 }
 
+/** What a battle card changed in its battle, kept on the card play so an undo can take it back. */
+export interface BattleCardEffect {
+  readonly battleId: string
+  readonly bonus?: number
+  readonly saved?: readonly string[]
+}
+
 export interface AppliedBattleCard {
   readonly state: GameState
-  readonly effect: { readonly battleId: string; readonly bonus?: number; readonly saved?: readonly string[] }
+  readonly effect: BattleCardEffect
   /** The end of the public line. */
   readonly said: string
 }
@@ -92,9 +100,9 @@ export function applyBattleCard(
   if (side === null) return undefined
   if (name === NIGHTINGALE) {
     const saved = killedOf(battle, side).map((unit) => unit.id)
-    const arena = battle.arena.map((unit) => (saved.includes(unit.id) ? { ...unit, saved: true } : unit))
+    const mark = (unit: ArenaUnit): ArenaUnit => (saved.includes(unit.id) ? { ...unit, saved: true } : unit)
     return {
-      state: { ...state, battle: { ...battle, arena } },
+      state: { ...state, battle: { ...battle, arena: battle.arena.map(mark), departedUnits: battle.departedUnits.map(mark) } },
       effect: { battleId: battle.id, saved },
       said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they stay in the hand`,
     }
@@ -109,23 +117,35 @@ export function applyBattleCard(
   }
 }
 
-/**
- * Takes a battle card back. In a battle that has ended there is nothing left to take back (its result stands, and
- * End battle can be undone by its ender), so the card alone returns.
- */
-export function undoBattleCard(
-  state: GameState,
-  effect: { readonly battleId: string; readonly bonus?: number; readonly saved?: readonly string[] },
-  actionId: string,
-): GameState {
-  const battle = state.battle
-  if (battle === null || battle.id !== effect.battleId) return state
+/** A battle without what a card play changed in it. */
+function withoutCard(battle: Battle, effect: BattleCardEffect, actionId: string): Battle {
   const saved = effect.saved ?? []
-  const arena = battle.arena.map((unit) => {
+  const clear = (unit: ArenaUnit): ArenaUnit => {
     if (!saved.includes(unit.id)) return unit
     const { saved: _saved, ...rest } = unit
     return rest
-  })
-  const cardBonuses = (battle.cardBonuses ?? []).filter((bonus) => bonus.actionId !== actionId)
-  return { ...state, battle: { ...battle, arena, cardBonuses } }
+  }
+  return {
+    ...battle,
+    arena: battle.arena.map(clear),
+    departedUnits: battle.departedUnits.map(clear),
+    cardBonuses: (battle.cardBonuses ?? []).filter((bonus) => bonus.actionId !== actionId),
+  }
+}
+
+/**
+ * Takes a battle card back, from the battle it was played in: the one on now, or the one End battle has set aside
+ * for its ender to bring back, which must not return with the card's bonus in it. A battle that is gone altogether
+ * has nothing left to take back (its result stands), so the card alone returns.
+ */
+export function undoBattleCard(state: GameState, effect: BattleCardEffect, actionId: string): GameState {
+  const battle = state.battle
+  if (battle !== null && battle.id === effect.battleId) {
+    return { ...state, battle: withoutCard(battle, effect, actionId) }
+  }
+  const ended = state.endedBattle
+  if (ended !== null && ended.battle.id === effect.battleId) {
+    return { ...state, endedBattle: { ...ended, battle: withoutCard(ended.battle, effect, actionId) } }
+  }
+  return state
 }

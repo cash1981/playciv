@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, sunTzuPass } from '../src/actions/arena.js'
+import { endBattleAction, initiateBattle, killArenaUnit, moveArenaUnit, placeUnitInArena, sunTzuPass, undoEndBattle } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
@@ -96,7 +96,7 @@ describe('Leonidas', () => {
     expect(card.automatic).toContain('8')
   })
 
-  it('adds 8 to the defender combat bonus, discards the card and says so in the public log', () => {
+  it('adds 8 to the defender combat bonus, keeps the card faceup and says so in the public log', () => {
     const base = fight(3, 2)
     const before = bonusOf(base, KARANDRAS1)
     const { state, cardId } = holding(base, 'Leonidas', KARANDRAS1)
@@ -105,7 +105,7 @@ describe('Leonidas', () => {
     expect(bonusOf(after, CASH1981)).toBe(bonusOf(base, CASH1981))
     // Leonidas is revealed, not discarded: he stays in the hand, faceup, and works again in a later battle
     expect(findPlayer(after, KARANDRAS1)?.items.find((item) => item.id === cardId)?.hidden).toBe(false)
-    expect(after.log.at(-1)?.publicLog).toContain('Leonidas')
+    expect(after.log.at(-1)?.publicLog).toContain('used Leonidas (battle)')
     expect(after.log.at(-1)?.publicLog).toContain('combat bonus')
   })
 
@@ -207,6 +207,48 @@ describe('Florence Nightingale', () => {
     const { state, cardId } = holding(base, 'Florence Nightingale', CASH1981)
     const undone = undoByVote(unwrap(play(state, CASH1981, cardId)), CASH1981, 'b1')
     expect(undone.battle?.arena.some((unit) => unit.saved !== undefined)).toBe(false)
+  })
+})
+
+describe('after the battle, and against barbarians', () => {
+  it('does not bring an undone card bonus back with Undo end battle', () => {
+    const base = withStat(fight(2, 2), KARANDRAS1, 'culture', 5)
+    const { state, cardId } = holding(base, 'Joan of Arc', KARANDRAS1)
+    const played = unwrap(play(state, KARANDRAS1, cardId))
+    const ended = unwrap(endBattleAction(played, { playerId: CASH1981 }))
+    const undone = undoByVote(ended, KARANDRAS1, 'b1')
+    const back = unwrap(undoEndBattle(undone, { playerId: CASH1981 }))
+    expect(bonusOf(back, KARANDRAS1)).toBe(bonusOf(base, KARANDRAS1))
+    // and the card can be played again for its own culture alone
+    const again = unwrap(play(back, KARANDRAS1, cardId, 'b2'))
+    expect(bonusOf(again, KARANDRAS1)).toBe(bonusOf(base, KARANDRAS1) + 5)
+  })
+
+  it('gives the controller of the barbarians no card, and the barbarians no bonus', () => {
+    let state = firstCivGame()
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    const controller = state.battle!.defender.playerId
+    const held = holding(withStat(state, controller, 'culture', 9), 'Joan of Arc', controller).state
+    expect(statusOf(held, controller, 'Joan of Arc').reason).toBe('You are not fighting in this battle.')
+    expect(bonusOf(held, controller)).toBe(0)
+  })
+})
+
+describe('Florence Nightingale and replaced units', () => {
+  it('saves a killed unit that another unit has replaced on its front', () => {
+    let state = fight(3, 2)
+    const [dead, mover] = (state.battle?.arena ?? []).filter((unit) => unit.side === 'attacker')
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: dead!.id }))
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: mover!.id, position: dead!.position }))
+    expect(state.battle?.departedUnits.some((unit) => unit.id === dead!.id)).toBe(true)
+
+    const { state: held, cardId } = holding(state, 'Florence Nightingale', CASH1981)
+    expect(statusOf(held, CASH1981, 'Florence Nightingale').status).toBe('ready')
+    const after = unwrap(play(held, CASH1981, cardId))
+    expect(after.battle?.departedUnits.find((unit) => unit.id === dead!.id)?.saved).toBe(true)
+    expect(after.log.at(-1)?.publicLog).toContain('saving 1 killed unit')
+    const undone = undoByVote(after, CASH1981, 'b1')
+    expect(undone.battle?.departedUnits.find((unit) => unit.id === dead!.id)?.saved).toBeUndefined()
   })
 })
 

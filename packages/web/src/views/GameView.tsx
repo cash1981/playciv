@@ -1800,8 +1800,12 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
             {sunTzuAvailable && (
               <button
                 className="small"
-                disabled={busy || noMutations || (view.you?.stats.trade ?? 0) < SUN_TZU_COST}
-                title={`Sun Tzu: spend ${SUN_TZU_COST} trade to pass your turn instead of playing a unit, once per battle`}
+                disabled={busy || noMutations || (view.you?.stats.trade ?? 0) < SUN_TZU_COST || battle.turn !== mySideInBattle}
+                title={
+                  battle.turn === mySideInBattle
+                    ? `Sun Tzu: spend ${SUN_TZU_COST} trade to pass your turn instead of playing a unit, once per battle`
+                    : 'Sun Tzu: pass on your own battle turn'
+                }
                 onClick={() => runBattleAction(() => api.sunTzuPass(gameId, rev))}
               >
                 Pass with Sun Tzu ({SUN_TZU_COST} trade)

@@ -1174,7 +1174,11 @@ export const playCard: AssistedActionDefinition = {
       return err(rejected('playCard', blocked('unavailable', 'That card is not in your hand.')))
     }
     const now = currentPhaseOf(state, player.playerId)
-    const when = card.timings.includes('ANY') ? CARD_TIMING_TEXT.ANY : CARD_TIMING_TEXT[now ?? 'SOT']
+    const when = card.timings.includes('ANY')
+      ? CARD_TIMING_TEXT.ANY
+      : BATTLE_CARDS.has(card.name)
+        ? CARD_TIMING_TEXT.BATTLE
+        : CARD_TIMING_TEXT[now ?? 'SOT']
 
     // The card leaves the hand: to the discard pile, or faceup in place for a Great Person that stays
     const moved: GameState = card.discards
@@ -1582,6 +1586,6 @@ export const playCard: AssistedActionDefinition = {
         ),
       }),
     )
-    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: the card is facedown again` })
+    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}` })
   },
 }
