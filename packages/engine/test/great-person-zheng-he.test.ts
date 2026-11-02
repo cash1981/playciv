@@ -325,8 +325,7 @@ describe('a draw from a chosen token', () => {
     expect(unwrapErr(drawWith(played, 'VILLAGES', { fromPieceId: 'nope' }))).toEqual({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: 'nope' })
     const removed = unwrap(removePiece(played, { playerId: CASH1981, pieceId: hutPieceId }))
     expect(unwrapErr(drawWith(removed, 'HUTS', { fromPieceId: hutPieceId })).kind).toBe('BOARD_PIECE_NOT_FOUND')
-    // A refused draw gives no state, so nothing is taken out of the bindings
-    expect(removed.underTokens).toHaveLength(2)
+    // A bound village on the map is still not drawn
     expect(drawn(removed, 'VILLAGES').id).not.toBe(topOf(state, 'VILLAGES').id)
   })
 

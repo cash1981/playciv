@@ -991,7 +991,7 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
           <button
             className="small"
             disabled={busy}
-            title="A token you have already moved off the map: you get what was under it"
+            title="A token you have already moved off the map: you get what was under it (the first of them if you moved several)"
             onClick={() => draw(choosing)}
           >
             A token already taken off the map
