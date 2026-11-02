@@ -378,7 +378,7 @@ battle in any phase of the turn, and is listed in every phase tab and in the Bat
   `units`: infantry, mounted, artillery, and aircraft only with Flight). The public line gives the counts; the cards
   are in the player's own log. Undo returns all of it while the new cards are still free in the hand and the discarded
   ones in the discard pile (the new cards go back into their decks, which are reshuffled); never once a new unit has
-  been in the arena, also after End battle. "At the start of a battle" is not enforced, as with Joan of Arc.
+  been in the arena while that battle is the active or the set-aside one. "At the start of a battle" is not enforced, as with Joan of Arc.
 - Undo of a battle card play (vote) takes the bonus or the mark back from the battle on now, or from the one End battle
   has set aside (so Undo end battle does not bring it back); once that battle is gone only the card returns.
 

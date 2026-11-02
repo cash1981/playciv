@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### battle-generals
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/battle-generals`
-- **Brief:** `docs/agents/tasks/battle-generals.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/{battle,battle-cards,gustavus,state,card-timing,assisted-cards,assisted-core}.ts`, `packages/engine/src/actions/arena.ts`, `packages/server/src/routes/{arena,assisted-args}.ts`, `packages/web/src/views/{GameView,PlayableCards}.tsx`, `packages/web/src/lib/api.ts`
-- **Notes:** stacked on `feat/battle-cards` (PR #331)
+_None._
 
 ## Format
 
