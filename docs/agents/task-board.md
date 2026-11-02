@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### zheng-he-all-tokens
+
+- **Owner:** Claude Code (Sonnet 5.5)
+- **Branch:** `wt/zheng-he-all` (pushed to `feat/zheng-he`)
+- **Brief:** `docs/agents/tasks/zheng-he-all-tokens.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/zheng-he.ts`, `packages/engine/src/actions/draw.ts`, `packages/server/src/routes/play.ts`, `packages/web/src/views/GameView.tsx`, `packages/web/src/lib/api.ts`
+
 
 ## Format
 
