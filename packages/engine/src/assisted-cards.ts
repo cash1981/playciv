@@ -16,7 +16,8 @@
 import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
-import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard } from './battle-cards.js'
+import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
+import { applyGustavus, gustavusChoiceOf, undoGustavus } from './gustavus.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
@@ -202,6 +203,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
             }
           : null,
       harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
+      gustavus: name === 'Gustavus Adolphus' ? gustavusChoiceOf(state, player) : null,
       cultureHand:
         name === FRIDA
           ? cultureCardsOf(player).map((card) => ({ itemId: card.id, name: itemName(card) }))
@@ -366,6 +368,7 @@ interface Automated {
     | 'kurosawa'
     | 'zhengHe'
     | 'battleCard'
+    | 'gustavus'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -730,8 +733,19 @@ function automate(
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
       })
     }
+    case 'Gustavus Adolphus': {
+      const applied = applyGustavus(state, player, payload?.units)
+      if (!applied.ok) return err(applied.error)
+      return ok({
+        state: applied.value.state,
+        extra: { gustavus: applied.value.effect },
+        said: applied.value.said,
+        privateLines: applied.value.privateLines,
+      })
+    }
     case 'Leonidas':
     case 'Joan of Arc':
+    case 'Georgy Zhukov':
     case 'Florence Nightingale': {
       const applied = applyBattleCard(state, player, name, requestId)
       if (applied === undefined) return err(`${name} is played in a battle you are fighting.`)
@@ -1275,6 +1289,10 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${effect.name} has already given a free building. Undo that building first.`)
     }
 
+    if (effect.battleCard?.zhukov === true && zhukovDealt(state, record.id) > 0) {
+      return blockedBy(`${effect.name} has already dealt wounds in this battle, which cannot be taken back.`)
+    }
+
     // What the game did besides logging goes first, checked before anything changes
     const drewCard = effect.drew === undefined ? undefined : player.items.find((candidate) => candidate.id === effect.drew?.itemId)
     if (effect.drew !== undefined && drewCard === undefined) {
@@ -1550,6 +1568,12 @@ export const playCard: AssistedActionDefinition = {
       hand = playerOf(current, player.playerId) ?? hand
     }
 
+    if (effect.gustavus !== undefined) {
+      const undone = undoGustavus(current, hand, effect.gustavus)
+      if (!undone.ok) return blockedBy(undone.error)
+      current = undone.value
+      hand = playerOf(current, player.playerId) ?? hand
+    }
     if (effect.battleCard !== undefined) current = undoBattleCard(current, effect.battleCard, record.id)
 
     // Akira Kurosawa's culture goes back from the holder, as far as it is still there

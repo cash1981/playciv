@@ -363,6 +363,20 @@ battle in any phase of the turn, and is listed in every phase tab and in the Bat
   player's own battle turn only (the turn itself stays advisory in the engine). A card still being chosen between is
   refused. It is left out of the list of playable cards. The arena has no assisted undo, so the trade is
   corrected by hand.
+- **Georgy Zhukov:** either combatant; played (revealed, kept) once per battle (`Battle.zhukov`). A wound is owed for
+  each of the player's units killed after the card was played (derived: their killed units now, minus the ones when it
+  was played, minus the wounds dealt; a kill taken back leaves a dealt wound as it is). The Battle panel then offers a
+  wound on each living enemy unit (`zhukovWound`, `POST /battle/arena/zhukov`): -1 health, a unit at 0 is killed,
+  which can earn the other side a wound if it played Zhukov too. The play cannot be undone once a wound was dealt; the
+  wound itself has no undo (health is corrected by hand). No ruling from the human: this is the card text.
+- **Gustavus Adolphus** (human 2026-11-02: "alle units discardes, og man får velge samme antall nye og de som er
+  unlocked"): the battle force is the player's living units in the arena plus the units in the battlehand not yet
+  placed. Played in a battle, the arena units are killed (`ArenaUnit.gustavus`: Nightingale cannot save them, and the
+  player discards them after the battle as with any kill), the battlehand units go to the discard pile, and one new
+  unit card is drawn into the hand and the battlehand for each, from the deck the player chose for it (the form sends
+  `units`: infantry, mounted, artillery, and aircraft only with Flight). The public line gives the counts; the cards
+  are in the player's own log. Undo returns all of it while the new cards are still free in the hand and the discarded
+  ones in the discard pile (the new cards go back into their decks, which are reshuffled).
 - Undo of a battle card play (vote) takes the bonus or the mark back from the battle on now, or from the one End battle
   has set aside (so Undo end battle does not bring it back); once that battle is gone only the card returns.
 

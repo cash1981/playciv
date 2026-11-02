@@ -18,6 +18,7 @@ import {
   rotateArenaUnit,
   setArenaUnitStat,
   sunTzuPass,
+  zhukovWound,
   undoEndBattle,
 } from '@civ/engine'
 
@@ -290,6 +291,27 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
         after: ({ after }) =>
           context.notifications.battleTurnChanged(after, player.id),
       },
+    )
+  })
+
+  /**
+   * Georgy Zhukov: deal one of the wounds earned by a killed unit to an enemy unit.
+   * Body: `{ arenaUnitId: string, rev: number }`.
+   */
+  app.post('/api/games/:gameId/battle/arena/zhukov', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+    const arenaUnitId = requireString(body, 'arenaUnitId')
+    if (arenaUnitId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'arenaUnitId is required')
+    const player = currentPlayer(c)
+
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => zhukovWound(state, { playerId: player.id, arenaUnitId }),
+      clientRev,
     )
   })
 

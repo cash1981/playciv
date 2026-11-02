@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { SUN_TZU, SUN_TZU_COST, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { SUN_TZU, SUN_TZU_COST, ZHUKOV, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType, zhukovOwed } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -1566,6 +1566,11 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
   const battleCards = myCombatant
     ? (view.you?.playableCards ?? []).filter((card) => card.timings.includes('BATTLE') && card.status === 'ready')
     : []
+  const zhukovOwedNow = battle !== null && myCombatant ? zhukovOwed(battle, myId) : 0
+  const zhukovTargets =
+    battle !== null && mySideInBattle !== null
+      ? battle.arena.filter((unit) => unit.side !== mySideInBattle && !unit.killed)
+      : []
   const sunTzuAvailable =
     myCombatant &&
     (view.you?.items ?? []).some((item) => item.kind === 'greatperson' && item.name === SUN_TZU) &&
@@ -1831,6 +1836,25 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                 </li>
               ))}
             </ul>
+          )}
+
+          {zhukovOwedNow > 0 && (
+            <div className="row battle-zhukov" role="group" aria-label={`${ZHUKOV} wounds`}>
+              <strong>
+                {ZHUKOV}: deal {zhukovOwedNow} wound{zhukovOwedNow === 1 ? '' : 's'} to an enemy unit
+              </strong>
+              {zhukovTargets.length === 0 && <span className="muted">No living enemy unit is left.</span>}
+              {zhukovTargets.map((unit) => (
+                <button
+                  key={unit.id}
+                  className="small"
+                  disabled={busy || noMutations}
+                  onClick={() => runBattleAction(() => api.zhukovWound(gameId, unit.id, rev))}
+                >
+                  Wound {itemName(unit.unit)} (front {unit.position + 1}, {unit.health} HP)
+                </button>
+              ))}
+            </div>
           )}
 
           {/* Summary bar */}

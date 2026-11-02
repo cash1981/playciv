@@ -23,7 +23,7 @@ import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
-import { SUN_TZU, SUN_TZU_COST, playerSideOf } from '../battle-cards.js'
+import { SUN_TZU, SUN_TZU_COST, ZHUKOV, playerSideOf, zhukovOwed } from '../battle-cards.js'
 import { blockadedGreatPersonTypes } from '../blockade.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -993,6 +993,59 @@ export function sunTzuPass(state: GameState, input: SunTzuPassInput): ActionResu
       ...battle,
       turn: side === 'attacker' ? 'defender' : 'attacker',
       sunTzu: [...(battle.sunTzu ?? []), input.playerId],
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// zhukovWound
+// ---------------------------------------------------------------------------
+
+export interface ZhukovWoundInput {
+  readonly playerId: string
+  readonly arenaUnitId: string
+}
+
+/**
+ * Georgy Zhukov (issue #301): "Each time one of your units is killed during a battle, deal 1 wound to an enemy unit
+ * of your choice." Deals one of the wounds the player has earned since playing the card to a living enemy unit; a
+ * unit at 0 health is killed (which can earn the other side a wound of its own). It is not undone by the
+ * assisted-action undo: the health is corrected by hand.
+ */
+export function zhukovWound(state: GameState, input: ZhukovWoundInput): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+  const battle = state.battle
+  const side = playerSideOf(battle, input.playerId)
+  if (side === null) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+
+  const refuse = (reason: string): ActionResult => err({ kind: 'BATTLE_CARD_REFUSED', reason })
+  const entry = (battle.zhukov ?? []).find((candidate) => candidate.playerId === input.playerId)
+  if (entry === undefined) return refuse(`${ZHUKOV} has not been played in this battle.`)
+  if (zhukovOwed(battle, input.playerId) <= 0) return refuse(`${ZHUKOV} has no wound to deal: none of your units has been killed since you played him.`)
+  const target = battle.arena.find((unit) => unit.id === input.arenaUnitId)
+  if (target === undefined) return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
+  if (target.side === side) return refuse('Choose an enemy unit.')
+  if (target.killed) return refuse('That unit is already killed.')
+
+  const health = Math.max(0, target.health - 1)
+  const dead = health === 0
+  const next = appendPublicLog(
+    state,
+    player.username,
+    player.playerId,
+    `uses ${ZHUKOV}: deals 1 wound to ${revealAll(target.unit)} in the arena${dead ? ', which is killed' : ` (${health} health left)`}`,
+  )
+  return ok({
+    ...next,
+    battle: {
+      ...battle,
+      arena: battle.arena.map((unit) => (unit.id === target.id ? { ...unit, health, killed: dead } : unit)),
+      zhukov: (battle.zhukov ?? []).map((candidate) =>
+        candidate.playerId === input.playerId ? { ...candidate, dealt: candidate.dealt + 1 } : candidate,
+      ),
     },
   })
 }

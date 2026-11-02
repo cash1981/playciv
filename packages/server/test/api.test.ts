@@ -1881,6 +1881,36 @@ describe('arena Sun Tzu', () => {
   })
 })
 
+describe('arena Zhukov', () => {
+  it('refuses a wound before Zhukov has been played', async () => {
+    const { gameId, starter, waiting } = await startedGame('Arena-zhukov')
+    const waitingView = await inject(app, { method: 'GET', url: `/api/games/${gameId}`, headers: bearer(waiting) })
+    const waitingId = (await waitingView.json() as { you: { playerId: string } }).you.playerId
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: waitingId },
+    })
+
+    const missing = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/zhukov`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(missing.status).toBe(400)
+    const refused = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/zhukov`,
+      headers: bearer(starter),
+      payload: { arenaUnitId: 'nobody' },
+    })
+    expect(refused.status).toBe(409)
+    expect(JSON.stringify(await refused.json())).toContain('Zhukov')
+  })
+})
+
 describe('arena place and rotate', () => {
   it('places a unit and rotates it 90 degrees through the API', async () => {
     const { gameId, starter, waiting } = await startedGame('Arena-rotate')
