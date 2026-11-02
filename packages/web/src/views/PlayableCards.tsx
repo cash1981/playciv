@@ -730,7 +730,7 @@ export function PlayCardControl({
           {gustavus !== null && (
             <fieldset className="play-card-targets">
               <legend>Which units do you build in their place?</legend>
-              {gustavus.count === 0 && <p className="muted">You have no units in your battle force.</p>}
+              {gustavus.count === 0 && <p className="muted">You have no units drawn for a battle.</p>}
               {chosenUnits.map((choice, index) => (
                 <label key={index} className="play-card-target">
                   Unit {index + 1}{' '}
@@ -750,7 +750,7 @@ export function PlayCardControl({
                 </label>
               ))}
               <p className="muted">
-                Every living unit of yours in the arena is killed and cannot be saved, the units of your battle force still in your hand are discarded, and the same number of new units are drawn into your battle force.
+                The units you have drawn for the battle and not placed are discarded, and the same number of new units of these types are drawn into your battlehand. Do it before the battle starts.
               </p>
             </fieldset>
           )}

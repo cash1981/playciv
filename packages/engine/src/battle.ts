@@ -82,8 +82,6 @@ export interface ArenaUnit {
    * battle. Absent on every unit not saved.
    */
   readonly saved?: boolean
-  /** Gustavus Adolphus killed this unit, so it cannot be saved. */
-  readonly gustavus?: boolean
   /**
    * What this unit's latest arrival on its front did, so taking it back off
    * that front (to hand, or to another front) undoes it. `null` when it

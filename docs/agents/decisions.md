@@ -365,20 +365,20 @@ battle in any phase of the turn, and is listed in every phase tab and in the Bat
   corrected by hand.
 - **Georgy Zhukov:** either combatant; played (revealed, kept) once per battle (`Battle.zhukov`). A wound is owed for
   each of the player's units killed that was not already dead when the card was played (derived from the ids dead then,
-  minus the wounds dealt; a kill taken back after a wound was dealt leaves that wound dealt). The units Gustavus
-  Adolphus kills count as killed, read literally (to be confirmed by the human). The Battle panel then offers a
+  minus the wounds dealt; a kill taken back after a wound was dealt leaves that wound dealt). The human: it is a
+  manual activation and the player picks the unit; with no enemy unit in the arena nothing happens. The Battle panel then offers a
   wound on each living enemy unit (`zhukovWound`, `POST /battle/arena/zhukov`): -1 health, a unit at 0 is killed,
   which can earn the other side a wound if it played Zhukov too. The play cannot be undone once a wound was dealt; the
   wound itself has no undo (health is corrected by hand). No ruling from the human: this is the card text.
-- **Gustavus Adolphus** (human 2026-11-02: "alle units discardes, og man får velge samme antall nye og de som er
-  unlocked"): the battle force is the player's living units in the arena plus the units in the battlehand not yet
-  placed. Played in a battle, the arena units are killed (`ArenaUnit.gustavus`: Nightingale cannot save them, and the
-  player discards them after the battle as with any kill), the battlehand units go to the discard pile, and one new
-  unit card is drawn into the hand and the battlehand for each, from the deck the player chose for it (the form sends
-  `units`: infantry, mounted, artillery, and aircraft only with Flight). The public line gives the counts; the cards
-  are in the player's own log. Undo returns all of it while the new cards are still free in the hand and the discarded
-  ones in the discard pile (the new cards go back into their decks, which are reshuffled); never once a new unit has
-  been in the arena while that battle is the active or the set-aside one. "At the start of a battle" is not enforced, as with Joan of Arc.
+- **Gustavus Adolphus** (human 2026-11-02: "Gustavus skjer før kampen starter. Du bare discarder unitene du har trukket
+  for å få muligheten til å trekke nye i en annen type"; no link to Zhukov): played before the battle, with or without
+  a battle on (then only by a combatant), on the units drawn for it and not placed in an arena (the battlehand, not
+  `inBattle`). They go to the discard pile and one new unit card is drawn into the hand and the battlehand for each,
+  from the deck the player chose (the form sends `units`: infantry, mounted, artillery, and aircraft only with
+  Flight). The arena is not touched. The public line gives the counts; the cards are in the player's own log. Undo
+  returns it while the new cards are still free in the hand and the discarded ones in the discard pile (the new cards
+  go back into their decks, which are reshuffled); never once a new unit has been in the arena while that battle is
+  the active or the set-aside one. Listed in the Battle panel and the phase tabs also with no battle on.
 - Undo of a battle card play (vote) takes the bonus or the mark back from the battle on now, or from the one End battle
   has set aside (so Undo end battle does not bring it back); once that battle is gone only the card returns.
 

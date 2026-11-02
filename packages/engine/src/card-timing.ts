@@ -226,7 +226,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Joan of Arc', 'adds your unspent culture to your combat bonus until the battle ends; only the defender'],
   ['Florence Nightingale', 'saves your killed units, so they stay in your hand'],
   ['Georgy Zhukov', 'is revealed and stays faceup: each time one of your units is killed after this, you deal 1 wound to an enemy unit of your choice'],
-  ['Gustavus Adolphus', 'kills every living unit of yours in the arena (they cannot be saved), discards the units of your battle force still in your hand and draws the same number of new units of the types you choose'],
+  ['Gustavus Adolphus', 'discards the units you have drawn for a battle and not placed, and draws the same number of new units of the types you choose'],
   ['Hannibal', 'moves any or all of your figures from one square to another square with your figures without exceeding your stacking limit'],
 ])
 
@@ -306,7 +306,7 @@ export interface PlayableCard {
   readonly coinSources: readonly { readonly key: string; readonly label: string; readonly coins: number }[]
   /** The most Albert Einstein can turn each way now, or null for every other card. */
   readonly conversion?: { readonly trade: number; readonly culture: number } | null
-  /** Gustavus Adolphus: how many units the battle force holds and the unit decks that can be built from, null for every other card. */
+  /** Gustavus Adolphus: how many units are drawn for a battle and the unit decks that can be built from, null for every other card. */
   readonly gustavus?: { readonly count: number; readonly sheets: readonly string[] } | null
   /** The squares Jacques Cousteau can put a free Harbor on, null for every other card. */
   readonly harbors?: readonly HarborChoice[] | null

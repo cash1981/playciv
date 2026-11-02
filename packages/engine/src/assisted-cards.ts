@@ -17,7 +17,7 @@ import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
 import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
-import { applyGustavus, gustavusChoiceOf, undoGustavus } from './gustavus.js'
+import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './gustavus.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
@@ -203,7 +203,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
             }
           : null,
       harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
-      gustavus: name === 'Gustavus Adolphus' ? gustavusChoiceOf(state, player) : null,
+      gustavus: name === 'Gustavus Adolphus' ? gustavusChoiceOf(player) : null,
       cultureHand:
         name === FRIDA
           ? cultureCardsOf(player).map((card) => ({ itemId: card.id, name: itemName(card) }))
@@ -292,7 +292,8 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
     }
     // A card played in a battle is ready for a combatant while one is on, in any phase of the turn
     if (BATTLE_CARDS.has(name) && base.timings.includes('BATTLE')) {
-      const block = battleCardBlock(state, player, name)
+      // Gustavus works before the battle starts, on the units drawn for it, so no battle need be on
+      const block = name === 'Gustavus Adolphus' ? gustavusBlock(state, player) : battleCardBlock(state, player, name)
       return [
         block === undefined
           ? { ...base, status: 'ready' as const, reason: 'Can be played in the battle you are fighting.' }

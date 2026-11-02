@@ -1563,9 +1563,11 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   // Battle Great Persons I can play now, and Sun Tzu's pass once per battle (a barbarian controller is no combatant)
   const myCombatant = battle !== null && mySideInBattle !== null && battle[mySideInBattle].kind === 'player'
-  const battleCards = myCombatant
-    ? (view.you?.playableCards ?? []).filter((card) => card.timings.includes('BATTLE') && card.status === 'ready')
-    : []
+  // Gustavus Adolphus is played before the battle, on the units drawn for it, so he is listed with no battle on too
+  const battleCards = (view.you?.playableCards ?? []).filter(
+    (card) =>
+      card.timings.includes('BATTLE') && card.status === 'ready' && (myCombatant || (battle === null && card.gustavus != null)),
+  )
   const zhukovOwedNow = battle !== null && myCombatant ? zhukovOwed(battle, myId) : 0
   const zhukovTargets =
     battle !== null && mySideInBattle !== null
@@ -1781,6 +1783,17 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         <EndedBattleArena lastBattle={lastBattle} gameId={gameId} rev={rev} run={run} />
       )}
 
+      {battleCards.length > 0 && (
+        <ul className="playable-cards battle-cards" aria-label="Battle cards">
+          {battleCards.map((card) => (
+            <li key={card.itemId} className="playable-card">
+              <strong>{card.name}</strong>
+              <PlayCardControl card={card} gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} />
+            </li>
+          ))}
+        </ul>
+      )}
+
       {/* — Arena — */}
       {battle !== null && (
         <div style={{ marginTop: '1rem' }}>
@@ -1826,17 +1839,6 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               </button>
             )}
           </div>
-
-          {battleCards.length > 0 && (
-            <ul className="playable-cards battle-cards" aria-label="Battle cards">
-              {battleCards.map((card) => (
-                <li key={card.itemId} className="playable-card">
-                  <strong>{card.name}</strong>
-                  <PlayCardControl card={card} gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} />
-                </li>
-              ))}
-            </ul>
-          )}
 
           {zhukovOwedNow > 0 && (
             <div className="row battle-zhukov" role="group" aria-label={`${ZHUKOV} wounds`}>

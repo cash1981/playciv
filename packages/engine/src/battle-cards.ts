@@ -8,7 +8,6 @@
 
 import type { ArenaUnit, Battle, BattleSideId } from './battle.js'
 import type { GameState, Playerhand } from './state.js'
-import type { UnitItem } from './item.js'
 
 export const LEONIDAS = 'Leonidas'
 export const JOAN_OF_ARC = 'Joan of Arc'
@@ -41,15 +40,13 @@ export function forceOf(battle: Battle, side: BattleSideId): number {
 
 /** The killed units of a side that Nightingale can still save, also the ones another unit has since replaced on their front. */
 const killedOf = (battle: Battle, side: BattleSideId): readonly ArenaUnit[] =>
-  [...battle.arena, ...battle.departedUnits].filter(
-    (unit) => unit.side === side && unit.killed && unit.saved !== true && unit.gustavus !== true,
-  )
+  [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed && unit.saved !== true)
 
 /** The ids of every unit of a side that has been killed, saved or not. */
 const killedIdsOf = (battle: Battle, side: BattleSideId): readonly string[] =>
   [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed).map((unit) => unit.id)
 
-/** Zhukov's wounds the player has earned and not yet dealt: their units killed since the card was played (a unit Gustavus Adolphus kills is one). */
+/** Zhukov's wounds the player has earned and not yet dealt: their units killed since the card was played. */
 export function zhukovOwed(battle: Battle, playerId: string): number {
   const entry = (battle.zhukov ?? []).find((candidate) => candidate.playerId === playerId)
   const side = playerSideOf(battle, playerId)
@@ -61,18 +58,6 @@ export function zhukovOwed(battle: Battle, playerId: string): number {
 export function zhukovDealt(state: GameState, actionId: string): number {
   const entries = [...(state.battle?.zhukov ?? []), ...(state.endedBattle?.battle.zhukov ?? [])]
   return entries.find((entry) => entry.actionId === actionId)?.dealt ?? 0
-}
-
-/** The units a player's battle force holds that Gustavus Adolphus replaces: the living ones in the arena and the ones still in the battlehand. */
-export function gustavusForceOf(
-  battle: Battle,
-  player: Playerhand,
-): { readonly arena: readonly ArenaUnit[]; readonly hand: readonly UnitItem[] } {
-  const side = playerSideOf(battle, player.playerId)
-  return {
-    arena: side === null ? [] : battle.arena.filter((unit) => unit.side === side && !unit.killed),
-    hand: side === null ? [] : player.battlehand.filter((unit) => !unit.inBattle),
-  }
 }
 
 /**
@@ -105,10 +90,6 @@ export function battleCardBlock(state: GameState, player: Playerhand, name: stri
       return (battle.zhukov ?? []).some((entry) => entry.playerId === player.playerId)
         ? 'Georgy Zhukov has already been played in this battle.'
         : undefined
-    case GUSTAVUS: {
-      const force = gustavusForceOf(battle, player)
-      return force.arena.length + force.hand.length === 0 ? 'You have no units in your battle force.' : undefined
-    }
     case NIGHTINGALE:
       return killedOf(battle, side).length === 0 ? 'None of your units has been killed in this battle.' : undefined
     default:

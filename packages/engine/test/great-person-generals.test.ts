@@ -190,110 +190,110 @@ describe('Georgy Zhukov', () => {
 })
 
 describe('Gustavus Adolphus', () => {
-  /** cash1981 has three units: one in the arena, two still in the battlehand. */
+  /** cash1981 has three units drawn for the battle, one of them placed in the arena. */
   const base = () => holding(fight([3, 2], [1, 2]), GUSTAVUS, CASH1981)
+  const unitsOnly = (): GameState => {
+    let state = firstCivGame()
+    for (let i = 0; i < 2; i++) state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+    return unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
+  }
 
-  it('counts the living arena units and the battlehand units still in hand', () => {
+  it('counts the units drawn for the battle and not placed, and is ready with no battle on', () => {
     const { state } = base()
     expect(statusOf(state, CASH1981, GUSTAVUS)).toMatchObject({
       status: 'ready',
-      gustavus: { count: 3, sheets: ['INFANTRY', 'MOUNTED', 'ARTILLERY'] },
+      gustavus: { count: 2, sheets: ['INFANTRY', 'MOUNTED', 'ARTILLERY'] },
     })
+    const before = holding(unitsOnly(), GUSTAVUS, CASH1981).state
+    expect(before.battle).toBeNull()
+    expect(statusOf(before, CASH1981, GUSTAVUS)).toMatchObject({ status: 'ready', gustavus: { count: 2 } })
   })
 
-  it('kills the arena unit for good, discards the unplaced ones and builds as many new units of the chosen types', () => {
+  it('discards the units drawn and draws as many new ones of the chosen types, leaving the arena alone', () => {
     const { state, cardId } = base()
     const before = findPlayer(state, CASH1981)!
-    const arenaUnit = unitOf(state, CASH1981)
     const waiting = before.battlehand.filter((unit) => !unit.inBattle).map((unit) => unit.id)
-    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'MOUNTED', 'ARTILLERY']))
+    const arena = state.battle?.arena
+    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['MOUNTED', 'ARTILLERY']))
 
-    expect(unitOf(after, CASH1981)).toMatchObject({ id: arenaUnit.id, killed: true, gustavus: true })
+    expect(after.battle?.arena).toEqual(arena)
     const player = findPlayer(after, CASH1981)!
     for (const id of waiting) {
       expect(player.items.some((item) => item.id === id)).toBe(false)
       expect(after.discardedItems.some((item) => item.id === id)).toBe(true)
     }
     const fresh = player.battlehand.filter((unit) => !unit.inBattle)
-    expect(fresh.map((unit) => unit.kind).sort()).toEqual(['artillery', 'infantry', 'mounted'])
+    expect(fresh.map((unit) => unit.kind).sort()).toEqual(['artillery', 'mounted'])
     expect(fresh.every((unit) => player.items.some((item) => item.id === unit.id))).toBe(true)
     const lines = after.log.filter((entry) => entry.playerId === CASH1981 && entry.privateLog.startsWith('Gustavus Adolphus'))
-    expect(lines).toHaveLength(4)
-    expect(after.log.find((entry) => entry.assistedActionId === 'g1')?.publicLog).toContain('building 3 units')
+    expect(lines).toHaveLength(3)
+    expect(after.log.find((entry) => entry.assistedActionId === 'g1')?.publicLog).toContain('building 2 units')
+  })
+
+  it('works before any battle', () => {
+    const { state, cardId } = holding(unitsOnly(), GUSTAVUS, CASH1981)
+    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['ARTILLERY', 'ARTILLERY']))
+    expect(findPlayer(after, CASH1981)!.battlehand.map((unit) => unit.kind)).toEqual(['artillery', 'artillery'])
+    expect(after.battle).toBeNull()
   })
 
   it('needs one deck for each unit, and only decks the player has unlocked', () => {
     const { state, cardId } = base()
     expect(unwrapErr(play(state, CASH1981, cardId, 'g1', ['INFANTRY'])).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrapErr(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'INFANTRY', 'AIRCRAFT'])).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(unwrapErr(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'AIRCRAFT'])).kind).toBe('ASSISTED_ACTION_REJECTED')
     expect(unwrapErr(play(state, CASH1981, cardId, 'g1')).kind).toBe('ASSISTED_ACTION_REJECTED')
   })
 
-  it('is refused with no units in the battle force, and for someone outside the battle', () => {
-    const empty = holding(fight([0, 2], [0, 2]), GUSTAVUS, CASH1981).state
+  it('is refused with no units drawn, and for someone outside the battle', () => {
+    const empty = holding(fight([1, 2], [1, 2]), GUSTAVUS, CASH1981).state
     expect(statusOf(empty, CASH1981, GUSTAVUS).status).toBe('wrong-phase')
     const outside = holding(fight([1, 1], [1, 1]), GUSTAVUS, ITCHI).state
-    expect(statusOf(outside, ITCHI, GUSTAVUS).reason).toBe('You are not fighting in this battle.')
+    expect(statusOf(outside, ITCHI, GUSTAVUS).status).toBe('wrong-phase')
   })
 
-  it('leaves the units it killed beyond Florence Nightingale', () => {
-    const { state, cardId } = base()
-    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'INFANTRY', 'INFANTRY']))
-    const { state: held } = holding(after, 'Florence Nightingale', CASH1981)
-    expect(statusOf(held, CASH1981, 'Florence Nightingale').status).toBe('wrong-phase')
+  it('does not change what Zhukov owes, in either order', () => {
+    const { state, cardId } = holding(fight([3, 2], [1, 2]), ZHUKOV, CASH1981)
+    const armedFirst = unwrap(play(state, CASH1981, cardId))
+    const { state: held, cardId: gustavus } = holding(armedFirst, GUSTAVUS, CASH1981)
+    const after = unwrap(play(held, CASH1981, gustavus, 'g2', ['INFANTRY', 'INFANTRY']))
+    expect(zhukovOwed(after.battle!, CASH1981)).toBe(0)
   })
 
-  it('is undone: the arena unit lives, the discarded units return and the new cards go back to the deck', () => {
+  it('is undone: the discarded units return and the new cards go back to the deck', () => {
     const { state, cardId } = base()
     const before = findPlayer(state, CASH1981)!
-    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'MOUNTED', 'ARTILLERY']))
+    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['MOUNTED', 'ARTILLERY']))
     const undone = undoByVote(after, CASH1981, 'g1')
-    expect(unitOf(undone, CASH1981)).toMatchObject({ killed: false })
-    expect(unitOf(undone, CASH1981).gustavus).toBeUndefined()
     const player = findPlayer(undone, CASH1981)!
     expect(player.battlehand.map((unit) => unit.id).sort()).toEqual(before.battlehand.map((unit) => unit.id).sort())
     expect(new Set(player.items.map((item) => item.id))).toEqual(new Set([...before.items.map((item) => item.id), cardId]))
   })
 
-  it('cannot be undone once a new unit has been put in the arena', () => {
+  it('cannot be undone once a new unit has been put in the arena, also after End battle', () => {
     const { state, cardId } = base()
-    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'MOUNTED', 'ARTILLERY']))
-    const fresh = findPlayer(after, CASH1981)!.battlehand.find((unit) => !unit.inBattle)!
-    const placed = unwrap(placeUnitInArena(after, { playerId: CASH1981, unitId: fresh.id, side: 'attacker', position: 4, attack: 1, health: 1 }))
-    const entry = placed.log.find((candidate) => candidate.assistedActionId === 'g1')!
-    let next = unwrap(initiateUndo(placed, { logId: entry.id, playerId: CASH1981 }))
-    let error: unknown
-    for (const voter of [KARANDRAS1, ITCHI, CHUL]) {
-      const result = vote(next, { logId: entry.id, playerId: voter, vote: true, at: AT })
-      if (!result.ok) error = result.error
-      else next = result.value
-    }
-    expect(JSON.stringify(error)).toContain('no longer free')
-  })
-
-  it('cannot be undone once a new unit has fought, not even after End battle', () => {
-    const { state, cardId } = base()
-    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'MOUNTED', 'ARTILLERY']))
+    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['MOUNTED', 'ARTILLERY']))
     const fresh = findPlayer(after, CASH1981)!.battlehand.find((unit) => !unit.inBattle)!
     const fought = unwrap(placeUnitInArena(after, { playerId: CASH1981, unitId: fresh.id, side: 'attacker', position: 4, attack: 1, health: 1 }))
-    const ended = unwrap(endBattleAction(fought, { playerId: CASH1981 }))
-    const entry = ended.log.find((candidate) => candidate.assistedActionId === 'g1')!
-    let next = unwrap(initiateUndo(ended, { logId: entry.id, playerId: CASH1981 }))
-    let error: unknown
-    for (const voter of [KARANDRAS1, ITCHI, CHUL]) {
-      const result = vote(next, { logId: entry.id, playerId: voter, vote: true, at: AT })
-      if (!result.ok) error = result.error
-      else next = result.value
+    const refuse = (current: GameState): string => {
+      const entry = current.log.find((candidate) => candidate.assistedActionId === 'g1')!
+      let next = unwrap(initiateUndo(current, { logId: entry.id, playerId: CASH1981 }))
+      let error: unknown
+      for (const voter of [KARANDRAS1, ITCHI, CHUL]) {
+        const result = vote(next, { logId: entry.id, playerId: voter, vote: true, at: AT })
+        if (!result.ok) error = result.error
+        else next = result.value
+      }
+      return JSON.stringify(error)
     }
-    expect(JSON.stringify(error)).toContain('has been in the arena')
+    expect(refuse(fought)).toContain('no longer free')
+    expect(refuse(unwrap(endBattleAction(fought, { playerId: CASH1981 })))).toContain('has been in the arena')
   })
 
   it('keeps the private lines about the drawn cards out of the other players log', () => {
     const { state, cardId } = base()
-    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['INFANTRY', 'MOUNTED', 'ARTILLERY']))
-    const fresh = findPlayer(after, CASH1981)!.battlehand.filter((unit) => !unit.inBattle).map((unit) => unit.id)
+    const after = unwrap(play(state, CASH1981, cardId, 'g1', ['MOUNTED', 'ARTILLERY']))
     const seen = JSON.stringify(toPlayerView(after, KARANDRAS1).log)
-    for (const id of fresh) expect(seen).not.toContain(id)
     expect(seen).not.toContain('you built a')
+    expect(seen).not.toContain('you discarded')
   })
 })

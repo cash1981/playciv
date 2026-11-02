@@ -431,6 +431,16 @@ describe('BattlePanel battle cards', () => {
     expect(list?.querySelector('button')?.textContent).toMatch(/Use|Play/)
   })
 
+  it('lists Gustavus Adolphus before any battle, since he works on the units drawn for it, and no other battle card', () => {
+    const gustavus = { ...leonidas, itemId: 'gp-3', name: 'Gustavus Adolphus', discards: true, gustavus: { count: 2, sheets: ['INFANTRY'] } }
+    const idle = { ...view, battle: null, you: { ...view.you, stats: { trade: 5 }, playableCards: [gustavus, leonidas] } } as unknown as PlayerView
+    const { getByText, container } = render(<BattlePanel gameId="game" busy={false} run={run} view={idle} />)
+    fireEvent.click(getByText('Battle'))
+    const list = container.querySelector('[aria-label="Battle cards"]')
+    expect(list?.textContent).toContain('Gustavus Adolphus')
+    expect(list?.textContent).not.toContain('Leonidas')
+  })
+
   it('lists no battle card to someone outside the battle', () => {
     const outsider = { ...attacking, attacker: { playerId: 'x', kind: 'player' }, defender: { playerId: 'y', kind: 'player' } }
     const { getByText, queryByText, container } = render(

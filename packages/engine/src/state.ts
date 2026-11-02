@@ -728,10 +728,8 @@ export type AssistedEffect =
         readonly saved?: readonly string[]
         readonly zhukov?: boolean
       }
-      /** Gustavus Adolphus: what the card killed, discarded and drew, so an undo can put it back. Never projected. */
+      /** Gustavus Adolphus: what the card discarded and drew, so an undo can put it back. Never projected. */
       readonly gustavus?: {
-        readonly battleId: string
-        readonly killed: readonly string[]
         readonly discarded: readonly UnitItem[]
         readonly drew: readonly { readonly itemId: string; readonly sheetName: SheetName }[]
       }
