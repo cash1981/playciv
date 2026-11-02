@@ -915,7 +915,7 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   // A hut or village: when tokens lie on the board the player says which one the draw is from
   const [choosing, setChoosing] = useState<SheetName | null>(null)
   const tokensOf = (sheet: SheetName) =>
-    sheet === 'HUTS' || sheet === 'VILLAGES' ? view.drawTokens.filter((token) => token.sheet === sheet) : []
+    sheet === 'HUTS' || sheet === 'VILLAGES' ? (view.drawTokens ?? []).filter((token) => token.sheet === sheet) : []
   const request = (sheet: SheetName): void => {
     if (tokensOf(sheet).length > 0) setChoosing(sheet)
     else draw(sheet)
