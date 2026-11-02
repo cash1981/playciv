@@ -42,7 +42,6 @@ import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
 import { turnHolder } from '../turn.js'
-import { squareLabel } from '../build-options.js'
 import { TOKEN_SHEET_NAMES, releaseLooseToken, releaseTokenOf } from '../zheng-he.js'
 
 type DrawResult = Result<GameState, EngineError>
@@ -82,12 +81,11 @@ export interface DrawInput {
   /** The player was warned that the culture hand is over its size and chose to draw a culture card anyway. */
   readonly confirmedOverLimit?: boolean
   /**
-   * A hut or village: the piece on the map the draw is from. It gives what lies under the piece (a token nobody
-   * has looked under gives the top card) and the piece stays where it is.
+   * A hut or village: the piece on the board the draw is from. It gives what lies under the piece (a token nobody has
+   * looked under gives the top card) and the piece stays where it is. Without it the draw never gives an item under a
+   * piece that is still on the board.
    */
   readonly fromPieceId?: string
-  /** A hut or village that is not from a token on the map (a card, a village marker): never an item under a piece. */
-  readonly notFromToken?: boolean
 }
 
 /**
@@ -103,19 +101,14 @@ export function draw(original: GameState, input: DrawInput): DrawResult {
   if (tokenSheet && input.fromPieceId !== undefined && from === undefined) {
     return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.fromPieceId })
   }
-  // Without a choice, what lies under a piece that has left the map is the next of its sheet to be drawn
-  const state =
-    from !== undefined
-      ? from.state
-      : tokenSheet && input.notFromToken !== true
-        ? releaseLooseToken(original, input.sheetName)
-        : original
+  // Without a choice, what lies under a piece that is gone from the board is the next of its sheet to be drawn
+  const state = from !== undefined ? from.state : tokenSheet ? releaseLooseToken(original, input.sheetName) : original
   const drawn = drawFromDeck(state, input)
   if (!drawn.ok || from === undefined) return drawn
   const player = findPlayer(drawn.value, input.playerId)
   if (player === undefined) return drawn
   const kind = input.sheetName === 'VILLAGES' ? 'village' : 'hut'
-  return ok(appendPublicLog(drawn.value, player.username, player.playerId, `drew the ${kind} from the token on ${squareLabel(from.cell)}`))
+  return ok(appendPublicLog(drawn.value, player.username, player.playerId, `drew the ${kind} from the token ${from.phrase}`))
 }
 
 function drawFromDeck(state: GameState, input: DrawInput): DrawResult {

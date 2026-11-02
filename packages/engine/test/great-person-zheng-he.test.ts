@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest'
 
 import { draw } from '../src/actions/draw.js'
 import { movePiece, placePiece, removePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { boardAreas, playerAreas } from '../src/board.js'
+import { squareLabel } from '../src/build-options.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
 import { shuffleDeckTwice } from '../src/assisted-culture.js'
@@ -17,7 +19,7 @@ import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import { itemName } from '../src/item.js'
 import type { HutItem, Item } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import { lookUnderTokens } from '../src/zheng-he.js'
+import { boardTokensOf, lookUnderTokens } from '../src/zheng-he.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
@@ -285,7 +287,7 @@ describe('Zheng He', () => {
 })
 
 describe('a draw from a chosen token', () => {
-  const drawWith = (state: GameState, sheetName: 'HUTS' | 'VILLAGES', choice: { fromPieceId?: string; notFromToken?: boolean }, playerId = CASH1981) =>
+  const drawWith = (state: GameState, sheetName: 'HUTS' | 'VILLAGES', choice: { fromPieceId?: string }, playerId = CASH1981) =>
     draw(state, { playerId, sheetName, confirmedOutOfTurn: true, ...choice })
 
   it('gives the item under the token, leaves the piece and says where the draw was from', () => {
@@ -307,15 +309,48 @@ describe('a draw from a chosen token', () => {
     expect(me(next).items.at(-1)?.id).toBe(top.id)
   })
 
-  it('draws a card that is not from a token without taking an item under a token, even from a piece that has left the map', () => {
+  /** The piece moved into the player's own area, as a collected token is. */
+  const inArea = (state: GameState, pieceId: string): GameState => {
+    const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === CASH1981)
+    if (area === undefined) throw new Error('no area')
+    return unwrap(movePiece(state, { playerId: CASH1981, pieceId, x: area.x + 20, y: area.y + 80 }))
+  }
+
+  it('lists a token moved into an area and gives its item when it is chosen there', () => {
     const { state, cardId, hutPieceId } = scene()
     const hut = topOf(state, 'HUTS')
-    const played = unwrap(play(state, cardId))
-    const removed = unwrap(removePiece(played, { playerId: CASH1981, pieceId: hutPieceId }))
-    const next = unwrap(drawWith(removed, 'HUTS', { notFromToken: true }))
+    const moved = inArea(unwrap(play(state, cardId)), hutPieceId)
+    const tokens = boardTokensOf(moved.board, boardAreas(moved.board, moved.players))
+    expect(tokens.map((token) => [token.label, token.cell === null ? null : squareLabel(token.cell)])).toEqual([
+      ['B4', 'B4'],
+      ['cash1981\'s area', null],
+    ])
+    const next = unwrap(drawWith(moved, 'HUTS', { fromPieceId: hutPieceId }))
+    expect(me(next).items.at(-1)?.id).toBe(hut.id)
+    expect(next.board.pieces.some((piece) => piece.id === hutPieceId)).toBe(true)
+    expect(next.log.some((entry) => entry.publicLog === "cash1981 drew the hut from the token in cash1981's area")).toBe(true)
+  })
+
+  it('draws a card that is not from a token without taking an item under a token that is still on the board', () => {
+    const { state, cardId, hutPieceId } = scene()
+    const hut = topOf(state, 'HUTS')
+    const moved = inArea(unwrap(play(state, cardId)), hutPieceId)
+    const next = unwrap(drawWith(moved, 'HUTS', {}))
     expect(me(next).items.at(-1)?.id).not.toBe(hut.id)
     expect(next.underTokens?.some((token) => token.item.id === hut.id)).toBe(true)
     expect(next.log.some((entry) => entry.publicLog.includes('from the token'))).toBe(false)
+  })
+
+  it('numbers the tokens in one area so their buttons differ', () => {
+    const { state, hutPieceId, villagePieceId } = scene()
+    const asset = findBoardAsset('resources/hut')
+    if (asset === undefined) throw new Error('missing hut asset')
+    const second = unwrap(placePiece(state, { playerId: CASH1981, assetId: 'resources/hut', x: Math.round(3 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2), y: Math.round(mapTop(state.board) + 2 * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2) }))
+    const secondId = (second.board.pieces.at(-1) as { id: string }).id
+    const both = inArea(inArea(second, hutPieceId), secondId)
+    const labels = boardTokensOf(both.board, boardAreas(both.board, both.players)).filter((token) => token.sheet === 'HUTS').map((token) => token.label)
+    expect(labels).toEqual(["cash1981's area (1)", "cash1981's area (2)"])
+    expect(villagePieceId).toBeDefined()
   })
 
   it('refuses a piece that is not a hut, not on the map or not there', () => {

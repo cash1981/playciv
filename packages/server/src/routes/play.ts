@@ -396,9 +396,8 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     const confirmedOutOfTurn = body['confirmedOutOfTurn'] === true
     // The same for a culture card drawn while the culture hand is over its size
     const confirmedOverLimit = body['confirmedOverLimit'] === true
-    // A hut or village: the token on the map the draw is from, or that it is from none
+    // A hut or village: the token on the board the draw is from
     const fromPieceId = typeof body['fromPieceId'] === 'string' ? body['fromPieceId'] : undefined
-    const notFromToken = body['notFromToken'] === true
 
     return applyToGame(context, c, gameId, (state) => {
       const playerId = currentPlayer(c).id
@@ -410,7 +409,6 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
             confirmedOutOfTurn,
             confirmedOverLimit,
             ...(fromPieceId === undefined ? {} : { fromPieceId }),
-            ...(notFromToken ? { notFromToken } : {}),
           })
     })
   })

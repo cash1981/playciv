@@ -10,7 +10,8 @@
  */
 
 import { mapCellOf } from './blockade.js'
-import type { Board, BoardPiece } from './board.js'
+import { areaAt, boardAreas } from './board.js'
+import type { Board, BoardArea, BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import type { Cell } from './blockade.js'
 import { itemName } from './item.js'
@@ -50,17 +51,63 @@ export function mapTokensOf(board: Board): readonly MapToken[] {
   return found.sort((a, b) => a.cell.row - b.cell.row || a.cell.column - b.cell.column || a.piece.id.localeCompare(b.piece.id))
 }
 
+/** A hut or village piece anywhere on the board, and where it lies. */
+export interface BoardToken {
+  readonly piece: BoardPiece
+  readonly sheet: SheetName
+  /** The map square, or `null` for a piece elsewhere (in a player's area). */
+  readonly cell: Cell | null
+  /** What a button says: the square ("J6"), or the area ("cash1981's area", numbered when it holds several). */
+  readonly label: string
+  /** What the log says after "the token": "on J6", "in cash1981's area" or "off the map". */
+  readonly phrase: string
+}
+
 /**
- * The next draw of `sheetName` when an item lies under a piece that has left the map (collected or taken
- * off): that one item goes on top of its sheet, so the draw gives what was under the piece. Every other
- * item stays under its piece, out of the reach of a shuffle and of a later board undo that puts its piece
- * back. Nothing changes when no look was ever made.
+ * Every hut and village piece on the board: the ones on a map square first (top row first, left to right), then the
+ * others by area. A piece lies in a player's area when it was collected there.
+ */
+export function boardTokensOf(board: Board, areas: readonly BoardArea[]): readonly BoardToken[] {
+  const onMap = mapTokensOf(board).map((token): BoardToken => ({
+    piece: token.piece,
+    sheet: token.sheet,
+    cell: token.cell,
+    label: squareLabel(token.cell),
+    phrase: `on ${squareLabel(token.cell)}`,
+  }))
+  const mapIds = new Set(onMap.map((token) => token.piece.id))
+  const elsewhere: BoardToken[] = []
+  const counts = new Map<string, number>()
+  for (const piece of board.pieces) {
+    const sheet = TOKEN_SHEETS.get(piece.assetId)
+    if (sheet === undefined || mapIds.has(piece.id)) continue
+    const area = areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2)
+    const place = area === undefined ? 'off the map' : `${area.username}'s area`
+    const number = (counts.get(`${sheet}:${place}`) ?? 0) + 1
+    counts.set(`${sheet}:${place}`, number)
+    elsewhere.push({ piece, sheet, cell: null, label: place, phrase: area === undefined ? place : `in ${place}` })
+  }
+  // A place that holds several pieces numbers them, so the buttons can be told apart
+  const numbered = elsewhere.map((token) => {
+    const total = counts.get(`${token.sheet}:${token.label}`) ?? 1
+    if (total === 1) return token
+    const position = elsewhere.filter((other) => other.sheet === token.sheet && other.label === token.label).indexOf(token) + 1
+    return { ...token, label: `${token.label} (${position})` }
+  })
+  return [...onMap, ...numbered.sort((a, b) => a.label.localeCompare(b.label) || a.piece.id.localeCompare(b.piece.id))]
+}
+
+/**
+ * The next draw of `sheetName` when an item lies under a piece that is no longer on the board at all: that one item
+ * goes on top of its sheet, so the draw gives what was under the piece. Every other item stays under its piece, out
+ * of the reach of a shuffle and of a later board undo that puts its piece back. Nothing changes when no look was
+ * ever made.
  */
 export function releaseLooseToken(state: GameState, sheetName: SheetName): GameState {
   const under = state.underTokens ?? []
   if (under.length === 0) return state
-  const onMap = new Set(mapTokensOf(state.board).map((token) => token.piece.id))
-  const loose = under.find((token) => token.item.sheetName === sheetName && !onMap.has(token.pieceId))
+  const onBoard = new Set(state.board.pieces.filter((piece) => TOKEN_SHEETS.has(piece.assetId)).map((piece) => piece.id))
+  const loose = under.find((token) => token.item.sheetName === sheetName && !onBoard.has(token.pieceId))
   if (loose === undefined) return state
   const top = state.items.findIndex((item) => item.sheetName === sheetName)
   const items = [...state.items]
@@ -71,18 +118,18 @@ export function releaseLooseToken(state: GameState, sheetName: SheetName): GameS
 /**
  * A draw from the token on `pieceId`: the item under it goes on top of its sheet, so the draw gives it, and the
  * piece stays where it is. A token nobody has looked under gives the top card as an anonymous draw does.
- * `undefined` when the piece is not a hut or village of `sheetName` on a map square.
+ * `undefined` when the piece is not a hut or village of `sheetName` on the board.
  */
-export function releaseTokenOf(state: GameState, pieceId: string, sheetName: SheetName): { readonly state: GameState; readonly cell: Cell } | undefined {
-  const token = mapTokensOf(state.board).find((candidate) => candidate.piece.id === pieceId && candidate.sheet === sheetName)
+export function releaseTokenOf(state: GameState, pieceId: string, sheetName: SheetName): { readonly state: GameState; readonly phrase: string } | undefined {
+  const token = boardTokensOf(state.board, boardAreas(state.board, state.players)).find((candidate) => candidate.piece.id === pieceId && candidate.sheet === sheetName)
   if (token === undefined) return undefined
   const under = state.underTokens ?? []
   const bound = under.find((candidate) => candidate.pieceId === pieceId)
-  if (bound === undefined) return { state, cell: token.cell }
+  if (bound === undefined) return { state, phrase: token.phrase }
   const top = state.items.findIndex((item) => item.sheetName === sheetName)
   const items = [...state.items]
   items.splice(top < 0 ? items.length : top, 0, { ...bound.item, hidden: true, ownerId: null })
-  return { state: { ...state, items, underTokens: under.filter((candidate) => candidate !== bound) }, cell: token.cell }
+  return { state: { ...state, items, underTokens: under.filter((candidate) => candidate !== bound) }, phrase: token.phrase }
 }
 
 export interface TokenLook {

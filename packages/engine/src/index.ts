@@ -46,8 +46,8 @@ export * from './culture-track.js'
 export * from './log.js'
 export * from './assisted.js'
 export { playableCardsOf } from './assisted-cards.js'
-export { mapTokensOf } from './zheng-he.js'
-export type { MapToken } from './zheng-he.js'
+export { boardTokensOf, mapTokensOf } from './zheng-he.js'
+export type { BoardToken, MapToken } from './zheng-he.js'
 export {
   GOVERNMENT_UNLOCK_TECH,
   INVESTABLE_COIN_SOURCES,

@@ -256,17 +256,17 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   items: the top item of the sheet is taken out of the deck and set under each piece
   without one (`GameState.underTokens`, never projected). A shuffle (an item undo, Frida
   Kahlo) cannot change what was seen, so no new message is needed. Draw Hut and Draw
-  Village ask which token the draw is from when such pieces lie on the map: one button
-  per square, "A token already taken off the map" or "Not from a token on the map" (a
-  card, a village marker). A chosen token gives the item under it (the top card when
-  nobody has looked) and its piece stays on the map, to be moved by hand
-  (`DrawInput.fromPieceId`); "not from a token" never gives an item under a piece
-  (`notFromToken`); a public line says which square. A draw that sends neither, as
-  "already taken off" does, gets the item under a piece that has left the map, one per
-  draw, so every other item stays under its piece, out of reach of shuffles and of a
-  board undo that puts its piece back. A token placed after the look stays anonymous.
-  Undoing the card puts the items still under a piece back, shuffles the sheets they
-  came from twice and says so privately; an item a draw already took stays where it went.
+  Village ask which token the draw is from when such pieces lie on the board: one
+  button per piece (a map square by its label, a piece in an area by that area, numbered
+  when there are several), or "Random hut (not from a token)" (a card, a village marker).
+  A chosen token gives the item under it (the top card when nobody has looked) and its
+  piece stays where it is, to be moved by hand (`DrawInput.fromPieceId`); a public line
+  says where. A draw with no piece never gives an item under a piece still on the board,
+  and gives the item under a piece that was deleted from the board, one per draw, so every
+  other item stays under its piece, out of reach of shuffles and of a board undo that
+  puts its piece back. A token placed after the look stays anonymous. Undoing the card
+  puts the items still under a piece back, shuffles the sheets they came from twice and
+  says so privately; an item a draw already took stays where it went.
 - Discard of a Great Person in the hand asks first: it does not use the card (Play
   does), and a Great Person that was killed is discarded unused (human).
 - Scout-transfer coin corrections remain manual; see [limitations](limitations.md).
