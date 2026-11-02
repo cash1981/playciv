@@ -721,6 +721,12 @@ export type AssistedEffect =
       readonly kurosawa?: readonly KurosawaPayment[]
       /** Zheng He: the tokens given an identity by his look, so an undo can put them back in the deck. Never projected. */
       readonly zhengHe?: { readonly bound: readonly UnderToken[] }
+      /** A battle card: the battle it was played in, and what it changed there, so an undo can take it back. */
+      readonly battleCard?: {
+        readonly battleId: string
+        readonly bonus?: number
+        readonly saved?: readonly string[]
+      }
       /** A movement culture card: the source and destination, and each moved figure. */
       readonly cardMove?: {
         readonly card: string
@@ -1779,8 +1785,13 @@ function summariesOf(state: GameState, battle: Battle): readonly BattleSideSumma
         ? 'Barbarians'
         : (player?.username ?? side.playerId)
     const defence = sideId === 'defender' ? cityDefence : null
+    const cardBonus = (battle.cardBonuses ?? [])
+      .filter((bonus) => side.kind === 'player' && bonus.playerId === side.playerId)
+      .reduce((sum, bonus) => sum + bonus.amount, 0)
     const combatBonus =
-      (side.kind === 'player' && player !== undefined ? combatBonusOf(state, player) : 0) + (defence?.total ?? 0)
+      (side.kind === 'player' && player !== undefined ? combatBonusOf(state, player) : 0) +
+      (defence?.total ?? 0) +
+      cardBonus
     return {
       side: sideId,
       kind: side.kind,

@@ -222,6 +222,9 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],
   ['Captain James Cook', 'doubles your travel speed until the end of the turn'],
   ['Galileo Galilei', 'moves every figure in the chosen outer-edge square to another outer-edge square and locks them for the turn'],
+  ['Leonidas', 'adds 8 to your combat bonus until the battle ends; only the defender, with fewer units played than the opponent'],
+  ['Joan of Arc', 'adds your unspent culture to your combat bonus until the battle ends; only the defender'],
+  ['Florence Nightingale', 'saves your killed units, so they stay in your hand'],
   ['Hannibal', 'moves any or all of your figures from one square to another square with your figures without exceeding your stacking limit'],
 ])
 
@@ -248,7 +251,7 @@ export const cardPlayRuleOf = (name: string): CardPlayRule => PLAY_RULES.get(nam
  * so the list of cards to play leaves them out: playing one there would log it without
  * the gain the button gives.
  */
-export const CARDS_WITH_OWN_BUTTON: ReadonlySet<string> = new Set(["Lorenzo de' Medici", 'Alan Turing', 'Jim Henson'])
+export const CARDS_WITH_OWN_BUTTON: ReadonlySet<string> = new Set(["Lorenzo de' Medici", 'Alan Turing', 'Jim Henson', 'Sun Tzu'])
 
 /** Whether using a Great Person card discards it: its text says "discard this card". */
 export const discardsWhenUsed = (description: string | null | undefined): boolean =>

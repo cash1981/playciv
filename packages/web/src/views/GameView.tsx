@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { SUN_TZU, SUN_TZU_COST, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -1561,6 +1561,16 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         : null
     : null
 
+  // Battle Great Persons I can play now, and Sun Tzu's pass once per battle (a barbarian controller is no combatant)
+  const myCombatant = battle !== null && mySideInBattle !== null && battle[mySideInBattle].kind === 'player'
+  const battleCards = myCombatant
+    ? (view.you?.playableCards ?? []).filter((card) => card.timings.includes('BATTLE') && card.status === 'ready')
+    : []
+  const sunTzuAvailable =
+    myCombatant &&
+    (view.you?.items ?? []).some((item) => item.kind === 'greatperson' && item.name === SUN_TZU) &&
+    !(battle?.sunTzu ?? []).includes(myId)
+
   // Next free position on my side (for click-to-place fallback). A front
   // held only by a killed unit is reinforceable — offer it first, rather
   // than always opening a new front, so the click path (not just drag) can
@@ -1787,6 +1797,16 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                 End turn
               </button>
             )}
+            {sunTzuAvailable && (
+              <button
+                className="small"
+                disabled={busy || noMutations || (view.you?.stats.trade ?? 0) < SUN_TZU_COST}
+                title={`Sun Tzu: spend ${SUN_TZU_COST} trade to pass your turn instead of playing a unit, once per battle`}
+                onClick={() => runBattleAction(() => api.sunTzuPass(gameId, rev))}
+              >
+                Pass with Sun Tzu ({SUN_TZU_COST} trade)
+              </button>
+            )}
             {mySideInBattle !== null && (
               <button
                 className="small danger"
@@ -1797,6 +1817,17 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               </button>
             )}
           </div>
+
+          {battleCards.length > 0 && (
+            <ul className="playable-cards battle-cards" aria-label="Battle cards">
+              {battleCards.map((card) => (
+                <li key={card.itemId} className="playable-card">
+                  <strong>{card.name}</strong>
+                  <PlayCardControl card={card} gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} />
+                </li>
+              ))}
+            </ul>
+          )}
 
           {/* Summary bar */}
           {battleSummary.length > 0 && (
@@ -2181,6 +2212,7 @@ export function ArenaUnitCard({
         onDragEnd={onDragEnd}
       />
       {unit.killed && <span className="tag discarded">DEAD</span>}
+      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved by Florence Nightingale: it stays in the hand">SAVED</span>}
       <button
         className="small"
         disabled={busy || readOnly}

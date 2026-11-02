@@ -16,6 +16,7 @@
 import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
+import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard } from './battle-cards.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
@@ -225,6 +226,8 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       kind === 'greatPerson' &&
       !base.discards &&
       !item.hidden &&
+      // Leonidas works in each battle he is played in, which `battleCardBlock` keeps to one
+      !BATTLE_CARDS.has(name) &&
       (name === 'William Shakespeare' ||
         state.assistedActions.some(
           (record) =>
@@ -283,6 +286,15 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
           status: 'unavailable',
           reason: 'No other player has revealed a tech for Edison to research.',
         },
+      ]
+    }
+    // A card played in a battle is ready for a combatant while one is on, in any phase of the turn
+    if (BATTLE_CARDS.has(name) && base.timings.includes('BATTLE')) {
+      const block = battleCardBlock(state, player, name)
+      return [
+        block === undefined
+          ? { ...base, status: 'ready' as const, reason: 'Can be played in the battle you are fighting.' }
+          : { ...base, status: 'wrong-phase' as const, reason: block },
       ]
     }
     return [{ ...base, ...playableIn(base.timings, now) }]
@@ -353,6 +365,7 @@ interface Automated {
     | 'garcia'
     | 'kurosawa'
     | 'zhengHe'
+    | 'battleCard'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -716,6 +729,13 @@ function automate(
           `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
       })
+    }
+    case 'Leonidas':
+    case 'Joan of Arc':
+    case 'Florence Nightingale': {
+      const applied = applyBattleCard(state, player, name, requestId)
+      if (applied === undefined) return err(`${name} is played in a battle you are fighting.`)
+      return ok({ state: applied.state, extra: { battleCard: applied.effect }, said: applied.said })
     }
     case 'Zheng He': {
       const look = lookUnderTokens(state, state.players.filter((candidate) => candidate.playerId !== player.playerId))
@@ -1525,6 +1545,8 @@ export const playCard: AssistedActionDefinition = {
       }
       hand = playerOf(current, player.playerId) ?? hand
     }
+
+    if (effect.battleCard !== undefined) current = undoBattleCard(current, effect.battleCard, record.id)
 
     // Akira Kurosawa's culture goes back from the holder, as far as it is still there
     const kurosawa = takeBackKurosawa(current, effect.kurosawa ?? [])

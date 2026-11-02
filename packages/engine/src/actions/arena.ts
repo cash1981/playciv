@@ -23,6 +23,8 @@ import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
+import { SUN_TZU, SUN_TZU_COST, playerSideOf } from '../battle-cards.js'
+import { blockadedGreatPersonTypes } from '../blockade.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -934,6 +936,60 @@ export function endBattleTurn(
   return ok({
     ...nextState,
     battle: { ...battle, turn: nextTurn },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// sunTzuPass
+// ---------------------------------------------------------------------------
+
+export interface SunTzuPassInput {
+  readonly playerId: string
+}
+
+/**
+ * Sun Tzu (issue #301): "Once per battle, you may spend 3 trade to pass your turn instead of playing a unit."
+ * Spends the trade, turns the card faceup (it stays in the hand) and flips the battle turn. Like the rest of the
+ * arena it is not undone by the assisted-action undo; the player corrects the trade by hand.
+ */
+export function sunTzuPass(state: GameState, input: SunTzuPassInput): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+  const battle = state.battle
+  const side = playerSideOf(battle, input.playerId)
+  if (side === null) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+
+  const refuse = (reason: string): ActionResult => err({ kind: 'BATTLE_CARD_REFUSED', reason })
+  const card = player.items.find((item) => item.kind === 'greatperson' && item.name === SUN_TZU)
+  if (card === undefined || card.kind !== 'greatperson') return refuse(`You do not hold ${SUN_TZU}.`)
+  if (card.type !== null && blockadedGreatPersonTypes(state, player).includes(card.type)) {
+    return refuse(`Every ${card.type} figure of yours is blockaded, so ${SUN_TZU} cannot be used.`)
+  }
+  if ((battle.sunTzu ?? []).includes(input.playerId)) return refuse(`${SUN_TZU} works once per battle.`)
+  if (player.stats.trade < SUN_TZU_COST) {
+    return refuse(`${SUN_TZU} costs ${SUN_TZU_COST} trade and you have ${player.stats.trade}.`)
+  }
+
+  const paid = withPlayer(state, {
+    ...player,
+    stats: { ...player.stats, trade: player.stats.trade - SUN_TZU_COST },
+    items: player.items.map((item) => (item.id === card.id ? { ...item, hidden: false } : item)),
+  })
+  const next = appendPublicLog(
+    paid,
+    player.username,
+    player.playerId,
+    `uses ${SUN_TZU}: spends ${SUN_TZU_COST} trade and passes the battle turn`,
+  )
+  return ok({
+    ...next,
+    battle: {
+      ...battle,
+      turn: side === 'attacker' ? 'defender' : 'attacker',
+      sunTzu: [...(battle.sunTzu ?? []), input.playerId],
+    },
   })
 }
 

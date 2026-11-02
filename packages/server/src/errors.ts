@@ -61,6 +61,7 @@ export function statusFor(error: EngineError): number {
     case 'CULTURE_HAND_OVER':
     case 'UNIT_ALREADY_IN_BATTLE':
     case 'ARENA_POSITION_OCCUPIED':
+    case 'BATTLE_CARD_REFUSED':
     case 'PLAYER_COLOR_TAKEN':
       return 409
     case 'COIN_PURCHASE_REJECTED':
