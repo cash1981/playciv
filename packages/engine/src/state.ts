@@ -7,8 +7,9 @@
  * away.
  */
 
-import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
+import type { HutItem, Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement, VillageItem } from './item.js'
 import { isUnit } from './item.js'
+import { drawTokensOf } from './zheng-he.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
 import { boardAreas } from './board.js'
@@ -718,6 +719,8 @@ export type AssistedEffect =
       }
       /** The culture Akira Kurosawa's holders gained because this devotion was made. */
       readonly kurosawa?: readonly KurosawaPayment[]
+      /** Zheng He: the tokens given an identity by his look, so an undo can put them back in the deck. Never projected. */
+      readonly zhengHe?: { readonly bound: readonly UnderToken[] }
       /** A movement culture card: the source and destination, and each moved figure. */
       readonly cardMove?: {
         readonly card: string
@@ -915,6 +918,25 @@ export type AssistedEffect =
     }
 
 /** Culture Akira Kurosawa gave his holder for another player's devotion, kept for the undo. */
+/**
+ * What lies under a hut or village piece on the map once Zheng He's player has looked: the item, taken out
+ * of the deck so that a shuffle cannot change it. Server only, never projected.
+ */
+export interface UnderToken {
+  readonly pieceId: string
+  readonly item: HutItem | VillageItem
+  /** The map square the piece lay on when the player looked ("C2"), so a piece moved away can still be told apart. */
+  readonly square?: string
+}
+
+/** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
+export interface DrawTokenView {
+  readonly pieceId: string
+  readonly sheet: SheetName
+  /** What the button says: the square ("J6"), or "C2 (in cash1981's area)" for a piece that was read on C2 and moved. */
+  readonly label: string
+}
+
 export interface KurosawaPayment {
   readonly playerId: string
   readonly culture: number
@@ -1034,6 +1056,11 @@ export interface GameState {
   readonly items: readonly Item[]
   /** Java: `PBF.discardedItems` — what a reshuffle draws back from. */
   readonly discardedItems: readonly Item[]
+  /**
+   * Hut and village items set aside under the pieces on the map by Zheng He's look (`zheng-he.ts`). Server
+   * only: a projection must never carry it. Absent until a first look.
+   */
+  readonly underTokens?: readonly UnderToken[]
   readonly players: readonly Playerhand[]
   /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]
@@ -1640,6 +1667,8 @@ export interface PlayerView {
   readonly winner: string | null
   readonly numberOfItemsInDeck: number
   readonly numberOfDiscardedItems: number
+  /** The hut and village pieces Draw Hut and Draw Village can be made from: every one on a map square, and a moved one that has something under it. */
+  readonly drawTokens: readonly DrawTokenView[]
   readonly you: PlayerViewSelf | null
   readonly opponents: readonly OpaquePlayerhand[]
   /** Whose turn it is and which phase they should be working on. */
@@ -1811,6 +1840,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     winner: state.winner,
     numberOfItemsInDeck: state.items.length,
     numberOfDiscardedItems: state.discardedItems.length,
+    drawTokens: drawTokensOf(state),
     you,
     opponents: state.players
       .filter((player) => player.playerId !== viewerId)

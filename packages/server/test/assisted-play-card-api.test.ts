@@ -8,7 +8,7 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { cultureCellCenter, findBoardAsset, leaderAssetId, mapCellOf, mapTop, markPhasesDone, placePiece, unwrap } from '@civ/engine'
+import { SQUARE_SIZE, cultureCellCenter, findBoardAsset, leaderAssetId, mapCellOf, mapTop, markPhasesDone, placePiece, unwrap } from '@civ/engine'
 import type { CivItem } from '@civ/engine'
 
 import { createTestApp } from '../src/app.js'
@@ -268,6 +268,38 @@ describe('playing a card through the actions route', () => {
     expect(after?.discardedItems.some((item) => item.id === first?.id)).toBe(true)
     // The other player's view carries no card name or id of it
     expect(JSON.stringify(await view(t.gameId, t.other))).not.toContain(first?.id as string)
+  })
+
+  it('carries Zheng He’s look through the route, and keeps what was seen out of every other view', async () => {
+    const t = await table('Zheng He')
+    const saved = await repo.findGame(t.gameId)
+    if (saved === undefined) throw new Error('missing game')
+    const opened = unwrap(markPhasesDone(saved, { playerId: t.starterId, turnNumber: 1, upToPhase: 'TRADE' }))
+    const asset = findBoardAsset('resources/hut')
+    if (asset === undefined) throw new Error('missing hut asset')
+    const withHut = unwrap(
+      placePiece(opened, {
+        playerId: t.starterId,
+        assetId: 'resources/hut',
+        x: Math.round(2 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2),
+        y: Math.round(mapTop(opened.board) + SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    await repo.saveGame(withHut)
+    const hut = withHut.items.find((item) => item.sheetName === 'HUTS')
+    if (hut === undefined || !('name' in hut)) throw new Error('no hut in the deck')
+
+    const rev = (await view(t.gameId, t.starter)).rev
+    const response = await post(t.starter, actions(t.gameId), { action: 'playCard', requestId: 'req-1', rev, args: { itemId: t.itemId, targets: [] } })
+    expect(response.status).toBe(200)
+    expect(JSON.stringify(await response.json())).toContain(`Zheng He: the hut on C2 is ${hut.name}`)
+
+    const stored = await repo.findGame(t.gameId)
+    expect(stored?.underTokens?.map((token) => token.item.id)).toEqual([hut.id])
+    const theirs = JSON.stringify(await view(t.gameId, t.other))
+    expect(theirs).not.toContain('Zheng He:')
+    expect(theirs).not.toContain('underTokens')
+    expect(theirs).not.toContain(hut.id)
   })
 
   it('carries Albert Einstein’s conversion through the route', async () => {

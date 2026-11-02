@@ -1248,6 +1248,33 @@ describe('a Great Person card whose tokens are blockaded (issue #241)', () => {
     expect(screen.getByRole('button', { name: 'Discard' }).hasAttribute('disabled')).toBe(false)
   })
 
+  it('asks before a Great Person is discarded, and discards only after Yes', async () => {
+    const discard = vi.spyOn(api, 'discardItem').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<HandItem item={general} gameId="g" busy={false} run={run} opponents={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+      "Discard does not use Sun Tzu's effect. To use the card, press Play in Your actions. Discard it anyway (for example because it was killed)?",
+    )
+    await Promise.resolve()
+    expect(discard).not.toHaveBeenCalled()
+
+    confirm.mockReturnValue(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(discard).toHaveBeenCalledTimes(1))
+  })
+
+  it('discards any other card without asking', async () => {
+    const discard = vi.spyOn(api, 'discardItem').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<HandItem item={{ ...general, kind: 'cultureI', sheetName: 'CULTURE_1', name: 'Drought' } as unknown as Item} gameId="g" busy={false} run={run} opponents={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(confirm).not.toHaveBeenCalled()
+    await waitFor(() => expect(discard).toHaveBeenCalledTimes(1))
+  })
+
   it('shows nothing extra on a card that is not blockaded', () => {
     const { container } = render(
       <HandItem item={general} gameId="g" busy={false} run={run} opponents={[]} />,
@@ -1446,6 +1473,86 @@ describe('the game page (issue #215)', () => {
         await renderGame({ ...chatView('Bob'), active: true } as unknown as PlayerView)
         expect(screen.getByRole('heading', { level: 1 }).textContent).toContain("Bob's turn")
       })
+    })
+  })
+
+  describe('drawing a hut or a village', () => {
+    const withTokens = (): PlayerView =>
+      chatView('Alice', {
+        drawTokens: [
+          { pieceId: 'hut-c2', sheet: 'HUTS', label: 'C2' },
+          { pieceId: 'hut-j6', sheet: 'HUTS', label: 'J6' },
+          { pieceId: 'village-l7', sheet: 'VILLAGES', label: 'L7' },
+        ],
+      })
+
+    it('asks which token the hut is from, listing the huts on the map by square and not the villages', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(withTokens())
+      await renderGame(withTokens())
+
+      fireEvent.click(drawButton('Huts'))
+      const group = screen.getByRole('group', { name: 'Draw a hut from' })
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual([
+        'C2',
+        'J6',
+        'Random hut (not from a token)',
+        'Cancel',
+      ])
+      expect(draw).not.toHaveBeenCalled()
+
+      fireEvent.click(within(group).getByRole('button', { name: 'J6' }))
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS', false, undefined, { fromPieceId: 'hut-j6' }))
+      expect(screen.queryByRole('group', { name: 'Draw a hut from' })).toBeNull()
+    })
+
+    it('draws a random card, not from a token, and nothing after Cancel', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(withTokens())
+      await renderGame(withTokens())
+
+      fireEvent.click(drawButton('Villages'))
+      expect(within(screen.getByRole('group', { name: 'Draw a village from' })).getAllByRole('button').map((button) => button.textContent)).toEqual([
+        'L7',
+        'Random village (not from a token)',
+        'Cancel',
+      ])
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('group', { name: 'Draw a village from' })).toBeNull()
+      expect(draw).not.toHaveBeenCalled()
+
+      fireEvent.click(drawButton('Huts'))
+      fireEvent.click(screen.getByRole('button', { name: 'Random hut (not from a token)' }))
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS'))
+    })
+
+    it('lists a token moved away by the square it was read on, and draws from it', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(withTokens())
+      const view = chatView('Alice', {
+        drawTokens: [
+          { pieceId: 'hut-j6', sheet: 'HUTS', label: 'J6' },
+          { pieceId: 'hut-c2', sheet: 'HUTS', label: "C2 (in Alice's area)" },
+        ],
+      })
+      await renderGame(view)
+
+      fireEvent.click(drawButton('Huts'))
+      const group = screen.getByRole('group', { name: 'Draw a hut from' })
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual([
+        'J6',
+        "C2 (in Alice's area)",
+        'Random hut (not from a token)',
+        'Cancel',
+      ])
+      fireEvent.click(within(group).getByRole('button', { name: "C2 (in Alice's area)" }))
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS', false, undefined, { fromPieceId: 'hut-c2' }))
+    })
+
+    it('draws at once when no token of that kind lies on the board', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Alice', { drawTokens: [] }))
+      await renderGame(chatView('Alice', { drawTokens: [] }))
+
+      fireEvent.click(drawButton('Huts'))
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS'))
+      expect(screen.queryByRole('group', { name: 'Draw a hut from' })).toBeNull()
     })
   })
 

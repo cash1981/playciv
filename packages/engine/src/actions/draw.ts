@@ -42,6 +42,7 @@ import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
 import { turnHolder } from '../turn.js'
+import { TOKEN_SHEET_NAMES, releaseLooseToken, releaseTokenOf } from '../zheng-he.js'
 
 type DrawResult = Result<GameState, EngineError>
 
@@ -79,6 +80,12 @@ export interface DrawInput {
   readonly confirmedOutOfTurn?: boolean
   /** The player was warned that the culture hand is over its size and chose to draw a culture card anyway. */
   readonly confirmedOverLimit?: boolean
+  /**
+   * A hut or village: the piece on the board the draw is from. It gives what lies under the piece (a token nobody has
+   * looked under gives the top card) and the piece stays where it is. Without it the draw never gives an item under a
+   * piece that is still on the board.
+   */
+  readonly fromPieceId?: string
 }
 
 /**
@@ -88,7 +95,23 @@ export interface DrawInput {
  * hand, and logs it. If the deck has none of that type left it is reshuffled
  * from `discardedItems` and the draw is tried once more.
  */
-export function draw(state: GameState, input: DrawInput): DrawResult {
+export function draw(original: GameState, input: DrawInput): DrawResult {
+  const tokenSheet = TOKEN_SHEET_NAMES.includes(input.sheetName)
+  const from = tokenSheet && input.fromPieceId !== undefined ? releaseTokenOf(original, input.fromPieceId, input.sheetName) : undefined
+  if (tokenSheet && input.fromPieceId !== undefined && from === undefined) {
+    return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.fromPieceId })
+  }
+  // Without a choice, what lies under a piece that is gone from the board is the next of its sheet to be drawn
+  const state = from !== undefined ? from.state : tokenSheet ? releaseLooseToken(original, input.sheetName) : original
+  const drawn = drawFromDeck(state, input)
+  if (!drawn.ok || from === undefined) return drawn
+  const player = findPlayer(drawn.value, input.playerId)
+  if (player === undefined) return drawn
+  const kind = input.sheetName === 'VILLAGES' ? 'village' : 'hut'
+  return ok(appendPublicLog(drawn.value, player.username, player.playerId, `drew the ${kind} from the token ${from.phrase}`))
+}
+
+function drawFromDeck(state: GameState, input: DrawInput): DrawResult {
   const found = requirePlayer(state, input.playerId)
   if (!found.ok) return found
   const turn = requireTurn(state, found.value, input.confirmedOutOfTurn)

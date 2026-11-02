@@ -16,7 +16,7 @@ import { confirmationText } from '../lib/confirmation.js'
 import { clearToasts, showToast } from '../lib/toasts.js'
 import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
-import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
+import type { DrawToken, GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
 import { hasActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
@@ -901,6 +901,10 @@ function cultureHandIsOver(view: PlayerView): boolean {
   return held > size
 }
 
+/** Discard only moves a card to the discard pile: it does not use it, and a Great Person that was killed is not used either. */
+export const greatPersonDiscardQuestion = (name: string): string =>
+  `Discard does not use ${name}'s effect. To use the card, press Play in Your actions. Discard it anyway (for example because it was killed)?`
+
 function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   // There is no baton, so the panel is never disabled for turn reasons. Out of
   // turn the player is asked first, and the server hears `confirmedOutOfTurn`
@@ -908,7 +912,16 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const question = outOfTurnQuestion(view)
   const canDraw = view.you !== null
   const handOver = cultureHandIsOver(view)
-  const draw = (sheet: SheetName): void => {
+  // A hut or village: when tokens lie on the board the player says which one the draw is from
+  const [choosing, setChoosing] = useState<SheetName | null>(null)
+  const tokensOf = (sheet: SheetName) =>
+    sheet === 'HUTS' || sheet === 'VILLAGES' ? (view.drawTokens ?? []).filter((token) => token.sheet === sheet) : []
+  const request = (sheet: SheetName): void => {
+    if (tokensOf(sheet).length > 0) setChoosing(sheet)
+    else draw(sheet)
+  }
+  const draw = (sheet: SheetName, token?: DrawToken): void => {
+    setChoosing(null)
     // Each warning is its own question; a no to any of them draws nothing.
     if (question !== null && !window.confirm(question)) return
     const level = cultureLevelOf(sheet)
@@ -920,6 +933,10 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
       level !== markerLevel &&
       !window.confirm(cultureLevelQuestion(level, markerLevel))
     ) {
+      return
+    }
+    if (token !== undefined) {
+      void run(() => api.draw(gameId, sheet, question !== null, undefined, token))
       return
     }
     const confirmedOverLimit = level !== null && handOver
@@ -951,12 +968,34 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
             key={sheet}
             className="small"
             disabled={busy || !canDraw}
-            onClick={() => draw(sheet)}
+            onClick={() => request(sheet)}
           >
             {label}
           </button>
         ))}
       </div>
+      {choosing !== null && (
+        <div role="group" aria-label={`Draw a ${choosing === 'VILLAGES' ? 'village' : 'hut'} from`} className="row" style={{ marginTop: '0.5rem' }}>
+          <span className="muted">{choosing === 'VILLAGES' ? 'Village' : 'Hut'} from:</span>
+          {tokensOf(choosing).map((token) => (
+            <button
+              key={token.pieceId}
+              className="small"
+              disabled={busy}
+              title="You get what lies under this token. The token stays where it is: move it yourself"
+              onClick={() => draw(choosing, { fromPieceId: token.pieceId })}
+            >
+              {token.label}
+            </button>
+          ))}
+          <button className="small" disabled={busy} onClick={() => draw(choosing)}>
+            Random {choosing === 'VILLAGES' ? 'village' : 'hut'} (not from a token)
+          </button>
+          <button className="small" onClick={() => setChoosing(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
     </CollapsiblePanel>
   )
 }
@@ -1185,9 +1224,10 @@ export function HandItem({
       <button
         className="small"
         disabled={busy}
-        onClick={() =>
+        onClick={() => {
+          if (item.kind === 'greatperson' && !window.confirm(greatPersonDiscardQuestion(itemName(item)))) return
           void run(() => api.discardItem(gameId, item.sheetName, item.itemNumber, itemName(item)))
-        }
+        }}
       >
         Discard
       </button>
