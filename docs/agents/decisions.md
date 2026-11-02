@@ -346,7 +346,8 @@ out by itself, recorded as `GameLogEntry.civSetup`:
 
 **Battle Great Persons** (issue #301; human 2026-11-02). A battle card is `ready` for a combatant of the active
 battle in any phase of the turn, and is listed in every phase tab and in the Battle panel; outside a battle it is
-`wrong-phase` ("Played during a battle."). The controller of the barbarians is no combatant for a card.
+`wrong-phase` ("Played during a battle."), except Gustavus Adolphus below. The controller of the barbarians is no
+combatant for a card.
 
 - **Leonidas:** the defender only, with fewer units played (arena plus reinforced away, killed or not) than the
   opponent. He need not be faceup: playing reveals him. He is kept, not discarded, adds +8 combat bonus until the
@@ -369,7 +370,7 @@ battle in any phase of the turn, and is listed in every phase tab and in the Bat
   manual activation and the player picks the unit; with no enemy unit in the arena nothing happens. The Battle panel then offers a
   wound on each living enemy unit (`zhukovWound`, `POST /battle/arena/zhukov`): -1 health, a unit at 0 is killed,
   which can earn the other side a wound if it played Zhukov too. The play cannot be undone once a wound was dealt; the
-  wound itself has no undo (health is corrected by hand). No ruling from the human: this is the card text.
+  wound itself has no undo (health is corrected by hand).
 - **Gustavus Adolphus** (human 2026-11-02: "Gustavus skjer før kampen starter. Du bare discarder unitene du har trukket
   for å få muligheten til å trekke nye i en annen type"; no link to Zhukov): played before the battle, with or without
   a battle on (then only by a combatant), on the units drawn for it and not placed in an arena (the battlehand, not

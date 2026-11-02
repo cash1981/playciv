@@ -296,7 +296,14 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       const block = name === 'Gustavus Adolphus' ? gustavusBlock(state, player) : battleCardBlock(state, player, name)
       return [
         block === undefined
-          ? { ...base, status: 'ready' as const, reason: 'Can be played in the battle you are fighting.' }
+          ? {
+              ...base,
+              status: 'ready' as const,
+              reason:
+                name === 'Gustavus Adolphus'
+                  ? 'Can be played on the units you have drawn for a battle.'
+                  : 'Can be played in the battle you are fighting.',
+            }
           : { ...base, status: 'wrong-phase' as const, reason: block },
       ]
     }
@@ -1191,6 +1198,8 @@ export const playCard: AssistedActionDefinition = {
     const now = currentPhaseOf(state, player.playerId)
     const when = card.timings.includes('ANY')
       ? CARD_TIMING_TEXT.ANY
+      : card.name === 'Gustavus Adolphus' && state.battle === null
+        ? 'before a battle'
       : BATTLE_CARDS.has(card.name)
         ? CARD_TIMING_TEXT.BATTLE
         : CARD_TIMING_TEXT[now ?? 'SOT']

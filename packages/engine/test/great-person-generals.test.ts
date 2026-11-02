@@ -2,8 +2,8 @@
  * Georgy Zhukov and Gustavus Adolphus (issue #301).
  *
  * Zhukov: "Each time one of your units is killed during a battle, deal 1 wound to an enemy unit of your choice."
- * Gustavus Adolphus: kill the units of the battle force (they cannot be saved) and build as many new ones
- * ("man får lov å velge samme antall nye og de som er unlocked" - the human).
+ * Gustavus Adolphus: before the battle, discard the units drawn for it and build as many new ones of the
+ * types chosen ("Gustavus skjer før kampen starter" - the human).
  */
 
 import { describe, expect, it } from 'vitest'
