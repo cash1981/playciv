@@ -105,16 +105,20 @@ export function applyGustavus(
       battlehand: [...holder.battlehand, card],
     })
     drew.push({ itemId: card.id, sheetName })
-    lines.push(`Gustavus Adolphus: you built a ${SHEET_NOUN[sheetName]} unit, card number ${card.itemNumber}`)
+    const noun = SHEET_NOUN[sheetName] ?? 'unit'
+    lines.push(`Gustavus Adolphus: you built ${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun} unit, card number ${card.itemNumber}`)
   }
 
-  const noun = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`
+  const units = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`
+  const parts = [
+    ...(killed.length === 0 ? [] : [`killing ${units(killed.length)} in the arena (they cannot be saved)`]),
+    ...(discarded.length === 0 ? [] : [`discarding ${units(discarded.length)} of the battle force`]),
+    `building ${units(count)} for free`,
+  ]
   return ok({
     state: next,
     effect: { battleId: battle.id, killed, discarded, drew },
-    said:
-      `, killing ${noun(killed.length)} in the arena (they cannot be saved), discarding ` +
-      `${noun(discarded.length)} of the battle force and building ${noun(count)} for free`,
+    said: `, ${parts.join(', ')}`,
     privateLines: [
       ...(discarded.length === 0 ? [] : [`Gustavus Adolphus: you discarded ${discarded.map((unit) => `${unit.kind} ${unit.itemNumber}`).join(', ')}`]),
       ...lines,
