@@ -1516,6 +1516,7 @@ describe('the game page (issue #215)', () => {
       expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual([
         'C2',
         'J6',
+        'A token already taken off the map',
         'Not from a token on the map',
         'Cancel',
       ])
@@ -1533,6 +1534,7 @@ describe('the game page (issue #215)', () => {
       fireEvent.click(drawButton('Villages'))
       expect(within(screen.getByRole('group', { name: 'Draw a village from' })).getAllByRole('button').map((button) => button.textContent)).toEqual([
         'L7',
+        'A token already taken off the map',
         'Not from a token on the map',
         'Cancel',
       ])
@@ -1543,6 +1545,16 @@ describe('the game page (issue #215)', () => {
       fireEvent.click(drawButton('Huts'))
       fireEvent.click(screen.getByRole('button', { name: 'Not from a token on the map' }))
       await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS', false, undefined, { notFromToken: true }))
+    })
+
+    it('sends no choice for a token that was already taken off the map, so its item is given', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(withTokens())
+      await renderGame(withTokens())
+
+      fireEvent.click(drawButton('Huts'))
+      fireEvent.click(screen.getByRole('button', { name: 'A token already taken off the map' }))
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'HUTS'))
+      expect(screen.queryByRole('group', { name: 'Draw a hut from' })).toBeNull()
     })
 
     it('draws at once when no token of that kind lies on the map', async () => {

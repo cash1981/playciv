@@ -257,12 +257,13 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   without one (`GameState.underTokens`, never projected). A shuffle (an item undo, Frida
   Kahlo) cannot change what was seen, so no new message is needed. Draw Hut and Draw
   Village ask which token the draw is from when such pieces lie on the map: one button
-  per square, or "Not from a token on the map" (a card, a village marker). A chosen
-  token gives the item under it (the top card when nobody has looked) and its piece
-  stays on the map, to be moved by hand (`DrawInput.fromPieceId`); "not from a token"
-  never gives an item under a piece (`notFromToken`); a public line says which square.
-  A client that sends neither gets the item under a piece that has left the map, one
-  per draw, so every other item stays under its piece, out of reach of shuffles and of a
+  per square, "A token already taken off the map" or "Not from a token on the map" (a
+  card, a village marker). A chosen token gives the item under it (the top card when
+  nobody has looked) and its piece stays on the map, to be moved by hand
+  (`DrawInput.fromPieceId`); "not from a token" never gives an item under a piece
+  (`notFromToken`); a public line says which square. A draw that sends neither, as
+  "already taken off" does, gets the item under a piece that has left the map, one per
+  draw, so every other item stays under its piece, out of reach of shuffles and of a
   board undo that puts its piece back. A token placed after the look stays anonymous.
   Undoing the card puts the items still under a piece back, shuffles the sheets they
   came from twice and says so privately; an item a draw already took stays where it went.

@@ -105,10 +105,10 @@ export interface RevealedPage {
 }
 
 /** The three loot choices exposed by the old client. */
+export type LootCategory = 'CULTURE_CARD' | 'HUTS' | 'VILLAGES'
+
 /** A hut or village draw: from the token on this piece, or not from a token on the map. */
 export type DrawToken = { readonly fromPieceId: string } | { readonly notFromToken: true }
-
-export type LootCategory = 'CULTURE_CARD' | 'HUTS' | 'VILLAGES'
 
 export interface PlayerDto {
   readonly id: string

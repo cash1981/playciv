@@ -325,7 +325,45 @@ describe('a draw from a chosen token', () => {
     expect(unwrapErr(drawWith(played, 'VILLAGES', { fromPieceId: 'nope' }))).toEqual({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: 'nope' })
     const removed = unwrap(removePiece(played, { playerId: CASH1981, pieceId: hutPieceId }))
     expect(unwrapErr(drawWith(removed, 'HUTS', { fromPieceId: hutPieceId })).kind).toBe('BOARD_PIECE_NOT_FOUND')
-    // Nothing is taken out of the bindings by a refused draw
+    // A refused draw gives no state, so nothing is taken out of the bindings
     expect(removed.underTokens).toHaveLength(2)
+    expect(drawn(removed, 'VILLAGES').id).not.toBe(topOf(state, 'VILLAGES').id)
+  })
+
+  it('hands out the top card, not an item under a piece that has left the map, for a token nobody has looked under', () => {
+    const { state, cardId, hutPieceId } = scene()
+    const hut = topOf(state, 'HUTS')
+    const asset = findBoardAsset('resources/hut')
+    if (asset === undefined) throw new Error('missing hut asset')
+    const played = unwrap(play(state, cardId))
+    const later = unwrap(
+      placePiece(played, {
+        playerId: CASH1981,
+        assetId: 'resources/hut',
+        x: Math.round(3 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2),
+        y: Math.round(mapTop(played.board) + 2 * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    const laterPieceId = (later.board.pieces.at(-1) as { id: string }).id
+    const removed = unwrap(removePiece(later, { playerId: CASH1981, pieceId: hutPieceId }))
+    const next = unwrap(drawWith(removed, 'HUTS', { fromPieceId: laterPieceId }))
+    expect(me(next).items.at(-1)?.id).toBe(topOf(removed, 'HUTS').id)
+    expect(next.underTokens?.some((token) => token.item.id === hut.id)).toBe(true)
+  })
+
+  it('keeps the item of a removed piece for a draw with no choice, also while other tokens lie on the map', () => {
+    const { state, cardId, hutPieceId } = scene()
+    const hut = topOf(state, 'HUTS')
+    const played = unwrap(play(state, cardId))
+    const removed = unwrap(removePiece(played, { playerId: CASH1981, pieceId: hutPieceId }))
+    expect(unwrap(draw(removed, { playerId: CASH1981, sheetName: 'HUTS', confirmedOutOfTurn: true })).players.find((p) => p.playerId === CASH1981)?.items.at(-1)?.id).toBe(hut.id)
+  })
+
+  it('ignores a token choice on any other sheet', () => {
+    const { state, villagePieceId } = scene()
+    const top = topOf(state, 'CULTURE_1')
+    const next = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1', confirmedOutOfTurn: true, fromPieceId: villagePieceId }))
+    expect(me(next).items.at(-1)?.id).toBe(top.id)
+    expect(next.log.some((entry) => entry.publicLog.includes('from the token'))).toBe(false)
   })
 })

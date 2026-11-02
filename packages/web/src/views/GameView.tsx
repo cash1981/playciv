@@ -988,6 +988,14 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
               {squareLabel(token.cell)}
             </button>
           ))}
+          <button
+            className="small"
+            disabled={busy}
+            title="A token you have already moved off the map: you get what was under it"
+            onClick={() => draw(choosing)}
+          >
+            A token already taken off the map
+          </button>
           <button className="small" disabled={busy} onClick={() => draw(choosing, { notFromToken: true })}>
             Not from a token on the map
           </button>
