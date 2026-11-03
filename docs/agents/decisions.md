@@ -361,6 +361,9 @@ battle in any phase of the turn, and is listed in every phase tab and in the Bat
   stays in the hand. Refused when none of the player's units is killed. She is played "after a battle" (human
   2026-11-03): also on the battle End battle has just set aside, by whichever combatant holds her, until the next battle
   starts; the SAVED marks then show in the final arena, and Undo end battle brings the battle back with them.
+  The mark goes when the death is taken back (kill toggle, face-off undo). A saved unit another unit has replaced on its
+  front is no longer in the arena: it is listed as saved casualties, in the active battle and in the final arena
+  (`LastBattleView.savedDeparted`).
 - **Sun Tzu:** not a card play but an arena button (`sunTzuPass`, `POST /battle/arena/sun-tzu`): spends 3 trade,
   turns the card faceup (kept), flips the battle turn, once per battle (`Battle.sunTzu`). The button is enabled on the
   player's own battle turn only (the turn itself stays advisory in the engine). A card still being chosen between is

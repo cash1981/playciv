@@ -250,6 +250,46 @@ describe('Florence Nightingale', () => {
   })
 })
 
+describe('Florence Nightingale and the dead who come back', () => {
+  it('takes the mark back with the death, so a later kill is not shown as saved', () => {
+    const base = fight(2, 2)
+    const unit = base.battle!.arena.find((candidate) => candidate.placedBy === CASH1981)!
+    const killed = unwrap(killArenaUnit(base, { playerId: CASH1981, arenaUnitId: unit.id }))
+    const { state, cardId } = holding(killed, 'Florence Nightingale', CASH1981)
+    const saved = unwrap(play(state, CASH1981, cardId))
+    expect(saved.battle!.arena.find((candidate) => candidate.id === unit.id)?.saved).toBe(true)
+    const revived = unwrap(killArenaUnit(saved, { playerId: CASH1981, arenaUnitId: unit.id }))
+    const again = revived.battle!.arena.find((candidate) => candidate.id === unit.id)!
+    expect(again.killed).toBe(false)
+    expect(again.saved).toBeUndefined()
+    const killedAgain = unwrap(killArenaUnit(revived, { playerId: CASH1981, arenaUnitId: unit.id }))
+    expect(killedAgain.battle!.arena.find((candidate) => candidate.id === unit.id)?.saved).toBeUndefined()
+  })
+
+  it('shows a saved unit that another unit has replaced on its front, also after End battle', () => {
+    const base = fight(2, 2)
+    const unit = base.battle!.arena.find((candidate) => candidate.placedBy === CASH1981)!
+    const killed = unwrap(killArenaUnit(base, { playerId: CASH1981, arenaUnitId: unit.id }))
+    // The unit has been replaced: it sits in departedUnits, not in the arena
+    const replaced: GameState = {
+      ...killed,
+      battle: {
+        ...killed.battle!,
+        arena: killed.battle!.arena.filter((candidate) => candidate.id !== unit.id),
+        departedUnits: [...killed.battle!.departedUnits, killed.battle!.arena.find((candidate) => candidate.id === unit.id)!],
+      },
+    }
+    const { state, cardId } = holding(replaced, 'Florence Nightingale', CASH1981)
+    const saved = unwrap(play(state, CASH1981, cardId))
+    const over = unwrap(endBattleAction(saved, { playerId: CASH1981 }))
+    const view = toPlayerView(over, KARANDRAS1).lastBattle!
+    expect(view.savedDeparted).toHaveLength(1)
+    expect(view.savedDeparted[0]).toMatchObject({ side: 'attacker', killed: true, saved: true })
+    // A casualty the card did not save is not listed
+    expect(toPlayerView(unwrap(endBattleAction(replaced, { playerId: CASH1981 })), KARANDRAS1).lastBattle!.savedDeparted).toHaveLength(0)
+  })
+})
+
 describe('after the battle, and against barbarians', () => {
   it('does not bring an undone card bonus back with Undo end battle', () => {
     const base = withStat(fight(2, 2), KARANDRAS1, 'culture', 5)

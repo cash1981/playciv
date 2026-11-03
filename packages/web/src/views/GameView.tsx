@@ -1571,10 +1571,13 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
       card.status === 'ready' &&
       (myCombatant || (battle === null && card.name === NIGHTINGALE)),
   )
-  const sunTzuAvailable =
-    myCombatant &&
-    (view.you?.items ?? []).some((item) => item.kind === 'greatperson' && item.name === SUN_TZU) &&
-    !(battle?.sunTzu ?? []).includes(myId)
+  const sunTzuCard = (view.you?.items ?? []).find((item) => item.kind === 'greatperson' && item.name === SUN_TZU)
+  const sunTzuAvailable = myCombatant && sunTzuCard !== undefined && !(battle?.sunTzu ?? []).includes(myId)
+  // The engine refuses the pass while every figure of the card's type is blockaded
+  const sunTzuBlockaded =
+    sunTzuCard?.kind === 'greatperson' &&
+    sunTzuCard.type !== null &&
+    (view.you?.blockadedGreatPersonTypes ?? []).includes(sunTzuCard.type)
 
   // Next free position on my side (for click-to-place fallback). A front
   // held only by a killed unit is reinforceable — offer it first, rather
@@ -1819,9 +1822,11 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
             {sunTzuAvailable && (
               <button
                 className="small"
-                disabled={busy || noMutations || (view.you?.stats.trade ?? 0) < SUN_TZU_COST || battle.turn !== mySideInBattle}
+                disabled={busy || noMutations || sunTzuBlockaded || (view.you?.stats.trade ?? 0) < SUN_TZU_COST || battle.turn !== mySideInBattle}
                 title={
-                  battle.turn === mySideInBattle
+                  sunTzuBlockaded
+                    ? 'Sun Tzu: every General figure of yours is blockaded'
+                    : battle.turn === mySideInBattle
                     ? `Sun Tzu: spend ${SUN_TZU_COST} trade to pass your turn instead of playing a unit, once per battle`
                     : 'Sun Tzu: pass on your own battle turn'
                 }
@@ -1840,6 +1845,8 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               </button>
             )}
           </div>
+
+          <SavedCasualties units={(battle?.departedUnits ?? []).filter((u) => u.killed && u.saved === true)} />
 
           {/* Summary bar */}
           {battleSummary.length > 0 && (
@@ -1919,6 +1926,16 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 }
 
 /** "Karandras1 won with 7 HP vs 5 HP", the same scores the log line gives. */
+/** The units Florence Nightingale saved that no longer stand in the arena, since another unit took their front. */
+function SavedCasualties({ units }: { readonly units: readonly ArenaUnit[] }): React.JSX.Element | null {
+  if (units.length === 0) return null
+  return (
+    <p className="saved-casualties" aria-label="Saved casualties">
+      <span className="tag revealed">SAVED</span> Replaced on their front: {units.map((u) => `${itemName(u.unit)} (${u.side})`).join(', ')}
+    </p>
+  )
+}
+
 function lastBattleResult(lastBattle: LastBattleView): string {
   const winner = lastBattle.summary.find((s) => s.side === lastBattle.winner)
   const loser = lastBattle.summary.find((s) => s.side !== lastBattle.winner)
@@ -1988,6 +2005,7 @@ function EndedBattleArena({ lastBattle, gameId, rev, run }: EndedBattleArenaProp
         {row('attacker')}
         {row('defender')}
       </div>
+      <SavedCasualties units={lastBattle.savedDeparted ?? []} />
     </div>
   )
 }

@@ -337,6 +337,13 @@ function hasVitals(unit: ArenaUnit, vitals: ArenaVitals): boolean {
  * toggle or face-off is a newer decision and stays. The displaced unit comes
  * back only to an empty front.
  */
+/** Taking a death back also takes Florence Nightingale's mark back: it applies to the deaths there were when she was played. */
+function revived(unit: ArenaUnit): ArenaUnit {
+  if (unit.killed || unit.saved === undefined) return unit
+  const { saved: _saved, ...rest } = unit
+  return rest
+}
+
 function undoArrival(
   arena: readonly ArenaUnit[],
   departedUnits: readonly ArenaUnit[],
@@ -349,7 +356,7 @@ function undoArrival(
   let nextArena = arena.map((u): ArenaUnit => {
     if (u.id === unit.id) {
       const restored = faceOff !== null && hasVitals(u, faceOff.selfAfter) ? faceOff.selfBefore : vitalsOf(u)
-      return { ...u, ...restored, arrival: null }
+      return revived({ ...u, ...restored, arrival: null })
     }
     if (
       faceOff !== null &&
@@ -357,7 +364,7 @@ function undoArrival(
       u.position === unit.position &&
       hasVitals(u, faceOff.opponentAfter)
     ) {
-      return { ...u, ...faceOff.opponentBefore }
+      return revived({ ...u, ...faceOff.opponentBefore })
     }
     return u
   })
@@ -867,7 +874,7 @@ export function killArenaUnit(
   }
 
   const killed = !arenaUnit.killed
-  const updatedUnit: ArenaUnit = { ...arenaUnit, killed }
+  const updatedUnit: ArenaUnit = revived({ ...arenaUnit, killed })
 
   // Both directions of the toggle recognize each other as "the same
   // adjustment" so kill/undo/kill/undo in a row collapses to one line —
