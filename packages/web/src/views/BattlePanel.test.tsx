@@ -493,6 +493,30 @@ describe('BattlePanel battle cards', () => {
     expect((getByText('Pass with Sun Tzu (3 trade)') as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('disables the Sun Tzu pass while every General figure is blockaded', () => {
+    const { getByText } = render(
+      <BattlePanel
+        gameId="game"
+        busy={false}
+        run={run}
+        view={battleView(attacking, { items: [sunTzu], stats: { trade: 5 }, blockadedGreatPersonTypes: ['General'] })}
+      />,
+    )
+    fireEvent.click(getByText('Battle'))
+    const button = getByText('Pass with Sun Tzu (3 trade)') as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(button.title).toContain('blockaded')
+  })
+
+  it('lists a saved unit that another unit replaced on its front', () => {
+    const departed = { id: 'a-1', side: 'attacker', position: 0, unit: infantry, attack: 1, health: 0, placedBy: 'me', rotation: 0, killed: true, saved: true, arrival: null }
+    const { getByText, container } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView({ ...attacking, arena: [], departedUnits: [departed] }, {})} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(container.querySelector('[aria-label="Saved casualties"]')?.textContent).toContain('SAVED')
+  })
+
   it('disables the Sun Tzu pass without 3 trade', () => {
     const { getByText } = render(
       <BattlePanel gameId="game" busy={false} run={run} view={battleView(attacking, { items: [sunTzu], stats: { trade: 2 } })} />,
@@ -542,6 +566,13 @@ describe('BattlePanel Zhukov', () => {
     expect(queryAllByText(/^Wound /)).toHaveLength(1)
     fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
     expect(api.zhukovWound).toHaveBeenCalledWith('game', 'd1', 4)
+  })
+
+  it('disables the wounds while every General figure is blockaded', () => {
+    const blockaded = { ...zhukovView([entry], true), you: { ...zhukovView([entry], true).you, blockadedGreatPersonTypes: ['General'] } } as unknown as PlayerView
+    const { getByText, queryAllByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={blockaded} />)
+    fireEvent.click(getByText('Battle'))
+    expect((queryAllByText(/^Wound /)[0] as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('offers nothing when no wound is owed, or he was not played', () => {

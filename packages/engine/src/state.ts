@@ -1731,7 +1731,7 @@ export interface PlayerView {
  * face up in the arena while the battle ran; what is new is that their cards
  * are now back in hidden hands. So no id survives: card, slot and battle ids
  * and the card's log number would let a viewer follow those cards in the hand
- * and the log. Departed units were never shown and are left out.
+ * and the log. Departed units are left out, except the ones Florence Nightingale saved (`savedDeparted`).
  */
 export interface LastBattleView {
   readonly endedBy: string
@@ -1741,6 +1741,8 @@ export interface LastBattleView {
   readonly winner: BattleSideId | null
   /** Every unit has `id` and `unit.id` set to `<side>-<position>`, `itemNumber` 0 and no arrival. */
   readonly arena: readonly ArenaUnit[]
+  /** The units Florence Nightingale saved that another unit had replaced on their front, so none is in the arena. */
+  readonly savedDeparted: readonly ArenaUnit[]
 }
 
 /** The winner by remaining HP plus combat bonus; a draw goes to the defender. */
@@ -1765,6 +1767,12 @@ function lastBattleOf(state: GameState): LastBattleView | null {
       const id = `${u.side}-${u.position}`
       return { ...u, id, unit: { ...u.unit, id, itemNumber: 0 }, arrival: null }
     }),
+    savedDeparted: ended.battle.departedUnits
+      .filter((u) => u.killed && u.saved === true)
+      .map((u, index): ArenaUnit => {
+        const id = `${u.side}-departed-${index}`
+        return { ...u, id, unit: { ...u.unit, id, itemNumber: 0 }, arrival: null }
+      }),
   }
 }
 
