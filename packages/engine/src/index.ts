@@ -46,6 +46,8 @@ export * from './culture-track.js'
 export * from './log.js'
 export * from './assisted.js'
 export { playableCardsOf } from './assisted-cards.js'
+export { KING_NAME, TWAIN_NAME, cancelWithTwain, twainRecordOf, twainTargetsOf } from './twain.js'
+export type { TwainInput, TwainTarget } from './twain.js'
 export { boardTokensOf, mapTokensOf } from './zheng-he.js'
 export type { BoardToken, MapToken } from './zheng-he.js'
 export {

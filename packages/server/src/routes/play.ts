@@ -25,6 +25,7 @@ import {
   RESOURCE_KINDS,
   UNIT_TYPES,
   WONDER_ASSET_IDS,
+  cancelWithTwain,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -58,6 +59,7 @@ import {
   purchaseCoin,
   setPlayerStat,
   setPlayerGovernment,
+  twainRecordOf,
   setPyramidPlacementSlot,
   setTechSlot,
   tradeToPlayer,
@@ -1106,6 +1108,59 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   // -------------------------------------------------------------------------
   // Undo
   // -------------------------------------------------------------------------
+
+  /**
+   * Mark Twain (#301): cancels another player's city action or culture event and rewinds the game to just before
+   * it. The engine is pure, so the state before the action is read here from the stored revisions: the revision
+   * that wrote the action's log line, and the one before it. If anybody but the action's player has saved a
+   * revision since, the rewind would erase their action and is refused.
+   */
+  app.post('/api/games/:gameId/twain', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const logId = requireString(body, 'logId')
+    if (logId === undefined || !REQUEST_ID.test(logId)) return sendError(c, 400, 'BAD_REQUEST', 'logId is required')
+    const clientRev = optionalNumber(body, 'rev')
+    if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
+    }
+    const game = await context.repo.findGame(gameId)
+    if (game === undefined) return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    if (clientRev !== undefined && clientRev !== game.rev) {
+      return sendError(c, 409, 'CONFLICT', `Game was modified concurrently (expected rev ${clientRev}, got ${game.rev}). Reload and retry.`)
+    }
+    const record = twainRecordOf(game, logId)
+    if (record === undefined) return sendError(c, 400, 'BAD_REQUEST', 'That action cannot be cancelled.')
+
+    const revisions = [...(await context.repo.listGameRevisionSummaries(gameId))].sort((a, b) => a.revision - b.revision)
+    const at = revisions.findIndex((revision) => revision.logIds.includes(logId))
+    const before = at > 0 ? revisions[at - 1] : undefined
+    if (at < 0 || before === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'The game before that action is not in the history, so it cannot be rewound.')
+    }
+    if (revisions.slice(at + 1).some((revision) => revision.actor.playerId !== record.playerId)) {
+      return sendError(c, 409, 'CONFLICT', 'Another player has acted since, and the rewind would erase their action.')
+    }
+    const earlier = (await context.repo.findGameRevision(gameId, before.revision))?.state
+    if (earlier === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'The game before that action could not be restored.')
+    }
+    const holderId = currentPlayer(c).id
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => {
+        const cancelled = cancelWithTwain(state, earlier, { holderId, logId, at: new Date().toISOString() })
+        return cancelled.ok
+          ? cancelled
+          : { ok: false, error: { kind: 'ASSISTED_ACTION_REJECTED', action: 'playCard', status: 'unavailable', reason: cancelled.error } }
+      },
+      // The revisions were read at this revision: the rewind is built on exactly that game
+      clientRev ?? game.rev,
+      { description: 'Cancelled an action with Mark Twain' },
+    )
+  })
 
   /** Java: `GameResource.undoItem` — PUT /{pbfId}/undo/{gameLogId}. */
   app.post('/api/games/:gameId/undo/:logId', auth, async (c) => {

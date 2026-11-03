@@ -177,6 +177,9 @@ function initiateAssistedUndo(
   if (record.status === 'undone') {
     return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: input.logId })
   }
+  if (record.status === 'cancelled') {
+    return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: input.logId, reason: 'That action was cancelled with Mark Twain, so it cannot be undone.' })
+  }
   if (entry.undo !== null) {
     return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
   }
@@ -273,6 +276,9 @@ function voteOnAssisted(
   }
   if (record.status === 'undone') {
     return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: input.logId })
+  }
+  if (record.status === 'cancelled') {
+    return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: input.logId, reason: 'That action was cancelled with Mark Twain, so it cannot be undone.' })
   }
 
   const undo = castVote(entry.undo, input.playerId, input.vote)

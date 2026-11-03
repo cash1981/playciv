@@ -268,6 +268,21 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Person counting) and a tech already moved by hand is not offered. The public line says only that a tech was placed
   one level lower, as the tech may be hidden; the player's own log names it. Undo puts the tech back in its row and
   is refused when the tech has been moved again or removed.
+- Mark Twain (human, 2026-11-03, #301; design notes on the issue) cancels another player's city action or culture
+  event by rewinding the game to just before it (`twain.ts`, `POST /api/games/:id/twain`). Everything after the
+  action is lost, and the player redoes it. The engine is given the earlier state; the server reads it from the
+  stored revisions (the one before the revision that wrote the action's log line) and refuses when anybody but
+  the action's player has saved a revision since, or written a log line since. Private notes, the log secret and
+  the random sequence are kept from the current game, so the decks the later actions drew from are shuffled from
+  a sequence the player has not seen. The cancelled action stays on the record as `status: 'cancelled'` (not
+  undoable), which counts as its city's action of the turn: another action of that city is asked about like any
+  second action, and the culture a devotion gave is gone with the rewind. A cancelled culture event is discarded,
+  not returned to the hand, and Mark Twain is discarded. Only an action of the player's open phase in the
+  current turn can be cancelled, never one's own. Cannot be cancelled: the city actions of a player with a
+  faceup Dr. Martin Luther King (his Humanitarian figures not all blockaded), Jerry Garcia's devotion and a city
+  action that used Ada Lovelace's extra action (the cards say so). A resource ability is not logged, so it is not
+  on the list; the card form's last option only logs the play, as before, and the players undo by vote.
+  Dr. Martin Luther King is a passive card the player makes faceup with Use; he already gave immunity to Anarchy.
 - Zheng He (human, #301) writes one private line for each hut or village piece on a map
   square (square and name) and for each hut or village item another player holds. The
   pieces on the map are anonymous and a draw takes the top card, so the look fixes the

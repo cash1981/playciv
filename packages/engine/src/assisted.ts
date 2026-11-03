@@ -1922,6 +1922,9 @@ export function reverseAssistedAction(
   if (record.status === 'undone') {
     return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: record.logId })
   }
+  if (record.status === 'cancelled') {
+    return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: 'That action was cancelled with Mark Twain, so it cannot be undone.' })
+  }
   const definition = definitionOf(record.kind)
   const player = playerOf(state, record.playerId)
   if (definition === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })

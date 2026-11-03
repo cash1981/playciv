@@ -84,6 +84,8 @@ export function PlayCardControl({
   const [coinSource, setCoinSource] = useState('')
   const [substitute, setSubstitute] = useState('')
   const [teslaTech, setTeslaTech] = useState('')
+  // Mark Twain: the log line of the action to cancel, '' for an action that is only logged (a resource ability)
+  const [twainLog, setTwainLog] = useState('')
   const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
   const [convertAmount, setConvertAmount] = useState('')
   const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
@@ -123,6 +125,9 @@ export function PlayCardControl({
   const tesla = card.tesla ?? null
   const chosenTesla =
     tesla === null ? '' : (tesla.find((choice) => choice.name === teslaTech)?.name ?? (tesla.length === 1 ? (tesla[0]?.name ?? '') : ''))
+  // Mark Twain: the other players' actions he can cancel with a rewind; a refresh can take one away
+  const twain = card.twain ?? null
+  const twainTarget = twain === null ? undefined : twain.find((target) => target.logId === twainLog)
   const harborChoices = card.harbors ?? null
   // A live refresh can take a square away: only the ticked squares still on offer count
   const chosenHarborKeys =
@@ -299,6 +304,14 @@ export function PlayCardControl({
 
   const confirm = (): void => {
     if (!valid) return
+    // Mark Twain on a chosen action: the server rewinds the game to before it. Otherwise it is only logged
+    if (twainTarget !== undefined) {
+      void run(() => api.twainCancel(gameId, twainTarget.logId, view.rev)).then(() => {
+        setTwainLog('')
+        setOpen(false)
+      })
+      return
+    }
     sendPlay()
   }
 
@@ -663,6 +676,43 @@ export function PlayCardControl({
                 ))}
               </select>
             </label>
+          )}
+          {twain !== null && twain.length > 0 && (
+            <fieldset className="play-card-targets">
+              <legend>Which action do you cancel?</legend>
+              {twain.map((target) => (
+                <label key={target.logId} className="play-card-target">
+                  <input
+                    type="radio"
+                    name={`${formId}-twain`}
+                    checked={twainTarget?.logId === target.logId}
+                    disabled={disabled}
+                    onChange={() => setTwainLog(target.logId)}
+                  />{' '}
+                  {target.text}
+                </label>
+              ))}
+              <label className="play-card-target">
+                <input
+                  type="radio"
+                  name={`${formId}-twain`}
+                  checked={twainTarget === undefined}
+                  disabled={disabled}
+                  onChange={() => setTwainLog('')}
+                />{' '}
+                Something else, such as a resource ability (only logged, undo it with a vote)
+              </label>
+              {twainTarget !== undefined && (
+                <p className="muted">
+                  The game goes back to just before this action and {twainTarget.username} redoes what came after.
+                  {twainTarget.rolledBack.length > 0
+                    ? ` These ${twainTarget.rolledBack.length === 1 ? 'action is' : 'actions are'} lost: ${twainTarget.rolledBack.join(' · ')}.`
+                    : ''}{' '}
+                  {twainTarget.kind === 'city' ? 'The city has used its action for the turn.' : 'The event card is discarded.'}{' '}
+                  Mark Twain is discarded.
+                </p>
+              )}
+            </fieldset>
           )}
           {tesla !== null && (
             <fieldset className="play-card-targets">
