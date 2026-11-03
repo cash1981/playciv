@@ -36,6 +36,18 @@ export function forceOf(battle: Battle, side: BattleSideId): number {
   return [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side).length
 }
 
+/**
+ * The units a side has in the battle for Leonidas: the units drawn for it (the battlehand, or the barbarians), or the
+ * ones put in the arena if that is more. The battlehand is public, so both sides can count it before a unit is placed
+ * (human, 2026-11-03: 5 units against 3 is enough).
+ */
+export function unitsInBattle(state: GameState, battle: Battle, side: BattleSideId): number {
+  const sideOf = side === 'attacker' ? battle.attacker : battle.defender
+  const owner = state.players.find((candidate) => candidate.playerId === sideOf.playerId)
+  const drawn = owner === undefined ? 0 : sideOf.kind === 'barbarians' ? owner.barbarians.length : owner.battlehand.length
+  return Math.max(drawn, forceOf(battle, side))
+}
+
 /** The killed units of a side not yet saved, also the ones another unit has since replaced on their front. */
 const killedOf = (battle: Battle, side: BattleSideId): readonly ArenaUnit[] =>
   [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed && unit.saved !== true)
@@ -57,10 +69,10 @@ export function battleCardBlock(state: GameState, player: Playerhand, name: stri
       if ((battle.cardBonuses ?? []).some((bonus) => bonus.card === LEONIDAS && bonus.playerId === player.playerId)) {
         return 'Leonidas has already been played in this battle.'
       }
-      const own = forceOf(battle, side)
-      const theirs = forceOf(battle, other(side))
+      const own = unitsInBattle(state, battle, side)
+      const theirs = unitsInBattle(state, battle, other(side))
       if (own >= theirs) {
-        return `Leonidas needs fewer units than your opponent: you have played ${own}, they have played ${theirs}.`
+        return `Leonidas needs fewer units than your opponent: you have ${own}, they have ${theirs}.`
       }
       return undefined
     }

@@ -348,8 +348,9 @@ out by itself, recorded as `GameLogEntry.civSetup`:
 battle in any phase of the turn, and is listed in every phase tab and in the Battle panel (under the battlehand, above the ended arena, which can be tall); outside a battle it is
 `wrong-phase` ("Played during a battle."). The controller of the barbarians is no combatant for a card.
 
-- **Leonidas:** the defender only, with fewer units played (arena plus reinforced away, killed or not) than the
-  opponent. He need not be faceup: playing reveals him. He is kept, not discarded, adds +8 combat bonus until the
+- **Leonidas:** the defender only, with fewer units in the battle than the opponent: the units drawn for it (battlehand,
+  or the barbarians), or those put in the arena (arena plus reinforced away, killed or not) if that is more; so he is
+  ready as soon as the battlehands are drawn (human, 2026-11-03: 5 against 3). He need not be faceup: playing reveals him. He is kept, not discarded, adds +8 combat bonus until the
   battle ends (`Battle.cardBonuses`, counted in `combatBonus` and so in the winner) and works once per battle, again in
   the next. Played after the last unit and before End battle; after End battle, Undo end battle first.
 - **Joan of Arc:** the defender only, discarded, adds the unspent culture the player has when playing it (the culture

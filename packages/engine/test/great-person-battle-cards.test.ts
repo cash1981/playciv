@@ -120,6 +120,22 @@ describe('Leonidas', () => {
     expect(more.status).toBe('wrong-phase')
   })
 
+  it('counts the units drawn for the battle, so he is ready before any unit is placed', () => {
+    let state = firstCivGame()
+    for (const [playerId, count] of [
+      [CASH1981, 5],
+      [KARANDRAS1, 3],
+    ] as const) {
+      for (let i = 0; i < count; i++) state = unwrap(draw(state, { playerId, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+      state = unwrap(drawUnitsForBattle(state, { playerId, numberOfDraws: count }))
+    }
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    expect(state.battle?.arena).toHaveLength(0)
+    expect(statusOf(holding(state, 'Leonidas', KARANDRAS1).state, KARANDRAS1, 'Leonidas').status).toBe('ready')
+    // The attacker never gets him, and the defender with the larger battlehand does not either
+    expect(statusOf(holding(state, 'Leonidas', CASH1981).state, CASH1981, 'Leonidas').status).toBe('wrong-phase')
+  })
+
   it('is refused for a player who is not in the battle', () => {
     const { state } = holding(fight(3, 2), 'Leonidas', ITCHI)
     expect(statusOf(state, ITCHI, 'Leonidas').reason).toBe('You are not fighting in this battle.')

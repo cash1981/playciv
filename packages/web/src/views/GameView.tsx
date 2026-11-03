@@ -1841,17 +1841,6 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
             )}
           </div>
 
-          {battleCards.length > 0 && (
-            <ul className="playable-cards battle-cards" aria-label="Battle cards">
-              {battleCards.map((card) => (
-                <li key={card.itemId} className="playable-card">
-                  <strong>{card.name}</strong>
-                  <PlayCardControl card={card} gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} />
-                </li>
-              ))}
-            </ul>
-          )}
-
           {/* Summary bar */}
           {battleSummary.length > 0 && (
             <div className="row battle-summary">
