@@ -32,8 +32,15 @@ export function gustavusSheetsOf(player: Playerhand): readonly SheetName[] {
   return flight ? ['INFANTRY', 'MOUNTED', 'ARTILLERY', 'AIRCRAFT'] : ['INFANTRY', 'MOUNTED', 'ARTILLERY']
 }
 
-/** The battle force Gustavus replaces: the units drawn for a battle and not placed in the arena. */
-export const gustavusForceOf = (player: Playerhand): readonly UnitItem[] => player.battlehand.filter((unit) => !unit.inBattle)
+/**
+ * The battle force Gustavus replaces: the units drawn for a battle and not placed in the arena, as they are in the
+ * hand. A battlehand entry whose card has left the hand (discarded by hand, which leaves the entry) is not one.
+ */
+export const gustavusForceOf = (player: Playerhand): readonly UnitItem[] =>
+  player.battlehand.flatMap((entry): readonly UnitItem[] => {
+    const held = player.items.find((item) => item.id === entry.id)
+    return held !== undefined && isUnit(held) && !held.inBattle && !entry.inBattle ? [held] : []
+  })
 
 /** How many units the card replaces and the decks it can build from. */
 export function gustavusChoiceOf(player: Playerhand): { readonly count: number; readonly sheets: readonly SheetName[] } {
@@ -132,7 +139,8 @@ export function undoGustavus(
   const drewIds = new Set(effect.drew.map((drew) => drew.itemId))
   const restoreIds = new Set(effect.discarded.map((unit) => unit.id))
   const holder = playerOf(state, player.playerId) ?? player
-  const returned = state.discardedItems.filter((item) => restoreIds.has(item.id)).filter(isUnit)
+  // The units as they were before the play, not the discard pile's facedown copies
+  const returned = effect.discarded
   let current: GameState = {
     ...withPlayerHand(state, {
       ...holder,

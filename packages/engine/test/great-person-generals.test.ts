@@ -15,7 +15,7 @@ import { performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
 import { zhukovOwed } from '../src/battle-cards.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import { findPlayer, toPlayerView } from '../src/state.js'
+import { findPlayer, toPlayerView, withPlayer } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
 import { withCardInHand } from './assisted-fixture.js'
@@ -295,5 +295,40 @@ describe('Gustavus Adolphus', () => {
     const seen = JSON.stringify(toPlayerView(after, KARANDRAS1).log)
     expect(seen).not.toContain('you built a')
     expect(seen).not.toContain('you discarded')
+  })
+})
+
+describe('Gustavus Adolphus and the hand', () => {
+  const drawn = () => {
+    let state = firstCivGame()
+    for (let i = 0; i < 2; i++) state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+    return unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
+  }
+
+  it('does not count a unit that was discarded by hand and left its battlehand entry behind', () => {
+    const state = drawn()
+    const gone = findPlayer(state, CASH1981)!.battlehand[0]!
+    const player = findPlayer(state, CASH1981)!
+    const handDiscarded = withPlayer(state, { ...player, items: player.items.filter((item) => item.id !== gone.id) })
+    const { state: held, cardId } = holding(handDiscarded, GUSTAVUS, CASH1981)
+    expect(statusOf(held, CASH1981, GUSTAVUS).gustavus?.count).toBe(1)
+    const after = unwrap(play(held, CASH1981, cardId, 'g1', ['MOUNTED']))
+    expect(after.discardedItems.filter((item) => item.id === gone.id)).toHaveLength(0)
+    expect(findPlayer(after, CASH1981)!.battlehand.filter((unit) => !unit.inBattle).map((unit) => unit.kind)).toContain('mounted')
+  })
+
+  it('puts a unit that was faceup back faceup when the play is undone', () => {
+    const state = drawn()
+    const player = findPlayer(state, CASH1981)!
+    const shown = player.battlehand[0]!
+    const revealed = withPlayer(state, {
+      ...player,
+      battlehand: player.battlehand.map((unit) => (unit.id === shown.id ? { ...unit, hidden: false } : unit)),
+      items: player.items.map((item) => (item.id === shown.id ? { ...item, hidden: false } : item)),
+    })
+    const { state: held, cardId } = holding(revealed, GUSTAVUS, CASH1981)
+    const undone = undoByVote(unwrap(play(held, CASH1981, cardId, 'g1', ['MOUNTED', 'MOUNTED'])), CASH1981, 'g1')
+    expect(findPlayer(undone, CASH1981)!.items.find((item) => item.id === shown.id)?.hidden).toBe(false)
+    expect(findPlayer(undone, CASH1981)!.battlehand.find((unit) => unit.id === shown.id)?.hidden).toBe(false)
   })
 })
