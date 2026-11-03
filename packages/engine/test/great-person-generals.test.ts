@@ -14,6 +14,7 @@ import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
 import { zhukovOwed } from '../src/battle-cards.js'
+import { itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView, withPlayer } from '../src/state.js'
 import type { GameState } from '../src/state.js'
@@ -226,8 +227,11 @@ describe('Gustavus Adolphus', () => {
     expect(fresh.map((unit) => unit.kind).sort()).toEqual(['artillery', 'mounted'])
     expect(fresh.every((unit) => player.items.some((item) => item.id === unit.id))).toBe(true)
     const lines = after.log.filter((entry) => entry.playerId === CASH1981 && entry.privateLog.startsWith('Gustavus Adolphus'))
-    expect(lines).toHaveLength(3)
-    expect(after.log.find((entry) => entry.assistedActionId === 'g1')?.publicLog).toContain('building 2 units')
+    expect(lines).toHaveLength(2)
+    for (const [index, unit] of fresh.entries()) expect(lines[index]?.privateLog).toBe(`Gustavus Adolphus: you built ${itemName(unit)}`)
+    const said = after.log.find((entry) => entry.assistedActionId === 'g1')?.publicLog
+    const thrown = waiting.map((id) => itemName(after.discardedItems.find((item) => item.id === id)!)).join(', ')
+    expect(said).toContain(`discarding ${thrown} from the battle force and building 2 units`)
   })
 
   it('works before any battle', () => {
@@ -293,8 +297,10 @@ describe('Gustavus Adolphus', () => {
     const { state, cardId } = base()
     const after = unwrap(play(state, CASH1981, cardId, 'g1', ['MOUNTED', 'ARTILLERY']))
     const seen = JSON.stringify(toPlayerView(after, KARANDRAS1).log)
-    expect(seen).not.toContain('you built a')
-    expect(seen).not.toContain('you discarded')
+    expect(seen).not.toContain('you built')
+    for (const unit of findPlayer(after, CASH1981)!.battlehand.filter((entry) => !entry.inBattle)) {
+      expect(seen).not.toContain(itemName(unit))
+    }
   })
 })
 

@@ -12,7 +12,7 @@
 import { playerSideOf } from './battle-cards.js'
 import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
 import { playerOf, withPlayerHand } from './assisted-core.js'
-import { isUnit } from './item.js'
+import { isUnit, itemName } from './item.js'
 import type { Item, UnitItem } from './item.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
@@ -102,16 +102,15 @@ export function applyGustavus(
       battlehand: [...holder.battlehand, card],
     })
     drew.push({ itemId: card.id, sheetName })
-    const noun = SHEET_NOUN[sheetName] ?? 'unit'
-    lines.push(`Gustavus Adolphus: you built ${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun} unit, card number ${card.itemNumber}`)
+    lines.push(`Gustavus Adolphus: you built ${itemName(card)}`)
   }
 
   const units = `${count} unit${count === 1 ? '' : 's'}`
   return ok({
     state: next,
     effect: { discarded, drew },
-    said: `, discarding ${units} of the battle force and building ${units} for free`,
-    privateLines: [`Gustavus Adolphus: you discarded ${discarded.map((unit) => `${unit.kind} ${unit.itemNumber}`).join(', ')}`, ...lines],
+    said: `, discarding ${discarded.map(itemName).join(', ')} from the battle force and building ${units} for free`,
+    privateLines: lines,
   })
 }
 
