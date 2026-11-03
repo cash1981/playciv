@@ -403,6 +403,40 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], tech: 'Sanitation' })
   })
 
+  it('lets Mark Twain cancel a chosen action with a rewind, telling what is lost, or only log a play', async () => {
+    const cancel = vi.spyOn(api, 'twainCancel').mockResolvedValue({} as PlayerView)
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const twain = card({
+      name: 'Mark Twain',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'players', min: 0, max: 1 },
+      prompt: 'Whose action is cancelled? (optional)',
+      discards: true,
+      twain: [
+        {
+          logId: 'l1',
+          playerId: 'p2',
+          username: 'itchi',
+          kind: 'city',
+          text: 'itchi devoted a city to the arts',
+          rolledBack: ['itchi advanced on the culture track'],
+        },
+      ],
+    })
+    renderControl(viewWith([twain]), twain)
+    fireEvent.click(playButton('Mark Twain'))
+    // Nothing is chosen at first, so the play is only logged
+    fireEvent.click(screen.getByRole('radio', { name: /itchi devoted a city to the arts/ }))
+    expect(screen.getByText(/These action is lost|action is lost/)).toBeTruthy()
+    expect(screen.getByText(/itchi advanced on the culture track/)).toBeTruthy()
+    expect(screen.getByText(/The city has used its action for the turn/)).toBeTruthy()
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1))
+    expect(cancel.mock.calls[0]?.[1]).toBe('l1')
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const frida = card({

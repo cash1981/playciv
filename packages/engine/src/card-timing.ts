@@ -15,6 +15,7 @@
 
 import type { TurnPhase } from './turn.js'
 import type { TeslaChoice } from './tesla.js'
+import type { TwainTarget } from './twain.js'
 
 /** `ANY` is "Any Time"; `BATTLE` is played during a battle, which is no phase of the turn. */
 export type CardTiming = TurnPhase | 'BATTLE' | 'ANY'
@@ -242,6 +243,7 @@ export const PASSIVE_GREAT_PERSONS: ReadonlyMap<string, string> = new Map([
   ['Adam Smith', 'you have 1 extra coin while Adam Smith is faceup'],
   ['Susan B. Anthony', 'all of your cities produce 2 more hammers while Susan B. Anthony is faceup'],
   ['Louis Pasteur', 'your stacking limit is increased by 1 while Louis Pasteur is faceup'],
+  ['Dr. Martin Luther King', 'your city actions cannot be canceled, and you never need Anarchy, while Dr. Martin Luther King is faceup'],
   ['Archimedes', 'pays 3 culture after Research for each tech no other player has revealed'],
   ['Henry Ford', 'your travel speed is increased by 1 while Henry Ford is faceup'],
 ])
@@ -312,6 +314,8 @@ export interface PlayableCard {
   readonly gustavus?: { readonly count: number; readonly sheets: readonly string[] } | null
   /** The techs Nikola Tesla can place one level lower now, null for every other card. Own view only. */
   readonly tesla?: readonly TeslaChoice[] | null
+  /** Mark Twain: the actions of other players he can cancel with a rewind now, null for every other card. Public lines only. */
+  readonly twain?: readonly TwainTarget[] | null
   /** The squares Jacques Cousteau can put a free Harbor on, null for every other card. */
   readonly harbors?: readonly HarborChoice[] | null
   /** The culture cards in the viewer's own hand that Frida Kahlo may discard, null for every other card. Own view only. */

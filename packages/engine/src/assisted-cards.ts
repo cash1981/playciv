@@ -18,6 +18,7 @@ import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './ass
 import { cityActionsOf } from './city-actions.js'
 import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
 import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './gustavus.js'
+import { TWAIN_NAME, twainTargetsOf } from './twain.js'
 import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, undoTesla } from './tesla.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
@@ -206,6 +207,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
       gustavus: name === 'Gustavus Adolphus' ? gustavusChoiceOf(player) : null,
       tesla: name === TESLA_NAME ? teslaChoicesOf(state, player) : null,
+      twain: name === TWAIN_NAME ? twainTargetsOf(state, player) : null,
       cultureHand:
         name === FRIDA
           ? cultureCardsOf(player).map((card) => ({ itemId: card.id, name: itemName(card) }))

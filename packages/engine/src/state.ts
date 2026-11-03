@@ -982,7 +982,8 @@ export interface AssistedActionRecord {
   readonly at: string | null
   /** The public log line the action wrote. */
   readonly logId: string
-  readonly status: 'applied' | 'undone'
+  /** `cancelled`: Mark Twain cancelled it and the game was rewound to before it. The record stays, so the city has acted. */
+  readonly status: 'applied' | 'undone' | 'cancelled'
   readonly effect: AssistedEffect
   /** The Ada Lovelace play whose extra city action this record consumed. */
   readonly lovelaceCreditId?: string
@@ -1029,7 +1030,8 @@ export interface PublicAssistedAction {
   readonly username: string
   readonly turnNumber: number
   readonly phase: TurnPhase
-  readonly status: 'applied' | 'undone'
+  /** `cancelled`: Mark Twain cancelled it and the game was rewound to before it. The record stays, so the city has acted. */
+  readonly status: 'applied' | 'undone' | 'cancelled'
   /** The public log line, as it was written. */
   readonly text: string
   readonly logId: string
