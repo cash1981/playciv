@@ -87,6 +87,7 @@ export function PlayCardControl({
   const [convertAmount, setConvertAmount] = useState('')
   const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
   const [discardIds, setDiscardIds] = useState<readonly string[]>([])
+  const [unitChoices, setUnitChoices] = useState<readonly string[]>([])
   const [moveFrom, setMoveFrom] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveTo, setMoveTo] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [moveHint, setMoveHint] = useState<string | null>(null)
@@ -126,6 +127,15 @@ export function PlayCardControl({
   // A refresh can take a card out of the hand: only the ticked cards still there count
   const chosenDiscards =
     cultureHand === null ? [] : discardIds.filter((id) => cultureHand.some((held) => held.itemId === id))
+  // Gustavus Adolphus: one deck for each unit of the battle force, the first deck until another is chosen
+  const gustavus = card.gustavus ?? null
+  const chosenUnits =
+    gustavus === null
+      ? []
+      : Array.from({ length: gustavus.count }, (_, index) => {
+          const picked = unitChoices[index]
+          return picked !== undefined && gustavus.sheets.includes(picked) ? picked : (gustavus.sheets[0] ?? '')
+        })
   const isGalileo = card.name === GALILEO_NAME
   const cardMove = card.mapMove ?? null
   const isMapMove = isGalileo || cardMove !== null
@@ -246,7 +256,7 @@ export function PlayCardControl({
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -266,6 +276,7 @@ export function PlayCardControl({
                   .map((choice) => ({ cityPieceId: choice.cityPieceId, column: choice.column, row: choice.row })),
               }),
           ...(cultureHand === null ? {} : { discard: cultureHand.filter((held) => chosenDiscards.includes(held.itemId)).map((held) => held.itemId) }),
+          ...(gustavus === null ? {} : { units: chosenUnits }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
           ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
@@ -714,6 +725,33 @@ export function PlayCardControl({
                 )
               })}
               <p className="muted">You then draw back up to your culture hand size from the deck for the area your culture marker is in.</p>
+            </fieldset>
+          )}
+          {gustavus !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Which units do you build in their place?</legend>
+              {gustavus.count === 0 && <p className="muted">You have no units drawn for a battle.</p>}
+              {chosenUnits.map((choice, index) => (
+                <label key={index} className="play-card-target">
+                  Unit {index + 1}{' '}
+                  <select
+                    value={choice}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      setUnitChoices(chosenUnits.map((current, at) => (at === index ? event.target.value : current)))
+                    }
+                  >
+                    {gustavus.sheets.map((sheet) => (
+                      <option key={sheet} value={sheet}>
+                        {capitalized(sheet.toLowerCase())}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <p className="muted">
+                The units you have drawn for the battle and not placed are discarded, and the same number of new units of these types are drawn into your battlehand. Do it before the battle starts.
+              </p>
             </fieldset>
           )}
           <p className="muted play-card-note">

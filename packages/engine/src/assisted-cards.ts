@@ -16,7 +16,8 @@
 import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
-import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard } from './battle-cards.js'
+import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
+import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './gustavus.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
@@ -202,6 +203,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
             }
           : null,
       harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
+      gustavus: name === 'Gustavus Adolphus' ? gustavusChoiceOf(player) : null,
       cultureHand:
         name === FRIDA
           ? cultureCardsOf(player).map((card) => ({ itemId: card.id, name: itemName(card) }))
@@ -290,16 +292,19 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
     }
     // A card played in a battle is ready for a combatant while one is on, in any phase of the turn
     if (BATTLE_CARDS.has(name) && base.timings.includes('BATTLE')) {
-      const block = battleCardBlock(state, player, name)
+      // Gustavus works before the battle starts, on the units drawn for it, so no battle need be on
+      const block = name === 'Gustavus Adolphus' ? gustavusBlock(state, player) : battleCardBlock(state, player, name)
       return [
         block === undefined
           ? {
               ...base,
               status: 'ready' as const,
               reason:
-                state.battle === null
-                  ? 'Can be played on the battle that has just ended.'
-                  : 'Can be played in the battle you are fighting.',
+                name === 'Gustavus Adolphus'
+                  ? 'Can be played on the units you have drawn for a battle.'
+                  : state.battle === null
+                    ? 'Can be played on the battle that has just ended.'
+                    : 'Can be played in the battle you are fighting.',
             }
           : { ...base, status: 'wrong-phase' as const, reason: block },
       ]
@@ -373,6 +378,7 @@ interface Automated {
     | 'kurosawa'
     | 'zhengHe'
     | 'battleCard'
+    | 'gustavus'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -737,8 +743,19 @@ function automate(
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
       })
     }
+    case 'Gustavus Adolphus': {
+      const applied = applyGustavus(state, player, payload?.units)
+      if (!applied.ok) return err(applied.error)
+      return ok({
+        state: applied.value.state,
+        extra: { gustavus: applied.value.effect },
+        said: applied.value.said,
+        privateLines: applied.value.privateLines,
+      })
+    }
     case 'Leonidas':
     case 'Joan of Arc':
+    case 'Georgy Zhukov':
     case 'Florence Nightingale': {
       const applied = applyBattleCard(state, player, name, requestId)
       if (applied === undefined) return err(`${name} is played in a battle you are fighting.`)
@@ -1183,6 +1200,8 @@ export const playCard: AssistedActionDefinition = {
     const now = currentPhaseOf(state, player.playerId)
     const when = card.timings.includes('ANY')
       ? CARD_TIMING_TEXT.ANY
+      : card.name === 'Gustavus Adolphus' && state.battle === null
+        ? 'before a battle'
       : BATTLE_CARDS.has(card.name)
         ? CARD_TIMING_TEXT.BATTLE
         : CARD_TIMING_TEXT[now ?? 'SOT']
@@ -1216,7 +1235,7 @@ export const playCard: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} ${verb} ${card.name} (${when})` +
+        `${player.username} ${verb} ${card.name}${card.name === 'Gustavus Adolphus' ? ` item number #${item.itemNumber}` : ''} (${when})` +
         (resource === null ? '' : ` as ${resource}`) +
         aimed +
         (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : '') +
@@ -1294,6 +1313,10 @@ export const playCard: AssistedActionDefinition = {
       state.assistedActions.some((other) => other.status === 'applied' && other.kind === 'gianniniBuild' && other.playerId === record.playerId)
     ) {
       return blockedBy(`${effect.name} has already given a free building. Undo that building first.`)
+    }
+
+    if (effect.battleCard?.zhukov === true && zhukovDealt(state, record.id) > 0) {
+      return blockedBy(`${effect.name} has already dealt wounds in this battle, which cannot be taken back.`)
     }
 
     // What the game did besides logging goes first, checked before anything changes
@@ -1571,6 +1594,12 @@ export const playCard: AssistedActionDefinition = {
       hand = playerOf(current, player.playerId) ?? hand
     }
 
+    if (effect.gustavus !== undefined) {
+      const undone = undoGustavus(current, hand, effect.gustavus)
+      if (!undone.ok) return blockedBy(undone.error)
+      current = undone.value
+      hand = playerOf(current, player.playerId) ?? hand
+    }
     if (effect.battleCard !== undefined) current = undoBattleCard(current, effect.battleCard, record.id)
 
     // Akira Kurosawa's culture goes back from the holder, as far as it is still there

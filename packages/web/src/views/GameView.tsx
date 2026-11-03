@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { NIGHTINGALE, SUN_TZU, SUN_TZU_COST, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { NIGHTINGALE, SUN_TZU, SUN_TZU_COST, ZHUKOV, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType, zhukovOwed } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -1563,14 +1563,20 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   // Battle Great Persons I can play now, and Sun Tzu's pass once per battle (a barbarian controller is no combatant)
   const myCombatant = battle !== null && mySideInBattle !== null && battle[mySideInBattle].kind === 'player'
-  // Florence Nightingale is also played right after the battle (the ended battle's final arena), so she is listed
-  // with no battle on too
+  // Gustavus Adolphus is played before the battle, on the units drawn for it, and Florence Nightingale also right after it
+  // (the ended battle's final arena), so both are listed with no battle on too
   const battleCards = (view.you?.playableCards ?? []).filter(
     (card) =>
       card.timings.includes('BATTLE') &&
       card.status === 'ready' &&
-      (myCombatant || (battle === null && card.name === NIGHTINGALE)),
+      (myCombatant || (battle === null && (card.gustavus != null || card.name === NIGHTINGALE))),
   )
+  const zhukovOwedNow = battle !== null && myCombatant ? zhukovOwed(battle, myId) : 0
+  const generalsBlockaded = (view.you?.blockadedGreatPersonTypes ?? []).includes('General')
+  const zhukovTargets =
+    battle !== null && mySideInBattle !== null
+      ? battle.arena.filter((unit) => unit.side !== mySideInBattle && !unit.killed)
+      : []
   const sunTzuCard = (view.you?.items ?? []).find((item) => item.kind === 'greatperson' && item.name === SUN_TZU)
   const sunTzuAvailable = myCombatant && sunTzuCard !== undefined && !(battle?.sunTzu ?? []).includes(myId)
   // The engine refuses the pass while every figure of the card's type is blockaded
@@ -1845,6 +1851,26 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               </button>
             )}
           </div>
+
+          {zhukovOwedNow > 0 && (
+            <div className="row battle-zhukov" role="group" aria-label={`${ZHUKOV} wounds`}>
+              <strong>
+                {ZHUKOV}: deal {zhukovOwedNow} wound{zhukovOwedNow === 1 ? '' : 's'} to an enemy unit
+              </strong>
+              {zhukovTargets.length === 0 && <span className="muted">No living enemy unit is left.</span>}
+              {zhukovTargets.map((unit) => (
+                <button
+                  key={unit.id}
+                  className="small"
+                  disabled={busy || noMutations || generalsBlockaded}
+                  title={generalsBlockaded ? `${ZHUKOV}: every General figure of yours is blockaded` : undefined}
+                  onClick={() => runBattleAction(() => api.zhukovWound(gameId, unit.id, rev))}
+                >
+                  Wound {itemName(unit.unit)} (front {unit.position + 1}, {unit.health} HP)
+                </button>
+              ))}
+            </div>
+          )}
 
           <SavedCasualties units={(battle?.departedUnits ?? []).filter((u) => u.killed && u.saved === true)} />
 

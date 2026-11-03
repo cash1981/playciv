@@ -18,6 +18,7 @@ vi.mock('../lib/api.js', () => ({
     moveArenaUnit: vi.fn(),
     setArenaUnitStat: vi.fn(),
     sunTzuPass: vi.fn(),
+    zhukovWound: vi.fn(),
   },
 }))
 
@@ -430,6 +431,16 @@ describe('BattlePanel battle cards', () => {
     expect(list?.querySelector('button')?.textContent).toMatch(/Use|Play/)
   })
 
+  it('lists Gustavus Adolphus before any battle, since he works on the units drawn for it, and no other battle card', () => {
+    const gustavus = { ...leonidas, itemId: 'gp-3', name: 'Gustavus Adolphus', discards: true, gustavus: { count: 2, sheets: ['INFANTRY'] } }
+    const idle = { ...view, battle: null, you: { ...view.you, stats: { trade: 5 }, playableCards: [gustavus, leonidas] } } as unknown as PlayerView
+    const { getByText, container } = render(<BattlePanel gameId="game" busy={false} run={run} view={idle} />)
+    fireEvent.click(getByText('Battle'))
+    const list = container.querySelector('[aria-label="Battle cards"]')
+    expect(list?.textContent).toContain('Gustavus Adolphus')
+    expect(list?.textContent).not.toContain('Leonidas')
+  })
+
   it('lists the battle cards once, not again in the arena', () => {
     const { getByText, container } = render(
       <BattlePanel gameId="game" busy={false} run={run} view={battleView(attacking, { playableCards: [leonidas] })} />,
@@ -524,5 +535,53 @@ describe('BattlePanel battle cards', () => {
     )
     fireEvent.click(getByText('Battle'))
     expect(getByText('SAVED')).toBeTruthy()
+  })
+})
+
+describe('BattlePanel Zhukov', () => {
+  afterEach(() => cleanup())
+
+  const unit = (id: string, side: 'attacker' | 'defender', killed: boolean, position: number) => ({
+    id, side, position, unit: { ...infantry, id: `card-${id}` }, attack: 1, health: 3, placedBy: side === 'attacker' ? 'me' : 'other',
+    rotation: 0, killed, arrival: null,
+  })
+  const zhukovView = (zhukov: object[], killedOwn: boolean): PlayerView =>
+    ({
+      ...view,
+      you: { ...view.you, stats: { trade: 5 } },
+      battle: {
+        ...view.battle,
+        arena: [unit('a1', 'attacker', killedOwn, 0), unit('d1', 'defender', false, 1), unit('d2', 'defender', true, 2)],
+        zhukov,
+      },
+    }) as unknown as PlayerView
+  const entry = { playerId: 'me', deadIds: [], dealt: 0, actionId: 'x' }
+
+  it('offers a wound on each living enemy unit while one is owed, and sends the chosen unit', () => {
+    vi.mocked(api.zhukovWound).mockResolvedValue(view)
+    const { getByText, queryAllByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={zhukovView([entry], true)} />)
+    fireEvent.click(getByText('Battle'))
+    expect(getByText(/Georgy Zhukov: deal 1 wound to an enemy unit/)).toBeTruthy()
+    // The killed enemy unit is not offered
+    expect(queryAllByText(/^Wound /)).toHaveLength(1)
+    fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
+    expect(api.zhukovWound).toHaveBeenCalledWith('game', 'd1', 4)
+  })
+
+  it('disables the wounds while every General figure is blockaded', () => {
+    const blockaded = { ...zhukovView([entry], true), you: { ...zhukovView([entry], true).you, blockadedGreatPersonTypes: ['General'] } } as unknown as PlayerView
+    const { getByText, queryAllByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={blockaded} />)
+    fireEvent.click(getByText('Battle'))
+    expect((queryAllByText(/^Wound /)[0] as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('offers nothing when no wound is owed, or he was not played', () => {
+    const none = render(<BattlePanel gameId="game" busy={false} run={run} view={zhukovView([entry], false)} />)
+    fireEvent.click(none.getByText('Battle'))
+    expect(none.queryByText(/Georgy Zhukov: deal/)).toBeNull()
+    cleanup()
+    const unplayed = render(<BattlePanel gameId="game" busy={false} run={run} view={zhukovView([], true)} />)
+    fireEvent.click(unplayed.getByText('Battle'))
+    expect(unplayed.queryByText(/Georgy Zhukov: deal/)).toBeNull()
   })
 })

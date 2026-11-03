@@ -348,8 +348,9 @@ out by itself, recorded as `GameLogEntry.civSetup`:
 - `civSetup` is server-side like `item`: opponents get the public log form only.
 
 **Battle Great Persons** (issue #301; human 2026-11-02). A battle card is `ready` for a combatant of the active
-battle in any phase of the turn, and is listed in every phase tab and in the Battle panel (under the battlehand, above the ended arena, which can be tall); outside a battle it is
-`wrong-phase` ("Played during a battle."). The controller of the barbarians is no combatant for a card.
+battle in any phase of the turn, and is listed in every phase tab and in the Battle panel; outside a battle it is
+`wrong-phase` ("Played during a battle."), except Gustavus Adolphus below. The controller of the barbarians is no
+combatant for a card.
 
 - **Leonidas:** the defender only, with fewer units in the battle than the opponent: the units drawn for it (battlehand,
   or the barbarians), or those put in the arena (arena plus reinforced away, killed or not) if that is more; so he is
@@ -372,6 +373,27 @@ battle in any phase of the turn, and is listed in every phase tab and in the Bat
   player's own battle turn only (the turn itself stays advisory in the engine). A card still being chosen between is
   refused. It is left out of the list of playable cards. The arena has no assisted undo, so the trade is
   corrected by hand.
+- **Georgy Zhukov:** either combatant; played (revealed, kept) once per battle (`Battle.zhukov`). A wound is owed for
+  each of the player's units killed that was not already dead when the card was played (derived from the ids dead then,
+  minus the wounds dealt; a kill taken back after a wound was dealt leaves that wound dealt). The human: it is a
+  manual activation and the player picks the unit; with no enemy unit in the arena nothing happens. The Battle panel then offers a
+  wound on each living enemy unit (`zhukovWound`, `POST /battle/arena/zhukov`): -1 health, a unit at 0 is killed,
+  which can earn the other side a wound if it played Zhukov too. The play cannot be undone once a wound was dealt; the
+  wound itself has no undo (health is corrected by hand).
+- **Gustavus Adolphus** (human 2026-11-02: "Gustavus skjer før kampen starter. Du bare discarder unitene du har trukket
+  for å få muligheten til å trekke nye i en annen type"; no link to Zhukov): played before the battle, with or without
+  a battle on (then only by a combatant), on the units drawn for it and not placed in an arena (the battlehand, not
+  `inBattle`). They go to the discard pile and one new unit card is drawn into the hand and the battlehand for each,
+  from the deck the player chose (the form sends `units`: infantry, mounted, artillery, and aircraft only with
+  Flight). The arena is not touched. The public line names the card with its item number, each discarded unit in full
+  with its item number ("Artillery 3.1 item number #54": a discard is open information) and each built unit by type
+  and item number only ("Infantry item number #61": a built card is hidden, so no strength or health; human
+  2026-11-03, to make it easy to keep track). The player's own log repeats them with the full names, one line for the
+  discards and one for each unit built. Undo
+  returns it while the new cards are still free in the hand and the discarded ones in the discard pile (the new cards
+  go back into their decks, which are reshuffled); never once a new unit has been in the arena while that battle is
+  the active or the set-aside one. Listed in the Battle panel, under the battlehand (above the ended arena, which can be tall), and in the phase
+  tabs, also with no battle on.
 - Undo of a battle card play (vote) takes the bonus or the mark back from the battle on now, or from the one End battle
   has set aside (so Undo end battle does not bring it back); once that battle is gone only the card returns.
 

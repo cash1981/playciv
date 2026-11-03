@@ -13,6 +13,8 @@ export const LEONIDAS = 'Leonidas'
 export const JOAN_OF_ARC = 'Joan of Arc'
 export const NIGHTINGALE = 'Florence Nightingale'
 export const SUN_TZU = 'Sun Tzu'
+export const ZHUKOV = 'Georgy Zhukov'
+export const GUSTAVUS = 'Gustavus Adolphus'
 
 /** What Leonidas adds to the combat bonus (card text). */
 export const LEONIDAS_BONUS = 8
@@ -20,7 +22,7 @@ export const LEONIDAS_BONUS = 8
 export const SUN_TZU_COST = 3
 
 /** The cards `applyBattleCard` carries out. */
-export const BATTLE_CARDS: ReadonlySet<string> = new Set([LEONIDAS, JOAN_OF_ARC, NIGHTINGALE])
+export const BATTLE_CARDS: ReadonlySet<string> = new Set([LEONIDAS, JOAN_OF_ARC, NIGHTINGALE, ZHUKOV, GUSTAVUS])
 
 const other = (side: BattleSideId): BattleSideId => (side === 'attacker' ? 'defender' : 'attacker')
 
@@ -48,9 +50,27 @@ export function unitsInBattle(state: GameState, battle: Battle, side: BattleSide
   return Math.max(drawn, forceOf(battle, side))
 }
 
-/** The killed units of a side not yet saved, also the ones another unit has since replaced on their front. */
+/** The killed units of a side that Nightingale can still save, also the ones another unit has since replaced on their front. */
 const killedOf = (battle: Battle, side: BattleSideId): readonly ArenaUnit[] =>
   [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed && unit.saved !== true)
+
+/** The ids of every unit of a side that has been killed, saved or not. */
+const killedIdsOf = (battle: Battle, side: BattleSideId): readonly string[] =>
+  [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === side && unit.killed).map((unit) => unit.id)
+
+/** Zhukov's wounds the player has earned and not yet dealt: their units killed since the card was played. */
+export function zhukovOwed(battle: Battle, playerId: string): number {
+  const entry = (battle.zhukov ?? []).find((candidate) => candidate.playerId === playerId)
+  const side = playerSideOf(battle, playerId)
+  if (entry === undefined || side === null) return 0
+  return Math.max(0, killedIdsOf(battle, side).filter((id) => !entry.deadIds.includes(id)).length - entry.dealt)
+}
+
+/** The wounds Zhukov has dealt for the card play `actionId`, in the battle on now or the one set aside. */
+export function zhukovDealt(state: GameState, actionId: string): number {
+  const entries = [...(state.battle?.zhukov ?? []), ...(state.endedBattle?.battle.zhukov ?? [])]
+  return entries.find((entry) => entry.actionId === actionId)?.dealt ?? 0
+}
 
 /**
  * Why the player cannot play a battle card now, or `undefined` when they can. Leonidas and Joan of Arc are for the
@@ -80,6 +100,10 @@ export function battleCardBlock(state: GameState, player: Playerhand, name: stri
       if (side !== 'defender') return 'Joan of Arc can be played only by the defender.'
       if (player.stats.culture <= 0) return 'You have no unspent culture for Joan of Arc to add.'
       return undefined
+    case ZHUKOV:
+      return (battle.zhukov ?? []).some((entry) => entry.playerId === player.playerId)
+        ? 'Georgy Zhukov has already been played in this battle.'
+        : undefined
     case NIGHTINGALE:
       return killedOf(battle, side).length === 0 ? 'None of your units has been killed in this battle.' : undefined
     default:
@@ -92,6 +116,7 @@ export interface BattleCardEffect {
   readonly battleId: string
   readonly bonus?: number
   readonly saved?: readonly string[]
+  readonly zhukov?: boolean
 }
 
 export interface AppliedBattleCard {
@@ -127,6 +152,14 @@ export function applyBattleCard(
   if (battle === null) return undefined
   const side = playerSideOf(battle, player.playerId)
   if (side === null) return undefined
+  if (name === ZHUKOV) {
+    const entry = { playerId: player.playerId, deadIds: killedIdsOf(battle, side), dealt: 0, actionId }
+    return {
+      state: { ...state, battle: { ...battle, zhukov: [...(battle.zhukov ?? []), entry] } },
+      effect: { battleId: battle.id, zhukov: true },
+      said: ', dealing 1 wound to an enemy unit each time one of their units is killed from now on',
+    }
+  }
   const amount = name === LEONIDAS ? LEONIDAS_BONUS : name === JOAN_OF_ARC ? player.stats.culture : undefined
   if (amount === undefined) return undefined
   const cardBonuses = [...(battle.cardBonuses ?? []), { playerId: player.playerId, card: name, amount, actionId }]
@@ -150,6 +183,7 @@ function withoutCard(battle: Battle, effect: BattleCardEffect, actionId: string)
     arena: battle.arena.map(clear),
     departedUnits: battle.departedUnits.map(clear),
     cardBonuses: (battle.cardBonuses ?? []).filter((bonus) => bonus.actionId !== actionId),
+    zhukov: (battle.zhukov ?? []).filter((entry) => entry.actionId !== actionId),
   }
 }
 

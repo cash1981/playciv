@@ -726,6 +726,12 @@ export type AssistedEffect =
         readonly battleId: string
         readonly bonus?: number
         readonly saved?: readonly string[]
+        readonly zhukov?: boolean
+      }
+      /** Gustavus Adolphus: what the card discarded and drew, so an undo can put it back. Never projected. */
+      readonly gustavus?: {
+        readonly discarded: readonly UnitItem[]
+        readonly drew: readonly { readonly itemId: string; readonly sheetName: SheetName }[]
       }
       /** A movement culture card: the source and destination, and each moved figure. */
       readonly cardMove?: {

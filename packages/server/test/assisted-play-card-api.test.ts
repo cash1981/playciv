@@ -204,6 +204,9 @@ describe('playing a card through the actions route', () => {
     for (const discard of ['card-1', [1], [null], ['bad id!'], Array.from({ length: 21 }, (_, index) => `card-${index}`), { 0: 'card-1' }]) {
       expect((await send({ itemId: t.itemId, targets: [], discard })).status).toBe(400)
     }
+    for (const units of ['INFANTRY', [1], [''], [null], Array.from({ length: 13 }, () => 'INFANTRY'), { 0: 'INFANTRY' }]) {
+      expect((await send({ itemId: t.itemId, targets: [], units })).status).toBe(400)
+    }
     expect((await send({ itemId: t.itemId, targets: [], extra: 1 })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [] }, { family: 'x' })).status).toBe(400)
     // A field of the body that no action reads is refused too, not ignored

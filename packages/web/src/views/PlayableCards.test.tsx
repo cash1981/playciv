@@ -355,6 +355,29 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], harbors: [{ cityPieceId: 'p1', column: 5, row: 0 }] })
   })
 
+  it('lets Gustavus Adolphus choose a unit deck for each unit of the battle force and sends them', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const gustavus = card({
+      name: 'Gustavus Adolphus',
+      kind: 'greatPerson',
+      timings: ['BATTLE'],
+      targets: { kind: 'none' },
+      prompt: '',
+      discards: true,
+      gustavus: { count: 3, sheets: ['INFANTRY', 'MOUNTED', 'ARTILLERY'] },
+    })
+    renderControl(viewWith([gustavus]), gustavus)
+    fireEvent.click(playButton('Gustavus Adolphus'))
+    const selects = screen.getAllByRole('combobox') as HTMLSelectElement[]
+    expect(selects).toHaveLength(3)
+    expect(selects.map((select) => select.value)).toEqual(['INFANTRY', 'INFANTRY', 'INFANTRY'])
+    fireEvent.change(selects[1] as HTMLSelectElement, { target: { value: 'MOUNTED' } })
+    fireEvent.change(selects[2] as HTMLSelectElement, { target: { value: 'ARTILLERY' } })
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], units: ['INFANTRY', 'MOUNTED', 'ARTILLERY'] })
+  })
+
   it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const frida = card({

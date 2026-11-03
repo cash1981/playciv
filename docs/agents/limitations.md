@@ -68,4 +68,8 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Leonidas and Joan of Arc cannot be played after End battle (Florence Nightingale can); the ender can Undo end battle,
   play the card and end again. Sun Tzu's pass has no undo (the trade is corrected by hand).
 - Florence Nightingale marks the units killed at the time she is played; a unit killed later is not saved.
-- Zhukov and Gustavus Adolphus are still only logged when discarded.
+- Zhukov's wound has no undo, and a kill taken back after a wound was dealt leaves that wound dealt (the next real
+  kill then earns none). He is counted from the moment he is played; units dead before are not owed.
+- Gustavus Adolphus counts "unlocked" as the unit decks infantry, mounted and artillery, and aircraft with Flight; unit
+  levels are not checked. The battlehand is not emptied by End battle (only by Reveal battlehand or a new draw), so
+  with no battle on Gustavus also counts units that fought and came back to it; reveal the battlehand first.

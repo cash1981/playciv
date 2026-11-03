@@ -223,6 +223,8 @@ export interface PlayCardPayload {
   readonly harbors?: readonly { readonly cityPieceId: string; readonly column: number; readonly row: number }[]
   /** Frida Kahlo: the ids of the culture cards in the player's own hand to discard before drawing back up. None is allowed. */
   readonly discard?: readonly string[]
+  /** Gustavus Adolphus: the unit sheet for each unit of the battle force, as many as it has. */
+  readonly units?: readonly string[]
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
   /** The map square whose figures move (Galileo and the movement culture cards). */
