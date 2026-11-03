@@ -70,6 +70,13 @@ function addBattlehand(
 // initiateBattle
 // ---------------------------------------------------------------------------
 
+/** The battle as it stands once every placement has been named in the log. */
+function announcedBattle(battle: GameState['battle']): GameState['battle'] {
+  if (battle === null) return null
+  const mark = <T extends { readonly announced?: boolean }>(u: T): T => ({ ...u, announced: true })
+  return { ...battle, arena: battle.arena.map(mark), departedUnits: battle.departedUnits.map(mark) }
+}
+
 describe('initiateBattle', () => {
   it('starts a battle between two players', () => {
     const before = firstCivGame()
@@ -296,6 +303,7 @@ describe('moveArenaUnit', () => {
         health: unit.health,
       }),
     )
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
     const logLengthAfterPlace = state.log.length
 
     const arenaUnitId = state.battle!.arena[0]!.id
@@ -570,6 +578,7 @@ describe('killArenaUnit', () => {
         health: unit.health,
       }),
     )
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
     const logLengthAfterPlace = state.log.length
 
     const arenaUnitId = state.battle!.arena[0]!.id
@@ -900,6 +909,7 @@ describe('setArenaUnitStat', () => {
       }),
     )
 
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
     const arenaUnitId = state.battle!.arena[0]!.id
 
     // KARANDRAS1 (not the one who placed the unit) updates the attack
@@ -1512,6 +1522,67 @@ describe('endBattleTurn', () => {
     expect(state.battle!.turn).toBe('defender')
   })
 
+  it('names a placement in the public log only once the turn ends, and never one taken back', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const [first, second] = findPlayer(state, CASH1981)!.battlehand
+    const place = (s: GameState, id: string, position: number) => {
+      const u = findPlayer(s, CASH1981)!.battlehand.find((x) => x.id === id)!
+      return unwrap(
+        placeUnitInArena(s, {
+          playerId: CASH1981, unitId: id, side: 'attacker', position, attack: u.attack, health: u.health,
+        }),
+      )
+    }
+    const logs = (s: GameState) => s.log.map((e) => e.publicLog).join('\n')
+
+    state = place(state, first!.id, 0)
+    expect(logs(state)).not.toContain('into the arena')
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: state.battle!.arena[0]!.id }))
+    state = place(state, second!.id, 0)
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
+
+    const text = logs(state)
+    expect(text.match(/into the arena/g)).toHaveLength(1)
+    expect(text).toContain(revealAll(second!))
+    expect(text).not.toContain('to hand')
+    if (revealAll(first!) !== revealAll(second!)) expect(text).not.toContain(revealAll(first!))
+  })
+
+  it('stays quiet about an unannounced unit when it is moved, rotated, edited or killed', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981, unitId: unit.id, side: 'attacker', position: 0, attack: unit.attack, health: unit.health,
+      }),
+    )
+    const before = state.log.length
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId, position: 1 }))
+    state = unwrap(rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+    state = unwrap(setArenaUnitStat(state, { playerId: CASH1981, arenaUnitId, key: 'attack', value: 9 }))
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+    expect(state.log).toHaveLength(before)
+  })
+
+  it('announces a placement once even after ending and undoing the battle', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981, unitId: unit.id, side: 'attacker', position: 0, attack: unit.attack, health: unit.health,
+      }),
+    )
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    state = unwrap(undoEndBattle(state, { playerId: CASH1981 }))
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
+    const count = state.log.filter((e) => e.publicLog.includes('into the arena')).length
+    expect(count).toBe(1)
+  })
+
   it('rejects a non-participant trying to end the battle turn', () => {
     let state = firstCivGame()
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
@@ -1794,7 +1865,7 @@ describe('undoEndBattle', () => {
 
     const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
 
-    expect(restored.battle).toEqual(before.battle)
+    expect(restored.battle).toEqual(announcedBattle(before.battle))
     expect(restored.battle?.turn).toBe(before.battle?.turn)
     expect(restored.endedBattle).toBeNull()
     expect(cardInBattle(restored, CASH1981, attackerCardId)).toBe(true)
@@ -1921,7 +1992,7 @@ describe('undoEndBattle', () => {
     expect(unwrapErr(undoEndBattle(state, { playerId: CASH1981 })).kind).toBe('NOT_IN_THIS_BATTLE')
     const restored = unwrap(undoEndBattle(state, { playerId: controllerId }))
 
-    expect(restored.battle).toEqual(before.battle)
+    expect(restored.battle).toEqual(announcedBattle(before.battle))
     expect(restored.battle?.defender.kind).toBe('barbarians')
     expect(findPlayer(restored, controllerId)!.barbarians.find((u) => u.id === barbarian.id)?.inBattle).toBe(true)
   })
@@ -1960,7 +2031,7 @@ describe('undoEndBattle', () => {
     expect(cardInBattle(state, CASH1981, fallen!.id)).toBe(false)
     const restored = unwrap(undoEndBattle(state, { playerId: CASH1981 }))
 
-    expect(restored.battle).toEqual(before.battle)
+    expect(restored.battle).toEqual(announcedBattle(before.battle))
     expect(restored.battle!.departedUnits).toHaveLength(1)
     expect(cardInBattle(restored, CASH1981, fallen!.id)).toBe(true)
     expect(cardInBattle(restored, CASH1981, reinforcement!.id)).toBe(true)

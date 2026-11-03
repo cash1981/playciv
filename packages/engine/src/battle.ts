@@ -83,6 +83,13 @@ export interface ArenaUnit {
    * arrived on an open front with nobody facing it.
    */
   readonly arrival: ArenaArrival | null
+  /**
+   * Whether the public log has named this unit yet. A placement is only
+   * announced when its player ends their battle turn (or the battle ends), so
+   * a unit taken back before then never shows up in the log. Absent on units
+   * placed before this field existed, which were announced when placed.
+   */
+  readonly announced?: boolean
 }
 
 /** The two things a face-off changes on a unit. */

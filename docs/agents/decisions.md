@@ -292,6 +292,9 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 - Fortification and caravan markers are read from the board, so ones placed by
   hand on a centre in existing games take effect too. An undo puts a used-up
   marker back only while its city has no other one (`cityMarkerMayReturn`).
+- **Arena placement log** (human 2026-11-03): placing a unit is not logged
+  until its player ends their battle turn (or the battle ends), so a unit taken
+  back first is never revealed (`ArenaUnit.announced`; absent means announced).
 
 Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
 `city-defence.ts`, `actions/arena.ts` and related tests (`disband`).

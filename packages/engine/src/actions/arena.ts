@@ -499,15 +499,11 @@ export function placeUnitInArena(
     rotation: 0,
     killed: false,
     arrival: null,
+    announced: false,
   }
 
-  nextState = appendPublicLog(
-    nextState,
-    player.username,
-    player.playerId,
-    `places ${revealAll(sourceUnit)} (${input.attack}/${input.health}) into the arena`,
-  )
-
+  // The placement is logged when the turn ends, so changing your mind first
+  // does not reveal the unit you took back.
   return ok({
     ...nextState,
     battle: {
@@ -570,13 +566,17 @@ export function moveArenaUnit(
   const fallenUnit = atTarget.find((u) => u.killed)
 
   const movePrefix = `${player.username} moves ${revealAll(unit.unit)} to`
-  const nextState = appendRollingArenaLog(
-    state,
-    player.username,
-    player.playerId,
-    `moves ${revealAll(unit.unit)} to ${unit.side} front #${input.position}`,
-    (previous) => previous.startsWith(movePrefix),
-  )
+  // A unit not yet announced is not named: its placement line carries where it ends up.
+  const nextState =
+    unit.announced === false
+      ? state
+      : appendRollingArenaLog(
+          state,
+          player.username,
+          player.playerId,
+          `moves ${revealAll(unit.unit)} to ${unit.side} front #${input.position}`,
+          (previous) => previous.startsWith(movePrefix),
+        )
 
   // Leaving a front takes back what arriving there did, the same as
   // returning the unit to hand; the new front then gets its own arrival.
@@ -666,12 +666,14 @@ export function returnArenaUnitToHand(
     }
   }
 
-  nextState = appendPublicLog(
-    nextState,
-    player.username,
-    player.playerId,
-    `returns ${revealAll(arenaUnit.unit)} to hand`,
-  )
+  if (arenaUnit.announced !== false) {
+    nextState = appendPublicLog(
+      nextState,
+      player.username,
+      player.playerId,
+      `returns ${revealAll(arenaUnit.unit)} to hand`,
+    )
+  }
 
   const undone = undoArrival(battle.arena, battle.departedUnits, arenaUnit)
   return ok({
@@ -724,12 +726,15 @@ export function setArenaUnitStat(
   const oldValue = unit[input.key]
   const updatedUnit: ArenaUnit = { ...unit, [input.key]: input.value }
 
-  const nextState = appendPublicLog(
-    state,
-    player.username,
-    player.playerId,
-    `updates ${revealAll(unit.unit)} ${input.key}: ${oldValue} → ${input.value}`,
-  )
+  const nextState =
+    unit.announced === false
+      ? state
+      : appendPublicLog(
+          state,
+          player.username,
+          player.playerId,
+          `updates ${revealAll(unit.unit)} ${input.key}: ${oldValue} → ${input.value}`,
+        )
 
   return ok({
     ...nextState,
@@ -805,12 +810,15 @@ export function rotateArenaUnit(
   const updatedUnit: ArenaUnit =
     opponent === undefined ? reseeded : withDamage(reseeded, opponent.attack)
 
-  const nextState = appendPublicLog(
-    state,
-    player.username,
-    player.playerId,
-    `rotates ${revealAll(unit.unit)} to ${rotation}° (${updatedUnit.attack}.${updatedUnit.health})`,
-  )
+  const nextState =
+    unit.announced === false
+      ? state
+      : appendPublicLog(
+          state,
+          player.username,
+          player.playerId,
+          `rotates ${revealAll(unit.unit)} to ${rotation}° (${updatedUnit.attack}.${updatedUnit.health})`,
+        )
 
   return ok({
     ...nextState,
@@ -874,13 +882,16 @@ export function killArenaUnit(
   const undoneMessage = `undoes the kill on ${revealAll(arenaUnit.unit)} in the arena`
   const killedLog = `${player.username} ${killedMessage}`
   const undoneLog = `${player.username} ${undoneMessage}`
-  const nextState = appendRollingArenaLog(
-    state,
-    player.username,
-    player.playerId,
-    killed ? killedMessage : undoneMessage,
-    (previous) => previous === killedLog || previous === undoneLog,
-  )
+  const nextState =
+    arenaUnit.announced === false
+      ? state
+      : appendRollingArenaLog(
+          state,
+          player.username,
+          player.playerId,
+          killed ? killedMessage : undoneMessage,
+          (previous) => previous === killedLog || previous === undoneLog,
+        )
 
   return ok({
     ...nextState,
@@ -897,6 +908,37 @@ export function killArenaUnit(
 
 export interface EndBattleTurnInput {
   readonly playerId: string
+}
+
+/**
+ * Logs every placement `playerId` made that the log has not named yet, and
+ * marks those units announced. Called when their battle turn (or the battle)
+ * ends, so a unit placed and then taken back is never revealed.
+ */
+function announcePlacements(state: GameState, playerId: string): GameState {
+  const battle = state.battle
+  const owner = findPlayer(state, playerId)
+  if (battle === null || owner === undefined) return state
+  let next = state
+  for (const u of [...battle.arena, ...battle.departedUnits]) {
+    if (u.placedBy !== playerId || u.announced !== false) continue
+    next = appendPublicLog(
+      next,
+      owner.username,
+      owner.playerId,
+      `places ${revealAll(u.unit)} (${u.attack}/${u.health}) into the arena`,
+    )
+  }
+  const markAnnounced = (u: ArenaUnit): ArenaUnit =>
+    u.placedBy === playerId && u.announced === false ? { ...u, announced: true } : u
+  return {
+    ...next,
+    battle: {
+      ...battle,
+      arena: battle.arena.map(markAnnounced),
+      departedUnits: battle.departedUnits.map(markAnnounced),
+    },
+  }
 }
 
 /**
@@ -924,8 +966,9 @@ export function endBattleTurn(
 
   const nextTurn: BattleSideId = battle.turn === 'attacker' ? 'defender' : 'attacker'
 
+  const announced = announcePlacements(state, input.playerId)
   const nextState = appendPublicLog(
-    state,
+    announced,
     player.username,
     player.playerId,
     `ends their battle turn`,
@@ -933,7 +976,7 @@ export function endBattleTurn(
 
   return ok({
     ...nextState,
-    battle: { ...battle, turn: nextTurn },
+    battle: { ...(nextState.battle ?? battle), turn: nextTurn },
   })
 }
 
@@ -995,7 +1038,11 @@ export function endBattleAction(
   // includes `departedUnits` (issue #74's reinforced-away units): their
   // cards stayed locked for the rest of the battle, and this is the moment
   // they finally free up too.
-  let nextState = state
+  let nextState = announcePlacements(
+    announcePlacements(state, battle.attacker.playerId),
+    battle.defender.playerId,
+  )
+  const announcedBattle = nextState.battle ?? battle
   for (const arenaUnit of [...battle.arena, ...battle.departedUnits]) {
     const ownerSide =
       arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
@@ -1055,7 +1102,7 @@ export function endBattleAction(
     ...nextState,
     battle: null,
     endedBattle: {
-      battle,
+      battle: announcedBattle,
       endedBy: input.playerId,
       summary: summaries,
       ...(fortification === undefined ? {} : { fortification }),
