@@ -706,7 +706,7 @@ export function PlayCardControl({
                 <p className="muted">
                   The game goes back to just before this action and {twainTarget.username} redoes what came after.
                   {twainTarget.rolledBack.length > 0
-                    ? ` These ${twainTarget.rolledBack.length === 1 ? 'action is' : 'actions are'} lost: ${twainTarget.rolledBack.join(' · ')}.`
+                    ? ` ${twainTarget.rolledBack.length === 1 ? 'This line is' : 'These lines are'} lost: ${twainTarget.rolledBack.join(' · ')}.`
                     : ''}{' '}
                   {twainTarget.kind === 'city' ? 'The city has used its action for the turn.' : 'The event card is discarded.'}{' '}
                   Mark Twain is discarded.

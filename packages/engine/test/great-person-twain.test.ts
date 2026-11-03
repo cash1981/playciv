@@ -105,7 +105,7 @@ describe('Mark Twain cancelling a city action', () => {
     expect(cancelled.log.some((entry) => entry.id === logLineOf(later, 'd-2'))).toBe(false)
     const line = cancelled.log.at(-1)?.publicLog ?? ''
     expect(line).toContain('cancelled the city action of')
-    expect(line).toContain('1 later action')
+    expect(line).toContain('1 later log line is lost')
     expect(line).toContain('Mark Twain is discarded')
   })
 
@@ -225,6 +225,57 @@ describe('what Mark Twain may not cancel', () => {
     expect(cancelWithTwain(devoted, before, { holderId: ITCHI, logId: logLineOf(devoted, 'd-1') }).ok).toBe(false)
     const older: GameState = { ...devoted, assistedActions: devoted.assistedActions.map((record) => ({ ...record, turnNumber: 0 })) }
     expect(cancelWithTwain(older, before, { holderId: KARANDRAS1, logId: logLineOf(devoted, 'd-1') }).ok).toBe(false)
+  })
+
+  it('closes a vote to undo the cancelled line, and does not hand out an item number again', () => {
+    const { state: before } = scene()
+    const devoted = devote({ ...before, itemCounter: 5 }, 'd-1')
+    const voted = unwrap(initiateUndo(devoted, { logId: logLineOf(devoted, 'd-1'), playerId: CASH1981 }))
+    expect(voted.log.find((entry) => entry.id === logLineOf(voted, 'd-1'))?.undo).not.toBeNull()
+    // The player took more item numbers after the action
+    const counted: GameState = { ...voted, itemCounter: 9 }
+    const cancelled = unwrap(cancelWithTwain(counted, { ...before, itemCounter: 5 }, { holderId: KARANDRAS1, logId: logLineOf(voted, 'd-1') }))
+    expect(cancelled.log.find((entry) => entry.id === logLineOf(voted, 'd-1'))?.undo).toBeNull()
+    expect(cancelled.itemCounter).toBe(9)
+  })
+
+  it('refuses a state that is not exactly the game before the action', () => {
+    const { state: before } = scene()
+    const first = devote(before, 'd-1')
+    const second = devote(first, 'd-2', true)
+    // The game before the first action is not the game before the second: its line would be dropped silently
+    expect(cancelWithTwain(second, before, { holderId: KARANDRAS1, logId: logLineOf(second, 'd-2') }).ok).toBe(false)
+    // The game with the action already in it, and the game of another table
+    expect(cancelWithTwain(second, second, { holderId: KARANDRAS1, logId: logLineOf(second, 'd-2') }).ok).toBe(false)
+    expect(cancelWithTwain(first, { ...before, id: 'another-game' }, { holderId: KARANDRAS1, logId: logLineOf(first, 'd-1') }).ok).toBe(false)
+    expect(cancelWithTwain(second, first, { holderId: KARANDRAS1, logId: logLineOf(second, 'd-2') }).ok).toBe(true)
+  })
+
+  it('cannot be used with every Artist or Thinker figure blockaded, and still reaches a culture event of a Dr. King holder', () => {
+    const { state: start } = scene()
+    const king = withCardInHand(start, 'Dr. Martin Luther King', CASH1981)
+    const faceup: GameState = {
+      ...king.state,
+      players: king.state.players.map((p) =>
+        p.playerId === CASH1981 ? { ...p, items: p.items.map((item) => (item.id === king.itemId ? { ...item, hidden: false } : item)) } : p,
+      ),
+    }
+    // Dr. King protects the city actions only
+    const event = withCardInHand(faceup, 'Supply Drop', CASH1981)
+    const played = unwrap(
+      performAssistedAction(event.state, {
+        playerId: CASH1981,
+        action: 'playCard',
+        requestId: 'e-1',
+        at: AT,
+        payload: { itemId: event.itemId, targets: [] },
+      }),
+    )
+    expect(twainTargetsOf(played, asHolder(played)).map((target) => target.kind)).toEqual(['culture'])
+
+    // A holder whose card is not in the hand has no list at all
+    const without: GameState = { ...played, players: played.players.map((p) => (p.playerId === KARANDRAS1 ? { ...p, items: [] } : p)) }
+    expect(twainTargetsOf(without, player(without, KARANDRAS1))).toEqual([])
   })
 
   it('shows nothing about the cancelled action beyond its public line to other players', () => {
