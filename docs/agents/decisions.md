@@ -359,7 +359,7 @@ combatant for a card.
 - **Florence Nightingale:** discarded; every killed unit of the player, also one a later unit replaced on its
   front, gets `ArenaUnit.saved`, shown as SAVED. Killed units are never discarded by the app, so this is a mark: it still counts as killed for the result, and the card
   stays in the hand. Refused when none of the player's units is killed. She is played "after a battle" (human
-  2026-11-03): also on the battle End battle has just set aside, by either combatant, until the next battle
+  2026-11-03): also on the battle End battle has just set aside, by whichever combatant holds her, until the next battle
   starts; the SAVED marks then show in the final arena, and Undo end battle brings the battle back with them.
 - **Sun Tzu:** not a card play but an arena button (`sunTzuPass`, `POST /battle/arena/sun-tzu`): spends 3 trade,
   turns the card faceup (kept), flips the battle turn, once per battle (`Battle.sunTzu`). The button is enabled on the
