@@ -163,6 +163,8 @@ export type EngineError =
   | { readonly kind: 'CANNOT_BATTLE_YOURSELF'; readonly playerId: string }
   /** That position is already occupied on this side */
   | { readonly kind: 'ARENA_POSITION_OCCUPIED' }
+  /** A battle card (Sun Tzu) cannot be used now; `reason` is a sentence for the player. */
+  | { readonly kind: 'BATTLE_CARD_REFUSED'; readonly reason: string }
   | { readonly kind: 'INVALID_TRADE_OFFER_TERMS'; readonly length: number }
   | { readonly kind: 'TRADE_OFFER_REQUEST_REUSED'; readonly requestId: string }
   | { readonly kind: 'TRADE_OFFER_RECIPIENT_NOT_FOUND'; readonly playerId: string }
@@ -315,6 +317,8 @@ export function describeError(error: EngineError): string {
       return 'You cannot initiate a battle against yourself'
     case 'ARENA_POSITION_OCCUPIED':
       return 'That position is already occupied on this side'
+    case 'BATTLE_CARD_REFUSED':
+      return error.reason
     case 'INVALID_TRADE_OFFER_TERMS':
       return `Trade offer terms must contain 1 to 2,000 characters (got ${error.length})`
     case 'TRADE_OFFER_REQUEST_REUSED':

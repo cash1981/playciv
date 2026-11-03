@@ -23,6 +23,8 @@ import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
+import { SUN_TZU, SUN_TZU_COST, playerSideOf } from '../battle-cards.js'
+import { blockadedGreatPersonTypes } from '../blockade.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -335,6 +337,13 @@ function hasVitals(unit: ArenaUnit, vitals: ArenaVitals): boolean {
  * toggle or face-off is a newer decision and stays. The displaced unit comes
  * back only to an empty front.
  */
+/** Taking a death back also takes Florence Nightingale's mark back: it applies to the deaths there were when she was played. */
+function revived(unit: ArenaUnit): ArenaUnit {
+  if (unit.killed || unit.saved === undefined) return unit
+  const { saved: _saved, ...rest } = unit
+  return rest
+}
+
 function undoArrival(
   arena: readonly ArenaUnit[],
   departedUnits: readonly ArenaUnit[],
@@ -347,7 +356,7 @@ function undoArrival(
   let nextArena = arena.map((u): ArenaUnit => {
     if (u.id === unit.id) {
       const restored = faceOff !== null && hasVitals(u, faceOff.selfAfter) ? faceOff.selfBefore : vitalsOf(u)
-      return { ...u, ...restored, arrival: null }
+      return revived({ ...u, ...restored, arrival: null })
     }
     if (
       faceOff !== null &&
@@ -355,7 +364,7 @@ function undoArrival(
       u.position === unit.position &&
       hasVitals(u, faceOff.opponentAfter)
     ) {
-      return { ...u, ...faceOff.opponentBefore }
+      return revived({ ...u, ...faceOff.opponentBefore })
     }
     return u
   })
@@ -873,7 +882,7 @@ export function killArenaUnit(
   }
 
   const killed = !arenaUnit.killed
-  const updatedUnit: ArenaUnit = { ...arenaUnit, killed }
+  const updatedUnit: ArenaUnit = revived({ ...arenaUnit, killed })
 
   // Both directions of the toggle recognize each other as "the same
   // adjustment" so kill/undo/kill/undo in a row collapses to one line —
@@ -977,6 +986,64 @@ export function endBattleTurn(
   return ok({
     ...nextState,
     battle: { ...(nextState.battle ?? battle), turn: nextTurn },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// sunTzuPass
+// ---------------------------------------------------------------------------
+
+export interface SunTzuPassInput {
+  readonly playerId: string
+}
+
+/**
+ * Sun Tzu (issue #301): "Once per battle, you may spend 3 trade to pass your turn instead of playing a unit."
+ * Spends the trade, turns the card faceup (it stays in the hand) and flips the battle turn. Like the rest of the
+ * arena it is not undone by the assisted-action undo; the player corrects the trade by hand.
+ */
+export function sunTzuPass(state: GameState, input: SunTzuPassInput): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+  const battle = state.battle
+  const side = playerSideOf(battle, input.playerId)
+  if (side === null) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+
+  const refuse = (reason: string): ActionResult => err({ kind: 'BATTLE_CARD_REFUSED', reason })
+  const card = player.items.find((item) => item.kind === 'greatperson' && item.name === SUN_TZU)
+  if (card === undefined || card.kind !== 'greatperson') return refuse(`You do not hold ${SUN_TZU}.`)
+  if (card.type !== null && blockadedGreatPersonTypes(state, player).includes(card.type)) {
+    return refuse(`Every ${card.type} figure of yours is blockaded, so ${SUN_TZU} cannot be used.`)
+  }
+  // A card still being chosen between is not the player's yet
+  if (player.pendingRewards.some((reward) => reward.candidateIds.includes(card.id))) {
+    return refuse(`${SUN_TZU} is one of the cards you are choosing between. Choose the card to keep first.`)
+  }
+  if ((battle.sunTzu ?? []).includes(input.playerId)) return refuse(`${SUN_TZU} works once per battle.`)
+  if (player.stats.trade < SUN_TZU_COST) {
+    return refuse(`${SUN_TZU} costs ${SUN_TZU_COST} trade and you have ${player.stats.trade}.`)
+  }
+
+  const paid = withPlayer(state, {
+    ...player,
+    stats: { ...player.stats, trade: player.stats.trade - SUN_TZU_COST },
+    items: player.items.map((item) => (item.id === card.id ? { ...item, hidden: false } : item)),
+  })
+  const next = appendPublicLog(
+    paid,
+    player.username,
+    player.playerId,
+    `uses ${SUN_TZU}: spends ${SUN_TZU_COST} trade and passes the battle turn`,
+  )
+  return ok({
+    ...next,
+    battle: {
+      ...battle,
+      turn: side === 'attacker' ? 'defender' : 'attacker',
+      sunTzu: [...(battle.sunTzu ?? []), input.playerId],
+    },
   })
 }
 

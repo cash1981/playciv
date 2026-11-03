@@ -347,6 +347,34 @@ out by itself, recorded as `GameLogEntry.civSetup`:
 - A vote that has run cannot be voted again (`UNDO_ALREADY_DONE`).
 - `civSetup` is server-side like `item`: opponents get the public log form only.
 
+**Battle Great Persons** (issue #301; human 2026-11-02). A battle card is `ready` for a combatant of the active
+battle in any phase of the turn, and is listed in every phase tab and in the Battle panel (under the battlehand, above the ended arena, which can be tall); outside a battle it is
+`wrong-phase` ("Played during a battle."). The controller of the barbarians is no combatant for a card.
+
+- **Leonidas:** the defender only, with fewer units in the battle than the opponent: the units drawn for it (battlehand,
+  or the barbarians), or those put in the arena (arena plus reinforced away, killed or not) if that is more; so he is
+  ready as soon as the battlehands are drawn (human, 2026-11-03: 5 against 3). He need not be faceup: playing reveals him. He is kept, not discarded, adds +8 combat bonus until the
+  battle ends (`Battle.cardBonuses`, counted in `combatBonus` and so in the winner) and works once per battle, again in
+  the next. Played after the last unit and before End battle; after End battle, Undo end battle first.
+- **Joan of Arc:** the defender only, discarded, adds the unspent culture the player has when playing it (the culture
+  is not spent). Refused with no culture. "At the start of a battle" is not enforced, as with Leonidas (the arena
+  has no start): she can be played until End battle.
+- **Florence Nightingale:** discarded; every killed unit of the player, also one a later unit replaced on its
+  front, gets `ArenaUnit.saved`, shown as SAVED. Killed units are never discarded by the app, so this is a mark: it still counts as killed for the result, and the card
+  stays in the hand. Refused when none of the player's units is killed. She is played "after a battle" (human
+  2026-11-03): also on the battle End battle has just set aside, by whichever combatant holds her, until the next battle
+  starts; the SAVED marks then show in the final arena, and Undo end battle brings the battle back with them.
+  The mark goes when the death is taken back (kill toggle, face-off undo). A saved unit another unit has replaced on its
+  front is no longer in the arena: it is listed as saved casualties, in the active battle and in the final arena
+  (`LastBattleView.savedDeparted`).
+- **Sun Tzu:** not a card play but an arena button (`sunTzuPass`, `POST /battle/arena/sun-tzu`): spends 3 trade,
+  turns the card faceup (kept), flips the battle turn, once per battle (`Battle.sunTzu`). The button is enabled on the
+  player's own battle turn only (the turn itself stays advisory in the engine). A card still being chosen between is
+  refused. It is left out of the list of playable cards. The arena has no assisted undo, so the trade is
+  corrected by hand.
+- Undo of a battle card play (vote) takes the bonus or the mark back from the battle on now, or from the one End battle
+  has set aside (so Undo end battle does not bring it back); once that battle is gone only the card returns.
+
 Arena unit values: the card label shows the unit's tier (printed values plus
 rotation level, `arenaUnitTier`), never damage or hand edits; the ATK/HP fields
 show current values. When a unit is placed or moved onto a front facing a living

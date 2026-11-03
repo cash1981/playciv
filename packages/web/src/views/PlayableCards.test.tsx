@@ -1050,6 +1050,25 @@ describe('the list of cards in a phase tab', () => {
     expect((screen.getByRole('button', { name: 'Play We Love the Despot Day!' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('lists a ready battle card in every tab, as the engine only makes it ready while a battle is on', () => {
+    const leonidas = card({
+      itemId: 'c5',
+      name: 'Leonidas',
+      description: 'Battle: Each time you start a battle with fewer units ...',
+      timings: ['BATTLE'],
+      targets: { kind: 'none' },
+      reason: 'Can be played in the battle you are fighting.',
+    })
+    list('TRADE', viewWith([leonidas]))
+    expect(screen.getByText('Leonidas')).toBeTruthy()
+    cleanup()
+    list('CM', viewWith([leonidas]))
+    expect(screen.getByText('Leonidas')).toBeTruthy()
+    cleanup()
+    list('CM', viewWith([{ ...leonidas, status: 'wrong-phase', reason: 'Played during a battle.' }]))
+    expect(screen.queryByText('Leonidas')).toBeNull()
+  })
+
   it('leaves out a card that cannot be played now', () => {
     const blocked = card({
       itemId: 'c4',

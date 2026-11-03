@@ -17,6 +17,7 @@ vi.mock('../lib/api.js', () => ({
     placeUnitInArena: vi.fn(),
     moveArenaUnit: vi.fn(),
     setArenaUnitStat: vi.fn(),
+    sunTzuPass: vi.fn(),
   },
 }))
 
@@ -402,5 +403,126 @@ describe('BattlePanel read-only', () => {
     const fields = container.querySelectorAll<HTMLInputElement>('.arena-unit-card input')
     expect(fields).toHaveLength(2)
     for (const field of fields) expect(field.disabled).toBe(true)
+  })
+})
+
+describe('BattlePanel battle cards', () => {
+  afterEach(() => cleanup())
+
+  const sunTzu = { kind: 'greatperson', name: 'Sun Tzu', id: 'gp-1', hidden: true, ownerId: 'me', type: 'General' }
+  const leonidas = {
+    itemId: 'gp-2', name: 'Leonidas', kind: 'greatPerson', description: 'Battle: ...', inEffect: false,
+    timings: ['BATTLE'], targets: { kind: 'none' }, prompt: '', resources: [], automatic: 'adds 8 to your combat bonus',
+    passive: false, discards: false, coinSources: [], substituteResources: [], status: 'ready', reason: 'Ready',
+  }
+  const battleView = (battle: object, you: object): PlayerView =>
+    ({ ...view, battle, you: { ...view.you, stats: { trade: 5 }, ...you } }) as unknown as PlayerView
+  const attacking = { ...view.battle, turn: 'attacker' }
+
+  it('lists a ready battle card with its Play button to a combatant', () => {
+    const { getByText, container } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView(attacking, { playableCards: [leonidas] })} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    const list = container.querySelector('[aria-label="Battle cards"]')
+    expect(list?.textContent).toContain('Leonidas')
+    // Leonidas is kept faceup, so his button says Use
+    expect(list?.querySelector('button')?.textContent).toMatch(/Use|Play/)
+  })
+
+  it('lists the battle cards once, not again in the arena', () => {
+    const { getByText, container } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView(attacking, { playableCards: [leonidas] })} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(container.querySelectorAll('[aria-label="Battle cards"]')).toHaveLength(1)
+  })
+
+  it('lists Florence Nightingale right after End battle, when no battle is on, and no other battle card', () => {
+    const florence = { ...leonidas, itemId: 'gp-4', name: 'Florence Nightingale', discards: true }
+    const afterwards = { ...view, battle: null, you: { ...view.you, stats: { trade: 5 }, playableCards: [florence, leonidas] } } as unknown as PlayerView
+    const { getByText, container } = render(<BattlePanel gameId="game" busy={false} run={run} view={afterwards} />)
+    fireEvent.click(getByText('Battle'))
+    const list = container.querySelector('[aria-label="Battle cards"]')
+    expect(list?.textContent).toContain('Florence Nightingale')
+    expect(list?.textContent).not.toContain('Leonidas')
+  })
+
+  it('lists no battle card to someone outside the battle', () => {
+    const outsider = { ...attacking, attacker: { playerId: 'x', kind: 'player' }, defender: { playerId: 'y', kind: 'player' } }
+    const { getByText, queryByText, container } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView(outsider, { playableCards: [leonidas], items: [sunTzu] })} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(container.querySelector('[aria-label="Battle cards"]')).toBeNull()
+    expect(queryByText(/Pass with Sun Tzu/)).toBeNull()
+  })
+
+  it('passes the turn with Sun Tzu for 3 trade, once per battle', () => {
+    vi.mocked(api.sunTzuPass).mockResolvedValue(view)
+    const { getByText, queryByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView(attacking, { items: [sunTzu] })} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(getByText('Pass with Sun Tzu (3 trade)'))
+    expect(api.sunTzuPass).toHaveBeenCalledWith('game', 4)
+    cleanup()
+    const used = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView({ ...attacking, sunTzu: ['me'] }, { items: [sunTzu] })} />,
+    )
+    fireEvent.click(used.getByText('Battle'))
+    expect(queryByText('Pass with Sun Tzu (3 trade)')).toBeNull()
+  })
+
+  it('disables the Sun Tzu pass on the other side\'s battle turn', () => {
+    const { getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView({ ...attacking, turn: 'defender' }, { items: [sunTzu] })} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect((getByText('Pass with Sun Tzu (3 trade)') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('disables the Sun Tzu pass while every General figure is blockaded', () => {
+    const { getByText } = render(
+      <BattlePanel
+        gameId="game"
+        busy={false}
+        run={run}
+        view={battleView(attacking, { items: [sunTzu], stats: { trade: 5 }, blockadedGreatPersonTypes: ['General'] })}
+      />,
+    )
+    fireEvent.click(getByText('Battle'))
+    const button = getByText('Pass with Sun Tzu (3 trade)') as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(button.title).toContain('blockaded')
+  })
+
+  it('lists a saved unit that another unit replaced on its front', () => {
+    const departed = { id: 'a-1', side: 'attacker', position: 0, unit: infantry, attack: 1, health: 0, placedBy: 'me', rotation: 0, killed: true, saved: true, arrival: null }
+    const { getByText, container } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView({ ...attacking, arena: [], departedUnits: [departed] }, {})} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(container.querySelector('[aria-label="Saved casualties"]')?.textContent).toContain('SAVED')
+  })
+
+  it('disables the Sun Tzu pass without 3 trade', () => {
+    const { getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView(attacking, { items: [sunTzu], stats: { trade: 2 } })} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect((getByText('Pass with Sun Tzu (3 trade)') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('marks a saved unit', () => {
+    const killedSaved = {
+      id: 'a1', side: 'attacker', position: 0, unit: infantry, attack: 1, health: 3, placedBy: 'me',
+      rotation: 0, killed: true, saved: true, arrival: null,
+    }
+    const { getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={battleView({ ...attacking, arena: [killedSaved] }, {})} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByText('SAVED')).toBeTruthy()
   })
 })

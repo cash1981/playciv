@@ -765,7 +765,11 @@ export function PlayableCardList({
   if (view.you === null) return null
   const cards = (view.you.playableCards ?? []).filter(
     (card) =>
-      card.status === 'ready' && (card.timings.includes(phase) || card.timings.includes('ANY')),
+      card.status === 'ready' &&
+      (card.timings.includes(phase) ||
+        card.timings.includes('ANY') ||
+        // A battle card is ready only while a battle is on, and then in every phase tab
+        card.timings.includes('BATTLE')),
   )
   if (cards.length === 0) return null
 

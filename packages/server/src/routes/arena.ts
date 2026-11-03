@@ -17,6 +17,7 @@ import {
   returnArenaUnitToHand,
   rotateArenaUnit,
   setArenaUnitStat,
+  sunTzuPass,
   undoEndBattle,
 } from '@civ/engine'
 
@@ -262,6 +263,28 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       c,
       gameId,
       (state) => endBattleTurn(state, { playerId: player.id }),
+      clientRev,
+      {
+        after: ({ after }) =>
+          context.notifications.battleTurnChanged(after, player.id),
+      },
+    )
+  })
+
+  /**
+   * Sun Tzu: spend 3 trade to pass the battle turn, once per battle. Body: `{ rev: number }`.
+   */
+  app.post('/api/games/:gameId/battle/arena/sun-tzu', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+    const player = currentPlayer(c)
+
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => sunTzuPass(state, { playerId: player.id }),
       clientRev,
       {
         after: ({ after }) =>

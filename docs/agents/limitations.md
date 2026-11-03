@@ -62,3 +62,10 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - A. P. Giannini's Start of Turn section stays hidden when no building can be placed, with no explanation. Frida Kahlo is listed as ready on the culture start space and refuses only when played.
 - Zheng He's look is a list in the private log; the map shows no marker on the squares it read. A token drawn from keeps its piece on the map, and a later look would give that piece a new item. An undone draw puts the item in the shuffled deck, so earlier lines can then be stale. A piece collected into an area is not listed by a later look.
 - Jerry Garcia's all-city devotion counts no scout's square and offers no Charles Darwin conversion; a figure can be corrected on the culture counter by hand.
+
+## Battle cards
+
+- Leonidas and Joan of Arc cannot be played after End battle (Florence Nightingale can); the ender can Undo end battle,
+  play the card and end again. Sun Tzu's pass has no undo (the trade is corrected by hand).
+- Florence Nightingale marks the units killed at the time she is played; a unit killed later is not saved.
+- Zhukov and Gustavus Adolphus are still only logged when discarded.

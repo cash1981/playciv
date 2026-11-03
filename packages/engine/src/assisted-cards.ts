@@ -16,6 +16,7 @@
 import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
+import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard } from './battle-cards.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
@@ -225,6 +226,8 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       kind === 'greatPerson' &&
       !base.discards &&
       !item.hidden &&
+      // Leonidas works in each battle he is played in, which `battleCardBlock` keeps to one
+      !BATTLE_CARDS.has(name) &&
       (name === 'William Shakespeare' ||
         state.assistedActions.some(
           (record) =>
@@ -283,6 +286,22 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
           status: 'unavailable',
           reason: 'No other player has revealed a tech for Edison to research.',
         },
+      ]
+    }
+    // A card played in a battle is ready for a combatant while one is on, in any phase of the turn
+    if (BATTLE_CARDS.has(name) && base.timings.includes('BATTLE')) {
+      const block = battleCardBlock(state, player, name)
+      return [
+        block === undefined
+          ? {
+              ...base,
+              status: 'ready' as const,
+              reason:
+                state.battle === null
+                  ? 'Can be played on the battle that has just ended.'
+                  : 'Can be played in the battle you are fighting.',
+            }
+          : { ...base, status: 'wrong-phase' as const, reason: block },
       ]
     }
     return [{ ...base, ...playableIn(base.timings, now) }]
@@ -353,6 +372,7 @@ interface Automated {
     | 'garcia'
     | 'kurosawa'
     | 'zhengHe'
+    | 'battleCard'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -716,6 +736,13 @@ function automate(
           `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
       })
+    }
+    case 'Leonidas':
+    case 'Joan of Arc':
+    case 'Florence Nightingale': {
+      const applied = applyBattleCard(state, player, name, requestId)
+      if (applied === undefined) return err(`${name} is played in a battle you are fighting.`)
+      return ok({ state: applied.state, extra: { battleCard: applied.effect }, said: applied.said })
     }
     case 'Zheng He': {
       const look = lookUnderTokens(state, state.players.filter((candidate) => candidate.playerId !== player.playerId))
@@ -1154,7 +1181,11 @@ export const playCard: AssistedActionDefinition = {
       return err(rejected('playCard', blocked('unavailable', 'That card is not in your hand.')))
     }
     const now = currentPhaseOf(state, player.playerId)
-    const when = card.timings.includes('ANY') ? CARD_TIMING_TEXT.ANY : CARD_TIMING_TEXT[now ?? 'SOT']
+    const when = card.timings.includes('ANY')
+      ? CARD_TIMING_TEXT.ANY
+      : BATTLE_CARDS.has(card.name)
+        ? CARD_TIMING_TEXT.BATTLE
+        : CARD_TIMING_TEXT[now ?? 'SOT']
 
     // The card leaves the hand: to the discard pile, or faceup in place for a Great Person that stays
     const moved: GameState = card.discards
@@ -1224,6 +1255,20 @@ export const playCard: AssistedActionDefinition = {
     const effect = record.effect
     if (effect.kind !== 'playCard') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
+
+    if (effect.battleCard !== undefined) {
+      const recordIndex = state.assistedActions.findIndex((candidate) => candidate.id === record.id)
+      const laterUse = state.assistedActions.slice(recordIndex + 1).some((candidate) => {
+        const laterEffect = candidate.effect
+        return (
+          candidate.status === 'applied' &&
+          laterEffect.kind === 'playCard' &&
+          laterEffect.item.id === effect.item.id &&
+          laterEffect.battleCard !== undefined
+        )
+      })
+      if (laterUse) return blockedBy(`A later use of ${effect.name} is still applied. Undo it first.`)
+    }
 
     // Her extra city action cannot be taken away while a city action that used it is in force
     if (effect.name === LOVELACE_NAME && lovelaceCreditWasUsed(state, record.id)) {
@@ -1526,6 +1571,8 @@ export const playCard: AssistedActionDefinition = {
       hand = playerOf(current, player.playerId) ?? hand
     }
 
+    if (effect.battleCard !== undefined) current = undoBattleCard(current, effect.battleCard, record.id)
+
     // Akira Kurosawa's culture goes back from the holder, as far as it is still there
     const kurosawa = takeBackKurosawa(current, effect.kurosawa ?? [])
     current = kurosawa.state
@@ -1560,6 +1607,6 @@ export const playCard: AssistedActionDefinition = {
         ),
       }),
     )
-    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: the card is facedown again` })
+    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}` })
   },
 }
