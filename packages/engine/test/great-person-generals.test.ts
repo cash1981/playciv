@@ -21,6 +21,7 @@ import type { GameState } from '../src/state.js'
 
 import { withCardInHand } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { put } from './sot-fixture.js'
 
 const AT = '2026-11-02T12:00:00.000Z'
 const ZHUKOV = 'Georgy Zhukov'
@@ -121,6 +122,19 @@ describe('Georgy Zhukov', () => {
     expect(hit.log.at(-1)?.publicLog).toContain('Georgy Zhukov')
     expect(zhukovOwed(hit.battle!, CASH1981)).toBe(0)
     expect(unwrapErr(zhukovWound(hit, { playerId: CASH1981, arenaUnitId: target.id })).kind).toBe('BATTLE_CARD_REFUSED')
+  })
+
+  it('deals no wound while every General figure of the player is blockaded', () => {
+    const killed = kill(armed().state, CASH1981)
+    const target = unitOf(killed, KARANDRAS1)
+    const token = put(killed, CASH1981, 'great people/general', 6, 6)
+    expect(unwrap(zhukovWound(token, { playerId: CASH1981, arenaUnitId: target.id })).battle).toBeDefined()
+    const blockaded = put(token, KARANDRAS1, 'figures/bluearmy', 6, 6)
+    const refused = unwrapErr(zhukovWound(blockaded, { playerId: CASH1981, arenaUnitId: target.id }))
+    expect(refused).toMatchObject({ kind: 'BATTLE_CARD_REFUSED' })
+    expect(JSON.stringify(refused)).toContain('blockaded')
+    expect(zhukovOwed(blockaded.battle!, CASH1981)).toBe(1)
+    expect(blockaded.battle?.arena.find((unit) => unit.id === target.id)?.health).toBe(target.health)
   })
 
   it('kills an enemy unit taken to 0 health', () => {

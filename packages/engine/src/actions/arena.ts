@@ -1024,6 +1024,11 @@ export function zhukovWound(state: GameState, input: ZhukovWoundInput): ActionRe
   const refuse = (reason: string): ActionResult => err({ kind: 'BATTLE_CARD_REFUSED', reason })
   const entry = (battle.zhukov ?? []).find((candidate) => candidate.playerId === input.playerId)
   if (entry === undefined) return refuse(`${ZHUKOV} has not been played in this battle.`)
+  // The ability stops while every figure of the card's type is blockaded, even after it has been played
+  const card = player.items.find((item) => item.kind === 'greatperson' && item.name === ZHUKOV)
+  if (card !== undefined && card.kind === 'greatperson' && card.type !== null && blockadedGreatPersonTypes(state, player).includes(card.type)) {
+    return refuse(`Every ${card.type} figure of yours is blockaded, so ${ZHUKOV} cannot be used.`)
+  }
   if (zhukovOwed(battle, input.playerId) <= 0) return refuse(`${ZHUKOV} has no wound to deal: none of your units has been killed since you played him.`)
   const target = battle.arena.find((unit) => unit.id === input.arenaUnitId)
   if (target === undefined) return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
