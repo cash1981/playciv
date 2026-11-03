@@ -291,7 +291,7 @@ describe('Florence Nightingale after End battle', () => {
     return { state: unwrap(endBattleAction(state, { playerId: KARANDRAS1 })), cardId }
   }
 
-  it('can be played by either combatant on the battle that has just ended', () => {
+  it('can be played, by the combatant who holds her, on the battle that has just ended', () => {
     const { state } = ended()
     expect(state.battle).toBeNull()
     const card = statusOf(state, CASH1981, 'Florence Nightingale')

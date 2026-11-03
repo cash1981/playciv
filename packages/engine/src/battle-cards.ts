@@ -66,7 +66,7 @@ export function zhukovDealt(state: GameState, actionId: string): number {
  */
 export function battleCardBlock(state: GameState, player: Playerhand, name: string): string | undefined {
   // Florence Nightingale saves the killed units "after a battle" (human, 2026-11-03), so she can also be played on the
-  // battle End battle has just set aside, by either combatant, until the next battle starts
+  // battle End battle has just set aside, by whichever combatant holds her, until the next battle starts
   const battle = state.battle ?? (name === NIGHTINGALE ? (state.endedBattle?.battle ?? null) : null)
   if (battle === null) return name === NIGHTINGALE ? 'Played during a battle, or right after it.' : 'Played during a battle.'
   const side = playerSideOf(battle, player.playerId)
