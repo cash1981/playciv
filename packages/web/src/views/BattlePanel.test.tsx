@@ -441,6 +441,16 @@ describe('BattlePanel battle cards', () => {
     expect(list?.textContent).not.toContain('Leonidas')
   })
 
+  it('lists Florence Nightingale right after End battle, when no battle is on, and no other battle card', () => {
+    const florence = { ...leonidas, itemId: 'gp-4', name: 'Florence Nightingale', discards: true }
+    const afterwards = { ...view, battle: null, you: { ...view.you, stats: { trade: 5 }, playableCards: [florence, leonidas] } } as unknown as PlayerView
+    const { getByText, container } = render(<BattlePanel gameId="game" busy={false} run={run} view={afterwards} />)
+    fireEvent.click(getByText('Battle'))
+    const list = container.querySelector('[aria-label="Battle cards"]')
+    expect(list?.textContent).toContain('Florence Nightingale')
+    expect(list?.textContent).not.toContain('Leonidas')
+  })
+
   it('lists no battle card to someone outside the battle', () => {
     const outsider = { ...attacking, attacker: { playerId: 'x', kind: 'player' }, defender: { playerId: 'y', kind: 'player' } }
     const { getByText, queryByText, container } = render(

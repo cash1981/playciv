@@ -302,7 +302,9 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
               reason:
                 name === 'Gustavus Adolphus'
                   ? 'Can be played on the units you have drawn for a battle.'
-                  : 'Can be played in the battle you are fighting.',
+                  : state.battle === null
+                    ? 'Can be played on the battle that has just ended.'
+                    : 'Can be played in the battle you are fighting.',
             }
           : { ...base, status: 'wrong-phase' as const, reason: block },
       ]

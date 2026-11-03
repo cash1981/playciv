@@ -279,6 +279,57 @@ describe('Florence Nightingale and replaced units', () => {
   })
 })
 
+describe('Florence Nightingale after End battle', () => {
+  const killOne = (state: GameState, playerId: string): GameState => {
+    const unit = state.battle?.arena.find((candidate) => candidate.placedBy === playerId)
+    return unwrap(killArenaUnit(state, { playerId, arenaUnitId: unit!.id }))
+  }
+  /** cash1981 lost a unit, and karandras1 pressed End battle. */
+  const ended = (): { readonly state: GameState; readonly cardId: string } => {
+    const fought = killOne(fight(2, 2), CASH1981)
+    const { state, cardId } = holding(fought, 'Florence Nightingale', CASH1981)
+    return { state: unwrap(endBattleAction(state, { playerId: KARANDRAS1 })), cardId }
+  }
+
+  it('can be played by either combatant on the battle that has just ended', () => {
+    const { state } = ended()
+    expect(state.battle).toBeNull()
+    const card = statusOf(state, CASH1981, 'Florence Nightingale')
+    expect(card.status).toBe('ready')
+    expect(card.reason).toContain('just ended')
+  })
+
+  it('marks the killed units of the final arena as saved, and the undo takes the mark back', () => {
+    const { state, cardId } = ended()
+    const after = unwrap(play(state, CASH1981, cardId))
+    const saved = after.endedBattle!.battle.arena.filter((unit) => unit.placedBy === CASH1981 && unit.killed)
+    expect(saved.length).toBeGreaterThan(0)
+    expect(saved.every((unit) => unit.saved === true)).toBe(true)
+    expect(toPlayerView(after, KARANDRAS1).lastBattle?.arena.some((unit) => unit.saved === true)).toBe(true)
+    expect(after.log.at(-1)?.publicLog).toContain('saving 1 killed unit')
+    const undone = undoByVote(after, CASH1981, 'b1')
+    expect(undone.endedBattle!.battle.arena.some((unit) => unit.saved !== undefined)).toBe(false)
+    // The ender's Undo end battle brings the battle back with the mark, when it was kept
+    const back = unwrap(undoEndBattle(after, { playerId: KARANDRAS1 }))
+    expect(back.battle?.arena.some((unit) => unit.saved === true)).toBe(true)
+  })
+
+  it('is refused by a player who was not in the battle, without a killed unit, and once a new battle has started', () => {
+    const outsider = holding(killOne(fight(2, 2), CASH1981), 'Florence Nightingale', ITCHI).state
+    const left = unwrap(endBattleAction(outsider, { playerId: KARANDRAS1 }))
+    expect(statusOf(left, ITCHI, 'Florence Nightingale').status).toBe('wrong-phase')
+    const spared = unwrap(endBattleAction(holding(fight(2, 2), 'Florence Nightingale', CASH1981).state, { playerId: KARANDRAS1 }))
+    expect(statusOf(spared, CASH1981, 'Florence Nightingale').status).toBe('wrong-phase')
+    const next = unwrap(initiateBattle(ended().state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    expect(statusOf(next, CASH1981, 'Florence Nightingale').status).toBe('wrong-phase')
+  })
+
+  it('does not extend to Leonidas, whose bonus was counted when the battle ended', () => {
+    const { state } = holding(unwrap(endBattleAction(fight(3, 2), { playerId: CASH1981 })), 'Leonidas', KARANDRAS1)
+    expect(statusOf(state, KARANDRAS1, 'Leonidas').status).toBe('wrong-phase')
+  })
+})
+
 describe('Sun Tzu', () => {
   const withSunTzu = (state: GameState, playerId: string, trade: number): GameState =>
     withStat(holding(state, 'Sun Tzu', playerId).state, playerId, 'trade', trade)

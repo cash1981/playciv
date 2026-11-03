@@ -65,7 +65,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 
 ## Battle cards
 
-- Leonidas, Joan of Arc and Florence Nightingale cannot be played after End battle; the ender can Undo end battle,
+- Leonidas and Joan of Arc cannot be played after End battle (Florence Nightingale can); the ender can Undo end battle,
   play the card and end again. Sun Tzu's pass has no undo (the trade is corrected by hand).
 - Florence Nightingale marks the units killed at the time she is played; a unit killed later is not saved.
 - Zhukov's wound has no undo, and a kill taken back after a wound was dealt leaves that wound dealt (the next real
