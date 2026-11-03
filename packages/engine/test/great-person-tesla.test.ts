@@ -141,6 +141,25 @@ describe('Nikola Tesla', () => {
     expect(JSON.stringify(refused)).toContain('level 2 row of your pyramid is full')
   })
 
+  it('counts a Great Person placed by Newton in the row, and does not offer a tech already moved by hand', () => {
+    const base = research(16)
+    const twos = [0, 1, 2].map((index) => techOfLevel(base, 2, index))
+    const tech = techOfLevel(base, 3)
+    const withPlacement = (state: GameState): GameState => ({
+      ...state,
+      players: state.players.map((hand) =>
+        hand.playerId === CASH1981 ? { ...hand, pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }] } : hand,
+      ),
+    })
+    // Three level II techs and Newton fill the four places of the level II row
+    const full = withCardInHand(withPlacement(learn(twos.reduce(learn, base), tech)), 'Nikola Tesla')
+    expect(card(full.state, full.itemId)?.tesla?.map((choice) => choice.name)).not.toContain(tech.name)
+
+    const handMoved = unwrap(setTechSlot(learn(base, tech), { playerId: CASH1981, techName: tech.name, slot: 2 }))
+    const held = withCardInHand(handMoved, 'Nikola Tesla')
+    expect(card(held.state, held.itemId)?.status).toBe('unavailable')
+  })
+
   it('refuses a tech the player has not chosen, and without a choice', () => {
     const tech = techOfLevel(firstCivGame(), 3)
     const held = withCardInHand(learn(research(16), tech), 'Nikola Tesla')

@@ -12,7 +12,7 @@
  */
 
 import { openResearchTurnOf, withTechSlot } from './actions/player.js'
-import { playerOf, withPlayerHand } from './assisted-core.js'
+import { withPlayerHand } from './assisted-core.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import type { GameState, Playerhand } from './state.js'
@@ -123,6 +123,5 @@ export function teslaUndoBlock(player: Playerhand, effect: TeslaEffect): string 
 
 /** The move taken back: the tech is shown in the row it had before. */
 export function undoTesla(state: GameState, player: Playerhand, effect: TeslaEffect): GameState {
-  const current = playerOf(state, player.playerId) ?? player
-  return withPlayerHand(state, withTechSlot(current, effect.techName, effect.from))
+  return withPlayerHand(state, withTechSlot(player, effect.techName, effect.from))
 }
