@@ -330,6 +330,28 @@ describe('Florence Nightingale after End battle', () => {
   })
 })
 
+describe('only the owner of a Great Person card can play it', () => {
+  it('refuses the other combatant, in the battle and after End battle', () => {
+    const killed = (() => {
+      const state = fight(2, 2)
+      const unit = state.battle!.arena.find((candidate) => candidate.placedBy === CASH1981)!
+      return unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: unit.id }))
+    })()
+    for (const [name, owner, other] of [
+      ['Florence Nightingale', CASH1981, KARANDRAS1],
+      ['Leonidas', KARANDRAS1, CASH1981],
+      ['Joan of Arc', KARANDRAS1, CASH1981],
+    ] as const) {
+      const { state, cardId } = holding(withStat(killed, KARANDRAS1, 'culture', 5), name, owner)
+      // It is not in the other player's list, and a play of its id is refused
+      expect(playableCardsOf(state, findPlayer(state, other)!).some((card) => card.name === name)).toBe(false)
+      expect(unwrapErr(play(state, other, cardId)).kind).toBe('ASSISTED_ACTION_REJECTED')
+      const over = unwrap(endBattleAction(state, { playerId: other }))
+      expect(unwrapErr(play(over, other, cardId)).kind).toBe('ASSISTED_ACTION_REJECTED')
+    }
+  })
+})
+
 describe('Sun Tzu', () => {
   const withSunTzu = (state: GameState, playerId: string, trade: number): GameState =>
     withStat(holding(state, 'Sun Tzu', playerId).state, playerId, 'trade', trade)
