@@ -23,8 +23,8 @@ import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 const AT = '2026-11-02T10:00:00.000Z'
 
 /** cash1981 attacks karandras1; each side has put `attackers` and `defenders` infantry in the arena. */
-function fight(attackers: number, defenders: number): GameState {
-  let state = firstCivGame()
+function fight(attackers: number, defenders: number, initial: GameState = firstCivGame()): GameState {
+  let state = initial
   for (const [playerId, count] of [
     [CASH1981, attackers],
     [KARANDRAS1, defenders],
@@ -132,6 +132,30 @@ describe('Leonidas', () => {
     const undone = undoByVote(played, KARANDRAS1, 'b1')
     expect(bonusOf(undone, KARANDRAS1)).toBe(bonusOf(base, KARANDRAS1))
     expect(findPlayer(undone, KARANDRAS1)?.items.find((item) => item.id === cardId)?.hidden).toBe(true)
+  })
+
+  it('requires later uses to be undone before an earlier use of the same card', () => {
+    const { state, cardId } = holding(fight(3, 2), 'Leonidas', KARANDRAS1)
+    const first = unwrap(play(state, KARANDRAS1, cardId, 'b1'))
+    const ended = unwrap(endBattleAction(first, { playerId: CASH1981 }))
+    const nextBattle = fight(3, 2, ended)
+    const second = unwrap(play(nextBattle, KARANDRAS1, cardId, 'b2'))
+    const earlier = second.log.find((entry) => entry.assistedActionId === 'b1')
+    if (earlier === undefined) throw new Error('no log line for the earlier action')
+
+    let pending = unwrap(initiateUndo(second, { logId: earlier.id, playerId: KARANDRAS1 }))
+    pending = unwrap(vote(pending, { logId: earlier.id, playerId: CASH1981, vote: true, at: AT }))
+    pending = unwrap(vote(pending, { logId: earlier.id, playerId: ITCHI, vote: true, at: AT }))
+    expect(unwrapErr(vote(pending, { logId: earlier.id, playerId: CHUL, vote: true, at: AT }))).toMatchObject({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      reason: 'A later use of Leonidas is still applied. Undo it first.',
+    })
+
+    const secondUndone = undoByVote(pending, KARANDRAS1, 'b2')
+    expect(findPlayer(secondUndone, KARANDRAS1)?.items.find((item) => item.id === cardId)?.hidden).toBe(false)
+    const bothUndone = unwrap(vote(secondUndone, { logId: earlier.id, playerId: CHUL, vote: true, at: AT }))
+    expect(findPlayer(bothUndone, KARANDRAS1)?.items.find((item) => item.id === cardId)?.hidden).toBe(true)
+    expect(bothUndone.assistedActions.map((record) => record.status)).toEqual(['undone', 'undone'])
   })
 
   it('works once in a battle, and again in the next one', () => {
