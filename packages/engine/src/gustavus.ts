@@ -87,7 +87,7 @@ export function applyGustavus(
   next = { ...next, discardedItems: [...next.discardedItems, ...discarded.map((unit): Item => ({ ...unit, hidden: true }))] }
 
   const drew: { itemId: string; sheetName: SheetName }[] = []
-  const lines: string[] = []
+  const built: UnitItem[] = []
   for (const sheetName of chosen) {
     const drawn = drawCandidates(next, sheetName, 1)
     const first = drawn.ok ? drawn.value.items[0] : undefined
@@ -102,15 +102,14 @@ export function applyGustavus(
       battlehand: [...holder.battlehand, card],
     })
     drew.push({ itemId: card.id, sheetName })
-    lines.push(`Gustavus Adolphus: you built ${itemName(card)}`)
+    built.push(card)
   }
 
-  const units = `${count} unit${count === 1 ? '' : 's'}`
   return ok({
     state: next,
     effect: { discarded, drew },
-    said: `, discarding ${discarded.map(itemName).join(', ')} from the battle force and building ${units} for free`,
-    privateLines: lines,
+    said: `, discarding ${discarded.map(itemName).join(', ')} from the battle force and building ${built.map(itemName).join(', ')} for free`,
+    privateLines: [],
   })
 }
 
