@@ -26,6 +26,9 @@ const SHEET_NOUN: Readonly<Partial<Record<SheetName, string>>> = {
   AIRCRAFT: 'aircraft',
 }
 
+/** The type of a unit, as the public log gives it: "Artillery", without the card's numbers. */
+const typeName = (unit: UnitItem): string => `${unit.kind.charAt(0).toUpperCase()}${unit.kind.slice(1)}`
+
 /** The unit decks the player may build from: aircraft only once Flight is known. */
 export function gustavusSheetsOf(player: Playerhand): readonly SheetName[] {
   const flight = player.techsChosen.some((tech) => tech.name === 'Flight' && !tech.hidden)
@@ -108,8 +111,12 @@ export function applyGustavus(
   return ok({
     state: next,
     effect: { discarded, drew },
-    said: `, discarding ${discarded.map(itemName).join(', ')} from the battle force and building ${built.map(itemName).join(', ')} for free`,
-    privateLines: [],
+    // Only the type is public: the numbers give the strength and health, which stay in the player's own log
+    said: `, discarding ${discarded.map(typeName).join(', ')} from the battle force and building ${built.map(typeName).join(', ')} for free`,
+    privateLines: [
+      `Gustavus Adolphus: you discarded ${discarded.map(itemName).join(', ')}`,
+      ...built.map((unit) => `Gustavus Adolphus: you built ${itemName(unit)}`),
+    ],
   })
 }
 

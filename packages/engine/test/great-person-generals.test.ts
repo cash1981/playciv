@@ -233,11 +233,17 @@ describe('Gustavus Adolphus', () => {
       expect(seen.battlehand.some((unit) => unit.id === id)).toBe(false)
     }
     for (const unit of fresh) expect(seen.items.some((item) => item.id === unit.id)).toBe(true)
-    // The public line names both, with the type and the number
+    // The public line gives the types only; the player's own log has the full names with the numbers
     const said = after.log.find((entry) => entry.assistedActionId === 'g1')?.publicLog
-    const thrown = waiting.map((id) => itemName(after.discardedItems.find((item) => item.id === id)!)).join(', ')
-    const built = fresh.map(itemName).join(', ')
-    expect(said).toContain(`discarding ${thrown} from the battle force and building ${built} for free`)
+    const typeOf = (unit: { readonly kind: string }): string => `${unit.kind.charAt(0).toUpperCase()}${unit.kind.slice(1)}`
+    const thrown = waiting.map((id) => typeOf(after.discardedItems.find((item) => item.id === id)!)).join(', ')
+    expect(said).toContain(`discarding ${thrown} from the battle force and building ${fresh.map(typeOf).join(', ')} for free`)
+    for (const unit of fresh) expect(said).not.toContain(itemName(unit))
+    const own = after.log.filter((entry) => entry.playerId === CASH1981 && entry.privateLog.startsWith('Gustavus Adolphus')).map((entry) => entry.privateLog)
+    expect(own).toEqual([
+      `Gustavus Adolphus: you discarded ${waiting.map((id) => itemName(after.discardedItems.find((item) => item.id === id)!)).join(', ')}`,
+      ...fresh.map((unit) => `Gustavus Adolphus: you built ${itemName(unit)}`),
+    ])
   })
 
   it('works before any battle', () => {
@@ -299,13 +305,18 @@ describe('Gustavus Adolphus', () => {
     expect(refuse(unwrap(endBattleAction(fought, { playerId: CASH1981 })))).toContain('has been in the arena')
   })
 
-  it('tells every player which units were built, in the public line only', () => {
+  it('tells every player the types built, and keeps the numbers out of their log', () => {
     const { state, cardId } = base()
+    const waiting = findPlayer(state, CASH1981)!.battlehand.filter((entry) => !entry.inBattle).map((entry) => entry.id)
     const after = unwrap(play(state, CASH1981, cardId, 'g1', ['MOUNTED', 'ARTILLERY']))
-    const fresh = findPlayer(after, CASH1981)!.battlehand.filter((entry) => !entry.inBattle)
+    const player = findPlayer(after, CASH1981)!
+    const fresh = player.battlehand.filter((entry) => !entry.inBattle)
     const seen = toPlayerView(after, KARANDRAS1).log.find((entry) => entry.assistedActionId === 'g1')?.publicLog ?? ''
-    for (const unit of fresh) expect(seen).toContain(itemName(unit))
-    expect(after.log.some((entry) => entry.playerId === CASH1981 && entry.privateLog.startsWith('Gustavus Adolphus'))).toBe(false)
+    expect(seen).toContain('building')
+    for (const unit of fresh) expect(seen).not.toContain(itemName(unit))
+    for (const id of waiting) expect(seen).not.toContain(itemName(after.discardedItems.find((item) => item.id === id)!))
+    // The player's own log lines are not in what the others get
+    expect(JSON.stringify(toPlayerView(after, KARANDRAS1).log)).not.toContain('you built')
   })
 })
 

@@ -376,8 +376,9 @@ combatant for a card.
   a battle on (then only by a combatant), on the units drawn for it and not placed in an arena (the battlehand, not
   `inBattle`). They go to the discard pile and one new unit card is drawn into the hand and the battlehand for each,
   from the deck the player chose (the form sends `units`: infantry, mounted, artillery, and aircraft only with
-  Flight). The arena is not touched. The public line names the discarded and the built units by value, type and number
-  (e.g. "Infantry 3.1", human 2026-11-03: it must say which types were built); there is no private line. Undo
+  Flight). The arena is not touched. The public line names the discarded and the built units by type only (e.g.
+  "Artillery"; human 2026-11-03: the numbers give strength and health and must not be public); the player's own log
+  has them in full ("Artillery 3.1"), one line for the discards and one for each unit built. Undo
   returns it while the new cards are still free in the hand and the discarded ones in the discard pile (the new cards
   go back into their decks, which are reshuffled); never once a new unit has been in the arena while that battle is
   the active or the set-aside one. Listed in the Battle panel and the phase tabs also with no battle on.
