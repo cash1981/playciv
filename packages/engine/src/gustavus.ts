@@ -26,8 +26,14 @@ const SHEET_NOUN: Readonly<Partial<Record<SheetName, string>>> = {
   AIRCRAFT: 'aircraft',
 }
 
-/** The type of a unit, as the public log gives it: "Artillery", without the card's numbers. */
+/** The type of a unit, as the public log gives a unit that was built: "Artillery", without the card's strength and health. */
 const typeName = (unit: UnitItem): string => `${unit.kind.charAt(0).toUpperCase()}${unit.kind.slice(1)}`
+
+/** A discarded unit in full, for the public log, so it is easy to keep track of: "Artillery 3.1 item number #54". */
+const discardedName = (unit: UnitItem): string => `${itemName(unit)} item number #${unit.itemNumber}`
+
+/** A unit that was built, for the public log: the type and the item number, not the strength: "Infantry item number #61". */
+const builtName = (unit: UnitItem): string => `${typeName(unit)} item number #${unit.itemNumber}`
 
 /** The unit decks the player may build from: aircraft only once Flight is known. */
 export function gustavusSheetsOf(player: Playerhand): readonly SheetName[] {
@@ -111,11 +117,12 @@ export function applyGustavus(
   return ok({
     state: next,
     effect: { discarded, drew },
-    // Only the type is public: the numbers give the strength and health, which stay in the player's own log
-    said: `, discarding ${discarded.map(typeName).join(', ')} from the battle force and building ${built.map(typeName).join(', ')} for free`,
+    // The discards are open information, in full. A built unit is still hidden, so only its type and item number
+    // are public (the strength and health stay in the player's own log)
+    said: `, discarding ${discarded.map(discardedName).join(', ')} from the battle force and building ${built.map(builtName).join(', ')} for free`,
     privateLines: [
-      `Gustavus Adolphus: you discarded ${discarded.map(itemName).join(', ')}`,
-      ...built.map((unit) => `Gustavus Adolphus: you built ${itemName(unit)}`),
+      `Gustavus Adolphus: you discarded ${discarded.map((unit) => `${itemName(unit)} item number #${unit.itemNumber}`).join(', ')}`,
+      ...built.map((unit) => `Gustavus Adolphus: you built ${itemName(unit)} item number #${unit.itemNumber}`),
     ],
   })
 }

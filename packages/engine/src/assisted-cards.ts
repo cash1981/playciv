@@ -1233,7 +1233,7 @@ export const playCard: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} ${verb} ${card.name} (${when})` +
+        `${player.username} ${verb} ${card.name}${card.name === 'Gustavus Adolphus' ? ` item number #${item.itemNumber}` : ''} (${when})` +
         (resource === null ? '' : ` as ${resource}`) +
         aimed +
         (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : '') +
