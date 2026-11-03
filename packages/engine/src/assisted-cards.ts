@@ -1273,6 +1273,20 @@ export const playCard: AssistedActionDefinition = {
     if (effect.kind !== 'playCard') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
 
+    if (effect.battleCard !== undefined) {
+      const recordIndex = state.assistedActions.findIndex((candidate) => candidate.id === record.id)
+      const laterUse = state.assistedActions.slice(recordIndex + 1).some((candidate) => {
+        const laterEffect = candidate.effect
+        return (
+          candidate.status === 'applied' &&
+          laterEffect.kind === 'playCard' &&
+          laterEffect.item.id === effect.item.id &&
+          laterEffect.battleCard !== undefined
+        )
+      })
+      if (laterUse) return blockedBy(`A later use of ${effect.name} is still applied. Undo it first.`)
+    }
+
     // Her extra city action cannot be taken away while a city action that used it is in force
     if (effect.name === LOVELACE_NAME && lovelaceCreditWasUsed(state, record.id)) {
       return blockedBy(`The extra city action from ${effect.name} has already been used. Undo that city action first.`)
