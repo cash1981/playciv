@@ -293,7 +293,14 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       const block = battleCardBlock(state, player, name)
       return [
         block === undefined
-          ? { ...base, status: 'ready' as const, reason: 'Can be played in the battle you are fighting.' }
+          ? {
+              ...base,
+              status: 'ready' as const,
+              reason:
+                state.battle === null
+                  ? 'Can be played on the battle that has just ended.'
+                  : 'Can be played in the battle you are fighting.',
+            }
           : { ...base, status: 'wrong-phase' as const, reason: block },
       ]
     }

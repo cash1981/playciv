@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { SUN_TZU, SUN_TZU_COST, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { NIGHTINGALE, SUN_TZU, SUN_TZU_COST, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -1563,9 +1563,14 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   // Battle Great Persons I can play now, and Sun Tzu's pass once per battle (a barbarian controller is no combatant)
   const myCombatant = battle !== null && mySideInBattle !== null && battle[mySideInBattle].kind === 'player'
-  const battleCards = myCombatant
-    ? (view.you?.playableCards ?? []).filter((card) => card.timings.includes('BATTLE') && card.status === 'ready')
-    : []
+  // Florence Nightingale is also played right after the battle (the ended battle's final arena), so she is listed
+  // with no battle on too
+  const battleCards = (view.you?.playableCards ?? []).filter(
+    (card) =>
+      card.timings.includes('BATTLE') &&
+      card.status === 'ready' &&
+      (myCombatant || (battle === null && card.name === NIGHTINGALE)),
+  )
   const sunTzuAvailable =
     myCombatant &&
     (view.you?.items ?? []).some((item) => item.kind === 'greatperson' && item.name === SUN_TZU) &&

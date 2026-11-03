@@ -45,8 +45,10 @@ const killedOf = (battle: Battle, side: BattleSideId): readonly ArenaUnit[] =>
  * defender; Leonidas also needs fewer units played than the opponent, which is judged when it is played.
  */
 export function battleCardBlock(state: GameState, player: Playerhand, name: string): string | undefined {
-  const battle = state.battle
-  if (battle === null) return 'Played during a battle.'
+  // Florence Nightingale saves the killed units "after a battle" (human, 2026-11-03), so she can also be played on the
+  // battle End battle has just set aside, by whichever combatant holds her, until the next battle starts
+  const battle = state.battle ?? (name === NIGHTINGALE ? (state.endedBattle?.battle ?? null) : null)
+  if (battle === null) return name === NIGHTINGALE ? 'Played during a battle, or right after it.' : 'Played during a battle.'
   const side = playerSideOf(battle, player.playerId)
   if (side === null) return 'You are not fighting in this battle.'
   switch (name) {
@@ -94,19 +96,25 @@ export function applyBattleCard(
   name: string,
   actionId: string,
 ): AppliedBattleCard | undefined {
+  if (name === NIGHTINGALE) {
+    // The battle on now, or the one that has just ended
+    const ended = state.battle === null ? state.endedBattle : null
+    const target = state.battle ?? ended?.battle ?? null
+    const own = target === null ? null : playerSideOf(target, player.playerId)
+    if (target === null || own === null) return undefined
+    const saved = killedOf(target, own).map((unit) => unit.id)
+    const mark = (unit: ArenaUnit): ArenaUnit => (saved.includes(unit.id) ? { ...unit, saved: true } : unit)
+    const marked = { ...target, arena: target.arena.map(mark), departedUnits: target.departedUnits.map(mark) }
+    return {
+      state: ended === null ? { ...state, battle: marked } : { ...state, endedBattle: { ...ended, battle: marked } },
+      effect: { battleId: target.id, saved },
+      said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they stay in the hand`,
+    }
+  }
   const battle = state.battle
   if (battle === null) return undefined
   const side = playerSideOf(battle, player.playerId)
   if (side === null) return undefined
-  if (name === NIGHTINGALE) {
-    const saved = killedOf(battle, side).map((unit) => unit.id)
-    const mark = (unit: ArenaUnit): ArenaUnit => (saved.includes(unit.id) ? { ...unit, saved: true } : unit)
-    return {
-      state: { ...state, battle: { ...battle, arena: battle.arena.map(mark), departedUnits: battle.departedUnits.map(mark) } },
-      effect: { battleId: battle.id, saved },
-      said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they stay in the hand`,
-    }
-  }
   const amount = name === LEONIDAS ? LEONIDAS_BONUS : name === JOAN_OF_ARC ? player.stats.culture : undefined
   if (amount === undefined) return undefined
   const cardBonuses = [...(battle.cardBonuses ?? []), { playerId: player.playerId, card: name, amount, actionId }]
