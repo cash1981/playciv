@@ -428,7 +428,7 @@ describe('choosing who the card names', () => {
     fireEvent.click(playButton('Mark Twain'))
     // Nothing is chosen at first, so the play is only logged
     fireEvent.click(screen.getByRole('radio', { name: /itchi devoted a city to the arts/ }))
-    expect(screen.getByText(/These action is lost|action is lost/)).toBeTruthy()
+    expect(screen.getByText(/This line is lost/)).toBeTruthy()
     expect(screen.getByText(/itchi advanced on the culture track/)).toBeTruthy()
     expect(screen.getByText(/The city has used its action for the turn/)).toBeTruthy()
     fireEvent.click(confirmButton())

@@ -154,10 +154,14 @@ export function cancelWithTwain(current: GameState, earlier: GameState, input: T
   }
   const target = current.log.find((entry) => entry.id === input.logId)
   if (target === undefined) return err('That action cannot be found.')
+  // `earlier` must be exactly the game before the action: the log up to it, nothing more and nothing less
+  const targetAt = current.log.findIndex((entry) => entry.id === input.logId)
+  const prefix = current.log.slice(0, targetAt)
   if (
     earlier.id !== current.id ||
     twainRecordOf(earlier, input.logId) !== undefined ||
-    earlier.log.some((entry) => !current.log.some((candidate) => candidate.id === entry.id))
+    earlier.log.length !== prefix.length ||
+    earlier.log.some((entry, index) => entry.id !== prefix[index]?.id)
   ) {
     return err('The game before that action could not be restored.')
   }
@@ -180,7 +184,10 @@ export function cancelWithTwain(current: GameState, earlier: GameState, input: T
     rev: current.rev,
     logSecret: current.logSecret,
     rng: current.rng,
-    log: [...earlier.log, target],
+    // The line stays as history; a vote to undo it, started before it was cancelled, can no longer be taken
+    log: [...earlier.log, { ...target, undo: null }],
+    // Item numbers the rolled-back actions took are not given out again
+    itemCounter: Math.max(current.itemCounter, earlier.itemCounter),
     assistedActions: [...earlier.assistedActions, { ...record, status: 'cancelled' }],
   }
 
@@ -217,7 +224,7 @@ export function cancelWithTwain(current: GameState, earlier: GameState, input: T
       `${holder.username} cancelled the ${label} of ${actor.username} with ${TWAIN_NAME}: “${target.publicLog}”` +
       (rolledBack.length === 0
         ? ''
-        : `. The game went back to just before it, so ${rolledBack.length} later ${rolledBack.length === 1 ? 'action' : 'actions'} of ${actor.username} are lost`) +
+        : `. The game went back to just before it, so ${rolledBack.length} later ${rolledBack.length === 1 ? 'log line is' : 'log lines are'} lost`) +
       (kindOf(record) === 'culture' ? '. The event card is discarded' : '. The city has used its action for the turn') +
       ' and Mark Twain is discarded',
     privateLog: '',

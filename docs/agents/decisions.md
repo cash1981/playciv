@@ -283,6 +283,9 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   action that used Ada Lovelace's extra action (the cards say so). A resource ability is not logged, so it is not
   on the list; the card form's last option only logs the play, as before, and the players undo by vote.
   Dr. Martin Luther King is a passive card the player makes faceup with Use; he already gave immunity to Anarchy.
+  Known gaps: the Revealed and Discarded list skips a cancelled event and the discarded Twain (both were played
+  publicly), and the engine's "another player acted" test reads log lines while the server's reads revisions, so
+  the list can offer an action the server then refuses with 409.
 - Zheng He (human, #301) writes one private line for each hut or village piece on a map
   square (square and name) and for each hut or village item another player holds. The
   pieces on the map are anonymous and a draw takes the top card, so the look fixes the
