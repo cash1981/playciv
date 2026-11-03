@@ -1512,6 +1512,33 @@ describe('endBattleTurn', () => {
     expect(state.battle!.turn).toBe('defender')
   })
 
+  it('names a placement in the public log only once the turn ends, and never one taken back', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const [first, second] = findPlayer(state, CASH1981)!.battlehand
+    const place = (s: GameState, id: string, position: number) => {
+      const u = findPlayer(s, CASH1981)!.battlehand.find((x) => x.id === id)!
+      return unwrap(
+        placeUnitInArena(s, {
+          playerId: CASH1981, unitId: id, side: 'attacker', position, attack: u.attack, health: u.health,
+        }),
+      )
+    }
+    const logs = (s: GameState) => s.log.map((e) => e.publicLog).join('\n')
+
+    state = place(state, first!.id, 0)
+    expect(logs(state)).not.toContain('into the arena')
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: state.battle!.arena[0]!.id }))
+    state = place(state, second!.id, 0)
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
+
+    const text = logs(state)
+    expect(text.match(/into the arena/g)).toHaveLength(1)
+    expect(text).toContain(revealAll(second!))
+    expect(text).not.toContain('to hand')
+    if (revealAll(first!) !== revealAll(second!)) expect(text).not.toContain(revealAll(first!))
+  })
+
   it('rejects a non-participant trying to end the battle turn', () => {
     let state = firstCivGame()
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))

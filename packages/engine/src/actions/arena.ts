@@ -499,15 +499,11 @@ export function placeUnitInArena(
     rotation: 0,
     killed: false,
     arrival: null,
+    announced: false,
   }
 
-  nextState = appendPublicLog(
-    nextState,
-    player.username,
-    player.playerId,
-    `places ${revealAll(sourceUnit)} (${input.attack}/${input.health}) into the arena`,
-  )
-
+  // The placement is logged when the turn ends, so changing your mind first
+  // does not reveal the unit you took back.
   return ok({
     ...nextState,
     battle: {
@@ -666,12 +662,14 @@ export function returnArenaUnitToHand(
     }
   }
 
-  nextState = appendPublicLog(
-    nextState,
-    player.username,
-    player.playerId,
-    `returns ${revealAll(arenaUnit.unit)} to hand`,
-  )
+  if (arenaUnit.announced !== false) {
+    nextState = appendPublicLog(
+      nextState,
+      player.username,
+      player.playerId,
+      `returns ${revealAll(arenaUnit.unit)} to hand`,
+    )
+  }
 
   const undone = undoArrival(battle.arena, battle.departedUnits, arenaUnit)
   return ok({
@@ -900,6 +898,34 @@ export interface EndBattleTurnInput {
 }
 
 /**
+ * Logs every placement `playerId` made that the log has not named yet, and
+ * marks those units announced. Called when their battle turn (or the battle)
+ * ends, so a unit placed and then taken back is never revealed.
+ */
+function announcePlacements(state: GameState, playerId: string): GameState {
+  const battle = state.battle
+  const owner = findPlayer(state, playerId)
+  if (battle === null || owner === undefined) return state
+  let next = state
+  for (const u of battle.arena) {
+    if (u.placedBy !== playerId || u.announced !== false) continue
+    next = appendPublicLog(
+      next,
+      owner.username,
+      owner.playerId,
+      `places ${revealAll(u.unit)} (${u.attack}/${u.health}) into the arena`,
+    )
+  }
+  return {
+    ...next,
+    battle: {
+      ...battle,
+      arena: battle.arena.map((u) => (u.placedBy === playerId && u.announced === false ? { ...u, announced: true } : u)),
+    },
+  }
+}
+
+/**
  * Flips the battle turn to the other side.
  *
  * Advisory: not enforced server-side, consistent with the general approach in
@@ -924,8 +950,9 @@ export function endBattleTurn(
 
   const nextTurn: BattleSideId = battle.turn === 'attacker' ? 'defender' : 'attacker'
 
+  const announced = announcePlacements(state, input.playerId)
   const nextState = appendPublicLog(
-    state,
+    announced,
     player.username,
     player.playerId,
     `ends their battle turn`,
@@ -933,7 +960,7 @@ export function endBattleTurn(
 
   return ok({
     ...nextState,
-    battle: { ...battle, turn: nextTurn },
+    battle: { ...(nextState.battle ?? battle), turn: nextTurn },
   })
 }
 
@@ -995,7 +1022,10 @@ export function endBattleAction(
   // includes `departedUnits` (issue #74's reinforced-away units): their
   // cards stayed locked for the rest of the battle, and this is the moment
   // they finally free up too.
-  let nextState = state
+  let nextState = announcePlacements(
+    announcePlacements(state, battle.attacker.playerId),
+    battle.defender.playerId,
+  )
   for (const arenaUnit of [...battle.arena, ...battle.departedUnits]) {
     const ownerSide =
       arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
