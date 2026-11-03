@@ -345,7 +345,7 @@ out by itself, recorded as `GameLogEntry.civSetup`:
 - `civSetup` is server-side like `item`: opponents get the public log form only.
 
 **Battle Great Persons** (issue #301; human 2026-11-02). A battle card is `ready` for a combatant of the active
-battle in any phase of the turn, and is listed in every phase tab and in the Battle panel; outside a battle it is
+battle in any phase of the turn, and is listed in every phase tab and in the Battle panel (under the battlehand, above the ended arena, which can be tall); outside a battle it is
 `wrong-phase` ("Played during a battle."). The controller of the barbarians is no combatant for a card.
 
 - **Leonidas:** the defender only, with fewer units played (arena plus reinforced away, killed or not) than the

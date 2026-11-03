@@ -1668,6 +1668,20 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         ))}
       </ul>
 
+      {battleCards.length > 0 && (
+        <>
+        <h3 style={{ marginTop: '0.8rem' }}>Battle cards</h3>
+        <ul className="playable-cards battle-cards" aria-label="Battle cards">
+          {battleCards.map((card) => (
+            <li key={card.itemId} className="playable-card">
+              <strong>{card.name}</strong>
+              <PlayCardControl card={card} gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} />
+            </li>
+          ))}
+        </ul>
+        </>
+      )}
+
       {/* — Barbarians — */}
       <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({availableBarbarians.length})</h3>
       <div className="row">
