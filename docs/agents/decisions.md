@@ -250,6 +250,14 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   discard does. Undo returns the drawn cards to the deck (also after the choices,
   from the hand or the discard pile) and the discards to the hand, and is refused
   when a kept card has left the hand or a discard has left the pile.
+- Nikola Tesla (human, 2026-11-03, #301) is played in Research on a tech of level II, III or IV that was added in
+  this Research phase (`researchTurns`), and shows it one pyramid row lower. The tech still costs the trade of its
+  own level (II 11, III 16, IV 21): a level III tech needs 16 trade to sit in the level II row. The move is the
+  manual one (`setTechSlot`, via `withTechSlot`): `level` stays, the row changes. Added here, not stated by the
+  human: the row below must have a free place (5, 4, 3, 2, 1 techs from level I to V, with Newton's placed Great
+  Person counting) and a tech already moved by hand is not offered. The public line says only that a tech was placed
+  one level lower, as the tech may be hidden; the player's own log names it. Undo puts the tech back in its row and
+  is refused when the tech has been moved again or removed.
 - Zheng He (human, #301) writes one private line for each hut or village piece on a map
   square (square and name) and for each hut or village item another player holds. The
   pieces on the map are anonymous and a draw takes the top card, so the look fixes the
