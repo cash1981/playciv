@@ -85,7 +85,10 @@ function othersActedAfter(state: GameState, logId: string, actorId: string): boo
   return state.log.slice(at + 1).some((entry) => entry.playerId !== null && entry.playerId !== actorId)
 }
 
-const twainCardOf = (player: Playerhand) => player.items.find((item) => item.kind === 'greatperson' && item.name === TWAIN_NAME)
+const twainCardOf = (player: Playerhand) => {
+  const pendingCandidates = new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
+  return player.items.find((item) => item.kind === 'greatperson' && item.name === TWAIN_NAME && !pendingCandidates.has(item.id))
+}
 
 /** Why the holder cannot cancel anything with Mark Twain now, or `undefined`. */
 export function twainBlock(state: GameState, holder: Playerhand): string | undefined {

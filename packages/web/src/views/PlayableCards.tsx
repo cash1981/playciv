@@ -305,8 +305,8 @@ export function PlayCardControl({
   const confirm = (): void => {
     if (!valid) return
     // Mark Twain on a chosen action: the server rewinds the game to before it. Otherwise it is only logged
-    if (twainTarget !== undefined) {
-      void run(() => api.twainCancel(gameId, twainTarget.logId, view.rev)).then(() => {
+    if (twainLog !== '') {
+      void run(() => api.twainCancel(gameId, twainLog, view.rev)).then(() => {
         setTwainLog('')
         setOpen(false)
       })

@@ -437,6 +437,47 @@ describe('choosing who the card names', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('still submits a selected Twain cancellation if a live refresh removes its target', async () => {
+    const cancel = vi.spyOn(api, 'twainCancel').mockResolvedValue({} as PlayerView)
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const twain = card({
+      name: 'Mark Twain',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'players', min: 0, max: 1 },
+      prompt: 'Whose action is cancelled? (optional)',
+      discards: true,
+      twain: [
+        {
+          logId: 'l1',
+          playerId: 'p2',
+          username: 'itchi',
+          kind: 'city',
+          text: 'itchi devoted a city to the arts',
+          rolledBack: [],
+        },
+      ],
+    })
+    const { rerender } = renderControl(viewWith([twain]), twain)
+    fireEvent.click(playButton('Mark Twain'))
+    fireEvent.click(screen.getByRole('radio', { name: /itchi devoted a city to the arts/ }))
+
+    const refreshed = { ...twain, twain: [] }
+    rerender(
+      <PlayCardControl
+        card={refreshed}
+        gameId="g1"
+        view={viewWith([refreshed])}
+        busy={false}
+        run={run}
+      />,
+    )
+    fireEvent.click(confirmButton())
+
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith('g1', 'l1', 8))
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const frida = card({
