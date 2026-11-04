@@ -114,8 +114,9 @@ describe('Frida Kahlo', () => {
     const drawn = after.find((item) => item.id === nextTwo[0]?.id)
     expect(drawn).toMatchObject({ sheetName: 'CULTURE_2', hidden: true, ownerId: CASH1981 })
     expect(deckIds(played, 'CULTURE_2')).not.toContain(drawn?.id)
+    // The discard is open information (full name and item number); the drawn card is hidden (item number only)
     expect(played.log.find((entry) => entry.assistedActionId === 'f1')?.publicLog).toBe(
-      'cash1981 played Frida Kahlo (any time) and discarded it, discarding 1 culture card and drawing 1 from the Culture II deck',
+      `cash1981 played Frida Kahlo (any time) and discarded it, discarding ${itemName(throwAway)} item number #${throwAway.itemNumber} and drawing 1 from the Culture II deck (item number #${drawn?.itemNumber})`,
     )
   })
 
@@ -125,7 +126,7 @@ describe('Frida Kahlo', () => {
     const drawn = me(played).items.filter((item) => item.kind.startsWith('culture'))
     expect(drawn).toHaveLength(2)
     expect(drawn.every((item) => item.sheetName === 'CULTURE_3')).toBe(true)
-    expect(played.log.at(-2)?.publicLog).toContain('discarding 2 culture cards and drawing 2 from the Culture III deck')
+    expect(played.log.at(-2)?.publicLog).toMatch(/discarding .+ item number #\d+, .+ item number #\d+ and drawing 2 from the Culture III deck \(item numbers #\d+, #\d+\)/)
   })
 
   it('draws up to the hand size without a discard', () => {
@@ -305,16 +306,25 @@ describe('Frida Kahlo', () => {
     expect(JSON.stringify(unwrapErr(undoRejection(taken, 'f1')))).toContain('no longer in the discard pile')
   })
 
-  it('keeps the card names out of the public log and out of every other view', () => {
+  it('names the discard in full in the public log, keeps the drawn card out of it and out of every other view', () => {
     const { state, fridaId, hand } = scene()
     const played = unwrap(play(state, fridaId, [hand[0]?.id as string]))
-    const drawnName = itemName(me(played).items.find((item) => item.sheetName === 'CULTURE_2') as Item)
-    const names = [itemName(hand[0] as Item), drawnName]
+    const drawnCard = me(played).items.find((item) => item.sheetName === 'CULTURE_2') as Item
+    const names = [itemName(drawnCard)]
+    const discardedName = itemName(hand[0] as Item)
 
     const line = played.log.find((entry) => entry.assistedActionId === 'f1')
+    expect(line?.publicLog).toContain(`${discardedName} item number #${(hand[0] as Item).itemNumber}`)
+    expect(line?.publicLog).toContain(`item number #${drawnCard.itemNumber}`)
     for (const name of names) expect(line?.publicLog).not.toContain(name)
-    // The private line names them, for the player only
-    expect(played.log.some((entry) => names.every((name) => entry.privateLog.includes(name)))).toBe(true)
+    // The private line names both with their item numbers, for the player only
+    expect(
+      played.log.some(
+        (entry) =>
+          entry.privateLog.includes(`${discardedName} item number #${(hand[0] as Item).itemNumber}`) &&
+          entry.privateLog.includes(`${itemName(drawnCard)} item number #${drawnCard.itemNumber}`),
+      ),
+    ).toBe(true)
 
     for (const viewerId of [KARANDRAS1, ITCHI, 'spectator']) {
       const view = toPlayerView(played, viewerId)

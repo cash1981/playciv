@@ -75,7 +75,6 @@ import {
   lastLogId,
   levelSheet,
   playerOf,
-  plural,
   rejected,
   useTurnAction,
   withPlayerHand,
@@ -686,7 +685,9 @@ function automate(
         discardedItems: [...state.discardedItems, ...discarding.map((card) => ({ ...card, hidden: true }))],
       }
       const room = Math.max(0, cultureHandSizeOf(discarded, holder) - cultureCardsHeld(holder))
-      const thrownText = discarding.length === 0 ? '' : `discarding ${plural(discarding.length, 'culture card')}`
+      // A discard is open information: the public line names each card in full with its item number
+      const fullName = (card: Item): string => `${itemName(card)} item number #${card.itemNumber}`
+      const thrownText = discarding.length === 0 ? '' : `discarding ${discarding.map(fullName).join(', ')}`
       const effectOf = (drawn: readonly string[]) => ({ frida: { discarded: discarding, drawn, sheetName } })
       if (room === 0) {
         return ok({
@@ -696,7 +697,7 @@ function automate(
             discarding.length === 0
               ? ', but the culture hand was already full, so nothing was drawn'
               : `, ${thrownText}; the culture hand was already full, so nothing was drawn`,
-          ...(discarding.length === 0 ? {} : { privateSaid: `${player.username} discarded ${discarding.map(itemName).join(', ')} with ${FRIDA}` }),
+          ...(discarding.length === 0 ? {} : { privateSaid: `${player.username} discarded ${discarding.map(fullName).join(', ')} with ${FRIDA}` }),
         })
       }
       // Every card of the hand is a draw of its own, which with Mysticism takes an extra card to choose from
@@ -733,7 +734,8 @@ function automate(
       )
       const drawer = playerOf(working, player.playerId) ?? holder
       const drawnText =
-        `drawing ${cards.length} from ${deck}` +
+        // The drawn cards are hidden, so the public line carries only their item numbers
+        `drawing ${cards.length} from ${deck} (item number${cards.length === 1 ? '' : 's'} ${cards.map((card) => `#${card.itemNumber}`).join(', ')})` +
         (rewards.length === 0 ? '' : ', keeping one of each pair') +
         (groups.length < room ? ' (no more cards were left)' : '')
       return ok({
@@ -746,8 +748,8 @@ function automate(
         said: `, ${thrownText === '' ? '' : `${thrownText} and `}${drawnText}`,
         privateSaid:
           `${player.username} ` +
-          (discarding.length === 0 ? '' : `discarded ${discarding.map(itemName).join(', ')} and `) +
-          `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
+          (discarding.length === 0 ? '' : `discarded ${discarding.map(fullName).join(', ')} and `) +
+          `drew ${cards.map((card) => `${itemName(card)} item number #${card.itemNumber}`).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
       })
     }

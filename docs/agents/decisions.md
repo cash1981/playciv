@@ -30,6 +30,13 @@ Source: `packages/engine/src/`, `packages/server/src/app.ts`,
   include hidden bonuses.
 - Undo descriptions must not reveal more than the original public action.
 - Log-number keys are independent of the public RNG stream.
+- Item numbers are a plain count from 1 (human 2026-11-04), shuffled once per game
+  so a number says nothing about the catalogue order or a card's place in a deck, and
+  the same card has another number in another game. Numbers of items made later
+  continue from the end. The number a hidden tech or policy line carries is a keyed
+  permutation of the item number for each player (the same card differs between
+  players), short (1-999, then by block of 999) and unique within a player's view.
+  Existing games keep the numbers they were created with.
 - Never reconstruct historical revealed cards by matching display names to a
   current hand: duplicate names and redraws can reveal private cards.
 
@@ -244,8 +251,11 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Mysticism every place in the hand is a draw of two with one kept, a pending choice
   each (`<request id>`, `<request id>:2`, as Cristo Redentor does), and she waits
   for an earlier choice. If the deck runs out the discard pile is reshuffled, which
-  can deal a just discarded card back. The public line gives counts only and the
-  names of drawn cards are in the player's private log (with Mysticism the line of the choice names the card not kept, as any card choice does); the cards she discards go
+  can deal a just discarded card back. The public line names each discarded card in
+  full with its item number (a discard is open information) and gives the drawn cards
+  by item number only; the player's private log repeats both with full names and item
+  numbers, so an opponent can check later that nothing was swapped (human 2026-11-04;
+  with Mysticism the line of the choice names the card not kept, as any card choice does); the cards she discards go
   to the public discard pile and show in the Revealed and Discarded list, as any
   discard does. Undo returns the drawn cards to the deck (also after the choices,
   from the hand or the discard pile) and the discards to the hand, and is refused

@@ -14,7 +14,7 @@ import type { GameDataFile, GreatPersonReference, WonderReference } from './game
 import { greatPersonReference, readDeck, wonderReference } from './gamedata.js'
 import type { Item, SocialPolicyItem, TechItem } from './item.js'
 import type { Rng } from './random.js'
-import { nextIntBetween, nextId, seedFrom } from './random.js'
+import { nextIntBetween, nextId, seedFrom, shuffle } from './random.js'
 import { deriveLogSecret } from './log.js'
 import type { GameState, GameType, Playerhand } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
@@ -143,13 +143,12 @@ export function createGame(options: CreateGameOptions): GameState {
 
   const seed = typeof options.seed === 'string' ? seedFrom(options.seed) : options.seed
 
-  // Java: `itemCounter = new AtomicInteger(RandomUtils.nextInt(1, 20))`, a
-  // static counter with a random start. The offset stays random per game so
-  // itemNumber cannot be used to guess which card another game was dealt.
-  const [startCounter, afterOffset] = nextIntBetween(seed, 1, 20)
+  // Java started the counter at a random 1-20. The numbers now run from 1 and are shuffled below, so the draw is kept
+  // only to leave the rest of the seeded stream as it was.
+  const [, afterOffset] = nextIntBetween(seed, 1, 20)
   const [gameId, afterId] = nextId(afterOffset)
 
-  const deck = readDeck(data, afterId, startCounter)
+  const deck = readDeck(data, afterId, 0)
 
   // This order decides the itemNumber, and follows PBFTestAction
   const items: Item[] = [
@@ -183,6 +182,15 @@ export function createGame(options: CreateGameOptions): GameState {
   const numberedTechs = numbered<TechItem>(deck.techs)
   const numberedPolicies = numbered<SocialPolicyItem>(deck.socialPolicies)
 
+  // The numbers are an ordinary count from 1, but handed out in a random order for each game. A number says nothing
+  // about the card it is on (the catalogue order) or where it sits in a deck, and the same card has another number in
+  // another game. Items made later (`itemCounter + 1`) carry on from the end.
+  const [labels, afterLabels] = shuffle(
+    Array.from({ length: counter }, (_, index) => index + 1),
+    deck.rng,
+  )
+  const relabel = (itemNumber: number): number => labels[itemNumber - 1] ?? itemNumber
+
   return {
     id: gameId,
     name: options.name,
@@ -191,7 +199,11 @@ export function createGame(options: CreateGameOptions): GameState {
     numOfPlayers: options.numOfPlayers,
     active: true,
     winner: null,
-    items: numberedItems,
+    items: numberedItems.map((item) =>
+      item.kind === 'civ'
+        ? { ...item, itemNumber: relabel(item.itemNumber), startingTech: { ...item.startingTech, itemNumber: relabel(item.startingTech.itemNumber) } }
+        : { ...item, itemNumber: relabel(item.itemNumber) },
+    ),
     discardedItems: [],
     withdrawnPlayers: [],
     publicTurns: {},
@@ -202,12 +214,12 @@ export function createGame(options: CreateGameOptions): GameState {
     players: (options.players ?? []).map((player, index) =>
       emptyPlayerhand(player, index + 1),
     ),
-    techs: numberedTechs,
-    socialPolicies: numberedPolicies,
+    techs: numberedTechs.map((tech) => ({ ...tech, itemNumber: relabel(tech.itemNumber) })),
+    socialPolicies: numberedPolicies.map((policy) => ({ ...policy, itemNumber: relabel(policy.itemNumber) })),
     log: [],
     assistedActions: [],
     tradeOffers: [],
-    rng: deck.rng,
+    rng: afterLabels,
     logSecret: options.secret ?? deriveLogSecret(seed, gameId),
     itemCounter: counter,
     wondersDealt: false,
