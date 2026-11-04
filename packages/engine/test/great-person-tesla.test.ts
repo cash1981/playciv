@@ -197,10 +197,27 @@ describe('Nikola Tesla', () => {
     const moved = unwrap(setTechSlot(played, { playerId: CASH1981, techName: tech.name, slot: 1 }))
     const movedResult = refusedAfter(moved)
     expect(movedResult.ok).toBe(false)
-    expect(JSON.stringify(movedResult)).toContain('moved to another row')
+    expect(JSON.stringify(movedResult)).toContain('This action can no longer be undone because its effect has changed.')
     const removedResult = refusedAfter(unwrap(removeTech(played, { playerId: CASH1981, techName: tech.name })))
     expect(removedResult.ok).toBe(false)
-    expect(JSON.stringify(removedResult)).toContain('has left your pyramid')
+    expect(JSON.stringify(removedResult)).toContain('This action can no longer be undone because its effect has changed.')
+  })
+
+  it('does not reveal a hidden tech when a non-owner vote cannot undo Tesla', () => {
+    const tech = techOfLevel(firstCivGame(), 3)
+    const held = withCardInHand(learn(research(16), tech), 'Nikola Tesla')
+    const played = unwrap(play(held.state, held.itemId, tech.name))
+    const entry = played.log.find((candidate) => candidate.assistedActionId === 'tesla-1')
+    if (entry === undefined) throw new Error('no log line')
+
+    const moved = unwrap(setTechSlot(played, { playerId: CASH1981, techName: tech.name, slot: 1 }))
+    const requested = unwrap(initiateUndo(moved, { logId: entry.id, playerId: CASH1981 }))
+    const firstVote = unwrap(vote(requested, { logId: entry.id, playerId: KARANDRAS1, vote: true, at: AT }))
+    const secondVote = unwrap(vote(firstVote, { logId: entry.id, playerId: ITCHI, vote: true, at: AT }))
+    const failedVote = vote(secondVote, { logId: entry.id, playerId: CHUL, vote: true, at: AT })
+
+    expect(failedVote.ok).toBe(false)
+    expect(JSON.stringify(failedVote)).not.toContain(tech.name)
   })
 
   it('does not name a hidden tech in the public log, only in the player\'s own', () => {
