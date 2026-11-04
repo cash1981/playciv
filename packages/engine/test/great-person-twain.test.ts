@@ -227,6 +227,25 @@ describe('what Mark Twain may not cancel', () => {
     expect(cancelWithTwain(older, before, { holderId: KARANDRAS1, logId: logLineOf(devoted, 'd-1') }).ok).toBe(false)
   })
 
+  it('cannot use Mark Twain while it is an unchosen reward candidate', () => {
+    const { state: before, twainId } = scene()
+    const devoted = devote(before, 'd-1')
+    const pending: GameState = {
+      ...devoted,
+      players: devoted.players.map((p) =>
+        p.playerId === KARANDRAS1
+          ? {
+              ...p,
+              pendingRewards: [{ id: 'reward', kind: 'event', level: 1, step: 1, candidateIds: [twainId], keep: 1 }],
+            }
+          : p,
+      ),
+    }
+
+    expect(twainTargetsOf(pending, player(pending, KARANDRAS1))).toEqual([])
+    expect(cancelWithTwain(pending, before, { holderId: KARANDRAS1, logId: logLineOf(devoted, 'd-1') }).ok).toBe(false)
+  })
+
   it('closes a vote to undo the cancelled line, and does not hand out an item number again', () => {
     const { state: before } = scene()
     const devoted = devote({ ...before, itemCounter: 5 }, 'd-1')
