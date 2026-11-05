@@ -18,6 +18,7 @@ import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './ass
 import { cityActionsOf } from './city-actions.js'
 import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
 import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './gustavus.js'
+import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, undoTesla } from './tesla.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
@@ -74,7 +75,6 @@ import {
   lastLogId,
   levelSheet,
   playerOf,
-  plural,
   rejected,
   useTurnAction,
   withPlayerHand,
@@ -204,6 +204,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
           : null,
       harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
       gustavus: name === 'Gustavus Adolphus' ? gustavusChoiceOf(player) : null,
+      tesla: name === TESLA_NAME ? teslaChoicesOf(state, player) : null,
       cultureHand:
         name === FRIDA
           ? cultureCardsOf(player).map((card) => ({ itemId: card.id, name: itemName(card) }))
@@ -289,6 +290,11 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
           reason: 'No other player has revealed a tech for Edison to research.',
         },
       ]
+    }
+    // Tesla is played on a tech just added in Research, so with none to move the card is not ready
+    if (name === TESLA_NAME && now === 'RESEARCH') {
+      const block = teslaBlock(state, player)
+      if (block !== undefined) return [{ ...base, status: 'unavailable', reason: block }]
     }
     // A card played in a battle is ready for a combatant while one is on, in any phase of the turn
     if (BATTLE_CARDS.has(name) && base.timings.includes('BATTLE')) {
@@ -379,6 +385,7 @@ interface Automated {
     | 'zhengHe'
     | 'battleCard'
     | 'gustavus'
+    | 'tesla'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -678,7 +685,9 @@ function automate(
         discardedItems: [...state.discardedItems, ...discarding.map((card) => ({ ...card, hidden: true }))],
       }
       const room = Math.max(0, cultureHandSizeOf(discarded, holder) - cultureCardsHeld(holder))
-      const thrownText = discarding.length === 0 ? '' : `discarding ${plural(discarding.length, 'culture card')}`
+      // A discard is open information: the public line names each card in full with its item number
+      const fullName = (card: Item): string => `${itemName(card)} item number #${card.itemNumber}`
+      const thrownText = discarding.length === 0 ? '' : `discarding ${discarding.map(fullName).join(', ')}`
       const effectOf = (drawn: readonly string[]) => ({ frida: { discarded: discarding, drawn, sheetName } })
       if (room === 0) {
         return ok({
@@ -688,7 +697,7 @@ function automate(
             discarding.length === 0
               ? ', but the culture hand was already full, so nothing was drawn'
               : `, ${thrownText}; the culture hand was already full, so nothing was drawn`,
-          ...(discarding.length === 0 ? {} : { privateSaid: `${player.username} discarded ${discarding.map(itemName).join(', ')} with ${FRIDA}` }),
+          ...(discarding.length === 0 ? {} : { privateSaid: `${player.username} discarded ${discarding.map(fullName).join(', ')} with ${FRIDA}` }),
         })
       }
       // Every card of the hand is a draw of its own, which with Mysticism takes an extra card to choose from
@@ -725,7 +734,8 @@ function automate(
       )
       const drawer = playerOf(working, player.playerId) ?? holder
       const drawnText =
-        `drawing ${cards.length} from ${deck}` +
+        // The drawn cards are hidden, so the public line carries only their item numbers
+        `drawing ${cards.length} from ${deck} (item number${cards.length === 1 ? '' : 's'} ${cards.map((card) => `#${card.itemNumber}`).join(', ')})` +
         (rewards.length === 0 ? '' : ', keeping one of each pair') +
         (groups.length < room ? ' (no more cards were left)' : '')
       return ok({
@@ -738,9 +748,20 @@ function automate(
         said: `, ${thrownText === '' ? '' : `${thrownText} and `}${drawnText}`,
         privateSaid:
           `${player.username} ` +
-          (discarding.length === 0 ? '' : `discarded ${discarding.map(itemName).join(', ')} and `) +
-          `drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
+          (discarding.length === 0 ? '' : `discarded ${discarding.map(fullName).join(', ')} and `) +
+          `drew ${cards.map((card) => `${itemName(card)} item number #${card.itemNumber}`).join(', ')} (${SHEET_LABEL[sheetName]}) with ${FRIDA}` +
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
+      })
+    }
+    case TESLA_NAME: {
+      const placed = applyTesla(state, player, payload?.tech)
+      if (!placed.ok) return err(placed.error)
+      return ok({
+        state: placed.value.state,
+        extra: { tesla: placed.value.effect },
+        // The tech may still be hidden, so the public line says only that one moved, and the player's own log names it
+        said: ', placing a tech one level lower in their pyramid',
+        privateSaid: `${TESLA_NAME} placed ${placed.value.tech.name}, a level ${placed.value.tech.level} tech, in the level ${placed.value.effect.to} row of your pyramid.`,
       })
     }
     case 'Gustavus Adolphus': {
@@ -1383,6 +1404,10 @@ export const playCard: AssistedActionDefinition = {
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
       return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
     }
+    if (effect.tesla !== undefined) {
+      const stuck = teslaUndoBlock(player, effect.tesla)
+      if (stuck !== undefined) return blockedBy(stuck)
+    }
     if (effect.galileo !== undefined) {
       const movedAway = effect.galileo.moves.find((move) => {
         const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
@@ -1594,6 +1619,10 @@ export const playCard: AssistedActionDefinition = {
       hand = playerOf(current, player.playerId) ?? hand
     }
 
+    if (effect.tesla !== undefined) {
+      current = undoTesla(current, hand, effect.tesla)
+      hand = playerOf(current, player.playerId) ?? hand
+    }
     if (effect.gustavus !== undefined) {
       const undone = undoGustavus(current, hand, effect.gustavus)
       if (!undone.ok) return blockedBy(undone.error)

@@ -38,8 +38,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'discard', 'units', 'from', 'to', 'figureId', 'figureIds'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, harbors, discard, units, from, to, figureId and figureIds, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'discard', 'units', 'from', 'to', 'figureId', 'figureIds', 'tech'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, harbors, discard, units, from, to, figureId, figureIds and tech, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -106,6 +106,10 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   ) {
     return 'units must be a list of at most 12 unit decks'
   }
+  const tech = args['tech']
+  if (tech !== undefined && (typeof tech !== 'string' || tech.length === 0 || tech.length > 60)) {
+    return 'tech must be a short text'
+  }
   const figureId = args['figureId']
   if (figureId !== undefined && !isId(figureId)) return 'figureId must be a piece id'
   const figureIds = args['figureIds']
@@ -144,6 +148,7 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     ...(units === undefined ? {} : { units: units as readonly string[] }),
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
+    ...(tech === undefined ? {} : { tech }),
     ...(figureId === undefined ? {} : { figureId }),
     ...(figureIds === undefined ? {} : { figureIds: figureIds as readonly string[] }),
   }

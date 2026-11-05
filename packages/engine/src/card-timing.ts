@@ -14,6 +14,7 @@
  */
 
 import type { TurnPhase } from './turn.js'
+import type { TeslaChoice } from './tesla.js'
 
 /** `ANY` is "Any Time"; `BATTLE` is played during a battle, which is no phase of the turn. */
 export type CardTiming = TurnPhase | 'BATTLE' | 'ANY'
@@ -227,6 +228,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Florence Nightingale', 'saves your killed units, so they stay in your hand'],
   ['Georgy Zhukov', 'is revealed and stays faceup: each time one of your units is killed after this, you deal 1 wound to an enemy unit of your choice'],
   ['Gustavus Adolphus', 'discards the units you have drawn for a battle and not placed, and draws the same number of new units of the types you choose'],
+  ['Nikola Tesla', 'places a tech you have just added to your pyramid one level lower, as you choose; it still costs the trade of its own level'],
   ['Hannibal', 'moves any or all of your figures from one square to another square with your figures without exceeding your stacking limit'],
 ])
 
@@ -308,6 +310,8 @@ export interface PlayableCard {
   readonly conversion?: { readonly trade: number; readonly culture: number } | null
   /** Gustavus Adolphus: how many units are drawn for a battle and the unit decks that can be built from, null for every other card. */
   readonly gustavus?: { readonly count: number; readonly sheets: readonly string[] } | null
+  /** The techs Nikola Tesla can place one level lower now, null for every other card. Own view only. */
+  readonly tesla?: readonly TeslaChoice[] | null
   /** The squares Jacques Cousteau can put a free Harbor on, null for every other card. */
   readonly harbors?: readonly HarborChoice[] | null
   /** The culture cards in the viewer's own hand that Frida Kahlo may discard, null for every other card. Own view only. */

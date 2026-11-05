@@ -378,6 +378,31 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], units: ['INFANTRY', 'MOUNTED', 'ARTILLERY'] })
   })
 
+  it('lets Nikola Tesla choose the tech to place one level lower, and sends its name', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const tesla = card({
+      name: 'Nikola Tesla',
+      kind: 'greatPerson',
+      timings: ['RESEARCH'],
+      targets: { kind: 'none' },
+      prompt: '',
+      discards: true,
+      tesla: [
+        { name: 'Democracy', level: 2, trade: 11, to: 1 },
+        { name: 'Sanitation', level: 3, trade: 16, to: 2 },
+      ],
+    })
+    renderControl(viewWith([tesla]), tesla)
+    fireEvent.click(playButton('Nikola Tesla'))
+    expect(screen.getByText(/costs the trade of its own level/)).toBeTruthy()
+    // Two techs are on offer, so none is chosen until one is picked
+    expect((confirmButton() as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('radio', { name: /Sanitation \(level 3, 16 trade\) goes to level 2/ }))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], tech: 'Sanitation' })
+  })
+
   it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const frida = card({

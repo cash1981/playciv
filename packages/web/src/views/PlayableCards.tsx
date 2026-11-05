@@ -83,6 +83,7 @@ export function PlayCardControl({
   const [resource, setResource] = useState('')
   const [coinSource, setCoinSource] = useState('')
   const [substitute, setSubstitute] = useState('')
+  const [teslaTech, setTeslaTech] = useState('')
   const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
   const [convertAmount, setConvertAmount] = useState('')
   const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
@@ -118,6 +119,10 @@ export function PlayCardControl({
   const convertHeld = conversion === null ? 0 : conversion[convertFrom]
   const convertWhole = Number(convertAmount)
   const convertValid = conversion === null || (Number.isInteger(convertWhole) && convertWhole >= 1 && convertWhole <= convertHeld)
+  // Nikola Tesla: the techs just added in Research that can go one row lower; a refresh can take one away
+  const tesla = card.tesla ?? null
+  const chosenTesla =
+    tesla === null ? '' : (tesla.find((choice) => choice.name === teslaTech)?.name ?? (tesla.length === 1 ? (tesla[0]?.name ?? '') : ''))
   const harborChoices = card.harbors ?? null
   // A live refresh can take a square away: only the ticked squares still on offer count
   const chosenHarborKeys =
@@ -223,6 +228,7 @@ export function PlayCardControl({
     (!needsCoin || coinSource !== '') &&
     (!needsSubstitute || substitute !== '') &&
     convertValid &&
+    (tesla === null || chosenTesla !== '') &&
     harborsValid
   const valid = baseValid
   const disabled = busy || readOnly
@@ -256,7 +262,7 @@ export function PlayCardControl({
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${chosenTesla}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -277,6 +283,7 @@ export function PlayCardControl({
               }),
           ...(cultureHand === null ? {} : { discard: cultureHand.filter((held) => chosenDiscards.includes(held.itemId)).map((held) => held.itemId) }),
           ...(gustavus === null ? {} : { units: chosenUnits }),
+          ...(tesla === null ? {} : { tech: chosenTesla }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
           ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
@@ -656,6 +663,25 @@ export function PlayCardControl({
                 ))}
               </select>
             </label>
+          )}
+          {tesla !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Which tech do you place one level lower?</legend>
+              {tesla.length === 0 && <p className="muted">{card.reason}</p>}
+              {tesla.map((choice) => (
+                <label key={choice.name} className="play-card-target">
+                  <input
+                    type="radio"
+                    name={`${formId}-tesla`}
+                    checked={chosenTesla === choice.name}
+                    disabled={disabled}
+                    onChange={() => setTeslaTech(choice.name)}
+                  />{' '}
+                  {choice.name} (level {choice.level}, {choice.trade} trade) goes to level {choice.to}
+                </label>
+              ))}
+              <p className="muted">The tech still costs the trade of its own level. It is only shown one row lower in your pyramid.</p>
+            </fieldset>
           )}
           {conversion !== null && (
             <label className="play-card-resource">

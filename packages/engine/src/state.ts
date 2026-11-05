@@ -10,6 +10,7 @@
 import type { HutItem, Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement, VillageItem } from './item.js'
 import { isUnit } from './item.js'
 import { drawTokensOf } from './zheng-he.js'
+import type { TeslaEffect } from './tesla.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
 import { boardAreas } from './board.js'
@@ -728,6 +729,8 @@ export type AssistedEffect =
         readonly saved?: readonly string[]
         readonly zhukov?: boolean
       }
+      /** Nikola Tesla: the tech placed one row lower and where it was, so an undo can move it back. Never projected. */
+      readonly tesla?: TeslaEffect
       /** Gustavus Adolphus: what the card discarded and drew, so an undo can put it back. Never projected. */
       readonly gustavus?: {
         readonly discarded: readonly UnitItem[]

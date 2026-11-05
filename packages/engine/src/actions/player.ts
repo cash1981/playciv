@@ -104,7 +104,7 @@ function withoutResearchTurn(
  * turn up to Movement is working on that turn's Research instead, so the choice
  * is recorded for the turn it belongs to.
  */
-function openResearchTurnOf(state: GameState, player: Playerhand): number | null {
+export function openResearchTurnOf(state: GameState, player: Playerhand): number | null {
   const currentTurn = turnStatus(state).currentTurn
   const open = openPhaseOf(state, player.playerId)
   if (open === 'RESEARCH') return currentTurn
@@ -301,15 +301,26 @@ export function setTechSlot(state: GameState, input: SetTechSlotInput): ActionRe
   const tech = player.techsChosen.find((candidate) => candidate.name === input.techName)
   if (tech === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
 
-  const moved: TechItem = { ...tech, slot: input.slot }
-  return ok(
-    withPlayer(state, {
-      ...player,
-      techsChosen: player.techsChosen.map((candidate) =>
-        candidate.name === tech.name ? moved : candidate,
-      ),
+  return ok(withPlayer(state, withTechSlot(player, tech.name, input.slot)))
+}
+
+/**
+ * The player with one chosen tech shown in another pyramid row. The move a player makes by hand
+ * (`setTechSlot`) and the one Nikola Tesla makes are this same move, so the row is kept in one place.
+ * `null` takes the override away, which is the tech's own level again.
+ */
+export function withTechSlot(player: Playerhand, techName: string, slot: 1 | 2 | 3 | 4 | 5 | null): Playerhand {
+  return {
+    ...player,
+    techsChosen: player.techsChosen.map((candidate): TechItem => {
+      if (candidate.name !== techName) return candidate
+      if (slot === null) {
+        const { slot: _slot, ...rest } = candidate
+        return rest
+      }
+      return { ...candidate, slot }
     }),
-  )
+  }
 }
 
 export interface PlaceGreatPersonInput {

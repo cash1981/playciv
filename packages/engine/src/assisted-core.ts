@@ -225,6 +225,8 @@ export interface PlayCardPayload {
   readonly discard?: readonly string[]
   /** Gustavus Adolphus: the unit sheet for each unit of the battle force, as many as it has. */
   readonly units?: readonly string[]
+  /** Nikola Tesla: the name of the tech, added to the pyramid in this Research, to place one level lower. */
+  readonly tech?: string
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
   /** The map square whose figures move (Galileo and the movement culture cards). */
