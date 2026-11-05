@@ -271,7 +271,8 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 - Cancellation reactions (#301, #336; human, 2026-11-05) use durable cases in `cancellation.ts`.
   `/twain` opens a case, never immediately rewinds. Twain targets another player's city action or culture
   event; Jousting Tourney and Primetime TV target culture events, including specific culture cancellation
-  reactions. Bread and Circuses requires actual targeting of its holder or a recorded moved figure of theirs;
+  reactions. Twain can also counter another player's culture cancellation, but cannot itself be culture-countered.
+  Bread and Circuses requires actual targeting of its holder or a recorded moved figure of theirs;
   targeting a cancellation card does not target its owner. Unstructured square/building targets and resource
   abilities remain manual. Printed texts are in `gamedata-faf-waw.json`; no local rulebooks were available.
 - No speculative gameplay while a case is pending. The server blocks gameplay mutations (including phase
