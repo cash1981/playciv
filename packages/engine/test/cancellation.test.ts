@@ -115,6 +115,51 @@ describe('durable cancellation disputes', () => {
     expect(initiateUndo(done, { playerId: A, logId: logOf(current, 'later') }).ok).toBe(false)
   })
 
+  it.each(['before dispute', 'during dispute', 'reverted during dispute'] as const)(
+    'reopens revised baseline-completed orders (%s) but leaves unchanged completed phases done',
+    (timing) => {
+      const scene = cityScene()
+      const original = { markdown: 'Original SOT order', at: '2026-11-05T09:00:00Z' }
+      const revised = { markdown: 'Revised SOT order', at: '2026-11-05T10:00:00Z' }
+      const reverted = { markdown: original.markdown, at: '2026-11-05T11:00:00Z' }
+      let baseline = unwrap(postOrder(scene.baseline, { playerId: C, turnNumber: 1, phase: 'SOT', ...original }))
+      baseline = unwrap(postOrder(baseline, {
+        playerId: C, turnNumber: 1, phase: 'TRADE', markdown: 'Unchanged trade order', at: original.at,
+      }))
+      baseline = unwrap(markPhasesDone(baseline, { playerId: C, turnNumber: 1, upToPhase: 'TRADE' }))
+      let current = devote(baseline, scene.cityId)
+      if (timing === 'before dispute') {
+        current = unwrap(postOrder(current, { playerId: C, turnNumber: 1, phase: 'SOT', ...revised }))
+      }
+      let pending = open(current, baseline, scene.twainId)
+      if (timing !== 'before dispute') {
+        pending = unwrap(postOrder(pending, { playerId: C, turnNumber: 1, phase: 'SOT', ...revised }))
+      }
+      if (timing === 'reverted during dispute') {
+        pending = unwrap(postOrder(pending, { playerId: C, turnNumber: 1, phase: 'SOT', ...reverted }))
+      }
+      // Saved baseline and live history must compare by content, not object identity.
+      pending = JSON.parse(JSON.stringify(pending)) as GameState
+      const beforeSettlement = JSON.stringify({ baseline, pending })
+      expect(player(baseline, C).playerTurns[0]?.done).toMatchObject({ SOT: true, TRADE: true })
+      expect(player(pending, C).playerTurns[0]?.done).toMatchObject({ SOT: true, TRADE: true })
+      const done = settle(pending, baseline)
+      const restored = player(done, C).playerTurns[0]
+      expect(done.cancellations?.cases[0]?.outcome).toBe('cancelled')
+      expect(restored).toMatchObject({
+        done: { SOT: false, TRADE: true },
+        needsRevision: true,
+        revisionPhases: ['SOT', 'CM', 'MOVEMENT', 'RESEARCH'],
+      })
+      expect(restored?.orders).toEqual(player(pending, C).playerTurns[0]?.orders)
+      expect(restored?.history).toEqual(player(pending, C).playerTurns[0]?.history)
+      expect(restored?.revealed).toEqual(player(pending, C).playerTurns[0]?.revealed)
+      expect(restored?.history.SOT).toEqual(timing === 'reverted during dispute'
+        ? [original, revised, reverted] : [original, revised])
+      expect(JSON.stringify({ baseline, pending })).toBe(beforeSettlement)
+    },
+  )
+
   it('resolves a culture counter and counter-counter, charging every committed card exactly once', () => {
     const { baseline, current, ids } = cultureScene()
     let pending = open(current, baseline, ids['joust'] ?? '')

@@ -116,8 +116,16 @@ function preserveWriting(baseline: GameState, current: GameState): GameState {
     const turns = live.playerTurns.map((turn) => {
       const previous = player.playerTurns.find((t) => t.turnNumber === turn.turnNumber)
       const restored = previous ?? createPlayerTurn(player.username, turn.turnNumber)
-      const revisionPhases = TURN_PHASES.filter((phase) => !restored.done[phase])
+      // Completed phases can receive later orders, even while the dispute is open.
+      // Compare versions too: reverting to the original text still leaves later work.
+      const revisionPhases = TURN_PHASES.filter((phase) => !restored.done[phase] ||
+        restored.orders[phase] !== turn.orders[phase] ||
+        restored.history[phase].length !== turn.history[phase].length ||
+        restored.history[phase].some((version, index) =>
+          version.markdown !== turn.history[phase][index]?.markdown ||
+          version.at !== turn.history[phase][index]?.at))
       return { ...restored, orders: turn.orders, history: turn.history, revealed: turn.revealed,
+        done: { ...restored.done, ...Object.fromEntries(revisionPhases.map((phase) => [phase, false])) },
         revisionPhases, needsRevision: revisionPhases.length > 0 }
     })
     return { ...player, gamenote: live.gamenote, playerTurns: [
