@@ -578,11 +578,20 @@ describe('purity', () => {
     expect(a).not.toEqual(b)
   })
 
-  it('a different seed gives a different item number offset', () => {
-    // Java: RandomUtils.nextInt(1, 20), so only 19 offsets exist and two seeds
-    // can land on the same one. These two are picked because they differ.
-    expect(firstCivGame('game-a').items[0]?.itemNumber).not.toBe(
-      firstCivGame('game-c').items[0]?.itemNumber,
-    )
+  it('item numbers are a plain count from 1, in a different order in each game', () => {
+    const numbersOf = (seed: string): number[] => {
+      const game = firstCivGame(seed)
+      return [
+        ...game.items.map((item) => item.itemNumber),
+        ...game.items.flatMap((item) => (item.kind === 'civ' ? [item.startingTech.itemNumber] : [])),
+        ...game.techs.map((tech) => tech.itemNumber),
+        ...game.socialPolicies.map((policy) => policy.itemNumber),
+      ]
+    }
+    const a = numbersOf('game-a')
+    expect([...a].sort((x, y) => x - y)).toEqual(Array.from({ length: a.length }, (_, index) => index + 1))
+    // Not the catalogue order, and not the same as another game's
+    expect(a).not.toEqual([...a].sort((x, y) => x - y))
+    expect(numbersOf('game-c')).not.toEqual(a)
   })
 })

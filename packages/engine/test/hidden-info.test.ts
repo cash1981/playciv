@@ -254,6 +254,17 @@ describe('log texts', () => {
     expect(uniqueItemNumber('key', 'cash1981', 42)).not.toBe(uniqueItemNumber('key', 'Karandras1', 42))
   })
 
+  it('uniqueItemNumber stays a short number and gives no two items the same number for one player', () => {
+    const first = Array.from({ length: 999 }, (_, index) => Number(uniqueItemNumber('key', 'cash1981', index + 1).split('#')[1]))
+    expect(Math.max(...first)).toBe(999)
+    expect(new Set(first).size).toBe(999)
+    const numbers = Array.from({ length: 1500 }, (_, index) => uniqueItemNumber('key', 'cash1981', index + 1))
+    expect(new Set(numbers).size).toBe(1500)
+    const digits = numbers.map((text) => Number(text.split('#')[1]))
+    expect(Math.max(...digits)).toBeLessThanOrEqual(1998)
+    expect(Math.min(...digits)).toBeGreaterThanOrEqual(1)
+  })
+
   it('uniqueItemNumber is stable for one game and differs between games', () => {
     expect(uniqueItemNumber('key', 'cash1981', 42)).toBe(uniqueItemNumber('key', 'cash1981', 42))
     expect(uniqueItemNumber('key', 'cash1981', 42)).not.toBe(uniqueItemNumber('other', 'cash1981', 42))

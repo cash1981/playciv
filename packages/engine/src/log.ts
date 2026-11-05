@@ -27,8 +27,33 @@ export function uniqueItemNumber(secret: string, username: string, itemNumber: n
   return `. Item number #${uniqueNumber(secret, username, itemNumber)}`
 }
 
+/**
+ * A short number for each player's view of an item: a keyed permutation of 1..999, so two different items never share
+ * a number for one player, the number has at most three digits, and the key hides which item is which. It is a 10-bit
+ * Feistel network that is applied again while the result lies outside 0..998 (cycle walking), which keeps it a
+ * permutation of that range. Numbers beyond 999 (items made late in a long game) are permuted within their own block.
+ */
+const BLOCK = 999
+const HALF_BITS = 5
+const HALF_MASK = (1 << HALF_BITS) - 1
+
+function feistel(secret: string, username: string, block: number, index: number): number {
+  let left = (index >> HALF_BITS) & HALF_MASK
+  let right = index & HALF_MASK
+  for (let round = 0; round < 6; round += 1) {
+    const mixed = keyedHash(`${secret}|${username}|${block}|${round}|${right}`) & HALF_MASK
+    ;[left, right] = [right, left ^ mixed]
+  }
+  return (left << HALF_BITS) | right
+}
+
 function uniqueNumber(secret: string, username: string, itemNumber: number): number {
-  return 1_000_000 + (keyedHash(`${secret}|${username}|${itemNumber}`) % 9_000_000)
+  const index = Math.max(0, itemNumber - 1)
+  const block = Math.floor(index / BLOCK)
+  let place = index % BLOCK
+  do place = feistel(secret, username, block, place)
+  while (place >= BLOCK)
+  return block * BLOCK + place + 1
 }
 
 /**

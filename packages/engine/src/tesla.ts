@@ -116,8 +116,9 @@ export function applyTesla(
 /** Why Tesla's move cannot be undone, or `undefined`: the tech must still be where the card put it. */
 export function teslaUndoBlock(player: Playerhand, effect: TeslaEffect): string | undefined {
   const tech = player.techsChosen.find((candidate) => candidate.name === effect.techName)
-  if (tech === undefined) return `${effect.techName} has left your pyramid, so Nikola Tesla cannot be undone.`
-  if (tech.slot !== effect.to) return `${effect.techName} has been moved to another row since. Move it back first.`
+  if (tech === undefined || tech.slot !== effect.to) {
+    return 'This action can no longer be undone because its effect has changed.'
+  }
   return undefined
 }
 
