@@ -6,7 +6,7 @@
  */
 
 import type { App } from '../src/app.js'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SQUARE_SIZE, mapTop, placePiece, slotOrigin, unwrap } from '@civ/engine'
 
@@ -116,42 +116,82 @@ const logIdOf = async (t: Table, requestId: string): Promise<string> => {
 }
 
 describe('Mark Twain over HTTP', () => {
-  it('rewinds to the stored revision before the action and keeps the city action on the record as cancelled', async () => {
+  it('opens a persistent case and only rewinds after everyone passes, with stale-request retries idempotent', async () => {
     const t = await table('Rewind')
     expect((await startProgram(t, 'sp-1')).status).toBe(200)
     const logId = await logIdOf(t, 'sp-1')
     const before = await repo.findGame(t.gameId)
     expect(before?.board.pieces.some((piece) => piece.assetId === 'markers/Building Program')).toBe(true)
 
-    const response = await post(t.other, `/api/games/${t.gameId}/twain`, { logId })
+    const opening = { logId, requestId: 'open', rev: before?.rev }
+    const response = await post(t.other, `/api/games/${t.gameId}/twain`, opening)
     const answer = response.status === 200 ? '' : JSON.stringify(await response.json())
     expect([response.status, answer]).toEqual([200, ''])
 
+    const pending = await repo.findGame(t.gameId)
+    expect(pending?.board).toEqual(before?.board)
+    expect(pending?.items).toEqual(before?.items)
+    expect(pending?.cancellations?.cases[0]).toMatchObject({ id: 'open', version: 1, outcome: 'pending', passes: [] })
+    expect((await post(t.other, `/api/games/${t.gameId}/twain`, opening)).status).toBe(200)
+    expect((await repo.findGame(t.gameId))?.rev).toBe(pending?.rev)
+    expect((await post(t.starter, `/api/games/${t.gameId}/cancellations`, {
+      kind: 'pass', caseId: 'open', version: 1, requestId: 'pass-a', rev: pending?.rev,
+    })).status).toBe(200)
+    const final = { kind: 'pass', caseId: 'open', version: 1, requestId: 'pass-b', rev: (await view(t.gameId, t.other)).rev }
+    expect((await post(t.other, `/api/games/${t.gameId}/cancellations`, final)).status).toBe(200)
     const after = await repo.findGame(t.gameId)
     // The Building Program marker the action placed is gone, the action stays as cancelled and Twain is discarded
     expect(after?.board.pieces.some((piece) => piece.assetId === 'markers/Building Program')).toBe(false)
     expect(after?.assistedActions.map((record) => record.status)).toEqual(['cancelled'])
     expect(after?.players.find((player) => player.playerId === t.otherId)?.items.some((item) => item.id === t.twainId)).toBe(false)
     expect(after?.discardedItems.some((item) => item.id === t.twainId)).toBe(true)
-    expect(after?.log.at(-1)?.publicLog).toContain('cancelled the city action of')
+    expect(after?.log.at(-1)?.publicLog).toContain('Cancellation settled')
     // It is a new revision of the game, never the old counter reused
-    expect(after?.rev).toBe((before?.rev ?? 0) + 1)
+    expect(after?.rev).toBe((before?.rev ?? 0) + 3)
     const seen = await view(t.gameId, t.starter)
     expect(seen.assistedActions.map((action) => action.status)).toEqual(['cancelled'])
+    expect((await post(t.other, `/api/games/${t.gameId}/cancellations`, final)).status).toBe(200)
+    expect((await post(t.other, `/api/games/${t.gameId}/twain`, opening)).status).toBe(200)
+    expect((await repo.findGame(t.gameId))?.rev).toBe(after?.rev)
   })
 
-  it('is refused when somebody else has saved a revision since the action, and changes nothing', async () => {
+  it('allows interleaved revisions but pauses gameplay mutations, while notes, orders and chat stay available', async () => {
     const t = await table('Erase')
     expect((await startProgram(t, 'sp-1')).status).toBe(200)
     const logId = await logIdOf(t, 'sp-1')
     // The other player acts after it: a rewind would erase their action
     expect((await post(t.other, `/api/games/${t.gameId}/techs/choose`, { name: 'Pottery' })).status).toBe(200)
-    const rev = (await repo.findGame(t.gameId))?.rev
+    await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'RESEARCH' })
+    const before = await repo.findGame(t.gameId)
+    const rev = before?.rev
 
-    const response = await post(t.other, `/api/games/${t.gameId}/twain`, { logId })
-    expect(response.status).toBe(409)
-    expect(JSON.stringify(await response.json())).toContain('Another player has acted since')
-    expect((await repo.findGame(t.gameId))?.rev).toBe(rev)
+    const response = await post(t.other, `/api/games/${t.gameId}/twain`, { logId, rev, requestId: 'open' })
+    expect(response.status).toBe(200)
+    for (const [path, payload] of [
+      ['techs/choose', { name: 'Writing' }],
+      ['draw/CULTURE_1', {}],
+      ['turns/done', { phase: 'CM' }],
+      ['turns/undone', { phase: 'TRADE', rev: (rev ?? 0) + 1 }],
+      ['items/discard', { sheetName: 'GREAT_PERSON', name: 'Mark Twain' }],
+      ['end', {}], ['withdraw', {}], ['delete', {}],
+    ] as const) {
+      expect((await post(t.other, `/api/games/${t.gameId}/${path}`, payload)).status, path).toBe(409)
+    }
+    expect((await post(t.other, `/api/games/${t.gameId}/note`, { note: 'private writing' })).status).toBe(200)
+    expect((await post(t.other, `/api/games/${t.gameId}/turns/order`, { phase: 'SOT', markdown: 'Preserved order text' })).status).toBe(200)
+    expect((await post(t.other, `/api/games/${t.gameId}/chat`, { message: 'Discuss the dispute' })).status).toBe(201)
+    for (const [token, requestId] of [[t.starter, 'pass-a'], [t.other, 'pass-b']] as const) {
+      expect((await post(token, `/api/games/${t.gameId}/cancellations`, {
+        kind: 'pass', caseId: 'open', version: 1, requestId, rev: (await view(t.gameId, token)).rev,
+      })).status).toBe(200)
+    }
+    const restored = await repo.findGame(t.gameId)
+    const other = restored?.players.find((p) => p.playerId === t.otherId)
+    expect(other?.gamenote).toBe('private writing')
+    expect(other?.playerTurns[0]?.orders.SOT).toBe('Preserved order text')
+    expect(other?.playerTurns[0]?.needsRevision).toBe(true)
+    expect(other?.techsChosen.some((tech) => tech.name === 'Pottery')).toBe(false)
+    expect(restored?.players.find((p) => p.playerId === t.starterId)?.playerTurns[0]?.done.CM).toBe(false)
   })
 
   it('is refused for a player without the card, for one\'s own action and for an unknown line', async () => {
@@ -159,11 +199,71 @@ describe('Mark Twain over HTTP', () => {
     expect((await startProgram(t, 'sp-1')).status).toBe(200)
     const logId = await logIdOf(t, 'sp-1')
     // The starter has no Mark Twain card, and it is their own action in any case
-    expect((await post(t.starter, `/api/games/${t.gameId}/twain`, { logId })).status).toBe(400)
-    expect((await post(t.other, `/api/games/${t.gameId}/twain`, { logId: 'nope' })).status).toBe(400)
+    const rev = (await view(t.gameId, t.other)).rev
+    expect((await post(t.starter, `/api/games/${t.gameId}/twain`, { logId, rev, requestId: 'own' })).status).toBe(400)
+    expect((await post(t.other, `/api/games/${t.gameId}/twain`, { logId: 'nope', rev, requestId: 'unknown' })).status).toBe(400)
     expect((await post(t.other, `/api/games/${t.gameId}/twain`, {})).status).toBe(400)
-    const stale = await post(t.other, `/api/games/${t.gameId}/twain`, { logId, rev: 0 })
+    const stale = await post(t.other, `/api/games/${t.gameId}/twain`, { logId, rev: 0, requestId: 'stale' })
     expect(stale.status).toBe(409)
     expect((await repo.findGame(t.gameId))?.assistedActions.map((record) => record.status)).toEqual(['applied'])
+  })
+
+  it('captures an exact before-action revision after a note-only gap and fails missing history atomically', async () => {
+    const t = await table('Gap')
+    await post(t.starter, `/api/games/${t.gameId}/note`, { note: 'Private baseline note' })
+    const baselineRev = (await view(t.gameId, t.starter)).rev
+    expect(await repo.findGameRevision(t.gameId, baselineRev)).toBeUndefined()
+    expect((await startProgram(t, 'sp-1')).status).toBe(200)
+    const current = await repo.findGame(t.gameId)
+    expect(current?.assistedActions[0]?.beforeRevision).toBe(baselineRev)
+    expect((await repo.findGameRevision(t.gameId, baselineRev))?.state.players.every((p) => p.gamenote === '')).toBe(true)
+    const spy = vi.spyOn(repo, 'findGameRevision').mockResolvedValue(undefined)
+    const response = await post(t.other, `/api/games/${t.gameId}/twain`, {
+      logId: await logIdOf(t, 'sp-1'), rev: current?.rev, requestId: 'missing',
+    })
+    expect(response.status).toBe(400)
+    expect(await repo.findGame(t.gameId)).toEqual(current)
+    spy.mockRestore()
+  })
+
+  it('does not settle a final pass without its saved continuation and baseline', async () => {
+    const t = await table('Missing final')
+    await startProgram(t, 'sp-1')
+    await post(t.other, `/api/games/${t.gameId}/twain`, {
+      logId: await logIdOf(t, 'sp-1'), rev: (await view(t.gameId, t.other)).rev, requestId: 'open',
+    })
+    await post(t.starter, `/api/games/${t.gameId}/cancellations`, {
+      kind: 'pass', caseId: 'open', version: 1, requestId: 'pass-a', rev: (await view(t.gameId, t.starter)).rev,
+    })
+    const before = await repo.findGame(t.gameId)
+    const spy = vi.spyOn(repo, 'findGameRevision').mockResolvedValue(undefined)
+    const response = await post(t.other, `/api/games/${t.gameId}/cancellations`, {
+      kind: 'pass', caseId: 'open', version: 1, requestId: 'pass-b', rev: before?.rev,
+    })
+    expect(response.status).toBe(409)
+    expect(await repo.findGame(t.gameId)).toEqual(before)
+    spy.mockRestore()
+  })
+
+  it('hides saved revisions, response hands and request data from public and opponent projections', async () => {
+    const t = await table('Privacy')
+    await startProgram(t, 'sp-1')
+    await post(t.other, `/api/games/${t.gameId}/twain`, {
+      logId: await logIdOf(t, 'sp-1'), rev: (await view(t.gameId, t.other)).rev, requestId: 'open',
+    })
+    for (const response of [
+      await inject(app, { url: `/api/games/${t.gameId}` }),
+      await inject(app, { url: `/api/games/${t.gameId}`, headers: bearer(t.starter) }),
+    ]) {
+      expect(response.status).toBe(200)
+      const text = JSON.stringify(await response.json())
+      for (const secret of ['beforeRevision', 'continuationRevision', 'fingerprint', t.twainId]) expect(text).not.toContain(secret)
+    }
+    const outsider = await register('outsider')
+    const spectator = await post(outsider, `/api/games/${t.gameId}/cancellations`, {
+      kind: 'pass', caseId: 'open', version: 1, requestId: 'spectator', rev: (await view(t.gameId, t.other)).rev,
+    })
+    expect(spectator.status).toBe(403)
+    expect((await post(outsider, `/api/games/${t.gameId}/chat`, { message: 'Not a participant' })).status).toBe(403)
   })
 })

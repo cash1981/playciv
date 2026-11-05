@@ -437,7 +437,7 @@ describe('choosing who the card names', () => {
     expect(screen.getByText(/Your own action/)).toBeTruthy()
   })
 
-  it('lets Mark Twain cancel a chosen action with a rewind, telling what is lost, or only log a play', async () => {
+  it('opens a dispute through the compatibility card control and explains conditional rollback', async () => {
     const cancel = vi.spyOn(api, 'twainCancel').mockResolvedValue({} as PlayerView)
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const twain = card({
@@ -463,7 +463,8 @@ describe('choosing who the card names', () => {
     fireEvent.click(playButton('Mark Twain'))
     // Nothing is chosen at first, so the play is only logged
     fireEvent.click(screen.getByRole('radio', { name: /itchi devoted a city to the arts/ }))
-    expect(screen.getByText(/This line is lost/)).toBeTruthy()
+    expect(screen.getByText(/Later history would be superseded/)).toBeTruthy()
+    expect(screen.getByText(/If King prevents cancellation, Twain stays in hand/)).toBeTruthy()
     expect(screen.getByText(/itchi advanced on the culture track/)).toBeTruthy()
     expect(screen.getByText(/The city has used its action for the turn/)).toBeTruthy()
     fireEvent.click(confirmButton())

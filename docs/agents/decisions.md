@@ -268,24 +268,36 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Person counting) and a tech already moved by hand is not offered. The public line says only that a tech was placed
   one level lower, as the tech may be hidden; the player's own log names it. Undo puts the tech back in its row and
   is refused when the tech has been moved again or removed.
-- Mark Twain (human, 2026-11-03, #301; design notes on the issue) cancels another player's city action or culture
-  event by rewinding the game to just before it (`twain.ts`, `POST /api/games/:id/twain`). Everything after the
-  action is lost, and the player redoes it. The engine is given the earlier state; the server reads it from the
-  stored revisions (the one before the revision that wrote the action's log line) and refuses when anybody but
-  the action's player has saved a revision since, or written a log line since. Private notes, the log secret and
-  the random sequence are kept from the current game, so the decks the later actions drew from are shuffled from
-  a sequence the player has not seen. The cancelled action stays on the record as `status: 'cancelled'` (not
-  undoable), which counts as its city's action of the turn: another action of that city is asked about like any
-  second action, and the culture a devotion gave is gone with the rewind. A cancelled culture event is discarded,
-  not returned to the hand, and Mark Twain is discarded. Only an action of the current turn can be cancelled, in any phase
-  (human 2026-11-04: a quick player may already have ended theirs; the players watch this themselves), never one's own. The list also shows this turn's other city actions and culture events greyed out with the reason they cannot be cancelled. Cannot be cancelled: the city actions of a player with a
-  faceup Dr. Martin Luther King (his Humanitarian figures not all blockaded), Jerry Garcia's devotion and a city
-  action that used Ada Lovelace's extra action (the cards say so). A resource ability is not logged, so it is not
-  on the list; the card form's last option only logs the play, as before, and the players undo by vote.
-  Dr. Martin Luther King is a passive card the player makes faceup with Use; he already gave immunity to Anarchy.
-  Known gaps: the Revealed and Discarded list skips a cancelled event and the discarded Twain (both were played
-  publicly), and the engine's "another player acted" test reads log lines while the server's reads revisions, so
-  the list can offer an action the server then refuses with 409.
+- Cancellation reactions (#301, #336; human, 2026-11-05) use durable cases in `cancellation.ts`.
+  `/twain` opens a case, never immediately rewinds. Twain targets another player's city action or culture
+  event; Jousting Tourney and Primetime TV target culture events, including specific culture cancellation
+  reactions. Bread and Circuses requires actual targeting of its holder or a recorded moved figure of theirs;
+  targeting a cancellation card does not target its owner. Unstructured square/building targets and resource
+  abilities remain manual. Printed texts are in `gamedata-faf-waw.json`; no local rulebooks were available.
+- No speculative gameplay while a case is pending. The server blocks gameplay mutations (including phase
+  completion), but allows chat, notes, orders and reactions. Spectators are read-only, including game chat;
+  existing admin chat moderation remains available.
+  All active players receive the same public pass opportunity regardless of their hands. Each response
+  increments the case version and clears all passes. No hidden-hand auto-pass or timeout exists.
+- Reaction ownership, reward-candidate availability and blockade are checked against both the saved baseline
+  and live hand. King is protection, not a counter to Twain: revealing him preserves the original continuation
+  and **keeps Twain in hand**, as explicitly chosen by the human. His reveal stays public. Garcia's devotion
+  and Lovelace's extra city actions retain their printed exclusions.
+- Successful settlement restores the exact before-action revision, keeps the cancelled city's action spent
+  (or discards the target culture event), pays committed reactions once and reshuffles changed decks once.
+  Subsequent interleaved gameplay becomes superseded history, not deleted history. Current notes and order
+  text/versions survive; restored phase flags reopen affected work and retained orders need revision.
+  Failed cancellation retains the continuation and draws, but still pays valid culture reaction costs.
+- The explicit shared confirmation frontier is separate from turn progression: only the minimum of active
+  players' acknowledgements seals a displayed log cutoff. Older acknowledgements never cover later entries.
+  Adoption starts eligibility at the current turn and persists that floor across turns. No confirmation is
+  allowed during a case. Settlement conservatively seals through the resolved dispute to prevent future
+  rewinds refunding its reactions. Older corrections and roster changes require table agreement.
+- State stores revision references, not recursive snapshots. Exact baselines are captured even after
+  note-only revision gaps; a primary action log is not assumed to be the first line of its revision.
+  Legacy targets are adopted only with an exact preceding revision. Missing history fails atomically.
+  Idempotence fingerprints and actual selected inputs stay private; projections whitelist public labels,
+  case versions, targets and passes, with response choices only for their owner.
 - Zheng He (human, #301) writes one private line for each hut or village piece on a map
   square (square and name) and for each hut or village item another player holds. The
   pieces on the map are anonymous and a draw takes the top card, so the look fixes the

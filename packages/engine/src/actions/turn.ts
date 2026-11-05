@@ -191,8 +191,11 @@ export function postOrder(state: GameState, input: PostOrderInput): ActionResult
   const player = access.value
 
   const turn = findOrCreateTurn(player, input.turnNumber)
+  const revisionPhases = state.cancellations?.cases.some((c) => c.outcome === 'pending')
+    ? turn.revisionPhases : turn.revisionPhases?.filter((phase) => phase !== input.phase)
   const updated: PlayerTurn = {
     ...turn,
+    ...(revisionPhases === undefined ? {} : { revisionPhases, needsRevision: revisionPhases.length > 0 }),
     orders: { ...turn.orders, [input.phase]: input.markdown },
     revealed: { ...turn.revealed, [input.phase]: true },
     history: {

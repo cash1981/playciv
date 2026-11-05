@@ -492,7 +492,7 @@ function cityActionRecordsThisTurn(state: GameState, player: Playerhand): readon
   const turn = turnStatus(state).currentTurn
   return state.assistedActions.flatMap((record) => {
     const action = cityActionOf(record)
-    if (action === undefined || record.status === 'undone' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
+    if (action === undefined || record.status === 'undone' || record.status === 'superseded' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
     // A city action Mark Twain cancelled is still the city's action of the turn
     return [record.status === 'cancelled' ? { ...action, label: `${action.label} (cancelled by Mark Twain)` } : action]
   })

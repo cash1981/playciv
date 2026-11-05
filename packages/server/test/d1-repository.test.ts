@@ -325,10 +325,8 @@ describe('D1Repository', () => {
     const summaries = await repo.finishedGamesForHighscore()
     expect(summaries).toHaveLength(2)
     expect(summaries.find((entry) => entry.winner === 'Alice')?.numOfPlayers).toBe(4)
-    expect(summaries.find((entry) => entry.winner === 'Bob')?.players.map((p) => p.username)).toEqual([
-      'Alice',
-      'Bob',
-    ])
+    expect(summaries.find((entry) => entry.winner === 'Bob')?.players.map((p) => p.username))
+      .toEqual(second.value.players.map((p) => p.username))
     // An unfinished game is not a highscore source.
     const running = fixtureGame('Still running')
     await repo.saveGame(running)

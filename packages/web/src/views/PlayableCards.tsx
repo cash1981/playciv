@@ -33,6 +33,8 @@ import {
 import type { CardTiming, PlayableCard, TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
+import { isCancellationCard } from '@civ/engine'
+import { CancellationCardControl } from './CancellationPanel.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
@@ -304,7 +306,7 @@ export function PlayCardControl({
 
   const confirm = (): void => {
     if (!valid) return
-    // Mark Twain on a chosen action: the server rewinds the game to before it. Otherwise it is only logged
+    // Compatibility with older projections: this route now opens a durable dispute.
     if (twainLog !== '') {
       void run(() => api.twainCancel(gameId, twainLog, view.rev)).then(() => {
         setTwainLog('')
@@ -461,6 +463,10 @@ export function PlayCardControl({
     mapPicker?.cancel()
     resetMove()
     setOpen(false)
+  }
+
+  if (isCancellationCard(card.name) && view.cancellations !== undefined) {
+    return <CancellationCardControl gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} itemId={card.itemId} />
   }
 
   return (
@@ -712,12 +718,12 @@ export function PlayCardControl({
               </label>
               {twainTarget !== undefined && (
                 <p className="muted">
-                  The game goes back to just before this action and {twainTarget.username} redoes what came after.
+                  Opens a dispute. If cancellation succeeds, the game goes back to just before this action.
                   {twainTarget.rolledBack.length > 0
-                    ? ` ${twainTarget.rolledBack.length === 1 ? 'This line is' : 'These lines are'} lost: ${twainTarget.rolledBack.join(' · ')}.`
+                    ? ` Later history would be superseded: ${twainTarget.rolledBack.join(' · ')}.`
                     : ''}{' '}
                   {twainTarget.kind === 'city' ? 'The city has used its action for the turn.' : 'The event card is discarded.'}{' '}
-                  Mark Twain is discarded.
+                  All players must pass the latest response. If King prevents cancellation, Twain stays in hand.
                 </p>
               )}
             </fieldset>

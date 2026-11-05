@@ -20,9 +20,19 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   second scout's city choice; choosing a city is refused with a reason (#319).
 - **Scout-held Bank coins:** board derivation does not model scout transfers;
   the Sheet is the manual correction.
-- **Game-chat permissions:** `POST /api/games/:gameId/chat` checks login and
-  game locking, not membership, so a non-member can post although the UI hides
-  the composer. Whether that is intended is undecided.
+- **Cancellation coverage:** only structured assisted city actions and culture
+  events can be selected. Resource abilities without records and unstructured
+  square/building targets remain manual; Bread and Circuses does not infer
+  targeting from a card's owner. Reaction choices show the current hand; the
+  server additionally checks historical availability on submission.
+- **Cancellation history:** missing exact legacy baselines cannot be guessed
+  from a log prefix. Cases cannot cross roster changes or a shared sealed
+  cutoff; resolving a case conservatively seals all history through settlement.
+  These corrections require table agreement. No automatic command replay,
+  speculative draws, timeout or hidden-hand auto-pass is implemented.
+- **Cancellation feed:** the dedicated panel and public log record reaction
+  cards and outcomes. The separate Revealed and Discarded feed does not yet
+  synthesize entries for settled reaction costs.
 - **Ending on an own city centre:** F&F p. 7 lets figures cross friendly
   centres "as long as they don't end their movement there"; travel still lets a
   figure that is not disbanded stop there (the #319 centre-scout rule assumes

@@ -4,7 +4,7 @@
  */
 
 import type { EngineError, GameState, PlayerView, Playerhand } from '@civ/engine'
-import { expireTradeOffers, toPlayerView } from '@civ/engine'
+import { expireTradeOffers, openCancellation, toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
@@ -214,6 +214,7 @@ export interface ApplyToGameInfo {
 }
 
 export interface ApplyToGameOptions {
+  readonly duringDispute?: boolean
   readonly record?: boolean
   readonly description?: string
   /**
@@ -257,6 +258,12 @@ export async function applyToGame(
   }
 
   if (isLockedForViewer(game, currentPlayer(c))) return gameEndedResponse(c)
+  // Default deny, including admin gameplay and routes without a client revision.
+  // Chat is stored independently. Only writing orders/notes and explicit reactions bypass this guard.
+  const writing = /\/(?:turns\/order|note)$/.test(c.req.path)
+  if (openCancellation(game) !== undefined && !writing && options.duringDispute !== true) {
+    return sendError(c, 409, 'CANCELLATION_PENDING', 'Gameplay is paused for a cancellation dispute. Chat, notes and order drafts remain available; do not carry out orders yet.')
+  }
 
   if (clientRev !== undefined && clientRev !== game.rev) {
     if (options.allowIdempotentRetry === true) {
@@ -280,6 +287,19 @@ export async function applyToGame(
   const given = game.logSecret === '' ? { ...game, logSecret: newId() } : game
   const result = action(given)
   if (!result.ok) return sendEngineError(c, result.error)
+
+  // Notes and other non-recorded writes make rev counters non-contiguous in history.
+  // Capture the exact before-action revision rather than guessing from a primary log ID.
+  if (result.value.assistedActions.some((r) => !game.assistedActions.some((old) => old.id === r.id)) ||
+      (result.value.cancellations?.cases.length ?? 0) > (game.cancellations?.cases.length ?? 0)) {
+    const existing = await context.repo.findGameRevision(gameId, game.rev)
+    if (existing === undefined) {
+      const baselineSaved = await context.repo.saveGameWithRevision(game,
+        createGameRevision(undefined, game, currentPlayer(c), new Date().toISOString(), 'Before assisted action'),
+        game.rev)
+      if (!baselineSaved) return sendError(c, 409, 'CONFLICT', 'Game changed before the action. Reload and retry.')
+    }
+  }
 
   const now = new Date().toISOString()
   const reconciled = expireTradeOffers(result.value, now)

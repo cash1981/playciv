@@ -512,6 +512,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     if (game === undefined) {
       return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
+    if (game.cancellations?.cases.some((entry) => entry.outcome === 'pending')) {
+      return sendError(c, 409, 'CANCELLATION_PENDING', 'Resolve the cancellation dispute before deleting the game.')
+    }
 
     const me = currentPlayer(c)
     const isCreator = game.players.some(
@@ -731,6 +734,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
 
     const me = currentPlayer(c)
     if (isLockedForViewer(game, me)) return gameEndedResponse(c)
+    if (!game.players.some((p) => p.playerId === me.id) && me.role !== 'admin') {
+      return sendError(c, 403, 'NO_ACCESS', 'Spectators are read-only; only active players may post game chat.')
+    }
     const entry: ChatMessage = {
       id: newId(),
       gameId,

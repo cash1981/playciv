@@ -15,7 +15,7 @@ import type { GameState, Playerhand, PlayerStats, TradeOffer } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
 import type { PlayerTurn } from './turn.js'
-import { TURN_PHASES, migratePlayerTurn, startPlayerOf } from './turn.js'
+import { TURN_PHASES, migratePlayerTurn, startPlayerOf, turnStatus } from './turn.js'
 
 /**
  * Issue #175: a game saved before `gamedata.ts` started correcting the
@@ -377,7 +377,10 @@ export function migrateGameState(state: GameState): GameState {
   // baseline is there). A state saved by this code has the baseline and no
   // switch, so it is left alone, and so is a second load of an adopted one.
   const classic = chatOrders === false || (chatOrders === undefined && older.chatOrdersStartTurn === undefined)
-  return classic ? adoptClassicGame(migrated) : migrated
+  const adopted = classic ? adoptClassicGame(migrated) : migrated
+  return { ...adopted, cancellations: adopted.cancellations ?? {
+    floorTurn: turnStatus(adopted).currentTurn, sealedThrough: 0, acknowledgements: {}, cases: [], requests: [],
+  } }
 }
 
 /**

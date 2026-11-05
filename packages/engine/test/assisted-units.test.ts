@@ -36,6 +36,7 @@ import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
+import { applyCancellation, openCancellation } from '../src/cancellation.js'
 import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
@@ -52,6 +53,7 @@ import type { GameState, Playerhand } from '../src/state.js'
 import { capitalOf, scoutDestinationsOf } from '../src/sot.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { withCardInHand } from './assisted-fixture.js'
 
 const AT = '2026-10-09T10:00:00.000Z'
 const OTHERS = [KARANDRAS1, ITCHI, CHUL]
@@ -1423,7 +1425,7 @@ describe('hidden information', () => {
     }
   })
 
-  it('another player\'s projection changes only by the public line, the record, the deck count and the unit count', () => {
+  it('another player\'s projection changes only by public history and counts, including its explicit cutoff', () => {
     const before = ready()
     const after = build(before, unit('mounted'))
     const was = toPlayerView(before, KARANDRAS1)
@@ -1435,6 +1437,7 @@ describe('hidden information', () => {
     expect(JSON.stringify(now.log.at(-1))).not.toContain('drew')
     expect(now.assistedActions).toHaveLength(1)
     expect(now.numberOfItemsInDeck).toBe(was.numberOfItemsInDeck - 1)
+    expect(now.cancellations).toEqual({ ...was.cancellations, cutoff: was.log.length + 2 })
 
     const cash = (view: typeof now) => view.opponents.find((player) => player.playerId === CASH1981)
     expect(cash(now)?.numberOfItemsInHand).toBe((cash(was)?.numberOfItemsInHand ?? 0) + 1)
@@ -1444,11 +1447,37 @@ describe('hidden information', () => {
         ...view,
         log: undefined,
         assistedActions: undefined,
+        cancellations: { ...view.cancellations, cutoff: 0 },
         numberOfItemsInDeck: undefined,
         rev: undefined,
         opponents: view.opponents.filter((player) => player.playerId !== CASH1981),
       })
     expect(rest(now)).toBe(rest(was))
+  })
+
+  it('cancels a unit build using its exact before-action revision despite multiple public/private log entries', () => {
+    const twain = withCardInHand({ ...ready(), rev: 37 }, 'Mark Twain', KARANDRAS1)
+    const before = twain.state
+    const after = build(before, unit('mounted'))
+    expect(after.log.length - before.log.length).toBe(2)
+    const record = after.assistedActions.at(-1)
+    if (record === undefined) throw new Error('no build record')
+    expect(record.beforeRevision).toBe(37)
+    let pending = unwrap(applyCancellation(after, {
+      playerId: KARANDRAS1, requestId: 'cancel-build',
+      command: { kind: 'open', logId: record.logId, itemId: twain.itemId },
+    }, before))
+    for (const p of pending.players) {
+      const dispute = openCancellation(pending)
+      if (dispute === undefined) throw new Error('case settled too soon')
+      pending = unwrap(applyCancellation(pending, {
+        playerId: p.playerId, requestId: `pass-${p.playerId}`,
+        command: { kind: 'pass', caseId: dispute.id, version: dispute.version },
+      }, before))
+    }
+    expect(pending.assistedActions.at(-1)?.status).toBe('cancelled')
+    expect(handOf(pending)).toEqual(handOf(before))
+    expect(pending.log.filter((l) => l.superseded)).toHaveLength(2)
   })
 
   it('the undo line says no card and the private line stays with its owner', () => {

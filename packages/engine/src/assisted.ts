@@ -26,6 +26,7 @@
  */
 
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
+import { availableKingId } from './twain.js'
 import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
@@ -1827,6 +1828,9 @@ export function performAssistedAction(
   state: GameState,
   input: PerformAssistedActionInput,
 ): Result<GameState, EngineError> {
+  if (state.cancellations?.cases.some((c) => c.outcome === 'pending')) {
+    return err(rejected(input.action, blocked('unavailable', 'Gameplay is paused. Only orders, notes, chat and cancellation responses are allowed.')))
+  }
   const definition = definitionOf(input.action)
   if (definition === undefined) {
     return err(rejected(String(input.action), blocked('unavailable', 'Unknown action.')))
@@ -1866,6 +1870,9 @@ export function performAssistedAction(
   const lovelaceCreditId =
     cityAction === undefined ? undefined : lovelaceCreditForAction(state, player, cityAction.cityPieceId)
   const record: AssistedActionRecord = {
+    kingAtAction: availableKingId(state, player),
+    beforeRevision: state.rev,
+    selectedInputs: input.payload,
     id: input.requestId,
     kind: input.action,
     playerId: input.playerId,
@@ -1922,6 +1929,7 @@ export function reverseAssistedAction(
   if (record.status === 'undone') {
     return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: record.logId })
   }
+  if (record.status === 'superseded') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
   if (record.status === 'cancelled') {
     return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: 'That action was cancelled with Mark Twain, so it cannot be undone.' })
   }

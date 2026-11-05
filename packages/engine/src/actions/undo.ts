@@ -115,6 +115,7 @@ function civSetupOf(state: GameState, entry: GameLogEntry): CivRevealSetup | und
  * {@link civSetupOf}.
  */
 export function canInitiateUndo(state: GameState, entry: GameLogEntry): boolean {
+  if (entry.superseded === true) return false
   if (entry.item === null || entry.undo !== null) return false
   return !isCivReveal(entry) || civSetupOf(state, entry) !== undefined
 }
@@ -133,6 +134,7 @@ const isAssistedEntry = (entry: GameLogEntry): boolean =>
 export function initiateUndo(state: GameState, input: InitiateUndoInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
   if (entry === undefined) return err({ kind: 'LOG_ENTRY_NOT_FOUND', logId: input.logId })
+  if (entry.superseded === true) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
   if (entry.item === null) return initiateAssistedUndo(state, entry, input)
   if (entry.undo !== null) {
     return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
@@ -216,6 +218,7 @@ export interface VoteInput {
 export function vote(state: GameState, input: VoteInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
   if (entry === undefined) return err({ kind: 'LOG_ENTRY_NOT_FOUND', logId: input.logId })
+  if (entry.superseded === true) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
   if (entry.undo === null) return err({ kind: 'UNDO_NOT_INITIATED', logId: input.logId })
   // A vote that has run is over: a late yes would otherwise run the undo again.
   // An assisted action says so with its own error, further down.
