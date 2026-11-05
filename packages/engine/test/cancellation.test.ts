@@ -11,6 +11,7 @@ import { migrateGameState } from '../src/migrate.js'
 import { unwrap } from '../src/result.js'
 import { toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
+import { publicTurn, publicTurnKey, turnStatus } from '../src/turn.js'
 import { player, withCardInHand } from './assisted-fixture.js'
 import { CASH1981 as A, KARANDRAS1 as B, ITCHI as C, CHUL as D, firstCivGame } from './fixture.js'
 
@@ -71,6 +72,20 @@ function cultureScene(targets: readonly string[] = [], twainOwner = B) {
 }
 
 describe('durable cancellation disputes', () => {
+  it.each(['twain', 'joust'])('rejects new %s cases in inactive games but replays committed requests unchanged', (card) => {
+    const { baseline, current, ids } = cultureScene()
+    const cmd: CancellationCommand = { kind: 'open', logId: logOf(current, 'target'), itemId: ids[card] ?? '' }
+    const inactive = { ...current, active: false }
+    const before = JSON.stringify(inactive)
+    expect(command(inactive, baseline, B, 'new-case', cmd)).toMatchObject({
+      ok: false,
+      error: { kind: 'ASSISTED_ACTION_REJECTED', reason: 'A cancellation cannot be opened in an inactive game.' },
+    })
+    expect(JSON.stringify(inactive)).toBe(before)
+    const committed = { ...unwrap(command(current, baseline, B, 'committed', cmd)), active: false }
+    expect(unwrap(command(committed, undefined, B, 'committed', cmd))).toBe(committed)
+  })
+
   it('opens without changing gameplay, costs, decks or randomness and requires every player to pass', () => {
     const { baseline, cityId, twainId } = cityScene()
     const current = devote(baseline, cityId)
@@ -159,6 +174,48 @@ describe('durable cancellation disputes', () => {
       expect(JSON.stringify({ baseline, pending })).toBe(beforeSettlement)
     },
   )
+
+  it('retains edited earlier-turn orders without reopening completed turns behind restored gameplay', () => {
+    const scene = cityScene()
+    const original = { markdown: 'Turn one research', at: '2026-11-05T09:00:00Z' }
+    const revised = { markdown: 'Corrected turn one research', at: '2026-11-05T10:00:00Z' }
+    let baseline = unwrap(postOrder(scene.baseline, { playerId: C, turnNumber: 1, phase: 'RESEARCH', ...original }))
+    for (const p of baseline.players) {
+      baseline = unwrap(markPhasesDone(baseline, { playerId: p.playerId, turnNumber: 1, upToPhase: 'RESEARCH' }))
+    }
+    baseline = unwrap(markPhasesDone(baseline, { playerId: A, turnNumber: 2, upToPhase: 'TRADE' }))
+    expect(turnStatus(baseline).currentTurn).toBe(2)
+    let current = devote(baseline, scene.cityId)
+    current = unwrap(performAssistedAction(current, {
+      playerId: A, action: 'startBuildingProgram', requestId: 'later', confirmedRepeat: true,
+      payload: { cityPieceId: scene.cityId },
+    }))
+    expect(current.board).not.toEqual(baseline.board)
+    expect(player(current).stats).not.toEqual(player(baseline).stats)
+    let pending = open(current, baseline, scene.twainId)
+    pending = unwrap(postOrder(pending, { playerId: C, turnNumber: 1, phase: 'RESEARCH', ...revised }))
+    const before = JSON.stringify({ baseline, pending })
+    const done = settle(pending, baseline)
+    expect(turnStatus(done).currentTurn).toBe(2)
+    expect(done.board).toEqual(baseline.board)
+    expect(player(done).stats).toEqual(player(baseline).stats)
+    for (const p of baseline.players) {
+      const older = player(done, p.playerId).playerTurns.find((t) => t.turnNumber === 1)
+      const saved = p.playerTurns.find((t) => t.turnNumber === 1)
+      expect(older?.done).toEqual(saved?.done)
+      expect(older?.needsRevision).toBe(saved?.needsRevision)
+      expect(older?.revisionPhases).toEqual(saved?.revisionPhases)
+    }
+    const older = player(done, C).playerTurns.find((t) => t.turnNumber === 1)
+    expect(older?.orders.RESEARCH).toBe(revised.markdown)
+    expect(older?.history.RESEARCH).toEqual([original, revised])
+    if (older === undefined) throw new Error('missing older turn')
+    expect(done.publicTurns[publicTurnKey(older)]).toEqual(publicTurn(older))
+    expect(player(done).playerTurns.find((t) => t.turnNumber === 2)).toMatchObject({
+      done: { CM: false }, needsRevision: true,
+    })
+    expect(JSON.stringify({ baseline, pending })).toBe(before)
+  })
 
   it('resolves a culture counter and counter-counter, charging every committed card exactly once', () => {
     const { baseline, current, ids } = cultureScene()

@@ -719,9 +719,7 @@ export function PlayCardControl({
               {twainTarget !== undefined && (
                 <p className="muted">
                   Opens a dispute. If cancellation succeeds, the game goes back to just before this action.
-                  {twainTarget.rolledBack.length > 0
-                    ? ` Later history would be superseded: ${twainTarget.rolledBack.join(' · ')}.`
-                    : ''}{' '}
+                  {' '}Later history would be superseded; the dispute will show the affected history.{' '}
                   {twainTarget.kind === 'city' ? 'The city has used its action for the turn.' : 'The event card is discarded.'}{' '}
                   All players must pass the latest response. If King prevents cancellation, Twain stays in hand.
                 </p>

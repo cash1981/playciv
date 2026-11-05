@@ -14,7 +14,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Owner:** Copilot
 - **Branch:** `feat/great-person-twain` (isolated fix worktree)
 - **Brief:** `docs/agents/tasks/twain-pr-comments.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:** `packages/engine/src/cancellation.ts`, `packages/engine/src/twain.ts`, their engine tests, `packages/server/src/context.ts`, `packages/server/test/great-person-twain-api.test.ts`, dependent Twain card UI/types/tests, relevant `docs/agents/decisions.md`.
 - **Notes:** Fix the four current review comments on #336. The two earlier reward-candidate/stale-selection findings are already addressed.
 

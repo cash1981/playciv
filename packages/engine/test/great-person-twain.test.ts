@@ -5,6 +5,7 @@ import { playableCardsOf } from '../src/assisted-cards.js'
 import { draw } from '../src/actions/draw.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { unwrap } from '../src/result.js'
+import { toPlayerView } from '../src/state.js'
 import { twainTargetsOf } from '../src/twain.js'
 import { player, withCardInHand } from './assisted-fixture.js'
 import { CASH1981 as A, KARANDRAS1 as B, ITCHI as C, firstCivGame } from './fixture.js'
@@ -26,8 +27,30 @@ describe('Mark Twain targets', () => {
     const targets = twainTargetsOf(state, player(state, B))
     expect(targets).toHaveLength(1)
     expect(targets[0]).toMatchObject({ kind: 'culture', blocked: null })
-    expect(targets[0]?.rolledBack.length).toBeGreaterThan(0)
+    expect(targets[0]).not.toHaveProperty('rolledBack')
     expect(JSON.stringify(targets)).not.toContain('privateLog')
+  })
+
+  it('projects multiple targets without copying growing history into each target', () => {
+    const { played } = scene()
+    const event = withCardInHand(played, 'Supply Drop', A)
+    const state = unwrap(performAssistedAction(event.state, {
+      playerId: A, action: 'playCard', requestId: 'second-event', confirmedRepeat: true,
+      payload: { itemId: event.itemId, targets: [] },
+    }))
+    const targets = twainTargetsOf(state, player(state, B))
+    expect(targets).toHaveLength(2)
+    for (const count of [10, 100]) {
+      let growing = state
+      for (let i = 0; i < count; i++) {
+        growing = unwrap(markPhasesDone(growing, { playerId: C, turnNumber: i + 2, upToPhase: 'RESEARCH' }))
+      }
+      expect(growing.log.length).toBeGreaterThan(state.log.length)
+      const projected = toPlayerView(growing, B).you?.playableCards.find((card) => card.name === 'Mark Twain')?.twain
+      expect(projected).toEqual(targets)
+      expect(JSON.stringify(projected)).not.toContain('rolledBack')
+      expect(JSON.stringify(projected)).not.toContain('privateLog')
+    }
   })
 
   it('explains the sealed frontier and own-action restriction', () => {

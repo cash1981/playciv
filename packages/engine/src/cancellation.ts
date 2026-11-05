@@ -109,13 +109,17 @@ function validBaseline(current: GameState, baseline: GameState, record: Assisted
     baseline.log.every((l, i) => l.id === current.log[i]?.id)
 }
 
-function preserveWriting(baseline: GameState, current: GameState): GameState {
+function preserveWriting(baseline: GameState, current: GameState, rollbackTurn: number): GameState {
   const restore = (player: Playerhand): Playerhand => {
     const live = [...current.players, ...current.withdrawnPlayers].find((p) => p.playerId === player.playerId)
     if (live === undefined) return player
     const turns = live.playerTurns.map((turn) => {
       const previous = player.playerTurns.find((t) => t.turnNumber === turn.turnNumber)
       const restored = previous ?? createPlayerTurn(player.username, turn.turnNumber)
+      // Earlier turns' gameplay survives the rollback, even if their writing was edited.
+      if (turn.turnNumber < rollbackTurn) {
+        return { ...restored, orders: turn.orders, history: turn.history, revealed: turn.revealed }
+      }
       // Completed phases can receive later orders, even while the dispute is open.
       // Compare versions too: reverting to the original text still leaves later work.
       const revisionPhases = TURN_PHASES.filter((phase) => !restored.done[phase] ||
@@ -147,7 +151,7 @@ function settle(current: GameState, baseline: GameState, dispute: CancellationCa
   const cancelled = !protectedByKing && dispute.reactions.some((r) => r.targetId === null && !r.protection && effective(r))
   let state = current
   if (cancelled) {
-    state = { ...preserveWriting(baseline, current),
+    state = { ...preserveWriting(baseline, current, record.turnNumber),
       rev: current.rev, rng: current.rng, logSecret: current.logSecret,
       itemCounter: Math.max(current.itemCounter, baseline.itemCounter),
       cancellations: cancellationHistory(current),
@@ -208,6 +212,7 @@ export function applyCancellation(
     ...cancellationHistory(next), requests: [...history.requests, { id: input.requestId, playerId: input.playerId, fingerprint }],
   } })
   const command = input.command
+  if (command.kind === 'open' && !state.active) return reject('A cancellation cannot be opened in an inactive game.')
   const pending = openCancellation(state)
   if (command.kind === 'confirm') {
     if (pending !== undefined) return reject('History cannot be confirmed during a dispute.')

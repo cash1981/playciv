@@ -280,6 +280,8 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   existing admin chat moderation remains available.
   All active players receive the same public pass opportunity regardless of their hands. Each response
   increments the case version and clears all passes. No hidden-hand auto-pass or timeout exists.
+  Inactive games cannot open new cases, including for admin participants; committed-request retries
+  remain idempotent and general admin correction privileges are unchanged.
 - Reaction ownership, reward-candidate availability and blockade are checked against both the saved baseline
   and live hand. King is protection, not a counter to Twain: revealing him preserves the original continuation
   and **keeps Twain in hand**, as explicitly chosen by the human. His reveal stays public. Garcia's devotion
@@ -287,7 +289,9 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 - Successful settlement restores the exact before-action revision, keeps the cancelled city's action spent
   (or discards the target culture event), pays committed reactions once and reshuffles changed decks once.
   Subsequent interleaved gameplay becomes superseded history, not deleted history. Current notes and order
-  text/versions survive; restored phase flags reopen affected work and retained orders need revision.
+  text/versions survive. Turns before the rollback target retain their baseline completion/revision
+  flags, even when their historical orders were edited. From the target turn onward, restored phase
+  flags reopen affected work, including revised orders in baseline-completed phases.
   Failed cancellation retains the continuation and draws, but still pays valid culture reaction costs.
 - The explicit shared confirmation frontier is separate from turn progression: only the minimum of active
   players' acknowledgements seals a displayed log cutoff. Older acknowledgements never cover later entries.
@@ -295,10 +299,12 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   allowed during a case. Settlement conservatively seals through the resolved dispute to prevent future
   rewinds refunding its reactions. Older corrections and roster changes require table agreement.
 - State stores revision references, not recursive snapshots. Exact baselines are captured even after
-  note-only revision gaps; a primary action log is not assumed to be the first line of its revision.
+  note-only revision gaps; these checkpoints add fallback metadata, not repeated old log IDs or
+  public/private descriptions. A primary action log is not assumed to be the first line of its revision.
   Legacy targets are adopted only with an exact preceding revision. Missing history fails atomically.
   Idempotence fingerprints and actual selected inputs stay private; projections whitelist public labels,
-  case versions, targets and passes, with response choices only for their owner.
+  case versions, targets and passes, with response choices only for their owner. Targets carry labels
+  and blocking reasons, not log suffixes; the actual dispute retains one affected-history preview.
 - Zheng He (human, #301) writes one private line for each hut or village piece on a map
   square (square and name) and for each hut or village item another player holds. The
   pieces on the map are anonymous and a draw takes the top card, so the look fixes the

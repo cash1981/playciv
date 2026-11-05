@@ -13,7 +13,6 @@ export interface TwainTarget {
   readonly username: string
   readonly kind: 'city' | 'culture'
   readonly text: string
-  readonly rolledBack: readonly string[]
   readonly blocked: string | null
 }
 
@@ -59,11 +58,12 @@ export function twainBlock(state: GameState, holder: Playerhand): string | undef
 /** Public target descriptions, including why a known target is blocked. Never uses another hand's hidden cards. */
 export function twainTargetsOf(state: GameState, holder: Playerhand): readonly TwainTarget[] {
   if (twainBlock(state, holder) !== undefined) return []
+  const logIndices = new Map(state.log.map((entry, index) => [entry.id, index]))
   return state.assistedActions.flatMap((record): readonly TwainTarget[] => {
     if (record.status !== 'applied' || record.turnNumber < (state.cancellations?.floorTurn ?? turnStatus(state).currentTurn)) return []
     const city = cityActionOf(record) !== undefined
     if (!city && !(record.effect.kind === 'playCard' && record.effect.item.kind.startsWith('culture'))) return []
-    const index = state.log.findIndex((l) => l.id === record.logId)
+    const index = logIndices.get(record.logId) ?? -1
     const entry = state.log[index]
     const actor = state.players.find((p) => p.playerId === record.playerId)
     if (entry === undefined || actor === undefined) return []
@@ -72,8 +72,7 @@ export function twainTargetsOf(state: GameState, holder: Playerhand): readonly T
         (index < (state.cancellations?.sealedThrough ?? 0) ? 'That action is before the shared confirmation frontier.'
           : state.cancellations?.cases.some((c) => c.outcome === 'pending') ? 'A cancellation is already pending.' : null)
     return [{ logId: record.logId, playerId: actor.playerId, username: actor.username,
-      kind: city ? 'city' : 'culture', text: entry.publicLog, blocked,
-      rolledBack: state.log.slice(index + 1).map((l) => l.publicLog).filter(Boolean) }]
+      kind: city ? 'city' : 'culture', text: entry.publicLog, blocked }]
   })
 }
 

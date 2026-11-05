@@ -12,6 +12,7 @@ import { SQUARE_SIZE, mapTop, placePiece, slotOrigin, unwrap } from '@civ/engine
 
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
+import { revisionSnapshot } from '../src/context.js'
 import { inject } from './helpers.js'
 
 let app: App
@@ -116,6 +117,27 @@ const logIdOf = async (t: Table, requestId: string): Promise<string> => {
 }
 
 describe('Mark Twain over HTTP', () => {
+  it('refuses an admin participant a new case after the game ends without removing correction privileges', async () => {
+    const t = await table('Ended')
+    expect((await startProgram(t, 'sp-1')).status).toBe(200)
+    await repo.updatePlayer(t.otherId, { role: 'admin' })
+    expect((await post(t.other, `/api/games/${t.gameId}/end`, { winner: 'Ended-a' })).status).toBe(200)
+    const before = await repo.findGame(t.gameId)
+    expect(before?.active).toBe(false)
+    const revisions = await repo.listGameRevisionSummaries(t.gameId)
+    for (const path of ['twain', 'cancellations']) {
+      const response = await post(t.other, `/api/games/${t.gameId}/${path}`, {
+        kind: 'open', itemId: t.twainId, logId: await logIdOf(t, 'sp-1'), rev: before?.rev, requestId: `ended-${path}`,
+      })
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ message: 'A cancellation cannot be opened in an inactive game.' })
+      expect(await repo.findGame(t.gameId)).toEqual(before)
+      expect(await repo.listGameRevisionSummaries(t.gameId)).toEqual(revisions)
+    }
+    expect((await post(t.other, `/api/games/${t.gameId}/note`, { note: 'Admin correction' })).status).toBe(200)
+    expect((await post(t.starter, `/api/games/${t.gameId}/note`, { note: 'Not allowed' })).status).toBe(409)
+  })
+
   it('opens a persistent case and only rewinds after everyone passes, with stale-request retries idempotent', async () => {
     const t = await table('Rewind')
     expect((await startProgram(t, 'sp-1')).status).toBe(200)
@@ -153,6 +175,12 @@ describe('Mark Twain over HTTP', () => {
     expect((await post(t.other, `/api/games/${t.gameId}/cancellations`, final)).status).toBe(200)
     expect((await post(t.other, `/api/games/${t.gameId}/twain`, opening)).status).toBe(200)
     expect((await repo.findGame(t.gameId))?.rev).toBe(after?.rev)
+    await repo.updatePlayer(t.otherId, { role: 'admin' })
+    expect((await post(t.other, `/api/games/${t.gameId}/end`, { winner: 'Rewind-a' })).status).toBe(200)
+    const ended = await repo.findGame(t.gameId)
+    expect((await post(t.other, `/api/games/${t.gameId}/twain`, opening)).status).toBe(200)
+    expect((await post(t.other, `/api/games/${t.gameId}/cancellations`, final)).status).toBe(200)
+    expect(await repo.findGame(t.gameId)).toEqual(ended)
   })
 
   it('allows interleaved revisions but pauses gameplay mutations, while notes, orders and chat stay available', async () => {
@@ -210,13 +238,22 @@ describe('Mark Twain over HTTP', () => {
 
   it('captures an exact before-action revision after a note-only gap and fails missing history atomically', async () => {
     const t = await table('Gap')
+    expect((await post(t.starter, `/api/games/${t.gameId}/draw/CULTURE_1`, { confirmedOutOfTurn: true })).status).toBe(200)
     await post(t.starter, `/api/games/${t.gameId}/note`, { note: 'Private baseline note' })
     const baselineRev = (await view(t.gameId, t.starter)).rev
+    const baseline = await repo.findGame(t.gameId)
+    if (baseline === undefined) throw new Error('game missing')
+    expect(baseline.log.some((entry) => entry.playerId !== null && entry.privateLog !== '' && entry.privateLog !== entry.publicLog)).toBe(true)
     expect(await repo.findGameRevision(t.gameId, baselineRev)).toBeUndefined()
     expect((await startProgram(t, 'sp-1')).status).toBe(200)
     const current = await repo.findGame(t.gameId)
     expect(current?.assistedActions[0]?.beforeRevision).toBe(baselineRev)
-    expect((await repo.findGameRevision(t.gameId, baselineRev))?.state.players.every((p) => p.gamenote === '')).toBe(true)
+    const checkpoint = await repo.findGameRevision(t.gameId, baselineRev)
+    expect(checkpoint?.state).toEqual(revisionSnapshot(baseline))
+    expect(checkpoint).toMatchObject({
+      logIds: [], privateDescriptions: {}, publicDescription: 'Before assisted action',
+    })
+    expect(checkpoint?.privateDescriptions).toEqual({})
     const spy = vi.spyOn(repo, 'findGameRevision').mockResolvedValue(undefined)
     const response = await post(t.other, `/api/games/${t.gameId}/twain`, {
       logId: await logIdOf(t, 'sp-1'), rev: current?.rev, requestId: 'missing',
@@ -224,6 +261,29 @@ describe('Mark Twain over HTTP', () => {
     expect(response.status).toBe(400)
     expect(await repo.findGame(t.gameId)).toEqual(current)
     spy.mockRestore()
+    expect((await post(t.starter, `/api/games/${t.gameId}/note`, { note: 'Private later note' })).status).toBe(200)
+    const later = await repo.findGame(t.gameId)
+    if (later === undefined) throw new Error('game missing')
+    expect((await post(t.starter, `/api/games/${t.gameId}/actions`, {
+      action: 'devoteToTheArts', requestId: 'later', rev: later.rev, cityPieceId: t.cityId, confirmedRepeat: true,
+    })).status).toBe(200)
+    const laterCheckpoint = await repo.findGameRevision(t.gameId, later.rev)
+    expect(laterCheckpoint?.state).toEqual(revisionSnapshot(later))
+    expect(laterCheckpoint).toMatchObject({
+      logIds: [], privateDescriptions: {}, publicDescription: 'Before assisted action',
+    })
+    expect(laterCheckpoint?.privateDescriptions).toEqual({})
+    expect((await post(t.other, `/api/games/${t.gameId}/twain`, {
+      logId: await logIdOf(t, 'sp-1'), rev: (await view(t.gameId, t.other)).rev, requestId: 'open',
+    })).status).toBe(200)
+    const pending = await repo.findGame(t.gameId)
+    const affected = pending?.cancellations?.cases[0]?.affected
+    expect(affected).toContain('Before assisted action')
+    for (const log of baseline.log.filter((entry) => entry.publicLog !== '')) {
+      expect(affected?.join(' · ')).not.toContain(log.publicLog)
+    }
+    expect(JSON.stringify(affected)).not.toContain('Private')
+    expect(pending?.players.find((p) => p.playerId === t.starterId)?.gamenote).toBe('Private later note')
   })
 
   it('does not settle a final pass without its saved continuation and baseline', async () => {

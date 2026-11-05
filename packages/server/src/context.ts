@@ -295,7 +295,7 @@ export async function applyToGame(
     const existing = await context.repo.findGameRevision(gameId, game.rev)
     if (existing === undefined) {
       const baselineSaved = await context.repo.saveGameWithRevision(game,
-        createGameRevision(undefined, game, currentPlayer(c), new Date().toISOString(), 'Before assisted action'),
+        createGameRevision(game, game, currentPlayer(c), new Date().toISOString(), 'Before assisted action'),
         game.rev)
       if (!baselineSaved) return sendError(c, 409, 'CONFLICT', 'Game changed before the action. Reload and retry.')
     }

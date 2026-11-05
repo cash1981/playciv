@@ -427,7 +427,7 @@ describe('choosing who the card names', () => {
       prompt: 'Whose action is cancelled? (optional)',
       discards: true,
       twain: [
-        { logId: 'l1', playerId: 'p1', username: 'bob', kind: 'city', text: 'bob devoted a city', rolledBack: [], blocked: 'Your own action: Mark Twain cancels the action of another player.' },
+        { logId: 'l1', playerId: 'p1', username: 'bob', kind: 'city', text: 'bob devoted a city', blocked: 'Your own action: Mark Twain cancels the action of another player.' },
       ],
     })
     renderControl(viewWith([twain]), twain)
@@ -454,7 +454,6 @@ describe('choosing who the card names', () => {
           username: 'itchi',
           kind: 'city',
           text: 'itchi devoted a city to the arts',
-          rolledBack: ['itchi advanced on the culture track'],
           blocked: null,
         },
       ],
@@ -465,7 +464,7 @@ describe('choosing who the card names', () => {
     fireEvent.click(screen.getByRole('radio', { name: /itchi devoted a city to the arts/ }))
     expect(screen.getByText(/Later history would be superseded/)).toBeTruthy()
     expect(screen.getByText(/If King prevents cancellation, Twain stays in hand/)).toBeTruthy()
-    expect(screen.getByText(/itchi advanced on the culture track/)).toBeTruthy()
+    expect(screen.getByText(/the dispute will show the affected history/)).toBeTruthy()
     expect(screen.getByText(/The city has used its action for the turn/)).toBeTruthy()
     fireEvent.click(confirmButton())
     await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1))
@@ -490,7 +489,6 @@ describe('choosing who the card names', () => {
           username: 'itchi',
           kind: 'city',
           text: 'itchi devoted a city to the arts',
-          rolledBack: [],
           blocked: null,
         },
       ],
