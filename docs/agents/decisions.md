@@ -267,8 +267,8 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   a sequence the player has not seen. The cancelled action stays on the record as `status: 'cancelled'` (not
   undoable), which counts as its city's action of the turn: another action of that city is asked about like any
   second action, and the culture a devotion gave is gone with the rewind. A cancelled culture event is discarded,
-  not returned to the hand, and Mark Twain is discarded. Only an action of the player's open phase in the
-  current turn can be cancelled, never one's own. Cannot be cancelled: the city actions of a player with a
+  not returned to the hand, and Mark Twain is discarded. Only an action of the current turn can be cancelled, in any phase
+  (human 2026-11-04: a quick player may already have ended theirs; the players watch this themselves), never one's own. The list also shows this turn's other city actions and culture events greyed out with the reason they cannot be cancelled. Cannot be cancelled: the city actions of a player with a
   faceup Dr. Martin Luther King (his Humanitarian figures not all blockaded), Jerry Garcia's devotion and a city
   action that used Ada Lovelace's extra action (the cards say so). A resource ability is not logged, so it is not
   on the list; the card form's last option only logs the play, as before, and the players undo by vote.

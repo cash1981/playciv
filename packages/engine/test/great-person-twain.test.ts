@@ -174,7 +174,7 @@ describe('Mark Twain cancelling a culture event', () => {
 describe('what Mark Twain may not cancel', () => {
   const asHolder = (state: GameState) => player(state, KARANDRAS1)
 
-  it('lists the other players\' actions of the open phase to the holder, with the lines a rewind would lose', () => {
+  it('lists the other players\' actions of this turn to the holder, with the lines a rewind would lose', () => {
     const { state: before } = scene()
     const later = devote(devote(before, 'd-1'), 'd-2', true)
     const targets = twainTargetsOf(later, asHolder(later))
@@ -188,6 +188,13 @@ describe('what Mark Twain may not cancel', () => {
     expect(card?.twain?.length).toBe(2)
   })
 
+  it('still lists an action of a phase its player has already ended, in the same turn', () => {
+    const { state: before } = scene()
+    const devoted = devote(before, 'd-1')
+    const ended = unwrap(markPhasesDone(devoted, { playerId: CASH1981, turnNumber: 1, upToPhase: 'CM' }))
+    expect(twainTargetsOf(ended, asHolder(ended)).map((target) => target.logId)).toEqual([logLineOf(ended, 'd-1')])
+  })
+
   it('refuses a city action of a player with a faceup Dr. Martin Luther King', () => {
     const { state: start } = scene()
     const king = withCardInHand(start, 'Dr. Martin Luther King', CASH1981)
@@ -198,21 +205,21 @@ describe('what Mark Twain may not cancel', () => {
       ),
     }
     const devoted = devote(faceup, 'd-1')
-    expect(twainTargetsOf(devoted, asHolder(devoted))).toEqual([])
+    expect(twainTargetsOf(devoted, asHolder(devoted)).map((target) => target.blocked)).toEqual([expect.stringContaining('Dr. Martin Luther King')])
     const refused = cancelWithTwain(devoted, faceup, { holderId: KARANDRAS1, logId: logLineOf(devoted, 'd-1') })
     expect(refused.ok).toBe(false)
     expect(JSON.stringify(refused)).toContain('Dr. Martin Luther King is faceup')
 
     // A hidden Dr. King protects nothing
     const hidden = devote(king.state, 'd-1')
-    expect(twainTargetsOf(hidden, asHolder(hidden))).toHaveLength(1)
+    expect(twainTargetsOf(hidden, asHolder(hidden)).map((target) => target.blocked)).toEqual([null])
   })
 
   it('refuses when another player has acted since, which the rewind would erase', () => {
     const { state: before } = scene()
     const devoted = devote(before, 'd-1')
     const interleaved = unwrap(draw(devoted, { playerId: ITCHI, sheetName: 'CULTURE_1', confirmedOutOfTurn: true }))
-    expect(twainTargetsOf(interleaved, asHolder(interleaved))).toEqual([])
+    expect(twainTargetsOf(interleaved, asHolder(interleaved)).map((target) => target.blocked)).toEqual([expect.stringContaining('Someone else has acted since')])
     const refused = cancelWithTwain(interleaved, before, { holderId: KARANDRAS1, logId: logLineOf(interleaved, 'd-1') })
     expect(refused.ok).toBe(false)
     expect(JSON.stringify(refused)).toContain('Another player has acted since')

@@ -21,7 +21,6 @@
  */
 
 import { cityActionOf } from './assisted-core.js'
-import { currentPhaseOf } from './assisted-cards.js'
 import { shuffleSheetTwice } from './assisted-culture.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import { err, ok } from './result.js'
@@ -44,6 +43,8 @@ export interface TwainTarget {
   readonly text: string
   /** The public lines of the actions after it that the rewind takes with it. */
   readonly rolledBack: readonly string[]
+  /** Why it cannot be cancelled now (shown greyed out in the list), or `null` when it can. */
+  readonly blocked: string | null
 }
 
 const holdsFaceupKing = (state: GameState, player: Playerhand): boolean =>
@@ -55,8 +56,9 @@ function refusalFor(state: GameState, record: AssistedActionRecord): string | un
   if (record.status !== 'applied') return 'That action is no longer in force.'
   const actor = state.players.find((candidate) => candidate.playerId === record.playerId)
   if (actor === undefined) return 'That player has left the game.'
-  if (record.turnNumber !== turnStatus(state).currentTurn || currentPhaseOf(state, record.playerId) !== record.phase) {
-    return 'Only an action of the phase that is still open can be cancelled.'
+  // Any phase of this turn: a quick player may have ended theirs, and the players keep an eye on it (human 2026-11-04)
+  if (record.turnNumber !== turnStatus(state).currentTurn) {
+    return 'Only an action of the current turn can be cancelled.'
   }
   const effect = record.effect
   if (effect.kind === 'playCard' && effect.garcia !== undefined) {
@@ -100,23 +102,35 @@ export function twainBlock(state: GameState, holder: Playerhand): string | undef
   return undefined
 }
 
-/** The actions of the other players that Mark Twain can cancel now, newest last. Public information only. */
+/**
+ * This turn's city actions and culture events, newest last, each with why it cannot be cancelled now or `null`. A list
+ * that left the others out would not tell the holder why the action they look for is missing. Public information only.
+ */
 export function twainTargetsOf(state: GameState, holder: Playerhand): readonly TwainTarget[] {
   if (twainBlock(state, holder) !== undefined) return []
   return state.assistedActions.flatMap((record): readonly TwainTarget[] => {
-    if (record.playerId === holder.playerId || refusalFor(state, record) !== undefined) return []
-    if (othersActedAfter(state, record.logId, record.playerId)) return []
+    if (record.status !== 'applied' || record.turnNumber !== turnStatus(state).currentTurn) return []
+    const isCityAction = cityActionOf(record) !== undefined
+    if (!isCityAction && !(record.effect.kind === 'playCard' && record.effect.item.kind.startsWith('culture'))) return []
     const entry = state.log.find((candidate) => candidate.id === record.logId)
     const actor = state.players.find((candidate) => candidate.playerId === record.playerId)
     if (entry === undefined || actor === undefined) return []
+    const blocked =
+      record.playerId === holder.playerId
+        ? 'Your own action: Mark Twain cancels the action of another player.'
+        : (refusalFor(state, record) ??
+          (othersActedAfter(state, record.logId, record.playerId)
+            ? 'Someone else has acted since, and the rewind would erase it.'
+            : null))
     return [
       {
         logId: record.logId,
         playerId: record.playerId,
         username: actor.username,
-        kind: kindOf(record),
+        kind: isCityAction ? 'city' : 'culture',
         text: entry.publicLog,
         rolledBack: linesAfter(state, record.logId),
+        blocked,
       },
     ]
   })

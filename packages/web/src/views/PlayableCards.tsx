@@ -127,7 +127,7 @@ export function PlayCardControl({
     tesla === null ? '' : (tesla.find((choice) => choice.name === teslaTech)?.name ?? (tesla.length === 1 ? (tesla[0]?.name ?? '') : ''))
   // Mark Twain: the other players' actions he can cancel with a rewind; a refresh can take one away
   const twain = card.twain ?? null
-  const twainTarget = twain === null ? undefined : twain.find((target) => target.logId === twainLog)
+  const twainTarget = twain === null ? undefined : twain.find((target) => target.logId === twainLog && target.blocked === null)
   const harborChoices = card.harbors ?? null
   // A live refresh can take a square away: only the ticked squares still on offer count
   const chosenHarborKeys =
@@ -513,7 +513,9 @@ export function PlayCardControl({
                 {min === max
                   ? `Choose ${min}.`
                   : min === 0
-                    ? `Choose up to ${max}, or nobody.`
+                    ? max === 1
+                      ? 'Choose one, or nobody.'
+                      : `Choose up to ${max}, or nobody.`
                     : `Choose ${min} to ${max}.`}
               </p>
             </fieldset>
@@ -677,6 +679,11 @@ export function PlayCardControl({
               </select>
             </label>
           )}
+          {twain !== null && twain.length === 0 && (
+            <p className="muted">
+              No city action or culture event has been played this turn, so there is nothing to cancel with a rewind.
+            </p>
+          )}
           {twain !== null && twain.length > 0 && (
             <fieldset className="play-card-targets">
               <legend>Which action do you cancel?</legend>
@@ -686,10 +693,11 @@ export function PlayCardControl({
                     type="radio"
                     name={`${formId}-twain`}
                     checked={twainTarget?.logId === target.logId}
-                    disabled={disabled}
+                    disabled={disabled || target.blocked !== null}
                     onChange={() => setTwainLog(target.logId)}
                   />{' '}
                   {target.text}
+                  {target.blocked !== null && <span className="muted"> — {target.blocked}</span>}
                 </label>
               ))}
               <label className="play-card-target">

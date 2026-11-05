@@ -200,7 +200,7 @@ describe('choosing who the card names', () => {
     })
     renderControl(viewWith([sabotage]), sabotage)
     fireEvent.click(playButton('Sabotage'))
-    expect(screen.getByText('Choose up to 1, or nobody.')).toBeTruthy()
+    expect(screen.getByText('Choose one, or nobody.')).toBeTruthy()
     expect(confirmButton().disabled).toBe(false)
   })
 
@@ -403,6 +403,40 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], tech: 'Sanitation' })
   })
 
+  it('tells why Mark Twain has nothing to cancel when no action is on the list', () => {
+    const twain = card({
+      name: 'Mark Twain',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'players', min: 0, max: 1 },
+      prompt: 'Whose action is cancelled? (optional)',
+      discards: true,
+      twain: [],
+    })
+    renderControl(viewWith([twain]), twain)
+    fireEvent.click(playButton('Mark Twain'))
+    expect(screen.getByText(/nothing to cancel with a rewind/)).toBeTruthy()
+  })
+
+  it('greys out an action Mark Twain cannot cancel and says why', () => {
+    const twain = card({
+      name: 'Mark Twain',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      targets: { kind: 'players', min: 0, max: 1 },
+      prompt: 'Whose action is cancelled? (optional)',
+      discards: true,
+      twain: [
+        { logId: 'l1', playerId: 'p1', username: 'bob', kind: 'city', text: 'bob devoted a city', rolledBack: [], blocked: 'Your own action: Mark Twain cancels the action of another player.' },
+      ],
+    })
+    renderControl(viewWith([twain]), twain)
+    fireEvent.click(playButton('Mark Twain'))
+    const radio = screen.getByRole('radio', { name: /bob devoted a city/ }) as HTMLInputElement
+    expect(radio.disabled).toBe(true)
+    expect(screen.getByText(/Your own action/)).toBeTruthy()
+  })
+
   it('lets Mark Twain cancel a chosen action with a rewind, telling what is lost, or only log a play', async () => {
     const cancel = vi.spyOn(api, 'twainCancel').mockResolvedValue({} as PlayerView)
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
@@ -421,6 +455,7 @@ describe('choosing who the card names', () => {
           kind: 'city',
           text: 'itchi devoted a city to the arts',
           rolledBack: ['itchi advanced on the culture track'],
+          blocked: null,
         },
       ],
     })
@@ -455,6 +490,7 @@ describe('choosing who the card names', () => {
           kind: 'city',
           text: 'itchi devoted a city to the arts',
           rolledBack: [],
+          blocked: null,
         },
       ],
     })
