@@ -1828,9 +1828,6 @@ export function performAssistedAction(
   state: GameState,
   input: PerformAssistedActionInput,
 ): Result<GameState, EngineError> {
-  if (state.cancellations?.cases.some((c) => c.outcome === 'pending')) {
-    return err(rejected(input.action, blocked('unavailable', 'Gameplay is paused. Only orders, notes, chat and cancellation responses are allowed.')))
-  }
   const definition = definitionOf(input.action)
   if (definition === undefined) {
     return err(rejected(String(input.action), blocked('unavailable', 'Unknown action.')))

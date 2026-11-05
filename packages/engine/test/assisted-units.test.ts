@@ -36,7 +36,7 @@ import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
-import { applyCancellation, openCancellation } from '../src/cancellation.js'
+import { applyCancellation } from '../src/cancellation.js'
 import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
@@ -1425,7 +1425,7 @@ describe('hidden information', () => {
     }
   })
 
-  it('another player\'s projection changes only by public history and counts, including its explicit cutoff', () => {
+  it('another player\'s projection changes only by public history and counts', () => {
     const before = ready()
     const after = build(before, unit('mounted'))
     const was = toPlayerView(before, KARANDRAS1)
@@ -1437,7 +1437,7 @@ describe('hidden information', () => {
     expect(JSON.stringify(now.log.at(-1))).not.toContain('drew')
     expect(now.assistedActions).toHaveLength(1)
     expect(now.numberOfItemsInDeck).toBe(was.numberOfItemsInDeck - 1)
-    expect(now.cancellations).toEqual({ ...was.cancellations, cutoff: was.log.length + 2 })
+    expect(now.cancellations).toEqual(was.cancellations)
 
     const cash = (view: typeof now) => view.opponents.find((player) => player.playerId === CASH1981)
     expect(cash(now)?.numberOfItemsInHand).toBe((cash(was)?.numberOfItemsInHand ?? 0) + 1)
@@ -1447,7 +1447,6 @@ describe('hidden information', () => {
         ...view,
         log: undefined,
         assistedActions: undefined,
-        cancellations: { ...view.cancellations, cutoff: 0 },
         numberOfItemsInDeck: undefined,
         rev: undefined,
         opponents: view.opponents.filter((player) => player.playerId !== CASH1981),
@@ -1463,18 +1462,10 @@ describe('hidden information', () => {
     const record = after.assistedActions.at(-1)
     if (record === undefined) throw new Error('no build record')
     expect(record.beforeRevision).toBe(37)
-    let pending = unwrap(applyCancellation(after, {
+    const pending = unwrap(applyCancellation(after, {
       playerId: KARANDRAS1, requestId: 'cancel-build',
-      command: { kind: 'open', logId: record.logId, itemId: twain.itemId },
+      command: { logId: record.logId, itemId: twain.itemId },
     }, before))
-    for (const p of pending.players) {
-      const dispute = openCancellation(pending)
-      if (dispute === undefined) throw new Error('case settled too soon')
-      pending = unwrap(applyCancellation(pending, {
-        playerId: p.playerId, requestId: `pass-${p.playerId}`,
-        command: { kind: 'pass', caseId: dispute.id, version: dispute.version },
-      }, before))
-    }
     expect(pending.assistedActions.at(-1)?.status).toBe('cancelled')
     expect(handOf(pending)).toEqual(handOf(before))
     expect(pending.log.filter((l) => l.superseded)).toHaveLength(2)

@@ -678,7 +678,7 @@ export function ChatOrdersPanel({
                 {mode === 'order' && (
                   <button
                     type="button"
-                    disabled={busy || view.cancellations?.cases.some((c) => c.outcome === 'pending')}
+                    disabled={busy}
                     aria-label={
                       // Starts with the visible text (WCAG 2.5.3, Label in Name)
                       isPhaseDone(orderPhase)

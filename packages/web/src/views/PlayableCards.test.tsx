@@ -403,114 +403,17 @@ describe('choosing who the card names', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], tech: 'Sanitation' })
   })
 
-  it('tells why Mark Twain has nothing to cancel when no action is on the list', () => {
+  it('plays Mark Twain through the log: no action picker on the card itself', () => {
     const twain = card({
       name: 'Mark Twain',
       kind: 'greatPerson',
       timings: ['ANY'],
-      targets: { kind: 'players', min: 0, max: 1 },
-      prompt: 'Whose action is cancelled? (optional)',
       discards: true,
-      twain: [],
     })
     renderControl(viewWith([twain]), twain)
-    fireEvent.click(playButton('Mark Twain'))
-    expect(screen.getByText(/nothing to cancel with a rewind/)).toBeTruthy()
-  })
-
-  it('greys out an action Mark Twain cannot cancel and says why', () => {
-    const twain = card({
-      name: 'Mark Twain',
-      kind: 'greatPerson',
-      timings: ['ANY'],
-      targets: { kind: 'players', min: 0, max: 1 },
-      prompt: 'Whose action is cancelled? (optional)',
-      discards: true,
-      twain: [
-        { logId: 'l1', playerId: 'p1', username: 'bob', kind: 'city', text: 'bob devoted a city', blocked: 'Your own action: Mark Twain cancels the action of another player.' },
-      ],
-    })
-    renderControl(viewWith([twain]), twain)
-    fireEvent.click(playButton('Mark Twain'))
-    const radio = screen.getByRole('radio', { name: /bob devoted a city/ }) as HTMLInputElement
-    expect(radio.disabled).toBe(true)
-    expect(screen.getByText(/Your own action/)).toBeTruthy()
-  })
-
-  it('opens a dispute through the compatibility card control and explains conditional rollback', async () => {
-    const cancel = vi.spyOn(api, 'twainCancel').mockResolvedValue({} as PlayerView)
-    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
-    const twain = card({
-      name: 'Mark Twain',
-      kind: 'greatPerson',
-      timings: ['ANY'],
-      targets: { kind: 'players', min: 0, max: 1 },
-      prompt: 'Whose action is cancelled? (optional)',
-      discards: true,
-      twain: [
-        {
-          logId: 'l1',
-          playerId: 'p2',
-          username: 'itchi',
-          kind: 'city',
-          text: 'itchi devoted a city to the arts',
-          blocked: null,
-        },
-      ],
-    })
-    renderControl(viewWith([twain]), twain)
-    fireEvent.click(playButton('Mark Twain'))
-    // Nothing is chosen at first, so the play is only logged
-    fireEvent.click(screen.getByRole('radio', { name: /itchi devoted a city to the arts/ }))
-    expect(screen.getByText(/Later history would be superseded/)).toBeTruthy()
-    expect(screen.getByText(/If King prevents cancellation, Twain stays in hand/)).toBeTruthy()
-    expect(screen.getByText(/the dispute will show the affected history/)).toBeTruthy()
-    expect(screen.getByText(/The city has used its action for the turn/)).toBeTruthy()
-    fireEvent.click(confirmButton())
-    await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1))
-    expect(cancel.mock.calls[0]?.[1]).toBe('l1')
-    expect(send).not.toHaveBeenCalled()
-  })
-
-  it('still submits a selected Twain cancellation if a live refresh removes its target', async () => {
-    const cancel = vi.spyOn(api, 'twainCancel').mockResolvedValue({} as PlayerView)
-    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
-    const twain = card({
-      name: 'Mark Twain',
-      kind: 'greatPerson',
-      timings: ['ANY'],
-      targets: { kind: 'players', min: 0, max: 1 },
-      prompt: 'Whose action is cancelled? (optional)',
-      discards: true,
-      twain: [
-        {
-          logId: 'l1',
-          playerId: 'p2',
-          username: 'itchi',
-          kind: 'city',
-          text: 'itchi devoted a city to the arts',
-          blocked: null,
-        },
-      ],
-    })
-    const { rerender } = renderControl(viewWith([twain]), twain)
-    fireEvent.click(playButton('Mark Twain'))
-    fireEvent.click(screen.getByRole('radio', { name: /itchi devoted a city to the arts/ }))
-
-    const refreshed = { ...twain, twain: [] }
-    rerender(
-      <PlayCardControl
-        card={refreshed}
-        gameId="g1"
-        view={viewWith([refreshed])}
-        busy={false}
-        run={run}
-      />,
-    )
-    fireEvent.click(confirmButton())
-
-    await waitFor(() => expect(cancel).toHaveBeenCalledWith('g1', 'l1', 8))
-    expect(send).not.toHaveBeenCalled()
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByLabelText('Action to cancel')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Play Mark Twain' })).toBeTruthy()
   })
 
   it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {

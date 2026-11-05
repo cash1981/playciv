@@ -10,6 +10,7 @@ import type { ArenaUnit, Battle } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard, createBoardForPlayers } from './board.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
+import type { CancellationHistory } from './cancellation.js'
 import type { SocialPolicyItem } from './item.js'
 import type { GameState, Playerhand, PlayerStats, TradeOffer } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
@@ -378,8 +379,13 @@ export function migrateGameState(state: GameState): GameState {
   // switch, so it is left alone, and so is a second load of an adopted one.
   const classic = chatOrders === false || (chatOrders === undefined && older.chatOrdersStartTurn === undefined)
   const adopted = classic ? adoptClassicGame(migrated) : migrated
-  return { ...adopted, cancellations: adopted.cancellations ?? {
-    floorTurn: turnStatus(adopted).currentTurn, sealedThrough: 0, acknowledgements: {}, cases: [], requests: [],
+  // A save from the time of disputes has `cases` and `acknowledgements`. They are dropped: a cancellation takes effect at once now.
+  const stored: Partial<CancellationHistory> | undefined = adopted.cancellations
+  return { ...adopted, cancellations: {
+    floorTurn: stored?.floorTurn ?? turnStatus(adopted).currentTurn,
+    sealedThrough: stored?.sealedThrough ?? 0,
+    events: stored?.events ?? [],
+    requests: stored?.requests ?? [],
   } }
 }
 

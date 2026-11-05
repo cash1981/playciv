@@ -34,7 +34,6 @@ import { PhaseActionsPanel } from './PhaseTabs.js'
 import { MapPickerContext } from './mapPick.js'
 import type { MapPicker, MapPickRequest } from './mapPick.js'
 import { PlayCardControl } from './PlayableCards.js'
-import { CancellationPanel } from './CancellationPanel.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
@@ -559,8 +558,7 @@ export function GameView({
   // server also enforces. Judged on the live game: a replayed revision of an
   // ended game was still active when it was recorded.
   const locked = !view.active && player?.role !== 'admin'
-  const disputeOpen = displayedView.cancellations?.cases.some((c) => c.outcome === 'pending') === true
-  const interactionBusy = busy || replaying || locked || disputeOpen
+  const interactionBusy = busy || replaying || locked
   const you = displayedView.you
   const movementPlayer =
     you === null
@@ -659,8 +657,6 @@ export function GameView({
         }}
       />
 
-      <CancellationPanel gameId={gameId} view={displayedView} busy={busy} readOnly={replaying || locked} run={run} />
-
       {/* The page runs: header and summary, the board, Your actions (End turn, the card
           buttons, a waiting choice and the viewer's own cities), Your cards, then the
           rest. The board has the whole content width at every size. */}
@@ -673,9 +669,9 @@ export function GameView({
         areas={displayedView.boardAreas}
         blockadedPieceIds={displayedView.blockadedPieceIds}
         busy={interactionBusy}
-        readOnly={displayedView.you === null || replaying || locked || disputeOpen}
+        readOnly={displayedView.you === null || replaying || locked}
         showReadOnlyOutline={replaying || locked}
-        readOnlyReason={disputeOpen ? 'Cancellation dispute — write orders, but do not carry them out yet.' : displayedView.you === null ? 'Viewing — only players can change the board.' : undefined}
+        readOnlyReason={displayedView.you === null ? 'Viewing — only players can change the board.' : undefined}
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
         viewerColor={you?.color ?? null}
@@ -691,7 +687,7 @@ export function GameView({
         gameId={gameId}
         view={displayedView}
         busy={interactionBusy}
-        readOnly={displayedView.you === null || replaying || locked || disputeOpen}
+        readOnly={displayedView.you === null || replaying || locked}
         run={run}
         build={buildFlow}
         reloadCount={reloadCount}
@@ -728,7 +724,7 @@ export function GameView({
           busy={interactionBusy}
           run={run}
           view={displayedView}
-          readOnly={displayedView.you === null || replaying || locked || disputeOpen}
+          readOnly={displayedView.you === null || replaying || locked}
         />
         <SocialPolicyPanel
           gameId={gameId}
@@ -737,29 +733,30 @@ export function GameView({
           view={displayedView}
           reloadCount={reloadCount}
           historical={historical}
-          readOnly={displayedView.you === null || replaying || locked || disputeOpen}
+          readOnly={displayedView.you === null || replaying || locked}
         />
         <StatusPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}
-          readOnly={displayedView.you === null || replaying || locked || disputeOpen}
+          readOnly={displayedView.you === null || replaying || locked}
           run={run}
         />
         <WondersPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}
-          readOnly={displayedView.you === null || replaying || locked || disputeOpen}
+          readOnly={displayedView.you === null || replaying || locked}
           run={run}
         />
         <LogPanel
           gameId={gameId}
-          busy={busy || locked || disputeOpen}
-          readOnly={replaying || locked || disputeOpen}
+          busy={busy || locked}
+          readOnly={replaying || locked}
           run={run}
           reloadCount={reloadCount}
           historical={historical}
+          view={displayedView}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
       </div>

@@ -57,28 +57,24 @@ See [AGENTS.md](AGENTS.md) for agent workflow and
 [current decisions](docs/agents/decisions.md) for enduring constraints.
 [Historical documentation](docs/history/README.md) is reference material, not an active backlog.
 
-## Cancellation disputes and shared history
+## Cancellations
 
-Mark Twain, Jousting Tourney, Primetime TV and Bread and Circuses can open a
-dispute against eligible recorded actions. Gameplay pauses only while a dispute
-is open: chat, private notes and order writing remain available, but orders must
-not be carried out yet. Each response resets everyone's passes; all active
-players must pass the latest version before settlement. Revealing Dr. Martin
-Luther King protects the owner's city action and **keeps Twain in hand**.
+Mark Twain, Jousting Tourney, Primetime TV and Bread and Circuses cancel an
+eligible recorded action at once. Playing the card scrolls to the log, where a
+red **Cancel** button sits on each line the card can cancel. Nothing pauses and
+nobody is asked to respond: players are trusted to wait for each other before
+they play on. A culture cancellation can be undone the same way by another
+culture reaction, and Dr. Martin Luther King's **Protect** button on the
+cancellation line undoes a cancellation of his holder's city action and **keeps
+Twain in hand**.
 
-Successful cancellation rewinds interleaved gameplay across phases and turns.
-Later actions remain as superseded history; notes and order versions are kept,
-with affected phases reopened and orders flagged for revision. Failed
-cancellation preserves the original continuation and draws.
-
-The separate **Confirm history** control acknowledges the displayed cutoff.
-Only everyone's minimum acknowledgement seals it; later actions are not
-implicitly confirmed. Resolving a dispute also seals through that dispute to
-prevent refunding reaction cards. This is an asynchronous-play convention, not
-a change to normal turn progression. Missing exact history, roster changes,
-unrecorded resource abilities and unstructured card targets require a
-table-agreed manual correction. Card eligibility is checked both before the
-original target and in the current hand.
+A cancellation rewinds interleaved gameplay across phases and turns. Later
+actions remain as superseded history; notes and order versions are kept, with
+affected phases reopened and orders flagged for revision. A cancellation seals
+the log through itself, so a later rewind cannot refund the cards it spent.
+Missing exact history, roster changes, unrecorded resource abilities and
+unstructured card targets require a table-agreed manual correction. Card
+eligibility is checked both before the original target and in the current hand.
 
 ## Packages
 

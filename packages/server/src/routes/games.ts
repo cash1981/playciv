@@ -512,9 +512,6 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     if (game === undefined) {
       return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
-    if (game.cancellations?.cases.some((entry) => entry.outcome === 'pending')) {
-      return sendError(c, 409, 'CANCELLATION_PENDING', 'Resolve the cancellation dispute before deleting the game.')
-    }
 
     const me = currentPlayer(c)
     const isCreator = game.players.some(

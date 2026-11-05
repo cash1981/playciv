@@ -1,4 +1,4 @@
-/** Twain's card-specific eligibility. Settlement lives in cancellation.ts, never in a card play. */
+/** Twain's card-specific eligibility. The cancellation itself lives in cancellation.ts, never in a card play. */
 import { cityActionOf } from './assisted-core.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import type { AssistedActionRecord, GameState, Playerhand } from './state.js'
@@ -28,7 +28,7 @@ export function availableKingId(state: GameState, player: Playerhand): string | 
     !player.pendingRewards.some((r) => r.candidateIds.includes(i.id)))?.id ?? null
 }
 
-/** Intentional printed exclusions; phase completion is not confirmation. */
+/** Intentional printed exclusions. */
 export function cancellationRefusal(state: GameState, record: AssistedActionRecord): string | undefined {
   if (record.status !== 'applied') return 'That action is no longer in force.'
   const actor = state.players.find((p) => p.playerId === record.playerId)
@@ -69,12 +69,9 @@ export function twainTargetsOf(state: GameState, holder: Playerhand): readonly T
     if (entry === undefined || actor === undefined) return []
     const blocked = record.playerId === holder.playerId ? 'Your own action: Mark Twain cancels the action of another player.'
       : cancellationRefusal(state, record) ??
-        (index < (state.cancellations?.sealedThrough ?? 0) ? 'That action is before the shared confirmation frontier.'
-          : state.cancellations?.cases.some((c) => c.outcome === 'pending') ? 'A cancellation is already pending.' : null)
+        (index < (state.cancellations?.sealedThrough ?? 0) ? 'That action is before an earlier cancellation.' : null)
     return [{ logId: record.logId, playerId: actor.playerId, username: actor.username,
       kind: city ? 'city' : 'culture', text: entry.publicLog, blocked }]
   })
 }
 
-export const twainRecordOf = (state: GameState, logId: string): AssistedActionRecord | undefined =>
-  state.assistedActions.find((r) => r.logId === logId)

@@ -24,15 +24,17 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   events can be selected. Resource abilities without records and unstructured
   square/building targets remain manual; Bread and Circuses does not infer
   targeting from a card's owner. Reaction choices show the current hand; the
-  server additionally checks historical availability on submission.
+  server additionally checks historical availability on submission. King is
+  tested only against the saved state just before the cancellation he undoes.
 - **Cancellation history:** missing exact legacy baselines cannot be guessed
-  from a log prefix. Cases cannot cross roster changes or a shared sealed
-  cutoff; resolving a case conservatively seals all history through settlement.
-  These corrections require table agreement. No automatic command replay,
-  speculative draws, timeout or hidden-hand auto-pass is implemented.
-- **Cancellation feed:** the dedicated panel and public log record reaction
-  cards and outcomes. The separate Revealed and Discarded feed does not yet
-  synthesize entries for settled reaction costs.
+  from a log prefix. A cancellation cannot cross roster changes or reach behind
+  an earlier cancellation (each seals the history through itself). These
+  corrections require table agreement. No automatic command replay, speculative
+  draws or timeout is implemented, and nothing stops players from playing on
+  before a cancellation: they are expected to wait for each other.
+- **Cancellation feed:** the public log records each cancellation, counter and
+  King protection. The separate Revealed and Discarded feed does not yet
+  synthesize entries for the cards they spent.
 - **Ending on an own city centre:** F&F p. 7 lets figures cross friendly
   centres "as long as they don't end their movement there"; travel still lets a
   figure that is not disbanded stop there (the #319 centre-scout rule assumes

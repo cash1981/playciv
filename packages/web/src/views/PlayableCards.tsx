@@ -34,7 +34,7 @@ import type { CardTiming, PlayableCard, TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import { isCancellationCard } from '@civ/engine'
-import { CancellationCardControl } from './CancellationPanel.js'
+import { CancellationCardControl } from './CancellationCardControl.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
@@ -86,8 +86,6 @@ export function PlayCardControl({
   const [coinSource, setCoinSource] = useState('')
   const [substitute, setSubstitute] = useState('')
   const [teslaTech, setTeslaTech] = useState('')
-  // Mark Twain: the log line of the action to cancel, '' for an action that is only logged (a resource ability)
-  const [twainLog, setTwainLog] = useState('')
   const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
   const [convertAmount, setConvertAmount] = useState('')
   const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
@@ -127,9 +125,6 @@ export function PlayCardControl({
   const tesla = card.tesla ?? null
   const chosenTesla =
     tesla === null ? '' : (tesla.find((choice) => choice.name === teslaTech)?.name ?? (tesla.length === 1 ? (tesla[0]?.name ?? '') : ''))
-  // Mark Twain: the other players' actions he can cancel with a rewind; a refresh can take one away
-  const twain = card.twain ?? null
-  const twainTarget = twain === null ? undefined : twain.find((target) => target.logId === twainLog && target.blocked === null)
   const harborChoices = card.harbors ?? null
   // A live refresh can take a square away: only the ticked squares still on offer count
   const chosenHarborKeys =
@@ -306,14 +301,6 @@ export function PlayCardControl({
 
   const confirm = (): void => {
     if (!valid) return
-    // Compatibility with older projections: this route now opens a durable dispute.
-    if (twainLog !== '') {
-      void run(() => api.twainCancel(gameId, twainLog, view.rev)).then(() => {
-        setTwainLog('')
-        setOpen(false)
-      })
-      return
-    }
     sendPlay()
   }
 
@@ -465,8 +452,8 @@ export function PlayCardControl({
     setOpen(false)
   }
 
-  if (isCancellationCard(card.name) && view.cancellations !== undefined) {
-    return <CancellationCardControl gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} itemId={card.itemId} />
+  if (isCancellationCard(card.name)) {
+    return <CancellationCardControl view={view} busy={busy} readOnly={readOnly} itemId={card.itemId} name={card.name} />
   }
 
   return (
@@ -684,47 +671,6 @@ export function PlayCardControl({
                 ))}
               </select>
             </label>
-          )}
-          {twain !== null && twain.length === 0 && (
-            <p className="muted">
-              No city action or culture event has been played this turn, so there is nothing to cancel with a rewind.
-            </p>
-          )}
-          {twain !== null && twain.length > 0 && (
-            <fieldset className="play-card-targets">
-              <legend>Which action do you cancel?</legend>
-              {twain.map((target) => (
-                <label key={target.logId} className="play-card-target">
-                  <input
-                    type="radio"
-                    name={`${formId}-twain`}
-                    checked={twainTarget?.logId === target.logId}
-                    disabled={disabled || target.blocked !== null}
-                    onChange={() => setTwainLog(target.logId)}
-                  />{' '}
-                  {target.text}
-                  {target.blocked !== null && <span className="muted"> — {target.blocked}</span>}
-                </label>
-              ))}
-              <label className="play-card-target">
-                <input
-                  type="radio"
-                  name={`${formId}-twain`}
-                  checked={twainTarget === undefined}
-                  disabled={disabled}
-                  onChange={() => setTwainLog('')}
-                />{' '}
-                Something else, such as a resource ability (only logged, undo it with a vote)
-              </label>
-              {twainTarget !== undefined && (
-                <p className="muted">
-                  Opens a dispute. If cancellation succeeds, the game goes back to just before this action.
-                  {' '}Later history would be superseded; the dispute will show the affected history.{' '}
-                  {twainTarget.kind === 'city' ? 'The city has used its action for the turn.' : 'The event card is discarded.'}{' '}
-                  All players must pass the latest response. If King prevents cancellation, Twain stays in hand.
-                </p>
-              )}
-            </fieldset>
           )}
           {tesla !== null && (
             <fieldset className="play-card-targets">

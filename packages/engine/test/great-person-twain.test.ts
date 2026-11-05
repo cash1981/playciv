@@ -5,7 +5,6 @@ import { playableCardsOf } from '../src/assisted-cards.js'
 import { draw } from '../src/actions/draw.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { unwrap } from '../src/result.js'
-import { toPlayerView } from '../src/state.js'
 import { twainTargetsOf } from '../src/twain.js'
 import { player, withCardInHand } from './assisted-fixture.js'
 import { CASH1981 as A, KARANDRAS1 as B, ITCHI as C, firstCivGame } from './fixture.js'
@@ -46,19 +45,19 @@ describe('Mark Twain targets', () => {
         growing = unwrap(markPhasesDone(growing, { playerId: C, turnNumber: i + 2, upToPhase: 'RESEARCH' }))
       }
       expect(growing.log.length).toBeGreaterThan(state.log.length)
-      const projected = toPlayerView(growing, B).you?.playableCards.find((card) => card.name === 'Mark Twain')?.twain
+      const projected = twainTargetsOf(growing, player(growing, B))
       expect(projected).toEqual(targets)
       expect(JSON.stringify(projected)).not.toContain('rolledBack')
       expect(JSON.stringify(projected)).not.toContain('privateLog')
     }
   })
 
-  it('explains the sealed frontier and own-action restriction', () => {
+  it('explains the sealed history and own-action restriction', () => {
     const { played } = scene()
     const sealed = { ...played, cancellations: {
-      floorTurn: 1, sealedThrough: played.log.length, cases: [], requests: [], acknowledgements: {},
+      floorTurn: 1, sealedThrough: played.log.length, events: [], requests: [],
     } }
-    expect(twainTargetsOf(sealed, player(sealed, B))[0]?.blocked).toContain('confirmation frontier')
+    expect(twainTargetsOf(sealed, player(sealed, B))[0]?.blocked).toContain('earlier cancellation')
     const twain = player(played, B).items.find((i) => i.kind === 'greatperson' && i.name === 'Mark Twain')
     if (twain === undefined) throw new Error('no Twain')
     expect(twainTargetsOf(played, { ...player(played, A), items: [twain] })[0]?.blocked).toContain('Your own action')
