@@ -317,7 +317,10 @@ function parsePhase(
   return phase
 }
 
+import { registerCancellationRoutes } from './cancellation.js'
+
 export function registerPlayRoutes(app: App, context: AppContext): void {
+  registerCancellationRoutes(app, context)
   const auth = authenticateWith(context)
   // Read-only routes a spectator's panels also poll (issue #81): an absent
   // viewer just sees the same "not a player" projection a signed-in

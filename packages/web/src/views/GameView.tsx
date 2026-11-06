@@ -756,6 +756,7 @@ export function GameView({
           run={run}
           reloadCount={reloadCount}
           historical={historical}
+          view={displayedView}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
       </div>

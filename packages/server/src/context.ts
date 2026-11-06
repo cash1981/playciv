@@ -281,6 +281,19 @@ export async function applyToGame(
   const result = action(given)
   if (!result.ok) return sendEngineError(c, result.error)
 
+  // Notes and other non-recorded writes make rev counters non-contiguous in history.
+  // Capture the exact before-action revision rather than guessing from a primary log ID.
+  if (result.value.assistedActions.some((r) => !game.assistedActions.some((old) => old.id === r.id)) ||
+      (result.value.cancellations?.events.length ?? 0) > (game.cancellations?.events.length ?? 0)) {
+    const existing = await context.repo.findGameRevision(gameId, game.rev)
+    if (existing === undefined) {
+      const baselineSaved = await context.repo.saveGameWithRevision(game,
+        createGameRevision(game, game, currentPlayer(c), new Date().toISOString(), 'Before assisted action'),
+        game.rev)
+      if (!baselineSaved) return sendError(c, 409, 'CONFLICT', 'Game changed before the action. Reload and retry.')
+    }
+  }
+
   const now = new Date().toISOString()
   const reconciled = expireTradeOffers(result.value, now)
 

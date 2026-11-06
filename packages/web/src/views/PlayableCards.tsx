@@ -33,6 +33,8 @@ import {
 import type { CardTiming, PlayableCard, TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
+import { isCancellationCard } from '@civ/engine'
+import { CancellationCardControl } from './CancellationCardControl.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
@@ -450,6 +452,10 @@ export function PlayCardControl({
     setOpen(false)
   }
 
+  if (isCancellationCard(card.name)) {
+    return <CancellationCardControl view={view} busy={busy} readOnly={readOnly} itemId={card.itemId} name={card.name} />
+  }
+
   return (
     <div className="play-card">
       <div className="play-card-row">
@@ -500,7 +506,9 @@ export function PlayCardControl({
                 {min === max
                   ? `Choose ${min}.`
                   : min === 0
-                    ? `Choose up to ${max}, or nobody.`
+                    ? max === 1
+                      ? 'Choose one, or nobody.'
+                      : `Choose up to ${max}, or nobody.`
                     : `Choose ${min} to ${max}.`}
               </p>
             </fieldset>

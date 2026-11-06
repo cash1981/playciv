@@ -57,6 +57,25 @@ See [AGENTS.md](AGENTS.md) for agent workflow and
 [current decisions](docs/agents/decisions.md) for enduring constraints.
 [Historical documentation](docs/history/README.md) is reference material, not an active backlog.
 
+## Cancellations
+
+Mark Twain, Jousting Tourney, Primetime TV and Bread and Circuses cancel an
+eligible recorded action at once. Playing the card scrolls to the log, where a
+red **Cancel** button sits on each line the card can cancel. Nothing pauses and
+nobody is asked to respond: players are trusted to wait for each other before
+they play on. A culture cancellation can be undone the same way by another
+culture reaction, and Dr. Martin Luther King's **Protect** button on the
+cancellation line undoes a cancellation of his holder's city action and **keeps
+Twain in hand**.
+
+A cancellation rewinds interleaved gameplay across phases and turns. Later
+actions remain as superseded history; notes and order versions are kept, with
+affected phases reopened and orders flagged for revision. A cancellation seals
+the log through itself, so a later rewind cannot refund the cards it spent.
+Missing exact history, roster changes, unrecorded resource abilities and
+unstructured card targets require a table-agreed manual correction. Card
+eligibility is checked both before the original target and in the current hand.
+
 ## Packages
 
 ### `packages/engine`

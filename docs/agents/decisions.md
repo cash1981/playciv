@@ -268,6 +268,46 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Person counting) and a tech already moved by hand is not offered. The public line says only that a tech was placed
   one level lower, as the tech may be hidden; the player's own log names it. Undo puts the tech back in its row and
   is refused when the tech has been moved again or removed.
+- Cancellation (#301, #336; human, 2026-11-05) takes effect at once, as an event in `cancellation.ts`. There is
+  no dispute, response window, pass or pause: players are trusted to wait for each other (human). Gameplay,
+  chat, notes and orders are never blocked. Twain targets another player's city action or culture event;
+  Jousting Tourney and Primetime TV target culture events; Bread and Circuses requires actual targeting of its
+  holder or a recorded moved figure of theirs (targeting a cancellation card does not target its owner).
+  Unstructured square/building targets and resource abilities remain manual. Printed texts are in
+  `gamedata-faf-waw.json`; no local rulebooks were available.
+- Counters act on the latest event only, by an event of their own, and rewind to the saved state before it:
+  Jousting Tourney and Primetime TV counter a culture cancellation, Twain counters another player's culture
+  cancellation (it cannot itself be culture-countered), and King is protection: he undoes a cancellation of his
+  holder's city action, is revealed (public) and **keeps Twain in hand**, as the human chose. Garcia's devotion
+  and Lovelace's extra city actions retain their printed exclusions; a faceup King makes his holder's city
+  actions uncancellable. Every card played is spent exactly once, except Twain when King protects.
+- Cards are checked against the saved baseline and the live hand (reward candidates, blockade, ownership). Inactive
+  games cannot take a cancellation, including from admin participants; committed-request retries are idempotent.
+  Spectators are read-only, including game chat; existing admin chat moderation remains available.
+- A cancellation restores the exact before-action revision, keeps the cancelled city's action spent (or discards
+  the target culture event), spends the cards played and reshuffles changed decks once (a counter reshuffles
+  nothing: the saved state is the game as it was). Later gameplay becomes superseded history, not deleted
+  history. Current notes and order text/versions survive. Turns before the rollback target retain their
+  baseline completion/revision flags, even when their historical orders were edited. From the target turn
+  onward, restored phase flags reopen affected work, including revised orders in baseline-completed phases.
+- Eligibility starts at the turn where cancellation was adopted (`floorTurn`), and every event seals the log
+  through itself (`sealedThrough`) so a later rewind cannot refund its cards. There is no explicit history
+  confirmation (human). Older corrections and roster changes require table agreement. A save from the time
+  of disputes loses its `cases` and `acknowledgements` when loaded; an open dispute is dropped.
+- The log carries the buttons (human). Playing Twain, Jousting Tourney, Primetime TV or Bread and Circuses
+  scrolls to the log and starts a cancel mode; only the lines the card can act on (an action, or the latest
+  cancellation for a counter) get a red Cancel button, after a confirmation, and the mode ends after one use,
+  on Stop or when the card is gone. King needs no mode: his holder sees Protect on the latest cancellation of
+  their city action. There is no cancellation panel.
+- Undo votes: a player with an undo waiting gets a notice on every page load (once per load, players only) that
+  links to the vote; the vote box and the Yes button are green. Voting rules are unchanged.
+- State stores revision references, not recursive snapshots. Exact baselines are captured even after
+  note-only revision gaps; these checkpoints add fallback metadata, not repeated old log IDs or
+  public/private descriptions. A primary action log is not assumed to be the first line of its revision.
+  Legacy targets are adopted only with an exact preceding revision. Missing history fails atomically.
+  Idempotence fingerprints and actual selected inputs stay private; projections whitelist the viewer's own
+  cancellation cards with the public log lines each can act on. Targets carry labels and blocking reasons,
+  not log suffixes. An event stores the revision before it (`priorRevision`), never a snapshot.
 - Zheng He (human, #301) writes one private line for each hut or village piece on a map
   square (square and name) and for each hut or village item another player holds. The
   pieces on the map are anonymous and a draw takes the top card, so the look fixes the

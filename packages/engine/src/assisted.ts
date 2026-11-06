@@ -26,6 +26,7 @@
  */
 
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
+import { availableKingId } from './twain.js'
 import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
@@ -1866,6 +1867,9 @@ export function performAssistedAction(
   const lovelaceCreditId =
     cityAction === undefined ? undefined : lovelaceCreditForAction(state, player, cityAction.cityPieceId)
   const record: AssistedActionRecord = {
+    kingAtAction: availableKingId(state, player),
+    beforeRevision: state.rev,
+    selectedInputs: input.payload,
     id: input.requestId,
     kind: input.action,
     playerId: input.playerId,
@@ -1921,6 +1925,10 @@ export function reverseAssistedAction(
   if (record === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: recordId })
   if (record.status === 'undone') {
     return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: record.logId })
+  }
+  if (record.status === 'superseded') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+  if (record.status === 'cancelled') {
+    return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: 'That action was cancelled with Mark Twain, so it cannot be undone.' })
   }
   const definition = definitionOf(record.kind)
   const player = playerOf(state, record.playerId)

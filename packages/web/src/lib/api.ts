@@ -7,6 +7,7 @@
  */
 
 import type {
+  CancellationCommand,
   ActiveTurnStatus,
   AssistedActionKind,
   Board,
@@ -953,6 +954,9 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/undo/${logId}`),
   voteUndo: (gameId: string, logId: string, vote: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/undo/${logId}/vote`, { vote }),
+  /** Cancels an action, or undoes the latest cancellation, with one of the player's cards; takes effect at once. */
+  cancellation: (gameId: string, command: CancellationCommand, rev: number, requestId: string) =>
+    post<PlayerView>(`/api/games/${gameId}/cancellations`, { ...command, rev, requestId }),
   pendingUndos: (gameId: string) => get<PendingUndoDto[]>(`/api/games/${gameId}/undo/pending`),
 
   boardAssets: () => get<BoardAsset[]>('/api/board/assets'),

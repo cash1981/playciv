@@ -200,7 +200,7 @@ describe('choosing who the card names', () => {
     })
     renderControl(viewWith([sabotage]), sabotage)
     fireEvent.click(playButton('Sabotage'))
-    expect(screen.getByText('Choose up to 1, or nobody.')).toBeTruthy()
+    expect(screen.getByText('Choose one, or nobody.')).toBeTruthy()
     expect(confirmButton().disabled).toBe(false)
   })
 
@@ -401,6 +401,19 @@ describe('choosing who the card names', () => {
     fireEvent.click(confirmButton())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], tech: 'Sanitation' })
+  })
+
+  it('plays Mark Twain through the log: no action picker on the card itself', () => {
+    const twain = card({
+      name: 'Mark Twain',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      discards: true,
+    })
+    renderControl(viewWith([twain]), twain)
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByLabelText('Action to cancel')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Play Mark Twain' })).toBeTruthy()
   })
 
   it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {

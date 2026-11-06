@@ -731,6 +731,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
 
     const me = currentPlayer(c)
     if (isLockedForViewer(game, me)) return gameEndedResponse(c)
+    if (!game.players.some((p) => p.playerId === me.id) && me.role !== 'admin') {
+      return sendError(c, 403, 'NO_ACCESS', 'Spectators are read-only; only active players may post game chat.')
+    }
     const entry: ChatMessage = {
       id: newId(),
       gameId,
