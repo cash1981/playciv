@@ -659,9 +659,11 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
   for an army outside Anarchy unless the expression already has a `+` term (older
-  saves recorded `3+1`); Henry Ford +1 while faceup; Captain James Cook doubles it
+  saves recorded `3+1`, which a scout does not get: it loses one point of it
+  while Natural Religion is active); Henry Ford +1 while faceup; Captain James Cook doubles it
   for the turn (`card:Captain James Cook` marker, freed by undo). Spain's bonus
-  and tech speed steps stay typed. Group movement is out of scope.
+  and tech speed steps stay typed; while Natural Religion is active any `+` term
+  is read as its bonus, so a typed Spain bonus makes a scout lose a point. Group movement is out of scope.
 - **Pool** (human): each travel adds to `movement.used`; the figure may move again
   while speed is left. It locks when the pool is spent or the move ends on a hut,
   village or another player's figures (`MovementDestination.ends`). Board Undo
