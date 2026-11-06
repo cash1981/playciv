@@ -136,6 +136,8 @@ describe('movement speed', () => {
       stats: { ...playerOf(religious).stats, mvmt: '3+1' },
     })
     expect(travelSpeedOf(playerOf(typed), armyPiece, 1)).toBe(4)
+    // ...and the scout does not get the army-only bonus from it.
+    expect(travelSpeedOf(playerOf(typed), scoutPiece, 1)).toBe(3)
 
     const hidden = withPlayer(state, {
       ...player,

@@ -132,17 +132,16 @@ const hasRevealedTech = (player: MovementPlayer, name: string): boolean =>
 export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNumber: number): number {
   const expression = player.stats.mvmt
   let speed = movementTotal(expression)
-  // Natural Religion is army-only, so the engine adds it to the player-wide base.
-  // A `+` in the typed expression is the players' existing way of recording their
-  // own bonuses (issue #102, `3+1`), so it already includes this one; adding it
-  // again would double-count an older save.
-  if (
-    isArmy(piece) &&
-    hasPolicy(player, 'Natural Religion') &&
-    !inAnarchy(player) &&
-    !expression.includes('+')
-  ) {
-    speed += 1
+  // Natural Religion is army-only. A `+` in the typed expression is the players'
+  // existing way of recording it (issue #102, `3+1`), so that expression is the
+  // army's speed and already includes the bonus: a scout gives one point of it
+  // back. Without a `+` the engine adds the bonus to an army itself.
+  if (hasPolicy(player, 'Natural Religion') && !inAnarchy(player)) {
+    if (!expression.includes('+')) {
+      if (isArmy(piece)) speed += 1
+    } else if (!isArmy(piece)) {
+      speed = Math.max(0, speed - 1)
+    }
   }
   if (hasActiveGreatPerson(player, 'Henry Ford')) speed += 1
   const cook = player.playerTurns
