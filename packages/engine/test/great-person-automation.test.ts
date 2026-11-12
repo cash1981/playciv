@@ -285,7 +285,7 @@ describe('Michelangelo', () => {
     const played = unwrap(play(state, 'michelangelo-1', card.itemId))
     expect(me(played).wonderDiscount).toBe(5)
     expect(played.log.at(-1)?.publicLog).toBe(
-      'cash1981 played Michelangelo (city management) and discarded it, taking 5 production off their next wonder',
+      'cash1981 played Michelangelo item number #264 (city management) and discarded it, taking 5 production off their next wonder',
     )
     const after = buildOptionsOf(played, me(played))[0]
     const wonderAfter = after?.choices.find((choice) => choice.item.kind === 'wonder')
@@ -365,7 +365,7 @@ describe('Jacques Cousteau', () => {
     const harbor = played.board.pieces.find((piece) => piece.assetId === 'buildings/harbor')
     expect(harbor).toBeDefined()
     expect(played.discardedItems.some((item) => item.id === itemId)).toBe(true)
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Jacques Cousteau (start of turn) and discarded it, building a Harbor for free on C1')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Jacques Cousteau item number #129 (start of turn) and discarded it, building a Harbor for free on C1')
     expect(me(played).stats.trade).toBe(me(state).stats.trade)
 
     const undone = undoByVote(played, 'cousteau-1')

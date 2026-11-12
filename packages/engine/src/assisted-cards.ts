@@ -94,7 +94,7 @@ import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
-import { appendLog } from './log.js'
+import { appendLog, itemNumberText, numberedItemName } from './log.js'
 import type { AssistedEffect, GameState, PendingReward, Playerhand } from './state.js'
 import { withPlayer } from './state.js'
 import type { PlayCardPayload } from './assisted-core.js'
@@ -801,7 +801,8 @@ function automate(
       return ok({
         state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
         extra: { drew: { itemId: card.id, sheetName } },
-        said: ', building an aircraft unit for free',
+        said: `, building an aircraft unit for free (${itemNumberText(state.logSecret, player.username, card)})`,
+        privateSaid: `${player.username} drew ${numberedItemName(state.logSecret, player.username, card)} (${SHEET_LABEL[sheetName]}) with Orville Wright`,
       })
     }
     case 'Khalid ibn al-Walid': {
@@ -1252,16 +1253,19 @@ export const playCard: AssistedActionDefinition = {
         : targets.length > 0
           ? `, targeting ${joinNames(targets.map((target) => target.username))}`
           : ''
+    // A played card is open information, so one line serves the log of everyone and the player's own,
+    // and the card is named with its own item number as well as the cards its effect moves
+    const playedText =
+      `${player.username} ${verb} ${card.name} ${itemNumberText(state.logSecret, player.username, item)} (${when})` +
+      (resource === null ? '' : ` as ${resource}`) +
+      aimed +
+      (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : '') +
+      (automated.value === null ? '' : automated.value.said)
     const logged = appendLog(after, {
       username: player.username,
       playerId: player.playerId,
-      publicLog:
-        `${player.username} ${verb} ${card.name}${card.name === 'Gustavus Adolphus' ? ` item number #${item.itemNumber}` : ''} (${when})` +
-        (resource === null ? '' : ` as ${resource}`) +
-        aimed +
-        (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : '') +
-        (automated.value === null ? '' : automated.value.said),
-      privateLog: '',
+      publicLog: playedText,
+      privateLog: playedText,
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
     })

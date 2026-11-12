@@ -63,8 +63,7 @@ import { cultureMarkerOf, rewardDrawCount } from './culture-track.js'
 import type { CultureLevel } from './culture-track.js'
 import { err, ok } from './result.js'
 import type { Item } from './item.js'
-import { itemName } from './item.js'
-import { appendLog } from './log.js'
+import { appendLog, itemNumbersText, numberedItemName } from './log.js'
 import type { SheetName } from './sheet-name.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import {
@@ -528,12 +527,13 @@ const patronage: AssistedActionDefinition = {
       'policy:Patronage',
       stats,
     )
-    const names = candidates.map(itemName).join(', ')
+    const names = candidates.map((card) => numberedItemName(state.logSecret, player.username, card)).join(', ')
+    const numbers = itemNumbersText(state.logSecret, player.username, candidates)
     const publicLine = appendLog(used, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} used Patronage: spent 1 culture and drew ${plural(candidates.length, `culture ${ROMAN[level]} card`)}` +
+        `${player.username} used Patronage: spent 1 culture and drew ${plural(candidates.length, `culture ${ROMAN[level]} card`)} (${numbers})` +
         (context.confirmedRepeat ? REPEAT_NOTE : ''),
       privateLog: '',
       createdAt: context.at ?? null,

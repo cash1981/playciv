@@ -113,7 +113,7 @@ describe('playing a card through the actions route', () => {
     const after = await response.json<View>()
     expect(after.you?.playableCards).toEqual([])
     expect(after.assistedActions[0]).toMatchObject({ id: 'req-1', kind: 'playCard', label: 'Counterfeiters', status: 'applied' })
-    expect(after.assistedActions[0]?.text).toMatch(/^card-[ab]-\d+ played Counterfeiters \(start of turn\), targeting card-[ab]-\d+$/)
+    expect(after.assistedActions[0]?.text).toMatch(/^card-[ab]-\d+ played Counterfeiters item number #\d+ \(start of turn\), targeting card-[ab]-\d+$/)
 
     // The other player sees the public line and the discarded card, never an effect
     const theirs = await view(t.gameId, t.other)

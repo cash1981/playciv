@@ -37,6 +37,13 @@ Source: `packages/engine/src/`, `packages/server/src/app.ts`,
   permutation of the item number for each player (the same card differs between
   players), short (1-999, then by block of 999) and unique within a player's view.
   Existing games keep the numbers they were created with.
+- Every log line that plays, draws, keeps, discards, replaces, gives, loots or places a card carries
+  its item number (#337): played cards and the cards their effect moves are numbered separately.
+  A hidden card is named by number only in the public line and in full in the owner's private
+  line; open information (a played or discarded card, a revealed or placed unit) is named in full
+  with its number. Tech and policy numbers stay the per-player ones. The private log never falls
+  back to the public line (the route drops empty private entries), so a line everyone can read is
+  written to both (`appendOpenLog`, the played-card line).
 - Never reconstruct historical revealed cards by matching display names to a
   current hand: duplicate names and redraws can reveal private cards.
 

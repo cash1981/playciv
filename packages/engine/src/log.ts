@@ -8,7 +8,7 @@
  */
 
 import type { Item } from './item.js'
-import { revealAll, revealPublic } from './item.js'
+import { itemName, revealAll, revealPublic } from './item.js'
 import type { GameLogEntry, GameState, LogType } from './state.js'
 import { nextId } from './random.js'
 
@@ -45,6 +45,33 @@ function feistel(secret: string, username: string, block: number, index: number)
     ;[left, right] = [right, left ^ mixed]
   }
   return (left << HALF_BITS) | right
+}
+
+/**
+ * The number a log line gives an item held by `username`: the catalogue-wide
+ * item number, except for a tech or social policy, whose number is the
+ * per-player one (the plain one can be looked up by anyone).
+ */
+export function loggedItemNumber(secret: string, username: string, item: Item): number {
+  return item.kind === 'tech' || item.kind === 'socialpolicy'
+    ? uniqueNumber(secret, username, item.itemNumber)
+    : item.itemNumber
+}
+
+/** `item number #N`, for a card named or hidden in the rest of the line. */
+export function itemNumberText(secret: string, username: string, item: Item): string {
+  return `item number #${loggedItemNumber(secret, username, item)}`
+}
+
+/** `item number #N` or `item numbers #A, #B`, for cards hidden in the rest of the line. */
+export function itemNumbersText(secret: string, username: string, items: readonly Item[]): string {
+  const numbers = items.map((item) => `#${loggedItemNumber(secret, username, item)}`).join(', ')
+  return `item number${items.length === 1 ? '' : 's'} ${numbers}`
+}
+
+/** A card named in full with its number, for the owner's private log and for open information. */
+export function numberedItemName(secret: string, username: string, item: Item): string {
+  return `${itemName(item)} ${itemNumberText(secret, username, item)}`
 }
 
 function uniqueNumber(secret: string, username: string, itemNumber: number): number {
@@ -187,11 +214,16 @@ export function createLogTexts(
         privateLog: `${username} plays ${DELIM}${all}`,
         publicLog: `${username} reveals ${DELIM}${pub}`,
       }
-    case 'TRADE_BETWEEN_PLAYERS':
+    case 'TRADE_BETWEEN_PLAYERS': {
+      const suffix =
+        item !== null && (item.kind === 'tech' || item.kind === 'socialpolicy')
+          ? uniqueText
+          : itemNumberText
       return {
-        privateLog: `${username} has received ${DELIM}${all}`,
-        publicLog: `${username} has received ${DELIM}${pub}`,
+        privateLog: `${username} has received ${DELIM}${all}${suffix}`,
+        publicLog: `${username} has received ${DELIM}${pub}${suffix}`,
       }
+    }
     case 'SOCIAL_POLICY':
       return {
         privateLog: `${username} has chosen ${DELIM}${all}${uniqueText}`,
@@ -460,6 +492,21 @@ export function appendPublicLog(
     publicLog: `${username} ${message}`,
     privateLog: '',
   })
+}
+
+/**
+ * A line about something everyone sees, written to the public and the owner's
+ * private log alike. The private log never falls back to the public one, so
+ * the owner's copy has to be written.
+ */
+export function appendOpenLog(
+  state: GameState,
+  username: string,
+  playerId: string,
+  message: string,
+): GameState {
+  const text = `${username} ${message}`
+  return appendLog(state, { username, playerId, publicLog: text, privateLog: text })
 }
 
 /** Java: `GameLogAction.createCommonPrivateLog`. */

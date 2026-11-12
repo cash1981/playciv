@@ -50,9 +50,8 @@ import { turnStatus } from './turn.js'
 import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } from './culture-track.js'
 import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
-import { itemName } from './item.js'
 import type { Item } from './item.js'
-import { appendLog } from './log.js'
+import { appendLog, itemNumbersText, numberedItemName } from './log.js'
 import { shuffle } from './random.js'
 import type { Result } from './result.js'
 import { err, ok } from './result.js'
@@ -459,14 +458,16 @@ function gainGreatPerson(
     valid: hasMarkerLeft,
     reject: (current, item) => {
       const assetId = markerAssetIdOf(item)
+      // The card goes faceup to the discard pile, so the public line names it in full; the owner's log repeats it
+      const rejectedText =
+        `${player.username} drew the Great Person card ${numberedItemName(current.logSecret, player.username, item)}, but ` +
+        (assetId === undefined ? 'it has no marker type' : `no ${markerLabelOf(assetId)} marker is left`) +
+        ', so it was discarded faceup'
       return appendLog(current, {
         username: player.username,
         playerId: player.playerId,
-        publicLog:
-          `${player.username} drew the Great Person card ${itemName(item)}, but ` +
-          (assetId === undefined ? 'it has no marker type' : `no ${markerLabelOf(assetId)} marker is left`) +
-          ', so it was discarded faceup',
-        privateLog: '',
+        publicLog: rejectedText,
+        privateLog: rejectedText,
         createdAt: origin.at ?? null,
       })
     },
@@ -514,7 +515,7 @@ function gainGreatPerson(
     items: [...holder.items, ...candidates],
     pendingRewards,
   })
-  const names = candidates.map(itemName).join(', ')
+  const names = candidates.map((card) => numberedItemName(state.logSecret, player.username, card)).join(', ')
   const base = { drawn: reward.candidateIds, rejected: rejectedIds }
 
   if (!resolved) {
@@ -522,7 +523,7 @@ function gainGreatPerson(
       ...base,
       state: withHand,
       outcome: 'choice',
-      phrase: `drew ${plural(candidates.length, 'Great Person card')}`,
+      phrase: `drew ${plural(candidates.length, 'Great Person card')} (${itemNumbersText(state.logSecret, player.username, candidates)})`,
       privateText: `${player.username} drew ${names} (${SHEET_LABEL.GREAT_PERSON}), keeps one`,
       kept: null,
       marker: null,
@@ -537,7 +538,7 @@ function gainGreatPerson(
     ...base,
     state: taken.value.state,
     outcome: 'kept',
-    phrase: `took a ${markerLabelOf(taken.value.marker.assetId)} great person marker into reserve`,
+    phrase: `took a ${markerLabelOf(taken.value.marker.assetId)} great person marker into reserve (${itemNumbersText(state.logSecret, player.username, [only])})`,
     privateText: `${player.username} drew ${names} (${SHEET_LABEL.GREAT_PERSON}) and kept it`,
     kept: only.id,
     marker: taken.value.marker,
@@ -734,8 +735,8 @@ export function performAdvance(
           : [...livePendingRewards(paying), reward],
       }),
     )
-    const names = candidates.map(itemName).join(', ')
-    publicText = prefix + `drew ${plural(candidates.length, `${rewardLabel(to)} card`)}`
+    const names = candidates.map((card) => numberedItemName(moved.logSecret, player.username, card)).join(', ')
+    publicText = prefix + `drew ${plural(candidates.length, `${rewardLabel(to)} card`)} (${itemNumbersText(moved.logSecret, player.username, candidates)})`
     privateText = resolved
       ? `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}) and kept it`
       : `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}), keeps one`
@@ -1080,6 +1081,7 @@ export const chooseReward: AssistedActionDefinition = {
       (item) => item.id !== kept.id && reward.candidateIds.includes(item.id),
     )
     const otherIds = new Set(others.map((item) => item.id))
+    const numbered = (card: Item): string => numberedItemName(state.logSecret, player.username, card)
     const discarded = withPlayerHand(
       {
         ...board,
@@ -1100,9 +1102,9 @@ export const chooseReward: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         (marker === null
-          ? `${player.username} kept a card`
-          : `${player.username} took a ${markerLabelOf(marker.assetId)} great person marker into reserve`) +
-        (others.length === 0 ? '' : ` and discarded ${others.map(itemName).join(', ')}`),
+          ? `${player.username} kept a card (${itemNumbersText(state.logSecret, player.username, [kept])})`
+          : `${player.username} took a ${markerLabelOf(marker.assetId)} great person marker into reserve (${itemNumbersText(state.logSecret, player.username, [kept])})`) +
+        (others.length === 0 ? '' : ` and discarded ${others.map(numbered).join(', ')}`),
       privateLog: '',
       createdAt: context.at ?? null,
     })
@@ -1111,8 +1113,8 @@ export const chooseReward: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       privateLog:
-        `${player.username} kept ${itemName(kept)}` +
-        (others.length === 0 ? '' : ` and discarded ${others.map(itemName).join(', ')}`),
+        `${player.username} kept ${numbered(kept)}` +
+        (others.length === 0 ? '' : ` and discarded ${others.map(numbered).join(', ')}`),
       createdAt: context.at ?? null,
     })
     return ok({

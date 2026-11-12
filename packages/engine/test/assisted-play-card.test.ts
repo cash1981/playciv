@@ -140,7 +140,7 @@ describe('playing a card', () => {
 
     expect(player(played).items.some((item) => item.id === itemId)).toBe(false)
     expect(played.discardedItems.some((item) => item.id === itemId)).toBe(true)
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Counterfeiters (start of turn), targeting Karandras1')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Counterfeiters item number #168 (start of turn), targeting Karandras1')
     expect(played.log.at(-1)?.assistedActionId).toBe('req-1')
     expect(played.assistedActions).toHaveLength(1)
     expect(played.assistedActions[0]).toMatchObject({
@@ -163,37 +163,37 @@ describe('playing a card', () => {
   it('names two players for Depression, and every other player for Bank Scandal', () => {
     const depression = withCardInHand(startOfTurn(), 'Depression')
     const two = unwrap(play(depression.state, 'req-1', depression.itemId, { targets: [KARANDRAS1, ITCHI] }))
-    expect(two.log.at(-1)?.publicLog).toBe('cash1981 played Depression (start of turn), targeting Karandras1 and Itchi')
+    expect(two.log.at(-1)?.publicLog).toBe('cash1981 played Depression item number #274 (start of turn), targeting Karandras1 and Itchi')
 
     const scandal = withCardInHand(startOfTurn(), 'Bank Scandal')
     const all = unwrap(play(scandal.state, 'req-1', scandal.itemId))
-    expect(all.log.at(-1)?.publicLog).toBe('cash1981 played Bank Scandal (start of turn), targeting every other player')
+    expect(all.log.at(-1)?.publicLog).toBe('cash1981 played Bank Scandal item number #130 (start of turn), targeting every other player')
   })
 
   it('names nobody for a card that names no player', () => {
     const { state, itemId } = withCardInHand(startOfTurn(), 'Drought')
     const played = unwrap(play(state, 'req-1', itemId))
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Drought (start of turn)')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Drought item number #180 (start of turn)')
   })
 
   it('plays a gift as a resource and names who gets the coin', () => {
     const { state, itemId } = withCardInHand(startOfTurn(), 'A Gift from Afar')
     const played = unwrap(play(state, 'req-1', itemId, { targets: [CHUL], resource: 'Iron' }))
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played A Gift from Afar (any time) as Iron, targeting Chul')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played A Gift from Afar item number #174 (any time) as Iron, targeting Chul')
   })
 
   it('discards a Great Person whose text says to discard it, and keeps one that does not faceup in the hand', () => {
     const marco = withCardInHand(startOfTurn(), 'Marco Polo')
     const discarded = unwrap(play(marco.state, 'req-1', marco.itemId))
     expect(discarded.discardedItems.some((item) => item.id === marco.itemId)).toBe(true)
-    expect(discarded.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo (any time) and discarded it, gaining 27 trade')
+    expect(discarded.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo item number #357 (any time) and discarded it, gaining 27 trade')
 
     const shakespeare = withCardInHand(startOfTurn(), 'William Shakespeare')
     const kept = unwrap(play(shakespeare.state, 'req-2', shakespeare.itemId))
     const card = player(kept).items.find((item) => item.id === shakespeare.itemId)
     expect(card?.hidden).toBe(false)
     expect(kept.discardedItems.some((item) => item.id === shakespeare.itemId)).toBe(false)
-    expect(kept.log.at(-1)?.publicLog).toBe('cash1981 used William Shakespeare (any time)')
+    expect(kept.log.at(-1)?.publicLog).toBe('cash1981 used William Shakespeare item number #55 (any time)')
   })
 
   it('cannot be used twice: a kept Great Person stays faceup and in effect', () => {
@@ -375,14 +375,18 @@ describe('what other players can see', () => {
     expect(json).not.toContain('"discarded"')
     const listed = toPlayerView(played, KARANDRAS1).assistedActions?.find((record) => record.id === 'req-1')
     expect(listed?.label).toBe('Counterfeiters')
-    expect(listed?.text).toBe('cash1981 played Counterfeiters (start of turn), targeting Karandras1')
+    expect(listed?.text).toBe('cash1981 played Counterfeiters item number #168 (start of turn), targeting Karandras1')
+    // The owner's log has the played card too, with the same number
+    const own = played.log.find((entry) => entry.assistedActionId === 'req-1')
+    expect(own?.privateLog).toBe(own?.publicLog)
   })
 })
 
 describe('Great Persons the game carries out', () => {
   const OTHERS = [KARANDRAS1, ITCHI, CHUL]
   const undoneBy = (state: GameState): GameState => {
-    const logId = state.log.at(-1)?.id ?? ''
+    // The played line is the one the undo targets; a private line may follow it
+    const logId = [...state.log].reverse().find((entry) => entry.assistedActionId !== undefined && entry.publicLog !== '')?.id ?? ''
     const asked = unwrap(initiateUndo(state, { logId, playerId: CASH1981 }))
     return OTHERS.reduce((next, playerId) => unwrap(vote(next, { logId, playerId, vote: true, at: AT })), asked)
   }
@@ -397,7 +401,7 @@ describe('Great Persons the game carries out', () => {
     const { state, itemId } = withCardInHand(withTrade(startOfTurn(), 10), 'Marco Polo')
     const played = unwrap(play(state, 'req-1', itemId))
     expect(player(played).stats.trade).toBe(27)
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo (any time) and discarded it, gaining 17 trade')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo item number #357 (any time) and discarded it, gaining 17 trade')
     expect(player(undoneBy(played)).stats.trade).toBe(10)
   })
 
@@ -408,9 +412,15 @@ describe('Great Persons the game carries out', () => {
     const hand = player(played).items
     expect(hand).toHaveLength(before) // Orville left, one aircraft card came in
     expect(hand.some((item) => item.id === itemId)).toBe(false)
-    expect(played.log.at(-1)?.publicLog).toBe(
-      'cash1981 played Orville Wright (start of turn) and discarded it, building an aircraft unit for free',
+    const line = played.log.find((entry) => entry.assistedActionId === 'req-1')
+    expect(line?.publicLog).toMatch(
+      /^cash1981 played Orville Wright item number #\d+ \(start of turn\) and discarded it, building an aircraft unit for free \(item number #\d+\)$/,
     )
+    // The played line is open information and written to the owner's log too; the drawn card has a private line
+    expect(line?.privateLog).toBe(line?.publicLog)
+    const drew = played.log.find((entry) => entry.privateLog.includes('with Orville Wright'))
+    expect(drew?.privateLog).toMatch(/^cash1981 drew .+ item number #\d+ \(.+\) with Orville Wright$/)
+    expect(drew?.publicLog).toBe('')
     const undone = undoneBy(played)
     expect(player(undone).items).toHaveLength(before)
     expect(player(undone).items.some((item) => item.id === itemId)).toBe(true)
@@ -423,7 +433,7 @@ describe('Great Persons the game carries out', () => {
     const played = unwrap(play(state, 'req-1', itemId, { playerId: CHUL }))
     expect(startPlayerOf(played)?.playerId).toBe(CHUL)
     expect(played.log.at(-1)?.publicLog).toBe(
-      'Chul played Khalid ibn al-Walid (any time) and discarded it, becoming the start player (next turn passes clockwise from Chul)',
+      'Chul played Khalid ibn al-Walid item number #281 (any time) and discarded it, becoming the start player (next turn passes clockwise from Chul)',
     )
     // The marker cannot be stepped back on the board alone
     expect(unwrapErr(undoLastBoardChange(played, CHUL)).kind).toBe('BOARD_UNDO_ASSISTED')

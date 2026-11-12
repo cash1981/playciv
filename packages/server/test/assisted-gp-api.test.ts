@@ -197,7 +197,7 @@ describe('a Great Person space over HTTP', () => {
     expect(ownMarkers(state, table.starterId).map((piece) => piece.assetId)).toEqual(['great people/scientist'])
     expect(after.board.pieces.some((piece) => piece.assetId === 'great people/scientist')).toBe(true)
     expect(after.assistedActions[0]?.text).toMatch(
-      /^.+ advanced on the culture track to space 3 and took a scientist great person marker into reserve$/,
+      /^.+ advanced on the culture track to space 3 and took a scientist great person marker into reserve \(item number #\d+\)$/,
     )
   })
 
@@ -225,7 +225,7 @@ describe('a Great Person space over HTTP', () => {
       const headers = token === undefined ? {} : { headers: bearer(token) }
       const log = await inject(app, { url: `/api/games/${table.gameId}/log/public`, ...headers })
       expect(log.body).toContain(
-        `drew the Great Person card ${itemName(rejected)}, but no scientist marker is left, so it was discarded faceup`,
+        `drew the Great Person card ${itemName(rejected)} item number #${rejected.itemNumber}, but no scientist marker is left, so it was discarded faceup`,
       )
       expect(log.body).toContain('took a general great person marker into reserve')
       expect(log.body).not.toContain(kept.id)

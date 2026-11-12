@@ -285,7 +285,7 @@ describe('Patronage', () => {
     const used = unwrap(act(state, 'patronage', 'req-1'))
     expect(me(used).stats.culture).toBe(3)
     expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
-      'cash1981 used Patronage: spent 1 culture and drew 1 culture II card',
+      'cash1981 used Patronage: spent 1 culture and drew 1 culture II card (item number #259)',
     )
     // One card is kept without a choice, and it is in the hand, hidden
     const record = used.assistedActions[0]
