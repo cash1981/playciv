@@ -5,7 +5,9 @@
  * Which cities may be nuked, and what each would take with it, from the public board alone (like `combustion.ts`), so the
  * browser lists the same targets the engine accepts. The reading of the card (human, 2026-11-13, "Nuke = Uranium"):
  *
- * - A target is a city of another player, never the player's own: nobody nukes their own city.
+ * - A target is any city of any player, the player's own included (human, 2026-11-13: the point may be to kill the many enemy
+ *   figures standing around it); what stands in its outskirts is destroyed whoever owns it, so the player's own buildings,
+ *   wonders, figures and great persons go too.
  * - Not a capital: the capital marker, or the metropolis, which only a capital grows into (`capitalOf` in `sot.ts`).
  * - Destroyed with the city piece: every building, wonder, figure and Great Person marker on a square of its outskirts, and the
  *   caravan, fortification and Building Program markers on its centre. A figure standing on the city's centre square is not
@@ -28,6 +30,8 @@ export interface NukeTarget {
   readonly label: string
   readonly ownerId: string
   readonly ownerUsername: string
+  /** The city is the viewer's own. */
+  readonly own: boolean
   /** Everything the nuke removes besides the city itself, in the order it is removed, with the square each stands on. */
   readonly destroyed: readonly { readonly pieceId: string; readonly label: string; readonly square: string | null }[]
 }
@@ -46,8 +50,8 @@ const kindOf = (piece: BoardPiece): string =>
 const ORDER = ['figure', 'greatperson', 'wonder', 'building', 'marker'] as const
 
 /**
- * The cities of the other players the viewer may nuke now, in board order. `owners` lists every player (the viewer
- * included, who is skipped). A city whose colour no player has is nobody's and is left out.
+ * The cities the viewer may nuke now, in board order: every city that is not a capital, their own included. `owners` lists
+ * every player. A city whose colour no player has is nobody's and is left out.
  */
 export function nukeTargetsOf(
   state: Pick<GameState, 'board' | 'players'>,
@@ -57,7 +61,7 @@ export function nukeTargetsOf(
   const { board } = state
   return owners.flatMap((owner): readonly NukeTarget[] => {
     const colour = owner.color?.toLowerCase()
-    if (owner.playerId === viewerId || colour === undefined) return []
+    if (colour === undefined) return []
     const footprints = cityFootprintsOf(state, colour)
     // The capital: the capital marker, else the metropolis
     const capital =
@@ -85,6 +89,7 @@ export function nukeTargetsOf(
           label: `${kindOf(piece)} ${squareOf(board, piece) ?? ''}`.trim(),
           ownerId: owner.playerId,
           ownerUsername: owner.username,
+          own: owner.playerId === viewerId,
           destroyed,
         },
       ]

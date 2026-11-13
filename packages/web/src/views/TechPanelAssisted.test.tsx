@@ -695,11 +695,12 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['atomicTheory', expect.any(String), 7, { mode: 'extraActions' }])
   })
 
-  it('lists only the cities of other players that are not capitals, says what each takes with it, and asks before nuking', async () => {
+  it('lists every city that is not a capital, the player\'s own included, says what each takes with it, and asks before nuking', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     const send = await open(atomicView(MAP))
     fireEvent.click(screen.getByLabelText(/Nuke a city/))
-    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1'])
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City B2 of cash1981 (yours)', 'City J10 of Karandras1'])
+    fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'city' } })
     expect(screen.getByRole('group').textContent).toContain('Destroys the city with Library (K10)')
     fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
     expect(confirm).toHaveBeenCalledTimes(1)
@@ -708,10 +709,21 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'city' })
   })
 
-  it('shows when there is no city to nuke, and cannot send', async () => {
-    const send = await open(atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'city')))
+  it('offers the player\'s own city, says it is their own when asking, and sends it', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = await open(atomicView(MAP))
     fireEvent.click(screen.getByLabelText(/Nuke a city/))
-    expect(screen.getByRole('group').textContent).toContain('No city of another player that is not a capital')
+    // The list starts on the first city, the player's own
+    expect((screen.getByLabelText('City to nuke') as HTMLSelectElement).value).toBe('mine')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuke City B2' }))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('(your own city)'))
+    expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'mine' })
+  })
+
+  it('shows when there is no city to nuke, and cannot send', async () => {
+    const send = await open(atomicView(MAP.filter((entry) => !['city', 'mine'].includes((entry as { id: string }).id))))
+    fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    expect(screen.getByRole('group').textContent).toContain('No city that is not a capital')
     const nuke = screen.getByRole('button', { name: /^Nuke / }) as HTMLButtonElement
     expect(nuke.disabled).toBe(true)
     fireEvent.click(nuke)
@@ -748,7 +760,7 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     fireEvent.click(screen.getByRole('button', { name: /^Use Atomic Theory/ }))
     fireEvent.click(screen.getByLabelText(/Nuke a city/))
     fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'city2' } })
-    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={atomicView(MAP)} reloadCount={0} />)
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'mine'))} reloadCount={0} />)
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1'])
     fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
     expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'city' })

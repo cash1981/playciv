@@ -51,7 +51,7 @@ export const atomicTheory = techAbility<'atomicTheory', Plan>({
     const id = payload['cityPieceId']
     const target = typeof id === 'string' ? nukeTargetsFor(state, player.playerId).find((candidate) => candidate.pieceId === id) : undefined
     if (target === undefined) {
-      return err('Choose a city of another player that is not their capital (a capital marker or a metropolis). You cannot nuke your own city.')
+      return err('Choose a city that is not a capital (a capital marker or a metropolis); your own city may be nuked, a capital may not.')
     }
     return ok({ mode, target })
   },

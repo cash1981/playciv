@@ -1,6 +1,6 @@
 /**
  * Atomic Theory (Uranium; issue #327, slice 2): an extra city action with each city in City Management, and a nuke on a
- * city of another player that is not their capital in Movement. Also Bureaucracy, a once-per-turn logged policy switch in
+ * non-capital city, the player's own included, in Movement. Also Bureaucracy, a once-per-turn logged policy switch in
  * Research, which costs nothing, and the Democracy and Printing Press coin purchases (covered in `assisted.test.ts`).
  */
 
@@ -14,6 +14,7 @@ import { assistedAvailability, availableActionsFor, performAssistedAction } from
 import { nukeTargetsFor } from '../src/atomic-theory.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import { cityActionsOf } from '../src/city-actions.js'
+import { cityProductionsOf } from '../src/city-production.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { toPlayerView } from '../src/state.js'
 import type { AssistedActionKind, GameState } from '../src/state.js'
@@ -197,14 +198,17 @@ describe('Atomic Theory: nuke a non-capital city (Uranium, Movement)', () => {
   }
   const nuke = (state: GameState, cityPieceId: string, requestId = 'req-1') => press(state, 'atomicTheory', { mode: 'nuke', cityPieceId }, requestId)
 
-  it('lists the cities of other players that are not capitals, with what each would take, and is ready in Movement', () => {
+  it('lists every city that is not a capital, the player\'s own included, with what each would take, and is ready in Movement', () => {
     const state = scene()
     expect(assistedAvailability(state, CASH1981, 'atomicTheory').status).toBe('ready')
     const targets = nukeTargetsFor(state, CASH1981)
-    expect(targets).toHaveLength(1)
-    expect(targets[0]).toMatchObject({ pieceId: blueCity(state), ownerUsername: 'Karandras1', label: 'City J10' })
+    expect(targets.map((target) => [target.label, target.ownerUsername, target.own])).toEqual([
+      ['City B2', 'cash1981', true],
+      ['City J10', 'Karandras1', false],
+    ])
+    const theirs = targets.find((target) => target.pieceId === blueCity(state))
     // Figures first, then great persons, wonders, buildings and the markers of the city itself
-    expect(targets[0]?.destroyed.map((item) => item.label)).toEqual(['Blue army', 'Scientist', 'Big Ben', 'Library', 'Caravan'])
+    expect(theirs?.destroyed.map((item) => item.label)).toEqual(['Blue army', 'Scientist', 'Big Ben', 'Library', 'Caravan'])
   })
 
   it('destroys the city and the buildings, wonders, figures and great person markers in its outskirts, through the board history', () => {
@@ -231,10 +235,10 @@ describe('Atomic Theory: nuke a non-capital city (Uranium, Movement)', () => {
     expect(undoLastBoardChange(used, CASH1981)).toMatchObject({ ok: false })
   })
 
-  it('refuses a capital, a metropolis, your own city, an unknown piece and a malformed payload, with nothing spent', () => {
-    const state = scene()
+  it('refuses a capital, a metropolis, your own capital, an unknown piece and a malformed payload, with nothing spent', () => {
+    const state = put(scene(), CASH1981, 'cities/redcapital2', 14, 1)
     const capital = state.board.pieces.find((piece) => piece.assetId === 'cities/bluecapital2')
-    const mine = state.board.pieces.find((piece) => piece.assetId === 'cities/redcity2')
+    const mine = state.board.pieces.find((piece) => piece.assetId === 'cities/redcapital2')
     if (capital === undefined || mine === undefined) throw new Error('missing cities')
     for (const payload of [{ mode: 'nuke', cityPieceId: capital.id }, { mode: 'nuke', cityPieceId: mine.id }, { mode: 'nuke', cityPieceId: 'nope' }, { mode: 'nuke' }, { mode: 'nuke', cityPieceId: 7 }]) {
       expect(refused(press(state, 'atomicTheory', payload as never))).toBe('ASSISTED_ACTION_REJECTED')
@@ -242,15 +246,82 @@ describe('Atomic Theory: nuke a non-capital city (Uranium, Movement)', () => {
     expect(hasHut(state, 'Uranium')).toBe(true)
     expect(state.assistedActions).toHaveLength(0)
     // A metropolis is the capital grown, so it is not a target either
-    const grown = put(coloured(), KARANDRAS1, 'cities/bluemetropolis2', 3, 3)
+    const grown = put(put(coloured(), KARANDRAS1, 'cities/bluemetropolis2', 3, 3), CASH1981, 'cities/redmetropolis2', 8, 8)
     expect(nukeTargetsFor(grown, CASH1981)).toHaveLength(0)
   })
 
   it('with no legal target the action is refused and the Uranium stays', () => {
-    const only = upTo(withHutInHand(withTech(put(put(coloured(), KARANDRAS1, 'cities/bluecapital2', 3, 3), CASH1981, 'cities/redcity2', 1, 1), 'Atomic Theory'), 'Uranium').state, 'CM')
+    const only = upTo(withHutInHand(withTech(put(put(coloured(), KARANDRAS1, 'cities/bluecapital2', 3, 3), CASH1981, 'cities/redcapital2', 1, 1), 'Atomic Theory'), 'Uranium').state, 'CM')
     expect(nukeTargetsFor(only, CASH1981)).toEqual([])
     expect(refused(nuke(only, 'any'))).toBe('ASSISTED_ACTION_REJECTED')
     expect(hasHut(only, 'Uranium')).toBe(true)
+  })
+
+  describe("nuking the player's own city to kill the enemy figures around it", () => {
+    /** Cash: a capital on D4 and a city on J10 with its Library, army and wonder around it; two Blue armies in its outskirts, one outside. */
+    function ownScene(): GameState {
+      let state = coloured()
+      state = put(state, CASH1981, 'cities/redcapital2', 3, 3)
+      state = put(state, CASH1981, 'cities/redcity2', 9, 9)
+      state = put(state, CASH1981, 'buildings/library', 10, 9)
+      state = put(state, CASH1981, 'wonders/bigben', 10, 10)
+      state = put(state, CASH1981, 'figures/redarmy', 8, 9)
+      state = put(state, KARANDRAS1, 'figures/bluearmy', 9, 8)
+      state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 10)
+      state = put(state, KARANDRAS1, 'figures/bluearmy', 13, 13)
+      return upTo(withHutInHand(withTech(state, 'Atomic Theory'), 'Uranium').state, 'CM')
+    }
+    const redCity = (state: GameState): string => {
+      const found = state.board.pieces.find((piece) => piece.assetId === 'cities/redcity2')
+      if (found === undefined) throw new Error('no red city')
+      return found.id
+    }
+
+    it('is a target, marked as the player\'s own, and destroys everything in its outskirts whoever owns it', () => {
+      const state = ownScene()
+      const target = nukeTargetsFor(state, CASH1981).find((candidate) => candidate.pieceId === redCity(state))
+      expect(target).toMatchObject({ label: 'City J10', own: true })
+      const used = unwrap(nuke(state, redCity(state)))
+      // The city, its Library and wonder, the player's own army and the two Blue armies around it
+      expect(state.board.pieces.length - used.board.pieces.length).toBe(6)
+      expect(idsAt(used, 'figures/bluearmy')).toHaveLength(1)
+      expect(idsAt(used, 'figures/redarmy')).toHaveLength(0)
+      expect(used.board.pieces.some((piece) => piece.assetId === 'cities/redcity2')).toBe(false)
+      expect(used.board.pieces.some((piece) => piece.assetId === 'cities/redcapital2')).toBe(true)
+      expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toMatch(/nuking City J10 of cash1981: the city is destroyed along with Red army \(I10\), Blue army/)
+    })
+
+    it('an undo by vote restores every piece exactly, the enemy figures too', () => {
+      const state = ownScene()
+      const used = unwrap(nuke(state, redCity(state)))
+      const undone = unwrap(tryVote(used, 'req-1'))
+      const key = (piece: { id: string; x: number; y: number; assetId: string }) => `${piece.id}@${piece.x},${piece.y}:${piece.assetId}`
+      expect(undone.board.pieces.map(key).sort()).toEqual(state.board.pieces.map(key).sort())
+      expect(hasHut(undone, 'Uranium')).toBe(true)
+    })
+
+    it('keeps the records that point at the destroyed city harmless: a boost on it counts for nothing and returns with the city', () => {
+      const base = ownScene()
+      const city = redCity(base)
+      const boosted: GameState = {
+        ...base,
+        assistedActions: [
+          {
+            id: 'boost-1', kind: 'construction', playerId: CASH1981, turnNumber: 1, phase: 'CM', usageKey: 'card:Construction', at: null, logId: 'x', status: 'applied',
+            effect: { kind: 'productionBoost', tech: 'Construction', cityPieceId: city, cityLabel: 'City J10', amount: 5, spent: [] },
+          },
+        ],
+      }
+      expect(cityProductionsOf(boosted, player(boosted)).find((entry) => entry.pieceId === city)?.boost).toBe(5)
+      const used = unwrap(nuke(boosted, city))
+      // The city is gone: the remaining city list is read without the dead record getting in the way
+      expect(cityProductionsOf(used, player(used)).map((entry) => entry.pieceId)).not.toContain(city)
+      expect(() => toPlayerView(used, CASH1981)).not.toThrow()
+      expect(() => toPlayerView(used, KARANDRAS1)).not.toThrow()
+      const undone = unwrap(tryVote(used, 'req-1'))
+      expect(cityProductionsOf(undone, player(undone)).find((entry) => entry.pieceId === city)?.boost).toBe(5)
+    })
+
   })
 
   it('is a Movement action: refused in City Management', () => {

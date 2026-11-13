@@ -425,11 +425,11 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
             <select aria-label="City to nuke" value={nukeId} onChange={(event) => setPick({ ...pick, cityPieceId: event.target.value })}>
               {targets.map((candidate) => (
                 <option key={candidate.pieceId} value={candidate.pieceId}>
-                  {candidate.label} of {candidate.ownerUsername}
+                  {candidate.label} of {candidate.ownerUsername}{candidate.own ? ' (yours)' : ''}
                 </option>
               ))}
             </select>
-            {targets.length === 0 && <span role="status" className="assisted-warning">No city of another player that is not a capital stands on the map.</span>}
+            {targets.length === 0 && <span role="status" className="assisted-warning">No city that is not a capital stands on the map.</span>}
             {target !== undefined && (
               <span className="muted">
                 Destroys the city{target.destroyed.length === 0 ? '' : ` with ${target.destroyed.map((item) => `${item.label}${item.square === null ? '' : ` (${item.square})`}`).join(', ')}`}. Only the undo vote brings it back.
@@ -443,7 +443,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           disabled={!canSubmit || (nuke && target === undefined)}
           onClick={() => {
             if (!nuke) return send({ mode: 'extraActions' })
-            if (target !== undefined && window.confirm(`Nuke ${target.label} of ${target.ownerUsername}? The city and everything in its outskirts is destroyed.`)) {
+            if (target !== undefined && window.confirm(`Nuke ${target.label} of ${target.ownerUsername}${target.own ? ' (your own city)' : ''}? The city and everything in its outskirts is destroyed, whoever owns it.`)) {
               send({ mode: 'nuke', cityPieceId: target.pieceId })
             }
           }}

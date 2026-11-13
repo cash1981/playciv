@@ -957,9 +957,13 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   is refused while any city has taken two actions this turn, whatever made the second action possible (a confirmed repeat,
   Lovelace or Atomic Theory): the records cannot tell which, and a refusal is the safe side. A city that had already taken a
   second action (confirmed, or with a Lovelace credit) before Atomic Theory was used gets no extra action from it: the extra is
-  the second action, so that city falls back to the confirm question for its third. `nuke` (Movement, `cityPieceId`): the target is a city of another
-  player (nobody nukes their own) that is not a capital, i.e. not the capital marker and not the metropolis, which only a
-  capital grows into (`capitalOf`). It removes, as separate board history entries, every building, wonder, figure and Great
+  the second action, so that city falls back to the confirm question for its third. `nuke` (Movement, `cityPieceId`): the target is any city that is not
+  a capital, the player's own included (human, 2026-11-13: the point may be to kill the many enemy figures standing around it),
+  i.e. not the capital marker and not the metropolis, which only a capital grows into (`capitalOf`). What stands in the outskirts
+  goes whoever owns it, so a nuke of an own city also destroys the player's own buildings, wonders, figures and great persons;
+  the web marks the player's own city and says so when it asks. Records that point at the destroyed city (a production boost,
+  city actions, scout assignments) are read only for cities still on the map, so they stay harmless and count again when the
+  undo brings the city back. It removes, as separate board history entries, every building, wonder, figure and Great
   Person marker on a square of the city's outskirts, the caravan, fortification and Building Program markers on its centre, and
   the city; a figure standing on the centre square, resource tokens, huts and city-states stay. The line names everything
   destroyed with its square. Only the undo vote puts it back, each piece exactly as it stood (`placeBack`), refused if one is on
