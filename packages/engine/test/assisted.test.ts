@@ -82,6 +82,10 @@ describe('the registry', () => {
       'plastics',
       'pottery',
       'writing',
+      // Batch 2: Metalworking, Atomic Theory, Bureaucracy
+      'atomicTheory',
+      'bureaucracy',
+      'metalworking',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -101,12 +105,14 @@ describe('the registry', () => {
       expect(action.phase).toBe(
         startOfTurn.includes(action.action) || action.action.startsWith('sot:')
           ? 'SOT'
-          : action.action === 'mathematics' || action.action === 'ballistics'
+          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'metalworking' || action.action === 'atomicTheory'
             ? 'ANY'
             : action.action === 'writing' || action.action === 'civilService' || action.action === 'massMedia'
               ? 'ANY'
               : action.action === 'horsebackRiding'
                 ? 'TRADE'
+                : action.action === 'bureaucracy'
+                  ? 'RESEARCH'
                 : action.action === 'communism' || action.action === 'combustion'
                   ? 'MOVEMENT'
                   : 'CM',

@@ -1693,6 +1693,8 @@ import { ballistics, mathematics } from './assisted-tech-wounds.js'
 import { gunpowder } from './assisted-gunpowder.js'
 import { combustion } from './assisted-combustion.js'
 import { TECH_ABILITY_ACTIONS } from './assisted-tech-abilities.js'
+import { atomicTheory } from './assisted-atomic-theory.js'
+import { bureaucracy } from './assisted-bureaucracy.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 
 /** Every assisted action, in the order the projection lists them. */
@@ -1707,6 +1709,8 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   gunpowder,
   combustion,
   ...TECH_ABILITY_ACTIONS,
+  atomicTheory,
+  bureaucracy,
   cultureAdvance,
   cultureAdvanceSkip,
   chooseReward,
@@ -1986,7 +1990,8 @@ export function reverseAssistedAction(
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
       (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
-    effect.kind === 'gianniniBuild'
+    effect.kind === 'gianniniBuild' ||
+    (effect.kind === 'atomicTheory' && effect.mode === 'nuke')
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }

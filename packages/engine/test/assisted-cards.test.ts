@@ -116,6 +116,10 @@ describe('the registry and the tech map', () => {
       'plastics',
       'pottery',
       'writing',
+      // Batch 2: Metalworking, Atomic Theory, Bureaucracy
+      'atomicTheory',
+      'bureaucracy',
+      'metalworking',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -148,8 +152,11 @@ describe('the registry and the tech map', () => {
       'Civil Service': 'civilService',
       'Mass Media': 'massMedia',
       Monarchy: 'monarchy',
+      Metalworking: 'metalworking',
+      'Atomic Theory': 'atomicTheory',
+      Bureaucracy: 'bureaucracy',
     })
-    // Metalworking, Atomic Theory and Bureaucracy come in the next batch; Masonry has no resource ability
+    // Masonry has no resource ability
     expect(ASSISTED_TECH_ACTIONS.get('Masonry')).toBeUndefined()
   })
 

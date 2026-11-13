@@ -306,6 +306,17 @@ export interface MonarchyPayload {
   readonly targetId?: string
 }
 
+/** What Metalworking carries: the arena unit (`ArenaUnit.id`) of the player's own that gets +3 attack. */
+export interface ArenaUnitPayload {
+  readonly arenaUnitId: string
+}
+
+/** What Atomic Theory carries: `extraActions`, or `nuke` with the city (`cityPieceId`) to destroy. */
+export interface AtomicTheoryPayload {
+  readonly mode: 'extraActions' | 'nuke'
+  readonly cityPieceId?: string
+}
+
 /** What `steamPower` carries: the square whose figures move, and the water square they move to. */
 export interface SteamPowerPayload {
   readonly from: CardSquare
@@ -348,6 +359,8 @@ export type AssistedPayload =
   | TargetPlayerPayload
   | MysticismPayload
   | MonarchyPayload
+  | ArenaUnitPayload
+  | AtomicTheoryPayload
   | SteamPowerPayload
   | FeudalismHarvestPayload
   | FoundCityPayload
@@ -580,9 +593,41 @@ function lovelaceCreditsLeft(state: GameState, player: Playerhand): readonly str
 /** The extra city actions Ada Lovelace has given this turn that no action has used yet. */
 export const extraCityActionsLeft = (state: GameState, player: Playerhand): number => lovelaceCreditsLeft(state, player).length
 
-/** The Lovelace play whose credit an action of this city would use: only a city that has already acted uses one. */
+/**
+ * Whether Atomic Theory's "extra action with each city" is in force this turn for the player: an applied, not undone,
+ * record of it. Derived from the record, so the undo vote removes it.
+ */
+export function atomicExtraActionsActive(state: GameState, player: Playerhand): boolean {
+  const turn = turnStatus(state).currentTurn
+  return state.assistedActions.some(
+    (record) =>
+      record.status === 'applied' &&
+      record.playerId === player.playerId &&
+      record.turnNumber === turn &&
+      record.effect.kind === 'atomicTheory' &&
+      record.effect.mode === 'extraActions',
+  )
+}
+
+/**
+ * Atomic Theory gives every city one more action: a city that has acted exactly once may act again without being
+ * asked, a city that has acted twice is back to the question (and to a Lovelace credit, if one is left).
+ */
+export const atomicExtraActionFor = (state: GameState, player: Playerhand, cityPieceId: string): boolean =>
+  atomicExtraActionsActive(state, player) && cityActionsTakenThisTurn(state, player, cityPieceId).length === 1
+
+/** How many city actions still in force each of the player's cities has taken this turn, by city piece id. */
+export function cityActionCountsThisTurn(state: GameState, player: Playerhand): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>()
+  for (const record of cityActionRecordsThisTurn(state, player)) counts.set(record.cityPieceId, (counts.get(record.cityPieceId) ?? 0) + 1)
+  return counts
+}
+
+/** The Lovelace play whose credit an action of this city would use: only a city that has already acted uses one, and not when Atomic Theory covers it. */
 export function lovelaceCreditForAction(state: GameState, player: Playerhand, cityPieceId: string): string | undefined {
-  return cityActionsTakenThisTurn(state, player, cityPieceId).length === 0 ? undefined : lovelaceCreditsLeft(state, player)[0]
+  if (cityActionsTakenThisTurn(state, player, cityPieceId).length === 0) return undefined
+  if (atomicExtraActionFor(state, player, cityPieceId)) return undefined
+  return lovelaceCreditsLeft(state, player)[0]
 }
 
 /** Whether a city action still in force used this Lovelace play's credit. */
@@ -591,6 +636,7 @@ export const lovelaceCreditWasUsed = (state: GameState, creditId: string): boole
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
 export const LOVELACE_ACTION_NOTE = ' (an extra city action from Ada Lovelace)'
+export const ATOMIC_ACTION_NOTE = ' (an extra city action from Atomic Theory)'
 
 /**
  * What the city's earlier actions this turn mean for one more: nothing to say, a note for the log
@@ -604,6 +650,7 @@ export function earlierCityActions(
 ): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
   const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
   if (taken.length === 0) return { refusal: undefined, note: '' }
+  if (atomicExtraActionFor(state, player, city.cityPieceId)) return { refusal: undefined, note: ATOMIC_ACTION_NOTE }
   if (extraCityActionsLeft(state, player) > 0) return { refusal: undefined, note: LOVELACE_ACTION_NOTE }
   if (confirmed) return { refusal: undefined, note: SECOND_ACTION_NOTE }
   return {

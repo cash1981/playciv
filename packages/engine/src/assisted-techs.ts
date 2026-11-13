@@ -35,6 +35,9 @@ export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = ne
   ['Civil Service', 'civilService'],
   ['Mass Media', 'massMedia'],
   ['Monarchy', 'monarchy'],
+  ['Metalworking', 'metalworking'],
+  ['Atomic Theory', 'atomicTheory'],
+  ['Bureaucracy', 'bureaucracy'],
 ])
 
 /**
@@ -48,6 +51,10 @@ export type TechPicker =
   | { readonly kind: 'player'; readonly noteLabel?: string }
   | { readonly kind: 'coin' }
   | { readonly kind: 'monarchy' }
+  /** One of the player's own living units in the arena (Metalworking). */
+  | { readonly kind: 'arenaUnit' }
+  /** Atomic Theory: extra city actions, or a nuke on a city of another player that is not their capital. */
+  | { readonly kind: 'atomic' }
 
 export const ASSISTED_TECH_PICKERS: ReadonlyMap<AssistedActionKind, TechPicker> = new Map<AssistedActionKind, TechPicker>([
   ['gunpowder', { kind: 'resources', count: 2, distinct: false }],
@@ -64,4 +71,6 @@ export const ASSISTED_TECH_PICKERS: ReadonlyMap<AssistedActionKind, TechPicker> 
   ['massMedia', { kind: 'player', noteLabel: 'Resource ability (optional)' }],
   ['mysticism', { kind: 'coin' }],
   ['monarchy', { kind: 'monarchy' }],
+  ['metalworking', { kind: 'arenaUnit' }],
+  ['atomicTheory', { kind: 'atomic' }],
 ])

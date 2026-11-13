@@ -22,6 +22,7 @@ export * from './card-movement.js'
 export * from './brandenburg.js'
 export * from './communism.js'
 export * from './combustion.js'
+export * from './atomic-theory.js'
 export * from './tile-icons.js'
 export * from './migrate.js'
 export * from './turn.js'
@@ -68,6 +69,8 @@ export type {
   AssistedAvailability,
   AssistedPayload,
   BlockedAvailability,
+  ArenaUnitPayload,
+  AtomicTheoryPayload,
   AssignScoutPayload,
   ChooseRewardPayload,
   CombustionPayload,

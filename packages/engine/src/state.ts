@@ -465,6 +465,9 @@ export type AssistedActionKind =
   | 'civilService'
   | 'massMedia'
   | 'monarchy'
+  | 'metalworking'
+  | 'atomicTheory'
+  | 'bureaucracy'
   // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
   | `militaryTradition:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
@@ -1037,6 +1040,36 @@ export type TechAbilityEffect =
       readonly spent: readonly SpentResource[]
       readonly targetId: string
       readonly note: string
+    }
+  | {
+      /** Metalworking: +3 attack on one of the player's own arena units, with the attack before and after so an undo can tell whether it was edited since. */
+      readonly kind: 'metalworking'
+      readonly spent: readonly SpentResource[]
+      readonly battleId: string
+      readonly arenaUnitId: string
+      readonly before: number
+      readonly after: number
+    }
+  | {
+      /** Atomic Theory, "extra action with each city": every city of the player may act once more this turn (`atomicExtraActionFor`). */
+      readonly kind: 'atomicTheory'
+      readonly mode: 'extraActions'
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /** Atomic Theory, nuke: the city and what stood in its outskirts, each exactly as it stood and with the board history entry that removed it. */
+      readonly kind: 'atomicTheory'
+      readonly mode: 'nuke'
+      readonly spent: readonly SpentResource[]
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      readonly ownerId: string
+      readonly removed: readonly { readonly piece: BoardPiece; readonly historyId: string }[]
+    }
+  | {
+      /** Bureaucracy: one social policy may be switched during Research this turn. */
+      readonly kind: 'bureaucracy'
+      readonly spent: readonly SpentResource[]
     }
   | {
       /** Monarchy: `obsolete` only logs; `kill` discarded one unit card from the target's hand, as it stood, so an undo can return it. */

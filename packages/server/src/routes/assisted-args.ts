@@ -10,6 +10,8 @@
 
 import { BUILDABLE_BUILDING_IDS, isGovernment } from '@civ/engine'
 import type {
+  ArenaUnitPayload,
+  AtomicTheoryPayload,
   AssignScoutPayload,
   AssistedPayload,
   CombustionPayload,
@@ -240,6 +242,23 @@ function parseMysticism(args: Record<string, unknown>): MysticismPayload | strin
   return { targetId: args['targetId'], source }
 }
 
+function parseArenaUnit(args: Record<string, unknown>): ArenaUnitPayload | string {
+  const extra = extraKeys(args, ['arenaUnitId'])
+  if (extra.length > 0) return `metalworking takes only arenaUnitId, not ${extra.join(', ')}`
+  if (!isId(args['arenaUnitId'])) return 'arenaUnitId is required: 1 to 64 characters, letters, digits and . _ : -'
+  return { arenaUnitId: args['arenaUnitId'] }
+}
+
+function parseAtomicTheory(args: Record<string, unknown>): AtomicTheoryPayload | string {
+  const extra = extraKeys(args, ['mode', 'cityPieceId'])
+  if (extra.length > 0) return `atomicTheory takes only mode and cityPieceId, not ${extra.join(', ')}`
+  const mode = args['mode']
+  if (mode !== 'extraActions' && mode !== 'nuke') return 'mode must be extraActions or nuke'
+  if (mode === 'extraActions') return args['cityPieceId'] === undefined ? { mode } : 'extraActions takes no cityPieceId'
+  if (!isId(args['cityPieceId'])) return 'nuke needs cityPieceId: the city to destroy'
+  return { mode, cityPieceId: args['cityPieceId'] }
+}
+
 function parseMonarchy(args: Record<string, unknown>): MonarchyPayload | string {
   const extra = extraKeys(args, ['mode', 'targetId'])
   if (extra.length > 0) return `monarchy takes only mode and targetId, not ${extra.join(', ')}`
@@ -361,6 +380,8 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['massMedia', parseTargetPlayer('massMedia', true)],
   ['mysticism', parseMysticism],
   ['monarchy', parseMonarchy],
+  ['metalworking', parseArenaUnit],
+  ['atomicTheory', parseAtomicTheory],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['gianniniBuild', parseGianniniBuild],

@@ -23,6 +23,8 @@ import {
   restoreDrawnCards,
   countLinesIn,
 } from './assisted-culture.js'
+import type { ArenaUnit, Battle } from './battle.js'
+import { playerSideOf } from './battle-cards.js'
 import { discardedName } from './gustavus.js'
 import {
   ANY_RESOURCES,
@@ -39,6 +41,7 @@ import {
 } from './assisted-resources.js'
 import {
   PHASE_REASON,
+  READY,
   REPEAT_NOTE,
   blocked,
   grantUndoBlock,
@@ -57,10 +60,10 @@ import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, totalCoins, withCo
 import type { CoinSourceKey } from './coins.js'
 import { cityProductionsOf } from './city-production.js'
 import type { EngineError } from './errors.js'
-import { isUnit, itemName } from './item.js'
+import { isUnit, itemName, revealAll } from './item.js'
 import type { UnitItem } from './item.js'
 import { tradeCeilingOf } from './limits.js'
-import { appendLog } from './log.js'
+import { appendLog, itemNumberText } from './log.js'
 import { nextInt } from './random.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
@@ -78,21 +81,26 @@ import { createPlayerTurn, turnStatus } from './turn.js'
 import type { PlayerTurn } from './turn.js'
 
 const GROUP = 'Resource abilities'
+const BATTLE_REASON = 'Used during a battle you are fighting in.'
 const TRADE_REASON = 'Only available during your open Trade phase.'
 
-type Payload = Readonly<Record<string, unknown>>
-type EffectKind = TechAbilityEffect['kind']
-type EffectOf<K extends EffectKind> = Extract<TechAbilityEffect, { readonly kind: K }>
+export type Payload = Readonly<Record<string, unknown>>
+export type EffectKind = TechAbilityEffect['kind']
+export type EffectOf<K extends EffectKind> = Extract<TechAbilityEffect, { readonly kind: K }>
 
-type Payment =
+export type AbilityPhase = 'CM' | 'TRADE' | 'MOVEMENT' | 'RESEARCH' | 'ANY'
+
+export type Payment =
   | { readonly kind: 'one'; readonly resource: string }
   /** `count` resource tokens of the player's own choosing (Gunpowder's rule). */
   | { readonly kind: 'any'; readonly count: number }
   /** `count` resource tokens of different kinds. */
   | { readonly kind: 'distinct'; readonly count: number }
+  /** Nothing is paid (Bureaucracy). */
+  | { readonly kind: 'none' }
 
 /** What the ability did to the state besides the payment. */
-interface Acted<E> {
+export interface Acted<E> {
   readonly state: GameState
   /** The end of the public line, with its own separator: ", so Capital D5 produces 3 more this turn". */
   readonly said: string
@@ -103,13 +111,15 @@ interface Acted<E> {
   readonly historyIds?: readonly (string | undefined)[]
 }
 
-interface TechAbility<K extends EffectKind, Plan> {
+export interface TechAbility<K extends EffectKind, Plan> {
   readonly kind: AssistedActionKind
   readonly techName: string
   /** Which effect record the action writes. */
   readonly effectKind: K
-  readonly phase: 'CM' | 'TRADE' | 'ANY'
+  readonly phase: AbilityPhase
   readonly buttonText?: string
+  /** The heading it is listed under; "Resource abilities" when absent. */
+  readonly group?: string
   readonly payment: Payment
   /** Refusals that do not depend on what the player chose; used by the availability and checked again on apply. */
   block?(state: GameState, player: Playerhand): BlockedAvailability | undefined
@@ -135,22 +145,23 @@ interface TechAbility<K extends EffectKind, Plan> {
 
 const usageKeyOf = (techName: string): string => `card:${techName}`
 
-function currentTurnOf(state: GameState, player: Playerhand): PlayerTurn {
+export function currentTurnOf(state: GameState, player: Playerhand): PlayerTurn {
   const turnNumber = turnStatus(state).currentTurn
   return player.playerTurns.find((turn) => turn.turnNumber === turnNumber) ?? createPlayerTurn(player.username, turnNumber)
 }
 
 /** The turn record while the phase the ability needs is open, `undefined` otherwise. */
-function turnFor(state: GameState, player: Playerhand, phase: 'CM' | 'TRADE' | 'ANY'): PlayerTurn | undefined {
+function turnFor(state: GameState, player: Playerhand, phase: AbilityPhase): PlayerTurn | undefined {
   if (phase === 'CM') return openCityManagementTurn(state, player)
-  if (phase === 'TRADE') return openPhaseOf(state, player.playerId) === 'TRADE' ? currentTurnOf(state, player) : undefined
-  return currentTurnOf(state, player)
+  if (phase === 'ANY') return currentTurnOf(state, player)
+  return openPhaseOf(state, player.playerId) === phase ? currentTurnOf(state, player) : undefined
 }
 
-const phaseReason = (phase: 'CM' | 'TRADE' | 'ANY'): string => (phase === 'TRADE' ? TRADE_REASON : PHASE_REASON)
+const phaseReason = (phase: AbilityPhase): string =>
+  phase === 'TRADE' ? TRADE_REASON : phase === 'MOVEMENT' ? 'Only available during your open Movement phase.' : phase === 'RESEARCH' ? 'Only available during your open Research phase.' : PHASE_REASON
 
 /** The other player a payload names, or the reason there is none. */
-function otherPlayer(state: GameState, player: Playerhand, payload: Payload): Result<Playerhand, string> {
+export function otherPlayer(state: GameState, player: Playerhand, payload: Payload): Result<Playerhand, string> {
   const id = payload['targetId']
   if (typeof id !== 'string' || id === '') return err('Choose another player.')
   if (id === player.playerId) return err('Choose another player, not yourself.')
@@ -178,6 +189,7 @@ interface Paid {
 
 /** Pays the ability's resources, or says why not: `unavailable` for names that do not fit, `needs-resource` for tokens and cards the player lacks. */
 function pay(state: GameState, player: Playerhand, payment: Payment, payload: Payload, at: string | undefined): Result<Paid, BlockedAvailability> {
+  if (payment.kind === 'none') return ok({ state, spent: [], said: '' })
   if (payment.kind === 'one') {
     const paid = spendResource(state, player.playerId, payment.resource, at)
     return paid.ok
@@ -207,13 +219,14 @@ function pay(state: GameState, player: Playerhand, payment: Payment, payload: Pa
 }
 
 function paymentAvailability(state: GameState, playerId: string, payment: Payment): AssistedAvailability {
+  if (payment.kind === 'none') return READY
   if (payment.kind === 'one') return resourceAvailability(state, playerId, payment.resource)
   return payment.kind === 'any'
     ? anyResourcesAvailability(state, playerId, payment.count)
     : distinctResourcesAvailability(state, playerId, payment.count)
 }
 
-function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Plan>): AssistedActionDefinition {
+export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Plan>): AssistedActionDefinition {
   const usageKey = usageKeyOf(spec.techName)
   return {
     kind: spec.kind,
@@ -222,7 +235,7 @@ function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Plan>): As
     button: true,
     usageKey,
     phase: spec.phase,
-    group: GROUP,
+    group: spec.group ?? GROUP,
     ...(spec.buttonText === undefined ? {} : { buttonText: spec.buttonText }),
 
     availability(state, playerId) {
@@ -294,7 +307,10 @@ function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Plan>): As
       if (!returned.ok) return returned
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${spec.techName} was undone: ${joinList(typed.spent.map(returnedText))} returned${undone.value.said}`,
+        text:
+          `${player.username}'s ${spec.techName} was undone` +
+          (typed.spent.length === 0 ? '' : `: ${joinList(typed.spent.map(returnedText))} returned`) +
+          undone.value.said,
       })
     },
   }
@@ -731,6 +747,78 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
   },
 })
 
+// ---------------------------------------------------------------------------
+// Metalworking: Iron in a battle, one of the player's own arena units gets +3 attack
+// ---------------------------------------------------------------------------
+
+const METALWORKING_BONUS = 3
+
+/** The arena unit of the battle on now, or the one End battle set aside, by the battle's id. */
+function arenaUnitIn(state: GameState, battleId: string, arenaUnitId: string): ArenaUnit | undefined {
+  const battle = state.battle?.id === battleId ? state.battle : state.endedBattle?.battle.id === battleId ? state.endedBattle.battle : undefined
+  return battle?.arena.find((unit) => unit.id === arenaUnitId)
+}
+
+/** Replaces one arena unit in the battle on now or the one set aside. */
+function withArenaUnit(state: GameState, battleId: string, unit: ArenaUnit): GameState {
+  const swap = (battle: Battle): Battle => ({ ...battle, arena: battle.arena.map((candidate) => (candidate.id === unit.id ? unit : candidate)) })
+  if (state.battle?.id === battleId) return { ...state, battle: swap(state.battle) }
+  if (state.endedBattle !== null && state.endedBattle.battle.id === battleId) {
+    return { ...state, endedBattle: { ...state.endedBattle, battle: swap(state.endedBattle.battle) } }
+  }
+  return state
+}
+
+/** The living units of the battle on now that this player placed. */
+const ownArenaUnits = (state: GameState, playerId: string): readonly ArenaUnit[] =>
+  state.battle === null ? [] : state.battle.arena.filter((unit) => unit.placedBy === playerId && !unit.killed)
+
+const metalworking = techAbility<'metalworking', ArenaUnit>({
+  kind: 'metalworking',
+  techName: 'Metalworking',
+  effectKind: 'metalworking',
+  phase: 'ANY',
+  group: 'Battle',
+  buttonText: `Use Metalworking (Iron: +${METALWORKING_BONUS} attack)`,
+  payment: { kind: 'one', resource: 'Iron' },
+
+  block(state, player) {
+    if (state.battle === null) return blocked('wrong-phase', BATTLE_REASON)
+    if (playerSideOf(state.battle, player.playerId) === null) return blocked('unavailable', 'You are not fighting in this battle.')
+    if (ownArenaUnits(state, player.playerId).length === 0) return blocked('unavailable', 'You have no living unit in the arena to give attack to.')
+    return undefined
+  },
+
+  plan(state, player, payload) {
+    const id = payload['arenaUnitId']
+    const unit = typeof id === 'string' ? ownArenaUnits(state, player.playerId).find((candidate) => candidate.id === id) : undefined
+    return unit === undefined ? err('Choose one of your own living units in the arena.') : ok(unit)
+  },
+
+  // Arena attack is typed by the players, so the +3 is added to what it shows now. A unit not announced yet is not named in
+  // the public line, as the arena's own lines do not name it
+  act(state, player, unit, spent) {
+    const after = unit.attack + METALWORKING_BONUS
+    const battleId = state.battle?.id ?? ''
+    const named = unit.announced === false ? 'a unit it placed' : `${revealAll(unit.unit)} ${itemNumberText(state.logSecret, player.username, unit.unit)}`
+    const next = withArenaUnit(state, battleId, { ...unit, attack: after })
+    return ok({
+      state: unit.announced === false
+        ? appendLog(next, { username: player.username, playerId: player.playerId, privateLog: `Metalworking: ${revealAll(unit.unit)} ${itemNumberText(state.logSecret, player.username, unit.unit)} attack ${unit.attack} → ${after}`, createdAt: null })
+        : next,
+      said: `, adding ${METALWORKING_BONUS} to the attack of ${named} (${unit.attack} → ${after})`,
+      effect: { kind: 'metalworking', spent, battleId, arenaUnitId: unit.id, before: unit.attack, after },
+    })
+  },
+
+  undo(state, _player, effect) {
+    const unit = arenaUnitIn(state, effect.battleId, effect.arenaUnitId)
+    if (unit === undefined) return err('The unit is no longer in the arena, so its attack cannot be taken back.')
+    if (unit.attack !== effect.after) return err(`The attack of the unit was edited since (it is ${unit.attack}, not ${effect.after}), so it cannot be taken back. Correct it by hand.`)
+    return ok({ state: withArenaUnit(state, effect.battleId, { ...unit, attack: effect.before }), said: ` and the unit's attack went back from ${effect.after} to ${effect.before}` })
+  },
+})
+
 /** Every action of this file, in the order the projection lists them. */
 export const TECH_ABILITY_ACTIONS: readonly AssistedActionDefinition[] = [
   ...PRODUCTION_BOOSTS.map(productionBoost),
@@ -741,4 +829,5 @@ export const TECH_ABILITY_ACTIONS: readonly AssistedActionDefinition[] = [
   mysticism,
   ...CANCELS.map(cancelAbility),
   monarchy,
+  metalworking,
 ]
