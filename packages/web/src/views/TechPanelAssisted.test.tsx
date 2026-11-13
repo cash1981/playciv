@@ -310,6 +310,42 @@ describe('the Combustion army picker (issue #327)', () => {
     expect([gameId, kind, rev, args]).toEqual(['game-1', 'combustion', 7, { pieceId: 'a2' }])
   })
 
+  it('names what the army stands on now: a refresh that moves an offered army onto another building changes the button', async () => {
+    const before = [
+      piece('a1', 'figures/redarmy', 'figure', 'Red Army', 3, 3),
+      piece('b1', 'buildings/granary', 'building', 'Granary', 3, 3),
+      piece('b2', 'buildings/market', 'building', 'Market', 6, 6),
+    ]
+    const moved = [piece('a1', 'figures/redarmy', 'figure', 'Red Army', 6, 6), before[1]!, before[2]!]
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(combustionView(before))
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={combustionView(before)} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Combustion'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
+    expect(screen.getByRole('button', { name: /^Army on D4/ }).textContent).toContain('Granary')
+
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={combustionView(moved)} reloadCount={0} />)
+    const button = screen.getByRole('button', { name: /^Army on G7/ })
+    expect(button.textContent).toContain('Market')
+    expect(screen.queryByRole('button', { name: /^Army on D4/ })).toBeNull()
+    fireEvent.click(button)
+    expect(send.mock.calls[0]?.[4]).toEqual({ pieceId: 'a1' })
+  })
+
+  it('shows the reason, and nothing to press, when a refresh leaves no army on a target', async () => {
+    const before = [piece('a1', 'figures/redarmy', 'figure', 'Red Army', 3, 3), piece('b1', 'buildings/granary', 'building', 'Granary', 3, 3)]
+    const away = [piece('a1', 'figures/redarmy', 'figure', 'Red Army', 9, 2), before[1]!]
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(combustionView(before))
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={combustionView(before)} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Combustion'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={combustionView(away)} reloadCount={0} />)
+    expect(screen.queryByRole('button', { name: /^Army on / })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Army that uses Combustion' }).textContent).toContain('None of your armies stands on')
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('asks about a repeat Combustion use when an army is chosen, and keeps the picker if declined', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(combustionView(twoArmies))
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)

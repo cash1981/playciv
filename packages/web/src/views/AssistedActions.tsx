@@ -702,9 +702,13 @@ export function AssistedActionButton({
   const [hint, setHint] = useState<string | null>(null)
   // The tech abilities that ask something first (`ASSISTED_TECH_PICKERS`): what the player has picked so far, or `null` while the picker is closed
   const [pick, setPick] = useState<TechPick | null>(null)
-  // Combustion: the armies standing on something to destroy, one entry each; the player picks the army that acts
-  const [armyPick, setArmyPick] = useState<readonly CombustionTarget[] | null>(null)
+  // Combustion: whether the army picker is open. The armies it offers are worked out from the current view on every render, so the
+  // square and building a button names are what the engine will work out for that army when it is pressed
+  const [armyPickOpen, setArmyPickOpen] = useState(false)
   if (view.you === null || state === undefined) return null
+  const NO_ARMY_TARGET = 'None of your armies stands on a building of another player or outside every city, or on another player\'s walled city.'
+  // The map in the projection carries every city and building; the owner of a building is read from the cities' outskirts
+  const armyTargets: readonly CombustionTarget[] = armyPickOpen ? combustionTargets({ board: view.board, players: [] }, view.you) : []
 
   const ready = state.status === 'ready'
   const used = state.status === 'used'
@@ -829,14 +833,12 @@ export function AssistedActionButton({
 
   const pressCombustion = (): void => {
     if (view.you === null) return
-    // The map in the projection carries every city and building; the owner of a building is read from the cities' outskirts
-    const targets = combustionTargets({ board: view.board, players: [] }, view.you)
-    if (targets.length === 0) {
-      setHint('None of your armies stands on a building of another player or outside every city, or on another player\'s walled city.')
+    if (combustionTargets({ board: view.board, players: [] }, view.you).length === 0) {
+      setHint(NO_ARMY_TARGET)
       return
     }
     setHint(null)
-    setArmyPick(targets)
+    setArmyPickOpen(true)
   }
 
   const burnWith = (target: CombustionTarget): void => {
@@ -845,7 +847,7 @@ export function AssistedActionButton({
     if (inFlight.has(key)) return
     // Cancelling the question keeps the picker open
     if (used && !window.confirm(usedAgainQuestion(state.label))) return
-    setArmyPick(null)
+    setArmyPickOpen(false)
     void pressOnce(
       key,
       run,
@@ -1013,14 +1015,15 @@ export function AssistedActionButton({
           {hint}
         </span>
       )}
-      {armyPick !== null && (
+      {armyPickOpen && (
         <span className="assisted-any-pick" role="group" aria-label="Army that uses Combustion">
-          {armyPick.map((target) => (
+          {armyTargets.map((target) => (
             <button key={target.pieceId} type="button" className="small" disabled={!canSubmit} onClick={() => burnWith(target)}>
               Army on {squareLabel(target)}: destroy {target.subject}
             </button>
           ))}
-          <button type="button" className="small" onClick={() => setArmyPick(null)}>
+          {armyTargets.length === 0 && <span role="status" className="assisted-warning">{NO_ARMY_TARGET}</span>}
+          <button type="button" className="small" onClick={() => setArmyPickOpen(false)}>
             Cancel
           </button>
         </span>
