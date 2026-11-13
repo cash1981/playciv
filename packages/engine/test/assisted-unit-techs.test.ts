@@ -17,6 +17,7 @@ import type { AssistedActionKind } from '../src/state.js'
 import { techWoundsOwed } from '../src/battle-cards.js'
 import { mapCellOf } from '../src/blockade.js'
 import { combustionTargets } from '../src/combustion.js'
+import { revealAll } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
@@ -165,6 +166,23 @@ describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
     expect(state.log.at(-1)?.publicLog).toContain(`uses ${tech}: deals 1 wound`)
     // The player may stop early: nothing forces the rest
     expect(state.battle?.arena.some((unit) => unit.killed)).toBe(false)
+  })
+
+  it('does not name an unannounced target in the public line, and names it in full once its placement is announced', () => {
+    const state = used()
+    const target = enemyUnits(state)[0]
+    if (target === undefined) throw new Error('missing enemy unit')
+    expect(target.announced).toBe(false)
+    const hit = unwrap(wound(state, target.id))
+    const line = hit.log.at(-1)?.publicLog ?? ''
+    // The card may still be taken back, so only its front is public
+    expect(line).toBe(`cash1981 uses ${tech}: deals 1 wound to the unit on defender front #${target.position} (2 health left)`)
+    for (const viewer of [ITCHI, CHUL]) {
+      expect(JSON.stringify(toPlayerView(hit, viewer).log)).not.toContain(revealAll(target.unit))
+    }
+    const announced: GameState = { ...state, battle: { ...state.battle!, arena: state.battle!.arena.map((unit) => ({ ...unit, announced: true })) } }
+    const named = unwrap(wound(announced, target.id)).log.at(-1)?.publicLog ?? ''
+    expect(named).toContain(`deals 1 wound to ${revealAll(target.unit)} in the arena`)
   })
 
   it('kills a unit taken to 0 health, and never deals more than it was paid for', () => {

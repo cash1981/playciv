@@ -1091,7 +1091,7 @@ export function zhukovWound(state: GameState, input: ZhukovWoundInput): ActionRe
     state,
     player.username,
     player.playerId,
-    `uses ${ZHUKOV}: deals 1 wound to ${revealAll(target.unit)} in the arena${dead ? ', which is killed' : ` (${health} health left)`}`,
+    `uses ${ZHUKOV}: deals 1 wound to ${publicUnitName(target)}${dead ? ', which is killed' : ` (${health} health left)`}`,
   )
   return ok({
     ...next,
@@ -1115,6 +1115,13 @@ export interface TechWoundInput {
   readonly tech: string
   readonly arenaUnitId: string
 }
+
+/**
+ * How a public line names an arena unit: in full once it is announced; before that by its front, since a freshly placed unit's
+ * card is not public yet and may be taken back (its placement line comes when its owner ends their battle turn).
+ */
+const publicUnitName = (unit: ArenaUnit): string =>
+  unit.announced === false ? `the unit on ${unit.side} front #${unit.position}` : `${revealAll(unit.unit)} in the arena`
 
 /**
  * Mathematics and Ballistics (issue #327): "while involved in a battle, deal up to 3 (6) wounds, spread across enemy
@@ -1151,7 +1158,7 @@ export function techWound(state: GameState, input: TechWoundInput): ActionResult
     state,
     player.username,
     player.playerId,
-    `uses ${input.tech}: deals 1 wound to ${revealAll(target.unit)} in the arena${dead ? ', which is killed' : ` (${health} health left)`}`,
+    `uses ${input.tech}: deals 1 wound to ${publicUnitName(target)}${dead ? ', which is killed' : ` (${health} health left)`}`,
   )
   return ok({
     ...next,

@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { revealAll } from '../src/item.js'
 import { endBattleAction, initiateBattle, killArenaUnit, moveArenaUnit, placeUnitInArena, setArenaUnitStat, zhukovWound } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -122,6 +123,17 @@ describe('Georgy Zhukov', () => {
     expect(hit.log.at(-1)?.publicLog).toContain('Georgy Zhukov')
     expect(zhukovOwed(hit.battle!, CASH1981)).toBe(0)
     expect(unwrapErr(zhukovWound(hit, { playerId: CASH1981, arenaUnitId: target.id })).kind).toBe('BATTLE_CARD_REFUSED')
+  })
+
+  it('names the wounded unit by its front until its placement is announced, and in full after', () => {
+    const killed = kill(armed().state, CASH1981)
+    const target = unitOf(killed, KARANDRAS1)
+    const unannounced: GameState = { ...killed, battle: { ...killed.battle!, arena: killed.battle!.arena.map((unit) => (unit.id === target.id ? { ...unit, announced: false } : unit)) } }
+    const hidden = unwrap(zhukovWound(unannounced, { playerId: CASH1981, arenaUnitId: target.id }))
+    expect(hidden.log.at(-1)?.publicLog).toContain(`deals 1 wound to the unit on ${target.side} front #${target.position}`)
+    expect(hidden.log.at(-1)?.publicLog).not.toContain(revealAll(target.unit))
+    const announced: GameState = { ...killed, battle: { ...killed.battle!, arena: killed.battle!.arena.map((unit) => (unit.id === target.id ? { ...unit, announced: true } : unit)) } }
+    expect(unwrap(zhukovWound(announced, { playerId: CASH1981, arenaUnitId: target.id })).log.at(-1)?.publicLog).toContain(`deals 1 wound to ${revealAll(target.unit)} in the arena`)
   })
 
   it('deals no wound while every General figure of the player is blockaded', () => {
