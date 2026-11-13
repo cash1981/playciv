@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Government">
+  <defs>
+    <radialGradient id="wax" cx="0.38" cy="0.32" r="0.85">
+      <stop offset="0" stop-color="#e0553f"/>
+      <stop offset="0.55" stop-color="#b3281f"/>
+      <stop offset="1" stop-color="#7a130f"/>
+    </radialGradient>
+    <radialGradient id="pad" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#c63a2c"/>
+      <stop offset="1" stop-color="#9a1f18"/>
+    </radialGradient>
+  </defs>
+  <path d="M115.9 58.5 Q120.0 64.0 116.9 69.7 Q113.8 75.4 113.5 81.5 Q113.1 87.7 108.4 91.7 Q103.8 95.7 101.4 101.9 Q99.1 108.0 92.1 108.0 Q85.1 107.9 81.0 113.9 Q76.8 120.0 70.4 116.7 Q64.0 113.4 57.8 115.7 Q51.7 118.0 46.7 114.2 Q41.7 110.3 35.8 108.6 Q29.9 106.8 27.3 101.1 Q24.7 95.3 18.7 92.0 Q12.7 88.7 14.7 81.7 Q16.7 74.8 11.8 69.4 Q6.9 64.0 11.1 58.4 Q15.2 52.9 14.9 46.5 Q14.6 40.2 19.2 36.1 Q23.8 31.9 26.7 26.4 Q29.6 20.8 36.0 20.1 Q42.5 19.3 46.9 13.7 Q51.2 8.1 57.6 11.7 Q64.0 15.4 70.3 12.2 Q76.6 8.9 81.3 13.6 Q86.0 18.3 92.0 19.8 Q98.0 21.4 101.0 26.7 Q104.0 32.1 109.2 35.9 Q114.3 39.8 113.0 46.4 Q111.8 53.1 115.9 58.5Z" fill="url(#wax)" stroke="#6a0f0b" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="64" cy="64" r="39" fill="url(#pad)" stroke="#e8786a" stroke-width="2" opacity=".95"/>
+  <circle cx="64" cy="64" r="39" fill="none" stroke="#6a0f0b" stroke-width="1.500" transform="translate(1 1)" opacity=".5"/>
+  <g fill="none" stroke="#7a130f" stroke-width="4" stroke-linecap="round" opacity=".75">
+    <path d="M48 48l32 32M80 48L48 80M64 42v44M42 64h44"/>
+  </g>
+  <g fill="none" stroke="#e8786a" stroke-width="1.500" stroke-linecap="round" opacity=".6">
+    <path d="M47 46l32 32M79 46L47 78M63 41v44M41 63h44"/>
+  </g>
+  <path d="M38 40Q50 28 70 27" fill="none" stroke="#f3a190" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+</svg>

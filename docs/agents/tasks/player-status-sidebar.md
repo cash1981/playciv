@@ -50,6 +50,30 @@ A shared stat-icon map keeps icon, label and `alt` text in one place.
 - [ ] Hidden information: only fields already shown to opponents; a test checks that nothing beyond public stats and revealed civ/government appears
 - [ ] Browser check: desktop and phone width
 
+## Icon decisions (made by the human; all files are in `packages/web/public/status-icons/`)
+
+| Stat | Icon |
+| --- | --- |
+| Coins | `coins.png` |
+| Trade | `trade.png` (the red/blue orb from the culture track) |
+| Culture | `culture.png` |
+| Culture hand size | `culture-hand-size.svg` (the "+1" medallion) |
+| Government | `government.svg` (red wax seal) next to the government **text** |
+| Infantry / Artillery / Mounted / Aircraft | `infantry.png`, `artillery.png`, `mounted.png`, `aircraft.png` (medallions from the unit cards) |
+| Stacking | `stacking.png` |
+| Movement | the player-colour army flag with three speed lines behind it. Draw it as an inline React SVG so the flag takes the player's colour (pole and outline `#1b1b1b`, speed lines `#6b7479`, flag path as in the player-colour examples: `M33 12c7-4 15-3 24 2l-3 9 3 9c-9-5-17-6-24-2z`, pole `M31.5 6v50`, viewBox 64x64) |
+| Combat | an orange-red 12-point starburst with a cream circle and the **total combat bonus** as bold text inside, like the "+2"/"+4" badge on the Barracks/Academy icons. Inline React SVG, the number is the engine-calculated `stats.combat`, shown as `+N`; use a smaller font for three characters. Reference rendering: 128x128 viewBox, burst radii 62/44, inner circle r=34 |
+| Combat hand size | `combat-hand-size.png` (free text such as `+1` or `5+2`, show it as text beside the icon) |
+| EftA / PE / MIC / Infra | `efta.png`, `pe.png`, `mic.png`, `infra.png` |
+
+Credits owed on the About page (free Magnific icons need attribution): Stacking
+(Layer icon by riajulislam) and Combat hand size (Swords icon, Magnific). The
+source and author of the EftA, PE, MIC and Infra icons are not yet known; ask
+the human before the PR is opened.
+
+Player colours are lower-case names (blue, green, purple, red, yellow, white):
+use the same value the status table uses for its swatch.
+
 ## Open questions
 
-Icon choices for the ten missing icons (shown to the human as a picker).
+Author and licence of the EftA, PE, MIC and Infra icons (for the credit line).
