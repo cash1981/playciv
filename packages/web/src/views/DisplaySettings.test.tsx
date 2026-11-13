@@ -207,6 +207,19 @@ describe('DisplaySettings', () => {
     expect(document.activeElement).toBe(reset)
   })
 
+  it('Tab and Shift+Tab with focus on the sheet itself stay inside the panel', () => {
+    render(<Harness />)
+    const dialog = openPanel()
+    const inDialog = within(dialog)
+    dialog.focus()
+    expect(document.activeElement).toBe(dialog)
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(inDialog.getByRole('button', { name: 'Reset to defaults' }))
+    dialog.focus()
+    fireEvent.keyDown(dialog, { key: 'Tab' })
+    expect(document.activeElement).toBe(inDialog.getByRole('button', { name: 'Close' }))
+  })
+
   it('Tab from the page body lands inside the sheet', () => {
     render(<Harness />)
     const dialog = within(openPanel())

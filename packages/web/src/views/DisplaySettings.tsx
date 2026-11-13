@@ -170,7 +170,10 @@ export function DisplaySettings({ settings, autoZoom, onChange, onReset }: Props
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
       if (first === undefined || last === undefined) return
-      if (!inside) {
+      // Focus on the sheet itself (a click on its text or padding) is in none of the tab
+      // positions, so it is treated like focus outside: Tab goes to the first control and
+      // Shift+Tab to the last, instead of leaving the dialog for the gear behind it.
+      if (!inside || document.activeElement === sheet) {
         event.preventDefault()
         ;(event.shiftKey ? last : first).focus({ preventScroll: true })
       } else if (event.shiftKey && document.activeElement === first) {
