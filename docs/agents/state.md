@@ -36,9 +36,9 @@ deployment reports do not establish present health.
 - Display settings (#342): a gear in the Board header opens sliders for map zoom,
   status icon size, status panel width and icons per row plus a Show labels switch (on by
   default), saved per browser. The sidebar can be minimised under the map.
-- Tech resource abilities (#327): every tech on the issue's checklist has an assisted button with undo; some
-  remaining manual parts (Combustion's removal, Bureaucracy's policy switch, Education's wonder coin) are in limitations.md. Culture cards played as a resource pay any resource ability when no
-  token can.
+- Tech resource abilities (#327): every tech on the issue's checklist has an assisted button with undo. The parts
+  that stay manual (Combustion's removal, Bureaucracy's policy switch, Education's wonder coin) are in
+  limitations.md. Culture cards played as a resource pay any resource ability when no token can.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
   Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein, Carnegie, Jim Henson, Jacques Cousteau, Jerry Garcia, Ada Lovelace, Akira
   Kurosawa, Charles Darwin, A. P. Giannini, Frida Kahlo, Zheng He, Leonidas, Joan of Arc, Florence Nightingale, Sun Tzu, Georgy Zhukov and Gustavus Adolphus apply through the engine.

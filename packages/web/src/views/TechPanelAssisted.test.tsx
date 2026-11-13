@@ -194,7 +194,7 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     expect(send).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText('Resource 1'), { target: { value: 'Silk' } })
     fireEvent.change(screen.getByLabelText('Resource 2'), { target: { value: 'Incense' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Pay Silk and Incense' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Destroy Library on E5 \(pay Silk and Incense\)$/ }))
 
     expect(send).toHaveBeenCalledTimes(1)
     const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
@@ -228,13 +228,13 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     // Opening the picker asks nothing: the state can still change before the player submits
     expect(confirm).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(send).not.toHaveBeenCalled()
     // Declining keeps the picker open
     expect(screen.getByLabelText('Resource 1')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
     expect(confirm).toHaveBeenCalledTimes(2)
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[5]).toBe(true)
@@ -248,10 +248,10 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
     fireEvent.click(await screen.findByText('Gunpowder'))
     fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder' }))
-    expect((screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement).disabled).toBe(false)
 
     rerender(<TechPanel gameId="game-1" busy={true} run={run} view={view} reloadCount={0} />)
-    const pay = screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement
+    const pay = screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement
     expect(pay.disabled).toBe(true)
     fireEvent.click(pay)
     expect(send).not.toHaveBeenCalled()
@@ -919,7 +919,7 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     ])
     fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
     expect(send).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
     expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['gunpowder', expect.any(String), 7, { resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w2' }])
   })
 
@@ -928,10 +928,10 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     fireEvent.click(screen.getByLabelText(/Destroy a building/))
     expect(screen.getAllByRole('option').filter((option) => option.closest('select')?.getAttribute('aria-label') === 'Building').map((option) => option.textContent)).toEqual([
       "Library on K10 (Karandras1's outskirts)",
-      'Market on E5 (no outskirts)',
+      'Market on E5 (no single owner)',
     ])
     fireEvent.change(screen.getByLabelText('Building'), { target: { value: 'b2' } })
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
     expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: 'b2' })
   })
 
@@ -941,12 +941,12 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     expect((screen.getByLabelText(/Destroy a building/) as HTMLInputElement).checked).toBe(true)
     fireEvent.click(screen.getByLabelText(/Obsolete an ancient or medieval wonder/))
     expect(screen.getByRole('group').textContent).toContain('No ancient or medieval wonder is owned by a player')
-    const pay = screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement
+    const pay = screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement
     expect(pay.disabled).toBe(true)
     fireEvent.click(pay)
     expect(send).not.toHaveBeenCalled()
     fireEvent.click(screen.getByLabelText(/Destroy a building/))
-    expect((screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('the wonder or building that was picked is gone: the one shown is the one sent', async () => {
@@ -954,7 +954,25 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { id: string }).id !== 'w2'))} reloadCount={0} />)
     expect((screen.getByLabelText('Wonder') as HTMLSelectElement).value).toBe('w1')
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w1' })
+  })
+
+  it('the button names the target it sends: after a refresh removes the picked building the new target is named and sent', async () => {
+    const { send, rerender } = await open(viewWith(PIECES))
+    fireEvent.click(screen.getByLabelText(/Destroy a building/))
+    fireEvent.change(screen.getByLabelText('Building'), { target: { value: 'b2' } })
+    expect(screen.getByRole('button', { name: 'Destroy Market on E5 (pay Iron and Wheat)' })).toBeTruthy()
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { id: string }).id !== 'b2'))} reloadCount={0} />)
+    expect((screen.getByLabelText('Building') as HTMLSelectElement).value).toBe('b1')
+    fireEvent.click(screen.getByRole('button', { name: 'Destroy Library on K10 (pay Iron and Wheat)' }))
+    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: 'b1' })
+  })
+
+  it('names the wonder it will obsolete, and the group says what it holds', async () => {
+    const { send } = await open(viewWith(PIECES))
+    expect(screen.getByRole('group', { name: 'Gunpowder: resources, mode and target' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Obsolete The Pyramids (pay Iron and Wheat)' }))
     expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w1' })
   })
 
@@ -963,13 +981,13 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     const used = viewWith(PIECES, 'used')
     const { send, rerender } = await open(used)
     expect(confirm).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
     expect(send).not.toHaveBeenCalled()
     expect(screen.getByLabelText('Wonder')).toBeTruthy()
     rerender(<TechPanel gameId="game-1" busy={true} run={run} view={used} reloadCount={0} />)
-    expect((screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement).disabled).toBe(true)
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={used} reloadCount={0} />)
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[5]).toBe(true)
   })

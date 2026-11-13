@@ -63,6 +63,18 @@ const hasHut = (state: GameState, name: string): boolean => player(state).items.
 const resources = ['Iron', 'Wheat']
 
 /**
+ * A refusal made on a state that holds what would be spent: it is an error, the state was not touched (no record, no log line,
+ * tokens still in the hand) and a second look at it is byte for byte the first.
+ */
+function refusedUntouched(base: GameState, payload: Record<string, unknown>): void {
+  expect(hasHut(base, 'Iron') && hasHut(base, 'Wheat')).toBe(true)
+  const before = JSON.stringify(base)
+  expect(refused(press(base, payload))).toBe('ASSISTED_ACTION_REJECTED')
+  expect(JSON.stringify(base)).toBe(before)
+  expect(base.assistedActions).toHaveLength(0)
+}
+
+/**
  * Cash is Red, Karandras Blue. Karandras: a blue city on J10 with a Library on K10 in its outskirts, the Pyramids (ancient),
  * Machu Picchu (medieval) and Big Ben (modern) owned, and the Colossus unowned. Cash: a red city on B2 with a Market on C2 and
  * Stonehenge owned. Gunpowder revealed, an Iron and a Wheat in hand, City Management open.
@@ -140,10 +152,11 @@ describe('Gunpowder: obsolete an ancient or medieval wonder', () => {
       [state, { resources, mode: 'raze' }],
       [state, { resources }],
     ] as const) {
-      expect(refused(press(base, payload as never))).toBe('ASSISTED_ACTION_REJECTED')
+      refusedUntouched(base, payload as never)
     }
-    expect(hasHut(state, 'Iron') && hasHut(state, 'Wheat')).toBe(true)
-    expect(state.assistedActions).toHaveLength(0)
+    // And a good press on the same state does spend them, so the checks above are not vacuous
+    const paid = unwrap(obsolete(state, idOf(state, 'wonders/pyramids')))
+    expect(hasHut(paid, 'Iron') || hasHut(paid, 'Wheat')).toBe(false)
   })
 
   it('the board Undo cannot take the disable back alone; the vote restores owner and flag, returns the tokens and frees the use', () => {
@@ -202,20 +215,26 @@ describe('Gunpowder: destroy a building', () => {
     expect(own.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain("destroying Market on C2 (in cash1981's outskirts)")
   })
 
-  it('names a building outside every outskirts as such', () => {
+  it('names a building outside every outskirts, or in those of two colours, as having no single owner', () => {
     const state = put(scene(), CASH1981, 'buildings/harbor', 6, 14)
     const used = unwrap(destroy(state, idOf(state, 'buildings/harbor')))
-    expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain("destroying Harbor on G15 (in no player's outskirts)")
+    expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain("destroying Harbor on G15 (in no single player's outskirts)")
+    // A Red city two squares from the Blue one: the Library on K10 stands in both outskirts
+    const shared = put(scene(), CASH1981, 'cities/redcity2', 11, 9)
+    expect(destroyableBuildingsOf(shared, shared.players).find((building) => building.label === 'Library')?.ownerUsername).toBeNull()
+    const both = unwrap(destroy(shared, idOf(shared, 'buildings/library')))
+    expect(both.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain("destroying Library on K10 (in no single player's outskirts)")
   })
 
   it('refuses a wonder, a city, a missing id and a malformed payload, with nothing spent', () => {
     const state = scene()
     for (const buildingPieceId of [idOf(state, 'wonders/pyramids'), idOf(state, 'cities/bluecity2'), 'nope']) {
-      expect(refused(destroy(state, buildingPieceId))).toBe('ASSISTED_ACTION_REJECTED')
+      refusedUntouched(state, { resources, mode: 'destroy', buildingPieceId })
     }
-    expect(refused(press(state, { resources, mode: 'destroy' }))).toBe('ASSISTED_ACTION_REJECTED')
-    expect(hasHut(state, 'Iron') && hasHut(state, 'Wheat')).toBe(true)
+    refusedUntouched(state, { resources, mode: 'destroy' })
     expect(state.board.pieces.some((piece) => piece.assetId === 'buildings/library')).toBe(true)
+    const paid = unwrap(destroy(state, idOf(state, 'buildings/library')))
+    expect(hasHut(paid, 'Iron') || hasHut(paid, 'Wheat')).toBe(false)
   })
 
   it('the board Undo cannot take the removal back alone; the vote puts the building back exactly and returns the tokens', () => {
@@ -238,7 +257,12 @@ describe('Gunpowder: destroy a building', () => {
     const back: GameState = { ...used, board: { ...used.board, pieces: [...used.board.pieces, pieceOf(state, id)!] } }
     expect(JSON.stringify(unwrapErr(tryVote(back, 'req-1')))).toContain('is on the board again')
     const taken = put(used, CASH1981, 'buildings/market', 10, 9)
-    expect(JSON.stringify(unwrapErr(tryVote(taken, 'req-1')))).toContain('Another building or wonder now stands on K10')
+    expect(JSON.stringify(unwrapErr(tryVote(taken, 'req-1')))).toContain('now stands on K10')
+    // A city or a city-state on the square would be stacked on too
+    for (const [assetId, owner] of [['cities/redcity2', CASH1981], ['city-states/cs1', CASH1981]] as const) {
+      const occupied = put(used, owner, assetId, 10, 9)
+      expect(JSON.stringify(unwrapErr(tryVote(occupied, 'req-1')))).toContain('now stands on K10')
+    }
     // Nothing else changed: a building on another square does not stop it
     const elsewhere = put(used, CASH1981, 'buildings/market', 12, 12)
     expect(pieceOf(unwrap(tryVote(elsewhere, 'req-1')), id)).toBeDefined()
@@ -257,15 +281,14 @@ describe('Gunpowder: availability', () => {
 
   it('is not usable with nothing to obsolete and nothing to destroy, and says why', () => {
     expect(assistedAvailability(bare(), CASH1981, 'gunpowder')).toMatchObject({ status: 'unavailable', reason: expect.stringContaining('nothing to do') })
-    expect(refused(press(bare(), { resources, mode: 'destroy', buildingPieceId: 'x' }))).toBe('ASSISTED_ACTION_REJECTED')
-    expect(hasHut(bare(), 'Iron')).toBe(true)
+    refusedUntouched(bare(), { resources, mode: 'destroy', buildingPieceId: 'x' })
   })
 
   it('stays ready with one of the two possible and says which is not', () => {
     const noWonder = { ...scene(), board: { ...scene().board, pieces: scene().board.pieces.filter((piece) => piece.category !== 'wonder') } }
-    expect(assistedAvailability(noWonder, CASH1981, 'gunpowder')).toMatchObject({ status: 'ready', warning: expect.stringContaining('No ancient or medieval wonder') })
+    expect(assistedAvailability(noWonder, CASH1981, 'gunpowder')).toMatchObject({ status: 'ready', warning: 'No ancient or medieval wonder is owned by a player, so there is none to obsolete.' })
     const noBuilding = { ...scene(), board: { ...scene().board, pieces: scene().board.pieces.filter((piece) => piece.category !== 'building') } }
-    expect(assistedAvailability(noBuilding, CASH1981, 'gunpowder')).toMatchObject({ status: 'ready', warning: expect.stringContaining('No building stands on the map') })
+    expect(assistedAvailability(noBuilding, CASH1981, 'gunpowder')).toMatchObject({ status: 'ready', warning: 'No building stands on the map, so there is none to destroy.' })
     expect(assistedAvailability(scene(), CASH1981, 'gunpowder')).not.toHaveProperty('warning')
   })
 })

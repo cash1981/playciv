@@ -326,7 +326,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
     const building = buildings.find((candidate) => candidate.pieceId === buildingId)
     const ready = obsolete ? wonder !== undefined : building !== undefined
     return (
-      <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${label}`}>
+      <span className="assisted-any-pick" role="group" aria-label={`${label}: resources, mode and target`}>
         {resources.map((resource, index) => (
           <select
             key={index}
@@ -364,7 +364,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
             <select aria-label="Building" value={buildingId} onChange={(event) => setPick({ ...pick, buildingPieceId: event.target.value })}>
               {buildings.map((candidate) => (
                 <option key={candidate.pieceId} value={candidate.pieceId}>
-                  {candidate.label} on {candidate.square} ({candidate.ownerUsername === null ? 'no outskirts' : `${candidate.ownerUsername}'s outskirts`})
+                  {candidate.label} on {candidate.square} ({candidate.ownerUsername === null ? 'no single owner' : `${candidate.ownerUsername}'s outskirts`})
                 </option>
               ))}
             </select>
@@ -382,7 +382,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           disabled={!canSubmit || !ready}
           onClick={() => send({ resources, ...(obsolete ? { mode: 'obsolete', wonderPieceId: wonderId } : { mode: 'destroy', buildingPieceId: buildingId }) })}
         >
-          Pay {listOf(resources)}
+          {obsolete ? `Obsolete ${wonder?.label ?? 'a wonder'}` : `Destroy ${building === undefined ? 'a building' : `${building.label} on ${building.square}`}`} (pay {listOf(resources)})
         </button>
         {cancel}
       </span>

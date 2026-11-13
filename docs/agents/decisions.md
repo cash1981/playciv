@@ -878,12 +878,12 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   the culture token is unaffected); modern wonders are not eligible. `destroy` (`buildingPieceId`) really removes a building
   from the board through `removePiece`, so the board history records it: any building on a map square, whoever's, the player's
   own included, never a wonder or a city (their own categories); the line names the building, its square and whose outskirts it
-  stood in (`destroyableBuildingsOf`, the owner being the one city whose footprint holds the square, as the coin rules read
+  stood in ("no single player's" for one outside every outskirts or in those of two colours) (`destroyableBuildingsOf`, the owner being the one city whose footprint holds the square, as the coin rules read
   it). Both lists come from the public board (`obsoletableWondersOf` with the eras, `destroyableBuildingsOf`), so the web lists
   what the engine accepts. A target that is not eligible is refused with nothing spent. With no wonder to obsolete and no
   building at all the button is not usable and says why; with one of the two it stays ready and warns which is missing. The
   undo by vote restores a wonder's owner and flag exactly (refused when it changed since) or puts the building back with
-  `placeBack` exactly (refused when the piece is on the board again or another building or wonder now stands on its square);
+  `placeBack` exactly (refused when the piece is on the board again or another building, wonder, city or city-state now stands on its square);
   the board Undo cannot take either alone (`isAssistedBoardChange`) nor walk back through the restoration (`undoFloor`).
 - **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
   no-cost assisted action in the open Movement phase (group "Movement abilities"). The player chooses which army

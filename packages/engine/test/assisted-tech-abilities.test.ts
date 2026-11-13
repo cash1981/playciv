@@ -723,6 +723,16 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
   }
   const obsolete = (state: GameState, wonderPieceId: string, requestId = 'req-1', confirmed = false) =>
     press(state, 'monarchy', { mode: 'obsolete', wonderPieceId }, requestId, confirmed)
+  /**
+   * A refusal made on a state that holds the Silk it would spend: it is an error and the state is byte for byte what it was
+   * (no record, no log line, the Silk still in the hand).
+   */
+  const refusedUntouched = (state: GameState, payload: Record<string, unknown>, requestId = 'req-1', confirmed = false): void => {
+    expect(hasHut(state, 'Silk')).toBe(true)
+    const before = JSON.stringify(state)
+    expect(refused(press(state, 'monarchy', payload, requestId, confirmed))).toBe('ASSISTED_ACTION_REJECTED')
+    expect(JSON.stringify(state)).toBe(before)
+  }
 
   it('obsolete disables the chosen ancient wonder: the owner is cleared, the piece stays, the Silk is paid and the line names the wonder and its former owner', () => {
     const { state, pyramids } = scene()
@@ -741,13 +751,12 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
     const { state, pyramids, bigBen, stonehenge } = scene()
     expect(wonderOf(unwrap(obsolete(state, stonehenge)), stonehenge)).toMatchObject({ ownerId: null, disabled: true })
     const market = withWonder(state, 'wonders/colossus', null)
-    for (const id of [bigBen, market.pieceId, 'nope']) expect(refused(obsolete(market.state, id))).toBe('ASSISTED_ACTION_REJECTED')
+    for (const id of [bigBen, market.pieceId, 'nope']) refusedUntouched(market.state, { mode: 'obsolete', wonderPieceId: id })
     const once = unwrap(obsolete(state, pyramids))
-    expect(refused(obsolete(huts(once, 'Silk'), pyramids, 'req-2', true))).toBe('ASSISTED_ACTION_REJECTED')
-    // Nothing was spent by a refusal
-    expect(hasHut(market.state, 'Silk')).toBe(true)
-    expect(market.state.assistedActions).toHaveLength(0)
-    expect(refused(press(state, 'monarchy', { mode: 'obsolete' }))).toBe('ASSISTED_ACTION_REJECTED')
+    refusedUntouched(huts(once, 'Silk'), { mode: 'obsolete', wonderPieceId: pyramids }, 'req-2', true)
+    refusedUntouched(state, { mode: 'obsolete' })
+    // A good press on the same kind of state does spend the Silk, so the checks above are not vacuous
+    expect(hasHut(unwrap(obsolete(market.state, pyramids)), 'Silk')).toBe(false)
   })
 
   it('goes through the board history like the hand-made disable, and a replay shows it', () => {
@@ -854,10 +863,10 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
   it('refuses a kill when the opponent holds no unit card, and spends nothing', () => {
     const state = ready()
     expect(unitsOf(state)).toHaveLength(0)
-    expect(refused(press(state, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))).toBe('ASSISTED_ACTION_REJECTED')
-    expect(hasHut(state, 'Silk')).toBe(true)
-    expect(state.assistedActions).toHaveLength(0)
+    refusedUntouched(state, { mode: 'kill', targetId: KARANDRAS1 })
     expect(usedKeys(state)).not.toContain('card:Monarchy')
+    // With a unit in the hand the same press spends the Silk
+    expect(hasHut(unwrap(press(drawUnits(state, KARANDRAS1, 'INFANTRY'), 'monarchy', { mode: 'kill', targetId: KARANDRAS1 })), 'Silk')).toBe(false)
   })
 
   describe('while a battle is on', () => {
@@ -875,10 +884,8 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
     it('refuses a kill with a reason, spends nothing and leaves the hand alone; obsolete is not limited', () => {
       const state = battle()
       expect(state.battle).not.toBeNull()
-      expect(refused(press(state, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))).toBe('ASSISTED_ACTION_REJECTED')
+      refusedUntouched(state, { mode: 'kill', targetId: KARANDRAS1 })
       expect(JSON.stringify(unwrapErr(press(state, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 })))).toContain('A battle is on')
-      expect(hasHut(state, 'Silk')).toBe(true)
-      expect(state.assistedActions).toHaveLength(0)
       expect(unitsOf(state)).toHaveLength(3)
       // The button says so but stays ready, since obsolete works
       expect(assistedAvailability(state, CASH1981, 'monarchy')).toMatchObject({ status: 'ready', warning: expect.stringContaining('A battle is on') })

@@ -62,6 +62,7 @@ const inDiscard = (state: GameState, name: string): boolean =>
 const handHut = (state: GameState, name: string): boolean =>
   player(state).items.some((item) => item.kind === 'hut' && item.name === name && !item.used)
 
+const NO_WONDER_WARNING = 'No ancient or medieval wonder is owned by a player, so there is none to obsolete.'
 const GENEROUS = 'A Generous Gift'
 const PRINCELY = 'A Princely Gift'
 const AFAR = 'A Gift from Afar'
@@ -238,7 +239,8 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
   it('names are a preference: other tokens pay before any card is played', () => {
     // Silk hut, Wheat hut and a Generous Gift; Iron and Wheat named
     const state = card(withHutInHand(withHutInHand(cmTurn('Gunpowder'), 'Silk').state, 'Wheat').state, GENEROUS)
-    expect((assistedAvailability(state, CASH1981, 'gunpowder') as { warning?: string }).warning ?? '').not.toContain('Not enough resource tokens')
+    // Only the missing wonder is mentioned: no card would be played
+    expect((assistedAvailability(state, CASH1981, 'gunpowder') as { warning?: string }).warning).toBe(NO_WONDER_WARNING)
     const paid = unwrap(gunpowder(state, ['Iron', 'Wheat']))
     expect(handHut(paid, 'Silk')).toBe(false)
     expect(handHut(paid, 'Wheat')).toBe(false)
@@ -290,7 +292,8 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
 
   it('tokens are used before any card is, across both resources', () => {
     const state = card(withHutInHand(withHutInHand(cmTurn('Gunpowder'), 'Silk').state, 'Wheat').state, GENEROUS)
-    expect((assistedAvailability(state, CASH1981, 'gunpowder') as { warning?: string }).warning ?? '').not.toContain('Not enough resource tokens')
+    // Only the missing wonder is mentioned: no card would be played
+    expect((assistedAvailability(state, CASH1981, 'gunpowder') as { warning?: string }).warning).toBe(NO_WONDER_WARNING)
     const paid = unwrap(gunpowder(state, ['Silk', 'Wheat']))
     expect(inHand(paid, GENEROUS)).toBe(true)
   })

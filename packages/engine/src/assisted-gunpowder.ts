@@ -8,8 +8,8 @@
  * - `obsolete` (`wonderPieceId`): an ANCIENT or MEDIEVAL wonder that a player owns and that is not disabled is marked disabled,
  *   as Monarchy does (`disableWonder`); modern wonders are not eligible.
  * - `destroy` (`buildingPieceId`): any building on a map square, whoever's, the player's own included, is removed from the
- *   board. The undo puts it back exactly, unless the piece is on the board again or another building or wonder now stands on
- *   its square.
+ *   board. The undo puts it back exactly, unless the piece is on the board again or another building, wonder, city or city-state
+ *   now stands on its square.
  * Nothing is spent when the chosen target is not eligible.
  */
 
@@ -18,7 +18,7 @@ import { blocked, placeBack } from './assisted-core.js'
 import { disableWonder, enableWonder, techAbility } from './assisted-tech-abilities.js'
 import { destroyableBuildingsOf } from './destroy-buildings.js'
 import type { DestroyableBuilding } from './destroy-buildings.js'
-import { mapCellOf } from './blockade.js'
+import { cityCenterCells, mapCellOf } from './blockade.js'
 import { obsoletableWondersOf } from './obsolete-wonders.js'
 import type { ObsoletableWonder } from './obsolete-wonders.js'
 import { err, ok } from './result.js'
@@ -96,7 +96,7 @@ export const gunpowder = techAbility<'gunpowder', Plan>({
       state: removed.value,
       said:
         `, destroying ${building.label} on ${building.square}` +
-        (building.ownerUsername === null ? ' (in no player\'s outskirts)' : ` (in ${building.ownerUsername}'s outskirts)`),
+        (building.ownerUsername === null ? ' (in no single player\'s outskirts)' : ` (in ${building.ownerUsername}'s outskirts)`),
       historyIds: [entry.id],
       effect: { kind: 'gunpowder', spent, mode: 'destroy', building: { piece, label: building.label, square: building.square, historyId: entry.id } },
     })
@@ -113,14 +113,16 @@ export const gunpowder = techAbility<'gunpowder', Plan>({
     if (state.board.pieces.some((piece) => piece.id === building.piece.id)) {
       return err(`${building.label} is on the board again, so the destruction cannot be taken back.`)
     }
-    // Another building or a wonder on the same square would be stacked on: a square holds one
+    // Another building, a wonder, a city or a city-state on the same square would be stacked on: a square holds one (other overlaps
+    // and the building supply are not checked, limitations.md)
     const where = mapCellOf(state.board, building.piece)
     const taken = where !== null && state.board.pieces.some((piece) => {
-      if (piece.category !== 'building' && piece.category !== 'wonder') return false
+      if (piece.category === 'city') return (cityCenterCells(state.board, piece) ?? []).some((cell) => cell.column === where.column && cell.row === where.row)
+      if (piece.category !== 'building' && piece.category !== 'wonder' && piece.category !== 'citystate') return false
       const cell = mapCellOf(state.board, piece)
       return cell !== null && cell.column === where.column && cell.row === where.row
     })
-    if (taken) return err(`Another building or wonder now stands on ${building.square}, so ${building.label} cannot be put back.`)
+    if (taken) return err(`A building, wonder, city or city-state now stands on ${building.square}, so ${building.label} cannot be put back.`)
     return ok({ state: placeBack(state, player, building.piece, at), said: ` and ${building.label} was put back on ${building.square}` })
   },
 })

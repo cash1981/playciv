@@ -191,10 +191,45 @@ describe('Gunpowder and Combustion args', () => {
     const after = await paid.json<View>()
     expect(after.assistedActions[0]).toMatchObject({ kind: 'gunpowder', status: 'applied' })
     // The names are a preference: no Silk is held, so the other token (Wheat) pays for it
-    expect(after.assistedActions[0]?.text).toMatch(/spent Iron and Wheat, destroying Library on E5 \(in no player's outskirts\)/)
+    expect(after.assistedActions[0]?.text).toMatch(/spent Iron and Wheat, destroying Library on E5 \(in no single player's outskirts\)/)
     expect(entryOf(after, 'gunpowder')?.status).toBe('used')
     const state = await repo.findGame(t.gameId)
     expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron' || piece.assetId === 'resources/wheat' || piece.id === library)).toBe(false)
+  })
+
+  it('obsolete disables an owned ancient or medieval wonder through the routes, and the other player sees the result and no effect', async () => {
+    const t = await table('guno', 'Gunpowder', ['resources/iron', 'resources/wheat'])
+    expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'TRADE' })).status).toBe(200)
+    const placed: string[] = []
+    for (const [index, assetId] of ['wonders/pyramids', 'wonders/bigben'].entries()) {
+      const response = await post(t.starter, `/api/games/${t.gameId}/board/pieces`, { assetId, x: 40, y: 700 + index * 90 })
+      expect(response.status).toBe(200)
+      placed.push(((await response.json()) as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find((piece) => piece.assetId === assetId)?.id ?? '')
+    }
+    const [pyramids, bigBen] = placed
+    if (pyramids === undefined || bigBen === undefined) throw new Error('wonders not placed')
+    const stored = await repo.findGame(t.gameId)
+    if (stored === undefined) throw new Error('game missing')
+    await repo.saveGame({
+      ...stored,
+      board: { ...stored.board, pieces: stored.board.pieces.map((piece) => ([pyramids, bigBen].includes(piece.id) ? { ...piece, ownerId: t.otherId } : piece)) },
+    })
+    const before = await view(t.gameId, t.starter)
+    // A modern wonder is not eligible: refused with nothing spent
+    const modern = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-m', rev: before.rev, args: { resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: bigBen } })
+    expect(modern.status).toBe(400)
+    expect(await modern.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+
+    const paid = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: pyramids } })
+    expect(paid.status).toBe(200)
+    const after = await paid.json<View & { board: { pieces: { id: string; ownerId?: string | null; disabled?: boolean }[] } }>()
+    expect(after.assistedActions[0]?.text).toMatch(/used Gunpowder: spent Iron and Wheat, obsoleting The Pyramids of .*: the wonder is disabled/)
+    expect(after.board.pieces.find((piece) => piece.id === pyramids)).toMatchObject({ ownerId: null, disabled: true })
+    const theirs = await view(t.gameId, t.other)
+    expect(JSON.stringify(theirs)).not.toContain('"effect"')
+    expect((theirs as unknown as { board: { pieces: { id: string; disabled?: boolean }[] } }).board.pieces.find((piece) => piece.id === pyramids)?.disabled).toBe(true)
+    expect((await repo.findGame(t.gameId))?.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(false)
   })
 
   it('refuses a target that is not eligible with nothing spent, and the button is not usable with nothing to do', async () => {

@@ -375,7 +375,7 @@ describe('Gunpowder (Any 2, City Management)', () => {
     expect(hasHut(paid, 'Iron')).toBe(false)
     expect(hasHut(paid, 'Wheat')).toBe(false)
     expect(paid.log.at(-1)?.publicLog).toContain('used Gunpowder: spent Iron and Wheat')
-    expect(paid.log.at(-1)?.publicLog).toMatch(/^cash1981 used Gunpowder: spent Iron and Wheat, destroying Library on E5 \(in no player's outskirts\)$/)
+    expect(paid.log.at(-1)?.publicLog).toMatch(/^cash1981 used Gunpowder: spent Iron and Wheat, destroying Library on E5 \(in no single player's outskirts\)$/)
     expect(assistedAvailability(paid, CASH1981, 'gunpowder').status).toBe('used')
     expect(paid.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'gunpowder' })
   })
@@ -395,16 +395,19 @@ describe('Gunpowder (Any 2, City Management)', () => {
     expect(hasHut(paid, 'Iron')).toBe(false)
   })
 
-  it('refuses a payment that is not exactly two known resources', () => {
+  it('refuses a payment that is not exactly two known resources, though the mode and the target are fine', () => {
     const state = rich()
-    for (const resources of [['Iron'], ['Iron', 'Wheat', 'Silk'], ['Iron', 'Gold'], [1, 2]]) {
-      expect(unwrapErr(press(state, 'gunpowder', 'req-1', { resources })).kind).toBe('ASSISTED_ACTION_REJECTED')
+    // `press` adds a mode and a target to a payload that has none; these carry theirs, so only the names are wrong
+    const target = { mode: 'destroy', buildingPieceId: state.board.pieces.find((piece) => piece.category === 'building')?.id }
+    const before = JSON.stringify(state)
+    for (const resources of [['Iron'], ['Iron', 'Wheat', 'Silk'], ['Iron', 'Gold'], [1, 2], 'Iron', undefined]) {
+      expect(unwrapErr(press(state, 'gunpowder', 'req-1', { resources, ...target })).kind).toBe('ASSISTED_ACTION_REJECTED')
     }
     expect(unwrapErr(press(state, 'gunpowder', 'req-1')).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrapErr(press(state, 'gunpowder', 'req-1', { resources: 'Iron' })).kind).toBe('ASSISTED_ACTION_REJECTED')
-    // A refusal pays nothing
-    expect(hasHut(state, 'Iron')).toBe(true)
-    expect(state.assistedActions).toHaveLength(0)
+    // The state that was refused held the tokens and still does; and a payload with good names does pay them
+    expect(hasHut(state, 'Iron') && hasHut(state, 'Wheat')).toBe(true)
+    expect(JSON.stringify(state)).toBe(before)
+    expect(hasHut(unwrap(press(state, 'gunpowder', 'req-1', { resources: ['Iron', 'Wheat'], ...target })), 'Iron')).toBe(false)
   })
 
   it('is once per turn, with a confirmed repeat', () => {
@@ -436,6 +439,11 @@ describe('Gunpowder (Any 2, City Management)', () => {
     // Two tokens and the building the action destroys
     expect(piecesPaid.board.pieces).toHaveLength(pieces.board.pieces.length - 3)
     expect(undoLastBoardChange(piecesPaid, CASH1981)).toMatchObject({ ok: false })
+    // One step further back is protected too: the removals of the spent tokens are not the board Undo's to take, whichever is last
+    const lastEntry = piecesPaid.board.history.at(-1)
+    const withoutLast: GameState = { ...piecesPaid, board: { ...piecesPaid.board, history: piecesPaid.board.history.slice(0, -1) } }
+    expect(lastEntry?.change.kind).toBe('remove')
+    expect(undoLastBoardChange(withoutLast, CASH1981)).toMatchObject({ ok: false })
     const piecesBack = voted(piecesPaid, 'req-p')
     expect([...piecesBack.board.pieces].map((candidate) => candidate.id).sort()).toEqual(before)
   })
