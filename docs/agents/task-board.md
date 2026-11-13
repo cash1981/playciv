@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### unit-tech-abilities
-
-- **Owner:** orchestrator (Sonnet 5.5)
-- **Branch:** `feat/unit-tech-abilities` (worktree `../civ-unit-tech-abilities`, PR 346)
-- **Brief:** `docs/agents/tasks/unit-tech-abilities.md`
-- **Status:** in progress (slice 2: the rest of #327)
-- **Claimed paths:** `packages/engine/src/assisted*`, `city-actions.ts`, `city-production.ts`, `coins.ts`, `state.ts`, `packages/server/src/routes/`, `packages/web/src/lib/api.ts`, `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`
-- **Notes:** claims `state.ts` (`PlayerView` shape) and `api.ts` shared resources
+_None._
 
 ## Format
 

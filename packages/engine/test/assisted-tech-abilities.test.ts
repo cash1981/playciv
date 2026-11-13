@@ -806,7 +806,7 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
       const used = unwrap(press({ ...ended, rng: seed }, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
       expect(unitsOf(used)).toHaveLength(2)
       expect(used.discardedItems.some((item) => fought.includes(item.id))).toBe(true)
-      // The card has left the hand: End battle can still be undone and the battle comes back without it
+      // The card has left the hand: End battle can still be undone; the battle comes back as it was and the hand without the card
       const back = unwrap(undoEndBattle(used, { playerId: CASH1981 }))
       expect(back.battle).not.toBeNull()
       expect(unitsOf(back)).toHaveLength(2)
