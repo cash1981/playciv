@@ -888,6 +888,59 @@ Source: `engine/src/assisted-tech-wounds.ts`, `assisted-gunpowder.ts`, `assisted
 `AssistedActions.tsx`; tests `assisted-unit-techs`, `unit-tech-levels`, `assisted-unit-techs-api`,
 `BattlePanel.test.tsx`, `TechPanelAssisted.test.tsx`.
 
+### Tech resource abilities (#327)
+
+Second slice (human, 2026-11-13): Animal Husbandry, Construction, Banking, Plastics, Pottery, Philosophy, Education, Horseback
+Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy and Printing Press were already automated
+(`coinPurchase`, covered by `assisted.test.ts`). Batch 2 (Metalworking, Atomic Theory, Bureaucracy) is separate.
+
+- **One shape** (`assisted-tech-abilities.ts`, `techAbility`): tech revealed, phase open, `card:<tech>` once per turn with the
+  confirmed repeat, payload checked BEFORE anything is paid (a refusal spends nothing), every payment through the shared
+  layer (token first, culture cards only for the shortfall, the Gift from Afar note), then the ability's own part. An undo
+  takes that part back or refuses with a reason, then returns exactly what was paid. The web asks through one picker per
+  kind (`ASSISTED_TECH_PICKERS` in `assisted-techs.ts`, a leaf table the web reads); the server parsers are strict and the
+  engine decides legality.
+- **Production boosts** (Wheat, City Management; +3, +5, +7, +10): the player names one of their cities. The bonus is not
+  stored on the city: `cityProductionsOf` sums the applied, not undone, records of this turn that name the city (like the
+  Communism lock), so the undo vote removes it and it ends with the turn. It is in `boost`, `estimate`, the Building Program
+  figure (added after the doubling, as every modifier) and appears as a per-city modifier. A number set by hand does not
+  include it, so a Build adds it to that number too. It is not used up by a Build: the city produces that much for the turn,
+  so a second Build in it counts it again. Undoing a boost after a Build used it does not refund that Build (limitations).
+  Animal Husbandry's heal and Plastics' Start of Turn build are unchanged.
+- **Pottery** (Any 2): one coin on its counter, capacity 4 (+2 with an active Internet, as Democracy's purchase). The undo
+  refuses when the counter holds no coin (it was edited by hand).
+- **Philosophy** (Any 3): a Great Person is gained exactly as a culture advance's Great Person space gains one
+  (`gainGreatPerson`: supply, faceup discard of an exhausted type, the marker taken into the player's area). With no marker
+  left the button is blocked and nothing is paid. The card is private: the public line names the marker type and the item
+  number, the name only the player's own log. The undo puts the card back in the deck, shuffled twice as every undo of a
+  draw does, and takes the marker; it is refused once the card has left the hand. (The brief said "at its place": the shared
+  convention was kept, because the owner has seen the card and a known top card would be a leak.)
+- **Education** (four different resources): read as four of the six kinds, one token each; a token of another kind never
+  stands in, and a card pays only a kind without a token. The free tech reuses `TechGrant` with `phase: 'CM'`: `revealTech`
+  spends a grant whose phase equals the open phase (no phase means Start of Turn), so a Start of Turn grant is not spent in
+  City Management and the reverse. The player chooses and reveals the tech in the tech tree; the grant is listed in the
+  Start of Turn view. The undo is refused once a tech was learned with it (the existing rule). Education's coin for building
+  a wonder stays the manual counter in `coins.ts` (covered by `coin-sources.test.ts`).
+- **Horseback Riding** (Silk, Trade phase): +9 trade for the player, +6 for another player they name, each stopped at the end
+  of the trade track; what was added is what an undo takes off, and the undo is refused when either has spent it.
+- **Mysticism** (Spy): the opponent loses one coin token on the counter the player names. The counters that hold tokens are
+  the ones a coin can be invested from (`INVESTABLE_COIN_SOURCES`; printed coins and wonder coins are not tokens), read from
+  the public status board. Refused when the opponent holds no coin there. The undo gives the coin back.
+- **Cancels** (Writing: Spy, City Management; Civil Service and Mass Media: Spy, Any Time; Mass Media says the resources of the
+  cancelled ability are lost): the Spy is paid, the other player and free text for what is cancelled are logged. The game
+  has no pending action, so it never blocks the cancelled thing: the other player undoes it with the vote or corrects it by
+  hand, and the line says so. Writing needs the canceller's own City Management to be open.
+- **Monarchy** (Silk, City Management): `obsolete` is only logged (obsolescence is not tracked). `kill` takes one random
+  unit card from the chosen opponent's hand with the game's seed and discards it. A unit already placed in an arena is not
+  a standing force and cannot be picked. A discard is open information, so the line names the unit in full with its item
+  number as Gustavus Adolphus' discards do, and only after the discard; the rest of the hand stays private. Refused, with
+  nothing paid, when the opponent holds no such card. The undo returns the card while it is still in the discard pile.
+
+Source: `engine/src/assisted-tech-abilities.ts`, `assisted-resources.ts` (`spendDistinctResources`), `city-production.ts`
+(`boost`), `build-options.ts`, `actions/player.ts` (`revealTech`), `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
+`web/src/views/AssistedActions.tsx` (`TechPickerForm`); tests `assisted-tech-abilities`, `assisted-tech-abilities-api`,
+`TechPanelAssisted.test.tsx`.
+
 ### Tech in the Research tab
 
 The Tech content (pyramid, picker, hidden-tech controls) renders in the Research
