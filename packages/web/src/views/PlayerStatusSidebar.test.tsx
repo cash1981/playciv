@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs'
+
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -38,6 +40,7 @@ const aliceStats: PlayerStats = {
 
 function makeView(overrides: { readonly opponent?: Record<string, unknown>; readonly you?: null } = {}): PlayerView {
   return {
+    active: true,
     activeTurn: null,
     board: { pieces: [] },
     you:
@@ -187,6 +190,30 @@ describe('PlayerStatusSidebar', () => {
 
     expect(within(block('Bob')).getByText('turn')).toBeTruthy()
     expect(within(block('Alice')).queryByText('turn')).toBeNull()
+  })
+
+  it('shows no turn tag once the game has ended, although activeTurn is still set', () => {
+    const view = {
+      ...makeView(),
+      active: false,
+      activeTurn: {
+        username: 'Bob',
+        turnNumber: 4,
+        waitingFor: [{ username: 'Bob', phase: 'trade' }],
+      },
+    } as unknown as PlayerView
+    render(<PlayerStatusSidebar view={view} />)
+
+    expect(screen.queryByText('turn')).toBeNull()
+  })
+
+  it('wraps long free-text values instead of truncating them', () => {
+    const css = readFileSync('src/views/PlayerStatusSidebar.css', 'utf8').replaceAll('\r\n', '\n')
+    const rule = /\.pss-value \{[^}]*\}/.exec(css)?.[0] ?? ''
+    expect(rule).toContain('white-space: normal')
+    expect(rule).toContain('overflow-wrap: anywhere')
+    expect(rule).not.toContain('text-overflow')
+    expect(rule).not.toContain('nowrap')
   })
 
   it('is read-only: no inputs, buttons or api calls', () => {

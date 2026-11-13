@@ -158,7 +158,8 @@ function leaderUrl(civilizationName: string | null, color: string | null): strin
 }
 
 function blocksOf(view: PlayerView): Block[] {
-  const focus = focusPlayer(view.activeTurn)
+  // An ended game keeps its last activeTurn, so no one is on turn once it is over.
+  const focus = view.active ? focusPlayer(view.activeTurn) : null
   const onTurn = (username: string): boolean => focus?.username === username
   const blocks: Block[] = []
   if (view.you !== null) {

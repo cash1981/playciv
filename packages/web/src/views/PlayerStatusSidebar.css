@@ -100,9 +100,11 @@
   font-size: 0.85rem;
   font-weight: 600;
   line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: center;
+  /* Movement expressions and Combat hand size are free text: wrap them rather
+     than cut them off, so the whole value stays readable. */
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .pss-locked-stat .pss-value,
