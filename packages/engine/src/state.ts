@@ -441,6 +441,11 @@ export type AssistedActionKind =
   | 'harvest'
   | 'communism'
   | 'steamPower'
+  // The unit techs of issue #327: Iron wounds in a battle, Gunpowder's Any 2 and Combustion's once-per-turn destruction
+  | 'mathematics'
+  | 'ballistics'
+  | 'gunpowder'
+  | 'combustion'
   // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
   | `militaryTradition:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
@@ -767,6 +772,26 @@ export type AssistedEffect =
       readonly kind: 'communism'
       readonly square: { readonly column: number; readonly row: number }
       readonly spent: SpentResource
+    }
+  | {
+      /** Mathematics or Ballistics: the Iron paid and the wounds it owes in the battle (`Battle.techWounds`). */
+      readonly kind: 'techWounds'
+      readonly tech: string
+      readonly wounds: number
+      readonly battleId: string
+      readonly spent: SpentResource
+    }
+  | {
+      /** Gunpowder: the two tokens paid, in the order the player named them. */
+      readonly kind: 'gunpowder'
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /** Combustion: the square an army stands on and what is to be destroyed there, for the log and the undo line. */
+      readonly kind: 'combustion'
+      readonly square: { readonly column: number; readonly row: number }
+      readonly walls: boolean
+      readonly subject: string
     }
   | {
       readonly kind: 'militaryTradition'

@@ -97,6 +97,11 @@ describe('the registry and the tech map', () => {
       'rationalismI',
       'rationalismII',
       'steamPower',
+      // The unit techs (issue #327)
+      'ballistics',
+      'combustion',
+      'gunpowder',
+      'mathematics',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -112,6 +117,10 @@ describe('the registry and the tech map', () => {
       'Metal Casting': 'metalCasting',
       Democracy: 'democracy',
       'Printing Press': 'printingPress',
+      Mathematics: 'mathematics',
+      Ballistics: 'ballistics',
+      Gunpowder: 'gunpowder',
+      Combustion: 'combustion',
     })
     expect(ASSISTED_TECH_ACTIONS.get('Writing')).toBeUndefined()
   })

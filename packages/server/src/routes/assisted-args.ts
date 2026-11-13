@@ -12,7 +12,9 @@ import { BUILDABLE_BUILDING_IDS, isGovernment } from '@civ/engine'
 import type {
   AssignScoutPayload,
   AssistedPayload,
+  CombustionPayload,
   CommunismPayload,
+  GunpowderPayload,
   SteamPowerPayload,
   FoundCityPayload,
   GovernmentPayload,
@@ -173,6 +175,27 @@ function parseCommunism(args: Record<string, unknown>): CommunismPayload | strin
   return { square: { column, row } }
 }
 
+function parseCombustion(args: Record<string, unknown>): CombustionPayload | string {
+  const extra = extraKeys(args, ['square'])
+  if (extra.length > 0) return `combustion takes only square, not ${extra.join(', ')}`
+  const square = wholeSquare(args['square'], 'square')
+  return typeof square === 'string' ? square : { square }
+}
+
+function parseGunpowder(args: Record<string, unknown>): GunpowderPayload | string {
+  const extra = extraKeys(args, ['resources'])
+  if (extra.length > 0) return `gunpowder takes only resources, not ${extra.join(', ')}`
+  const resources = args['resources']
+  if (
+    !Array.isArray(resources) ||
+    resources.length !== 2 ||
+    !resources.every((name) => typeof name === 'string' && name.length > 0 && name.length <= 20)
+  ) {
+    return 'resources must be a list of exactly 2 resource names'
+  }
+  return { resources: resources as readonly string[] }
+}
+
 function wholeSquare(value: unknown, name: string): { column: number; row: number } | string {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return `${name} is required`
   const record = asRecord(value)
@@ -267,6 +290,8 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['playCard', parsePlayCard],
   ['communism', parseCommunism],
   ['steamPower', parseSteamPower],
+  ['combustion', parseCombustion],
+  ['gunpowder', parseGunpowder],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['gianniniBuild', parseGianniniBuild],

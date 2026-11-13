@@ -164,3 +164,51 @@ describe('the assisted action button in the tech dialog', () => {
     expect(screen.queryByRole('button', { name: /^Use / })).toBeNull()
   })
 })
+
+describe('the unit techs in the tech dialog (issue #327)', () => {
+  const unitView = (techName: string, kind: string, status: string, reason: string, buttonText?: string): PlayerView => {
+    const base = viewOf([tech(techName, 3)])
+    return {
+      ...base,
+      you: {
+        ...base.you!,
+        availableActions: [{ ...action(kind, techName, status, reason), ...(buttonText === undefined ? {} : { buttonText }) }],
+      },
+    } as unknown as PlayerView
+  }
+
+  it('lets the player name the two resources Gunpowder pays, and sends them as args', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(viewOf([tech('Gunpowder', 3)]))
+    renderPanel(unitView('Gunpowder', 'gunpowder', 'ready', 'Ready to use.', 'Use Gunpowder (any 2 resources)'))
+    fireEvent.click(await screen.findByText('Gunpowder'))
+
+    // Nothing is paid by opening the dialog or pressing the button: the picker comes first
+    fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder (any 2 resources)' }))
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Resource 1'), { target: { value: 'Silk' } })
+    fireEvent.change(screen.getByLabelText('Resource 2'), { target: { value: 'Incense' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Pay Silk and Incense' }))
+
+    expect(send).toHaveBeenCalledTimes(1)
+    const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
+    expect([gameId, kind, rev, args]).toEqual(['game-1', 'gunpowder', 7, { resources: ['Silk', 'Incense'] }])
+  })
+
+  it('can cancel the Gunpowder picker without paying', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(viewOf([tech('Gunpowder', 3)]))
+    renderPanel(unitView('Gunpowder', 'gunpowder', 'ready', 'Ready to use.'))
+    fireEvent.click(await screen.findByText('Gunpowder'))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByLabelText('Resource 1')).toBeNull()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('shows Mathematics with the reason it is not usable outside a battle', async () => {
+    renderPanel(unitView('Mathematics', 'mathematics', 'wrong-phase', 'Used during a battle you are fighting in.'))
+    fireEvent.click(await screen.findByText('Mathematics'))
+    const button = screen.getByRole('button', { name: 'Use Mathematics' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(screen.getByRole('dialog').textContent).toContain('Used during a battle you are fighting in.')
+  })
+})

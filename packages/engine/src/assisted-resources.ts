@@ -133,3 +133,82 @@ export function returnResource(
   }
   return ok(placeBack(withPlayerHand(state, restoredPlayer), restoredPlayer, spent.piece, at))
 }
+
+// ---------------------------------------------------------------------------
+// "Any N": N resource tokens of the player's own choosing (Gunpowder; Pottery and Philosophy later)
+// ---------------------------------------------------------------------------
+
+/**
+ * The resources an "Any" payment may name: the ones `findResourceToken` can find a token for. Whether Spy and
+ * Uranium count as "Any" is not settled by a rulebook the project could read (see decisions.md); they are
+ * accepted so that a player is never blocked from paying with a token that is theirs.
+ */
+export const ANY_RESOURCES: readonly string[] = ['Incense', 'Iron', 'Silk', 'Wheat', 'Spy', 'Uranium']
+
+/** The canonical name of a resource a payload named (case and spacing are forgiven), or `undefined`. */
+export const anyResourceName = (name: unknown): string | undefined =>
+  typeof name === 'string' ? ANY_RESOURCES.find((resource) => normalize(resource) === normalize(name)) : undefined
+
+/**
+ * Whether the player holds at least `count` tokens of any resources together: each is spent from a scratch copy
+ * in turn, so the answer agrees with what paying would do (the Marie Curie substitution included).
+ */
+export function hasAnyResources(state: GameState, playerId: string, count: number): boolean {
+  let current = state
+  let found = 0
+  for (const resource of ANY_RESOURCES) {
+    for (;;) {
+      if (found >= count) return true
+      const spent = spendResource(current, playerId, resource)
+      if (!spent.ok) break
+      current = spent.value.state
+      found += 1
+    }
+  }
+  return found >= count
+}
+
+export interface SpendAnyOutcome {
+  readonly state: GameState
+  /** Exactly what was spent, in the order named, so an undo can put the same tokens back. */
+  readonly spent: readonly SpentResource[]
+}
+
+/**
+ * Pays one token for each name in `resources`, in order; naming a resource twice pays two tokens of it.
+ * `NO_RESOURCE` carries the first name the player cannot pay, and nothing is spent then.
+ */
+export function spendAnyResources(
+  state: GameState,
+  playerId: string,
+  resources: readonly string[],
+  at?: string,
+): Result<SpendAnyOutcome, { readonly missing: string }> {
+  let current = state
+  const spent: SpentResource[] = []
+  for (const resource of resources) {
+    const paid = spendResource(current, playerId, resource, at)
+    if (!paid.ok) return err({ missing: resource })
+    current = paid.value.state
+    spent.push(paid.value.spent)
+  }
+  return ok({ state: current, spent })
+}
+
+/** Puts back every token of {@link spendAnyResources}, the last paid first. */
+export function returnResources(
+  state: GameState,
+  player: Playerhand,
+  spent: readonly SpentResource[],
+  at: string | null,
+): Result<GameState, EngineError> {
+  let current = state
+  let holder = player
+  for (const token of [...spent].reverse()) {
+    const returned = returnResource(current, holder, token, at)
+    if (!returned.ok) return returned
+    current = returned.value
+    holder = playerOf(current, player.playerId) ?? holder
+  }
+  return ok(current)
+}

@@ -1696,6 +1696,9 @@ const upgradeBuildings: AssistedActionDefinition = {
 
 import { communism } from './assisted-communism.js'
 import { steamPower } from './assisted-steam-power.js'
+import { ballistics, mathematics } from './assisted-tech-wounds.js'
+import { gunpowder } from './assisted-gunpowder.js'
+import { combustion } from './assisted-combustion.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 
 /** Every assisted action, in the order the projection lists them. */
@@ -1705,6 +1708,10 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   coinPurchase('printingPress'),
   communism,
   steamPower,
+  mathematics,
+  ballistics,
+  gunpowder,
+  combustion,
   cultureAdvance,
   cultureAdvanceSkip,
   chooseReward,

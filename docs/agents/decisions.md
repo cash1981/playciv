@@ -807,6 +807,42 @@ Source: `engine/src/galileo.ts`, `card-movement.ts`, `empty-square.ts`,
 (`CardSquare`), `web/src/views/mapPick.ts`, `PlayableCards.tsx`; tests
 `galileo`, `card-movement`, `hannibal`, `steam-power`.
 
+### Unit tech abilities (#327)
+
+First slice of automating the tech resource abilities. Scope: Mathematics, Ballistics, Gunpowder, Combustion
+(human, 2026-11-13); Metalworking and the other techs are later slices.
+
+- **Level raise on reveal** is existing behaviour (`revealTech`, `UNIT_LEVEL_TECHS`; never lowers, only a hidden
+  copy counts); `unit-tech-levels.test.ts` covers every unit tech and Flight.
+- **Mathematics (3 wounds) and Ballistics (6), Iron, Battle:** `mathematics` / `ballistics` are assisted
+  actions (phase `ANY`, group "Battle", usage key `card:<tech>`, once per turn with the usual confirmed repeat).
+  Ready only in a battle the player fights in (the barbarian controller does not), with the tech revealed and an
+  Iron token. Pressing pays the Iron and records the wounds owed in `Battle.techWounds`; the player deals them
+  one click at a time with `techWound` (`POST /battle/arena/tech-wound`, body `tech` and `arenaUnitId`), modelled
+  on Zhukov: -1 health, a unit at 0 is killed, own and killed units are refused, nothing beyond what was paid.
+  "Up to": the player may stop; what is left is lost when the battle ends. Undo by vote returns the Iron and
+  removes the owed wounds, and is refused once a wound has been dealt (as for Zhukov; health is corrected by
+  hand). The Battle panel lists the button and the wound buttons; the tech dialog and phase tabs show the button.
+- **Gunpowder (Any 2, City Management):** pays two tokens the player names (`payload.resources`, exactly two
+  names; the same resource twice needs two tokens), through `spendAnyResources` in `assisted-resources.ts`,
+  reusable for Pottery (Any 2) and Philosophy (Any 3). The web tech dialog asks for the two resources before
+  paying. Undo returns exactly the tokens spent. The effect (obsolete an ancient or medieval wonder, or destroy a
+  building of the player's choice) stays manual: obsolescence is not tracked in the engine and the choice is the
+  player's; the log line says so. **Open rules question:** which resources count as "Any" could not be checked
+  (the rulebooks are not readable in this environment); Incense, Iron, Silk, Wheat, Spy and Uranium are accepted.
+- **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
+  no-cost assisted action in the open Movement phase (group "Movement abilities"): the player picks a square
+  where one of their armies stands on a building or on a walled city (`combustionTargetAt`); the log line names
+  the building or "the walls of ..." and says to remove it by hand. **Manual:** removing the building, turning
+  the walled city marker back to its unwalled side, and judging that the army really ended its movement there or
+  attacked the city. Undo by vote only frees the use for the turn.
+
+Source: `engine/src/assisted-tech-wounds.ts`, `assisted-gunpowder.ts`, `assisted-combustion.ts`, `combustion.ts`,
+`assisted-resources.ts`, `battle-cards.ts` (`TECH_WOUNDS`), `actions/arena.ts` (`techWound`),
+`server/src/routes/arena.ts`, `assisted-args.ts`, `web/src/views/GameView.tsx` (Battle panel),
+`AssistedActions.tsx`; tests `assisted-unit-techs`, `unit-tech-levels`, `assisted-unit-techs-api`,
+`BattlePanel.test.tsx`, `TechPanelAssisted.test.tsx`.
+
 ### Tech in the Research tab
 
 The Tech content (pyramid, picker, hidden-tech controls) renders in the Research

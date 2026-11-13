@@ -268,6 +268,16 @@ export interface CommunismPayload {
   readonly square: CardSquare
 }
 
+/** What `combustion` carries: the square an army of the player stands on, with the building or walls to destroy. */
+export interface CombustionPayload {
+  readonly square: CardSquare
+}
+
+/** What `gunpowder` carries: the two resource tokens to pay, by name, in the player's own choice. */
+export interface GunpowderPayload {
+  readonly resources: readonly string[]
+}
+
 /** What `steamPower` carries: the square whose figures move, and the water square they move to. */
 export interface SteamPowerPayload {
   readonly from: CardSquare
@@ -303,6 +313,8 @@ export type AssistedPayload =
   | InvestPayload
   | GianniniBuildPayload
   | CommunismPayload
+  | CombustionPayload
+  | GunpowderPayload
   | SteamPowerPayload
   | FeudalismHarvestPayload
   | FoundCityPayload

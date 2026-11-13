@@ -19,6 +19,12 @@ vi.mock('../lib/api.js', () => ({
     setArenaUnitStat: vi.fn(),
     sunTzuPass: vi.fn(),
     zhukovWound: vi.fn(),
+    techWound: vi.fn(),
+    performAction: vi.fn(),
+  },
+  // The assisted action buttons of the Battle panel read it when a press fails
+  ApiError: class ApiError extends Error {
+    status = 0
   },
 }))
 
@@ -583,5 +589,80 @@ describe('BattlePanel Zhukov', () => {
     const unplayed = render(<BattlePanel gameId="game" busy={false} run={run} view={zhukovView([], true)} />)
     fireEvent.click(unplayed.getByText('Battle'))
     expect(unplayed.queryByText(/Georgy Zhukov: deal/)).toBeNull()
+  })
+})
+
+describe('BattlePanel Mathematics and Ballistics', () => {
+  // The panel remembers whether it was left open, so each test starts closed and the click below opens it
+  beforeEach(() => localStorage.clear())
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  const unit = (id: string, side: 'attacker' | 'defender', killed: boolean, position: number) => ({
+    id, side, position, unit: { ...infantry, id: `card-${id}` }, attack: 1, health: 3, placedBy: side === 'attacker' ? 'me' : 'other',
+    rotation: 0, killed, arrival: null,
+  })
+  const action = (kind: string, label: string, status: string) => ({
+    action: kind, label, phase: 'ANY', group: 'Battle', status, reason: `${label} is ${status}`, repeatable: true, techName: label, buttonText: `Use ${label} (Iron)`,
+  })
+  const techView = (techWounds: object[], availableActions: object[], combatant = true): PlayerView =>
+    ({
+      ...view,
+      you: { ...view.you, playerId: combatant ? 'me' : 'bystander', stats: { trade: 5 }, availableActions },
+      battle: {
+        ...view.battle,
+        arena: [unit('a1', 'attacker', false, 0), unit('d1', 'defender', false, 1), unit('d2', 'defender', true, 2)],
+        techWounds,
+      },
+    }) as unknown as PlayerView
+
+  it('shows the Mathematics button, which pays the Iron through the assisted action', async () => {
+    vi.mocked(api.performAction).mockResolvedValue(view)
+    const { getByText, getByRole } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={techView([], [action('mathematics', 'Mathematics', 'ready')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByRole('group', { name: 'Mathematics wounds' })).toBeTruthy()
+    fireEvent.click(getByText('Use Mathematics (Iron)'))
+    expect(api.performAction).toHaveBeenCalledWith('game', 'mathematics', expect.any(String), 4)
+  })
+
+  it('offers a wound on each living enemy unit while wounds are owed, and sends the tech and the unit', () => {
+    vi.mocked(api.techWound).mockResolvedValue(view)
+    const owed = { playerId: 'me', tech: 'Ballistics', total: 6, dealt: 2, actionId: 'x' }
+    const { getByText, queryAllByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={techView([owed], [action('ballistics', 'Ballistics', 'used')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByText(/Ballistics: deal up to 4 wounds, one to an enemy unit at a time/)).toBeTruthy()
+    // The killed enemy unit and own units are not offered
+    expect(queryAllByText(/^Wound /)).toHaveLength(1)
+    fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
+    expect(api.techWound).toHaveBeenCalledWith('game', 'Ballistics', 'd1', 4)
+  })
+
+  it('lists nothing without the tech, for a player outside the battle, or for a spectator', () => {
+    const none = render(<BattlePanel gameId="game" busy={false} run={run} view={techView([], [action('mathematics', 'Mathematics', 'not-owned')])} />)
+    fireEvent.click(none.getByText('Battle'))
+    expect(none.queryByText(/Mathematics/)).toBeNull()
+    cleanup()
+    const bystander = render(<BattlePanel gameId="game" busy={false} run={run} view={techView([], [action('mathematics', 'Mathematics', 'ready')], false)} />)
+    fireEvent.click(bystander.getByText('Battle'))
+    expect(bystander.queryByText(/Mathematics/)).toBeNull()
+    cleanup()
+    const spectator = render(<BattlePanel gameId="game" busy={false} run={run} readOnly view={techView([{ playerId: 'me', tech: 'Mathematics', total: 3, dealt: 0, actionId: 'x' }], [action('mathematics', 'Mathematics', 'used')])} />)
+    fireEvent.click(spectator.getByText('Battle'))
+    expect((spectator.queryAllByText(/^Wound /)[0] as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('stops offering wounds once all have been dealt', () => {
+    const spent = { playerId: 'me', tech: 'Mathematics', total: 3, dealt: 3, actionId: 'x' }
+    const { getByText, queryByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={techView([spent], [action('mathematics', 'Mathematics', 'used')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(queryByText(/Mathematics: deal up to/)).toBeNull()
   })
 })

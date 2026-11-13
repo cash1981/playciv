@@ -16,7 +16,9 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import {
+  ANY_RESOURCES,
   brandenburgForbiddenCells,
+  combustionTargets,
   isMapCell,
   itemName,
   occupancyOf,
@@ -241,6 +243,8 @@ export function AssistedActionButton({
   const state = view.you?.availableActions?.find((candidate) => candidate.action === action)
   const mapPicker = useMapPicker()
   const [hint, setHint] = useState<string | null>(null)
+  // Gunpowder: the two resources the player names before paying ("Any 2"), or `null` while the picker is closed
+  const [anyPick, setAnyPick] = useState<readonly [string, string] | null>(null)
   if (view.you === null || state === undefined) return null
 
   const ready = state.status === 'ready'
@@ -360,7 +364,62 @@ export function AssistedActionButton({
     })
   }
 
+  const pressCombustion = async (): Promise<void> => {
+    if (mapPicker === null || view.you === null) return
+    if (used && !window.confirm(usedAgainQuestion(state.label))) return
+    const targets = combustionTargets(view.board, view.you)
+    if (targets.length === 0) {
+      setHint('None of your armies stands on a building or on a walled city.')
+      return
+    }
+    setHint(null)
+    onBeforePress?.()
+    const picked = await mapPicker.begin({
+      title: 'the Combustion square',
+      cells: targets.map((target) => ({ column: target.column, row: target.row, label: squareLabel(target) })),
+      describeCell: (cell) => {
+        const target = targets.find((candidate) => candidate.column === cell.column && candidate.row === cell.row)
+        return `Destroy ${target?.subject ?? `what stands on ${cell.label}`} with Combustion`
+      },
+    })
+    if (picked === null) return
+    const square = { column: picked.column, row: picked.row }
+    const key = `${gameId}:${playerId}:combustion:${square.column},${square.row}`
+    if (inFlight.has(key)) return
+    void pressOnce(
+      key,
+      run,
+      (requestId) => api.actionWithArgs(gameId, 'combustion', requestId, rev, { square }, used),
+      view,
+    ).then((done) => {
+      if (done) onDone?.()
+    })
+  }
+
+  const payGunpowder = (resources: readonly [string, string]): void => {
+    setAnyPick(null)
+    const key = `${gameId}:${playerId}:gunpowder:${resources.join(',')}`
+    if (inFlight.has(key)) return
+    void pressOnce(
+      key,
+      run,
+      (requestId) => api.actionWithArgs(gameId, 'gunpowder', requestId, rev, { resources }, used),
+      view,
+    ).then((done) => {
+      if (done) onDone?.()
+    })
+  }
+
   const press = (): void => {
+    if (action === 'gunpowder') {
+      if (used && !window.confirm(usedAgainQuestion(state.label))) return
+      setAnyPick(['Iron', 'Wheat'])
+      return
+    }
+    if (action === 'combustion') {
+      void pressCombustion()
+      return
+    }
     if (action === 'communism') {
       void pressCommunism()
       return
@@ -400,7 +459,7 @@ export function AssistedActionButton({
       <button
         type="button"
         className={className}
-        disabled={busy || readOnly || !pressable || ((action === 'communism' || action === 'steamPower') && mapPicker === null)}
+        disabled={busy || readOnly || !pressable || ((action === 'communism' || action === 'steamPower' || action === 'combustion') && mapPicker === null)}
         title={shownReason}
         onClick={press}
       >
@@ -420,6 +479,32 @@ export function AssistedActionButton({
       {hint !== null && (
         <span role="status" className="assisted-warning">
           {hint}
+        </span>
+      )}
+      {anyPick !== null && (
+        <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${state.label}`}>
+          {([0, 1] as const).map((index) => (
+            <select
+              key={index}
+              aria-label={`Resource ${index + 1}`}
+              value={anyPick[index]}
+              onChange={(event) =>
+                setAnyPick(index === 0 ? [event.target.value, anyPick[1]] : [anyPick[0], event.target.value])
+              }
+            >
+              {ANY_RESOURCES.map((resource) => (
+                <option key={resource} value={resource}>
+                  {resource}
+                </option>
+              ))}
+            </select>
+          ))}
+          <button type="button" className="small" onClick={() => payGunpowder(anyPick)}>
+            Pay {anyPick.join(' and ')}
+          </button>
+          <button type="button" className="small" onClick={() => setAnyPick(null)}>
+            Cancel
+          </button>
         </span>
       )}
     </span>

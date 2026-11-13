@@ -18,4 +18,8 @@ export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = ne
   ['Printing Press', 'printingPress'],
   ['Communism', 'communism'],
   ['Steam Power', 'steamPower'],
+  ['Mathematics', 'mathematics'],
+  ['Ballistics', 'ballistics'],
+  ['Gunpowder', 'gunpowder'],
+  ['Combustion', 'combustion'],
 ])

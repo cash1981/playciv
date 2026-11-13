@@ -1116,12 +1116,11 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       if (change.kind === 'place' && advance.marker?.pieceId === change.piece.id) return true
       if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
+    // Gunpowder pays several tokens, every other action one
+    const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (
       change.kind === 'remove' &&
-      'spent' in effect &&
-      effect.spent !== null &&
-      effect.spent.kind === 'piece' &&
-      effect.spent.piece.id === change.piece.id
+      spentTokens.some((token) => token.kind === 'piece' && token.piece.id === change.piece.id)
     )
   })
 }
