@@ -606,3 +606,89 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
     })
   })
 })
+
+describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)', () => {
+  const piece = (id: string, assetId: string, category: string, label: string, column: number, row: number) => {
+    const board = createBoard()
+    return { id, assetId, category, label, x: column * board.squareSize + 10, y: mapTop(board) + row * board.squareSize + 10, width: 80, height: 80, rotation: 0 }
+  }
+  const BLUE = {
+    playerId: 'p2', username: 'Karandras1', color: 'Blue', civilization: null, revealedTechs: [], numberOfTechsChosen: 0, pyramidPlacements: [],
+    publicHand: { units: 0, cultureCards: 0, huts: 0, villages: 0, greatPersons: 0 }, stats: { coinSources: {} },
+  }
+  const atomicView = (pieces: readonly object[], status = 'ready'): PlayerView => {
+    const base = viewOf([tech('Atomic Theory', 4)])
+    return {
+      ...base,
+      board: { ...createBoard(), pieces },
+      boardAreas: [],
+      opponents: [BLUE],
+      you: { ...base.you!, color: 'Red', items: [], cities: [], availableActions: [action('atomicTheory', 'Atomic Theory', status, 'Ready to use.')] },
+    } as unknown as PlayerView
+  }
+  const MAP = [
+    piece('cap', 'cities/bluecapital2', 'city', 'Blue capital', 3, 3),
+    piece('city', 'cities/bluecity2', 'city', 'Blue city', 9, 9),
+    piece('lib', 'buildings/library', 'building', 'Library', 10, 9),
+    piece('mine', 'cities/redcity2', 'city', 'Red city', 1, 1),
+  ]
+  const open = async (view: PlayerView) => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Atomic Theory'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Atomic Theory/ }))
+    return send
+  }
+
+  it('sends the extra action mode with no city', async () => {
+    const send = await open(atomicView(MAP))
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Allow an extra action with each city' }))
+    expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['atomicTheory', expect.any(String), 7, { mode: 'extraActions' }])
+  })
+
+  it('lists only the cities of other players that are not capitals, says what each takes with it, and asks before nuking', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const send = await open(atomicView(MAP))
+    fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1'])
+    expect(screen.getByRole('group').textContent).toContain('Destroys the city with Library (K10)')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
+    expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'city' })
+  })
+
+  it('shows when there is no city to nuke, and cannot send', async () => {
+    const send = await open(atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'city')))
+    fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    expect(screen.getByRole('group').textContent).toContain('No city of another player that is not a capital')
+    const nuke = screen.getByRole('button', { name: /^Nuke / }) as HTMLButtonElement
+    expect(nuke.disabled).toBe(true)
+    fireEvent.click(nuke)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('asks about a repeat use when the player submits, and keeps the picker if declined', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const send = await open(atomicView(MAP, 'used'))
+    expect(confirm).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Allow an extra action with each city' }))
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Allow an extra action with each city' }))
+    expect(send.mock.calls[0]?.[5]).toBe(true)
+  })
+
+  it('Bureaucracy is one press with no picker, through the one route', async () => {
+    const base = viewOf([tech('Bureaucracy', 2)])
+    const view = { ...base, you: { ...base.you!, availableActions: [action('bureaucracy', 'Bureaucracy', 'ready', 'Ready to use.')] } } as unknown as PlayerView
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(view)
+    renderPanel(view)
+    fireEvent.click(await screen.findByText('Bureaucracy'))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Bureaucracy' }))
+    expect(perform).toHaveBeenCalledTimes(1)
+    expect(perform.mock.calls[0]?.slice(0, 2)).toEqual(['game-1', 'bureaucracy'])
+  })
+})

@@ -96,7 +96,7 @@ async function giveHut(gameId: string, playerId: string, name: string): Promise<
 
 const actions = (gameId: string) => `/api/games/${gameId}/actions`
 const entryOf = (v: View, action: string) => v.you?.availableActions?.find((entry) => entry.action === action)
-const doneThrough = async (t: { gameId: string; starter: string }, phase: 'SOT' | 'TRADE' | 'CM') =>
+const doneThrough = async (t: { gameId: string; starter: string }, phase: 'SOT' | 'TRADE' | 'CM' | 'MOVEMENT') =>
   expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase })).status).toBe(200)
 
 describe('resources through args: Pottery, Philosophy and Education', () => {
@@ -295,5 +295,84 @@ describe('the Spy abilities through args', () => {
     const paid = await post(t.starter, actions(t.gameId), { action: 'monarchy', requestId: 'req-2', rev: fresh.rev, args: { mode: 'kill', targetId: t.otherId } })
     expect(paid.status).toBe(200)
     expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/used Monarchy: spent 1 Silk, killing \w+ \d\.\d item number #\d+ from .*'s hand/)
+  })
+})
+
+describe('batch 2 through the routes: Metalworking, Atomic Theory and Bureaucracy', () => {
+  it('Bureaucracy is one press in Research with no args, and takes nothing from the player', async () => {
+    const t = await table('bur', 'Bureaucracy', [])
+    await doneThrough(t, 'MOVEMENT')
+    const before = await view(t.gameId, t.starter)
+    expect(entryOf(before, 'bureaucracy')).toMatchObject({ status: 'ready' })
+    const stray = await post(t.starter, actions(t.gameId), { action: 'bureaucracy', requestId: 'req-bad', rev: before.rev, args: { x: 1 } })
+    expect(stray.status).toBe(400)
+    const paid = await post(t.starter, actions(t.gameId), { action: 'bureaucracy', requestId: 'req-1', rev: before.rev })
+    expect(paid.status).toBe(200)
+    const after = await paid.json<View>()
+    expect(after.assistedActions[0]).toMatchObject({ kind: 'bureaucracy', status: 'applied' })
+    expect(after.assistedActions[0]?.text).toMatch(/used Bureaucracy: may switch one of their social policies during research/)
+    expect(entryOf(after, 'bureaucracy')?.status).toBe('used')
+  })
+
+  it('Atomic Theory takes a strict mode and, for a nuke, a city; a nuke in City Management is the engine\'s refusal', async () => {
+    const t = await table('atom', 'Atomic Theory', [])
+    await giveHut(t.gameId, t.starterId, 'Uranium')
+    const city = await post(t.starter, `/api/games/${t.gameId}/board/pieces`, {
+      assetId: `cities/${t.color.toLowerCase()}city2`,
+      x: 6 * SQUARE_SIZE,
+      y: mapTop((await view(t.gameId, t.starter) as unknown as { board: Parameters<typeof mapTop>[0] }).board) + 6 * SQUARE_SIZE,
+    })
+    expect(city.status).toBe(200)
+    await doneThrough(t, 'TRADE')
+    const before = await view(t.gameId, t.starter)
+    expect(entryOf(before, 'atomicTheory')).toMatchObject({ status: 'ready' })
+    for (const args of [{}, { mode: 'raze' }, { mode: 'nuke' }, { mode: 'nuke', cityPieceId: 7 }, { mode: 'extraActions', cityPieceId: 'a1' }, { mode: 'extraActions', extra: 1 }]) {
+      expect((await post(t.starter, actions(t.gameId), { action: 'atomicTheory', requestId: 'req-bad', rev: before.rev, args })).status).toBe(400)
+    }
+    const early = await post(t.starter, actions(t.gameId), { action: 'atomicTheory', requestId: 'req-n', rev: before.rev, args: { mode: 'nuke', cityPieceId: 'no-such-piece' } })
+    expect(early.status).toBe(400)
+    expect(await early.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+
+    const paid = await post(t.starter, actions(t.gameId), { action: 'atomicTheory', requestId: 'req-1', rev: before.rev, args: { mode: 'extraActions' } })
+    expect(paid.status).toBe(200)
+    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/^ta-[ab]-atom used Atomic Theory: spent 1 Uranium, so each of their cities may take one more city action this turn$/)
+  })
+
+  it('Metalworking adds 3 to one of the player\'s own arena units and refuses an enemy unit', async () => {
+    const t = await table('met', 'Metalworking', ['resources/iron'])
+    for (const [token, confirm] of [[t.starter, {}], [t.other, { confirmedOutOfTurn: true }]] as const) {
+      expect((await post(token, `/api/games/${t.gameId}/draw/INFANTRY`, confirm)).status).toBe(200)
+      expect((await post(token, `/api/games/${t.gameId}/battle/draw`, { numberOfUnits: 1 })).status).toBe(200)
+    }
+    expect((await post(t.starter, `/api/games/${t.gameId}/battle/arena/initiate`, { opponentId: t.otherId })).status).toBe(200)
+    for (const [token, side, position] of [[t.starter, 'attacker', 0], [t.other, 'defender', 1]] as const) {
+      const mine = await inject(app, { url: `/api/games/${t.gameId}`, headers: bearer(token) })
+      const unit = (await mine.json<{ you: { battlehand: { id: string; attack: number; health: number }[] } }>()).you.battlehand[0]
+      if (unit === undefined) throw new Error('no battlehand unit')
+      expect((await post(token, `/api/games/${t.gameId}/battle/arena/place`, { unitId: unit.id, side, position, attack: unit.attack, health: unit.health })).status).toBe(200)
+    }
+    const before = await view(t.gameId, t.starter) as View & { battle: { arena: { id: string; side: string; attack: number }[] } }
+    const own = before.battle.arena.find((unit) => unit.side === 'attacker')
+    const enemy = before.battle.arena.find((unit) => unit.side === 'defender')
+    if (own === undefined || enemy === undefined) throw new Error('missing arena units')
+    expect(entryOf(before, 'metalworking')).toMatchObject({ status: 'ready' })
+
+    for (const args of [{}, { arenaUnitId: 7 }, { arenaUnitId: 'bad id!' }, { arenaUnitId: own.id, extra: 1 }]) {
+      expect((await post(t.starter, actions(t.gameId), { action: 'metalworking', requestId: 'req-bad', rev: before.rev, args })).status).toBe(400)
+    }
+    const theirs = await post(t.starter, actions(t.gameId), { action: 'metalworking', requestId: 'req-e', rev: before.rev, args: { arenaUnitId: enemy.id } })
+    expect(theirs.status).toBe(400)
+    expect(await theirs.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    expect((await repo.findGame(t.gameId))?.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(true)
+
+    const paid = await post(t.starter, actions(t.gameId), { action: 'metalworking', requestId: 'req-1', rev: before.rev, args: { arenaUnitId: own.id } })
+    expect(paid.status).toBe(200)
+    const after = await paid.json<View & { battle: { arena: { id: string; attack: number }[] } }>()
+    expect(after.battle.arena.find((unit) => unit.id === own.id)?.attack).toBe(own.attack + 3)
+    expect(after.assistedActions[0]?.text).toMatch(/used Metalworking: spent 1 Iron, adding 3 to the attack of a unit it placed/)
+    // The unit is not announced yet, so the other player's view does not name it in any line
+    const log = JSON.stringify((await view(t.gameId, t.other) as unknown as { log: unknown }).log)
+    expect(log).not.toMatch(/Metalworking: Infantry/)
   })
 })

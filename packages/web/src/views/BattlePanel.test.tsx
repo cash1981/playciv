@@ -21,6 +21,7 @@ vi.mock('../lib/api.js', () => ({
     zhukovWound: vi.fn(),
     techWound: vi.fn(),
     performAction: vi.fn(),
+    actionWithArgs: vi.fn(),
   },
   // The assisted action buttons of the Battle panel read it when a press fails
   ApiError: class ApiError extends Error {
@@ -664,5 +665,72 @@ describe('BattlePanel Mathematics and Ballistics', () => {
     )
     fireEvent.click(getByText('Battle'))
     expect(queryByText(/Mathematics: deal up to/)).toBeNull()
+  })
+})
+
+describe('BattlePanel Metalworking', () => {
+  beforeEach(() => localStorage.clear())
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  const unit = (id: string, side: 'attacker' | 'defender', killed: boolean, position: number, placedBy: string) => ({
+    id, side, position, unit: { ...infantry, id: `card-${id}` }, attack: 1, health: 3, placedBy, rotation: 0, killed, arrival: null,
+  })
+  const action = (status: string) => ({
+    action: 'metalworking', label: 'Metalworking', phase: 'ANY', group: 'Battle', status, reason: `Metalworking is ${status}`, repeatable: true, techName: 'Metalworking', buttonText: 'Use Metalworking (Iron: +3 attack)',
+  })
+  const metalView = (status = 'ready', arena = [unit('a1', 'attacker', false, 0, 'me'), unit('a2', 'attacker', true, 1, 'me'), unit('a3', 'attacker', false, 2, 'me'), unit('d1', 'defender', false, 3, 'other')]): PlayerView =>
+    ({ ...view, you: { ...view.you, availableActions: [action(status)] }, battle: { ...view.battle, arena, techWounds: [] } }) as unknown as PlayerView
+
+  it('lists the button next to Mathematics and Ballistics, and asks which of the player\'s own living units gets the attack', () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue(view)
+    const { getByText, getByRole, getAllByRole, getByLabelText } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView()} />)
+    fireEvent.click(getByText('Battle'))
+    expect(getByRole('group', { name: 'Metalworking' })).toBeTruthy()
+    fireEvent.click(getByText('Use Metalworking (Iron: +3 attack)'))
+    expect(api.actionWithArgs).not.toHaveBeenCalled()
+    // Only the player's own living units: not the killed one, not the enemy
+    expect(getAllByRole('option').map((option) => option.textContent)).toEqual([
+      expect.stringContaining('front 1'),
+      expect.stringContaining('front 3'),
+    ])
+    fireEvent.change(getByLabelText('Unit'), { target: { value: 'a3' } })
+    fireEvent.click(getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a3' }, false)
+  })
+
+  it('says so when no unit of the player stands in the arena, and sends nothing', () => {
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView('ready', [unit('d1', 'defender', false, 1, 'other')])} />)
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(getByText('Use Metalworking (Iron: +3 attack)'))
+    expect(getByText('You have no living unit of your own in the arena.')).toBeTruthy()
+    expect(api.actionWithArgs).not.toHaveBeenCalled()
+  })
+
+  it('asks about a repeat use at submit, and a used or read-only panel cannot send', () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue(view)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const used = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView('used')} />)
+    fireEvent.click(used.getByText('Battle'))
+    fireEvent.click(used.getByText('Use Metalworking (Iron: +3 attack)'))
+    expect(confirm).not.toHaveBeenCalled()
+    fireEvent.click(used.getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).not.toHaveBeenCalled()
+    fireEvent.click(used.getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(api.actionWithArgs).mock.calls[0]?.[5]).toBe(true)
+    cleanup()
+
+    const readOnly = render(<BattlePanel gameId="game" busy={false} run={run} readOnly view={metalView()} />)
+    fireEvent.click(readOnly.getByText('Battle'))
+    expect((readOnly.getByText('Use Metalworking (Iron: +3 attack)') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('lists nothing outside a battle the player fights in', () => {
+    const none = render(<BattlePanel gameId="game" busy={false} run={run} view={{ ...metalView(), you: { ...metalView().you, playerId: 'bystander' } } as unknown as PlayerView} />)
+    fireEvent.click(none.getByText('Battle'))
+    expect(none.queryByText(/Metalworking/)).toBeNull()
   })
 })

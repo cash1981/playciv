@@ -24,6 +24,7 @@ import {
   findCoinSource,
   isMapCell,
   itemName,
+  nukeTargetsOf,
   occupancyOf,
   squareLabel,
   steamPowerDestinations,
@@ -196,8 +197,24 @@ type TechPick =
   | { readonly kind: 'player'; readonly targetId: string; readonly note: string }
   | { readonly kind: 'coin'; readonly targetId: string; readonly source: string }
   | { readonly kind: 'monarchy'; readonly mode: 'obsolete' | 'kill'; readonly targetId: string }
+  | { readonly kind: 'arenaUnit'; readonly arenaUnitId: string }
+  | { readonly kind: 'atomic'; readonly mode: 'extraActions' | 'nuke'; readonly cityPieceId: string }
 
 type Opponent = PlayerView['opponents'][number]
+
+/** The viewer's own living units in the arena, which Metalworking may give attack to. */
+function ownArenaUnits(view: PlayerView) {
+  const me = view.you?.playerId
+  return (view.battle?.arena ?? []).filter((unit) => unit.placedBy === me && !unit.killed)
+}
+
+/** The cities of other players Atomic Theory may nuke, with what each would take with it: the public board and the players' colours. */
+function nukeTargetsInView(view: PlayerView) {
+  const me = view.you
+  if (me === null) return []
+  const owners = [me, ...(view.opponents ?? [])].map((player) => ({ playerId: player.playerId, username: player.username, color: player.color }))
+  return nukeTargetsOf({ board: view.board, players: [] }, me.playerId, owners)
+}
 
 /** The coin counters of an opponent that hold a coin token (the public status board), with what is on each. */
 function coinCountersOf(opponent: Opponent): readonly { readonly key: string; readonly label: string; readonly coins: number }[] {
@@ -353,6 +370,74 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           onClick={() => send({ targetId: pick.targetId, source: pick.source })}
         >
           Discard a coin from {chosen?.label ?? 'a counter'}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  if (pick.kind === 'arenaUnit') {
+    const units = ownArenaUnits(view)
+    const chosen = units.find((unit) => unit.id === pick.arenaUnitId)
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`Unit for ${label}`}>
+        <select aria-label="Unit" value={pick.arenaUnitId} onChange={(event) => setPick({ kind: 'arenaUnit', arenaUnitId: event.target.value })}>
+          {units.map((unit) => (
+            <option key={unit.id} value={unit.id}>
+              {itemName(unit.unit)} (front {unit.position + 1}, attack {unit.attack})
+            </option>
+          ))}
+        </select>
+        <span className="muted">Adds 3 to the attack shown on the unit. The Iron is paid from a token first.</span>
+        <button type="button" className="small" disabled={!canSubmit || chosen === undefined} onClick={() => send({ arenaUnitId: pick.arenaUnitId })}>
+          Add 3 attack to {chosen === undefined ? 'a unit' : itemName(chosen.unit)}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  if (pick.kind === 'atomic') {
+    const targets = nukeTargetsInView(view)
+    const nuke = pick.mode === 'nuke'
+    const target = targets.find((candidate) => candidate.pieceId === pick.cityPieceId)
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
+        <label>
+          <input type="radio" name={`${label}-mode`} checked={!nuke} onChange={() => setPick({ ...pick, mode: 'extraActions' })} /> An extra action with each city (City Management)
+        </label>
+        <label>
+          <input type="radio" name={`${label}-mode`} checked={nuke} onChange={() => setPick({ ...pick, mode: 'nuke' })} /> Nuke a city (Movement)
+        </label>
+        {nuke && (
+          <>
+            <select aria-label="City to nuke" value={pick.cityPieceId} onChange={(event) => setPick({ ...pick, cityPieceId: event.target.value })}>
+              {targets.map((candidate) => (
+                <option key={candidate.pieceId} value={candidate.pieceId}>
+                  {candidate.label} of {candidate.ownerUsername}
+                </option>
+              ))}
+            </select>
+            {targets.length === 0 && <span role="status" className="assisted-warning">No city of another player that is not a capital stands on the map.</span>}
+            {target !== undefined && (
+              <span className="muted">
+                Destroys the city{target.destroyed.length === 0 ? '' : ` with ${target.destroyed.map((item) => `${item.label}${item.square === null ? '' : ` (${item.square})`}`).join(', ')}`}. Only the undo vote brings it back.
+              </span>
+            )}
+          </>
+        )}
+        <button
+          type="button"
+          className="small"
+          disabled={!canSubmit || (nuke && target === undefined)}
+          onClick={() => {
+            if (!nuke) return send({ mode: 'extraActions' })
+            if (target !== undefined && window.confirm(`Nuke ${target.label} of ${target.ownerUsername}? The city and everything in its outskirts is destroyed.`)) {
+              send({ mode: 'nuke', cityPieceId: target.pieceId })
+            }
+          }}
+        >
+          {nuke ? `Nuke ${target?.label ?? 'a city'}` : 'Allow an extra action with each city'}
         </button>
         {cancel}
       </span>
@@ -695,6 +780,19 @@ export function AssistedActionButton({
           return
         }
         setPick({ kind: 'coin', targetId: target.playerId, source: coinCountersOf(target)[0]?.key ?? '' })
+        return
+      }
+      case 'arenaUnit': {
+        const unit = ownArenaUnits(view)[0]
+        if (unit === undefined) {
+          setHint('You have no living unit of your own in the arena.')
+          return
+        }
+        setPick({ kind: 'arenaUnit', arenaUnitId: unit.id })
+        return
+      }
+      case 'atomic': {
+        setPick({ kind: 'atomic', mode: 'extraActions', cityPieceId: nukeTargetsInView(view)[0]?.pieceId ?? '' })
         return
       }
       case 'monarchy': {

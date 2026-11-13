@@ -1588,10 +1588,11 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
       ? battle.arena.filter((unit) => unit.side !== mySideInBattle && !unit.killed)
       : []
   // Mathematics and Ballistics: the button that pays the Iron, and the wounds it owes, dealt one click at a time like Zhukov's.
+  // Metalworking sits in the same list: its button pays the Iron and asks which of the player's own units gets +3 attack, and owes nothing.
   // Listed once the tech is revealed and a battle is on, so the player sees why it is not pressable (no Iron, used this turn).
   const woundTechs =
     battle !== null && myCombatant
-      ? Object.keys(TECH_WOUNDS).flatMap((tech) => {
+      ? [...Object.keys(TECH_WOUNDS), 'Metalworking'].flatMap((tech) => {
           const action = ASSISTED_TECH_ACTIONS.get(tech)
           const status = view.you?.availableActions?.find((candidate) => candidate.action === action)?.status
           const owed = techWoundsOwed(battle, myId, tech)
@@ -1895,7 +1896,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
           )}
 
           {woundTechs.map(({ tech, action, owed, listed }) => (
-            <div key={tech} className="row battle-tech-wounds" role="group" aria-label={`${tech} wounds`}>
+            <div key={tech} className="row battle-tech-wounds" role="group" aria-label={tech in TECH_WOUNDS ? `${tech} wounds` : tech}>
               {listed && (
                 <AssistedActionButton
                   action={action}
