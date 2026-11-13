@@ -137,7 +137,10 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   Spectators, replay and locked games get no edit controls (the government is
   text, `?` still works); controls are disabled while a save is running. An
   untouched editor never saves, so a value another member changed during a
-  refresh is not overwritten. The Player status panel stays until Coins move over
+  refresh is not overwritten. Under the map (900px and below) the sidebar can be
+  minimised with a "Player overview" heading and toggle, remembered under
+  `civ.panel.player-status` (default open); beside the map it is always fully
+  shown whatever is stored. The Player status panel stays until Coins move over
   and is expected to be retired later.
 - Display settings (#342): the Zoom dropdown in the Board header is replaced by a
   gear that opens a Display settings panel with sliders for map zoom (25-150 %,
@@ -147,11 +150,13 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   persist across games and reloads (the old dropdown reset to Auto on each
   mount). Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
   manual choice is continuous. Nothing is stored on the server. A "Show labels"
-  switch (off by default) puts the name of every status value above its icon in
-  the sidebar instead of relying on tooltips; every cell is label, fixed icon box
-  and value, so icons line up across a row. The four investments are named in
-  full (Endowment for the Arts, Infrastructure, Military-Industrial Complex,
-  Public Education) in tooltips, accessible names and labels.
+  switch, on by default, puts the name of every status value above its icon in
+  the sidebar instead of relying on tooltips; a stored explicit off is kept, and
+  settings saved before the switch existed get labels on. Every cell is label,
+  fixed icon box and value, so icons line up across a row. The visible labels of
+  the four investments are the abbreviations (EftA, Infra, MIC, PE); tooltips,
+  alt text and accessible names use the full names (Endowment for the Arts,
+  Infrastructure, Military-Industrial Complex, Public Education).
 - Board undo targets the caller's latest consecutive actions; a new board action
   clears redo. Undoing board edits does not undo game actions.
 - A moved piece keeps the pixel position where it is dropped, including in a

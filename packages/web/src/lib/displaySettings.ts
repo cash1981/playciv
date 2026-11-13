@@ -36,7 +36,7 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   mapZoom: 'auto',
   iconScale: 1,
   sidebarWidth: 16.5,
-  showLabels: false,
+  showLabels: true,
 }
 
 /** Clamps into the range and snaps to its step, so a stored value is always one the slider can show. */

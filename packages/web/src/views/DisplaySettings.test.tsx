@@ -71,18 +71,19 @@ describe('DisplaySettings', () => {
     fireEvent.change(dialog.getByLabelText('Map zoom'), { target: { value: '0.8' } })
     fireEvent.change(dialog.getByLabelText('Status icon size'), { target: { value: '1.2' } })
     fireEvent.change(dialog.getByLabelText('Status panel width'), { target: { value: '19.5' } })
-    const expected = { mapZoom: 0.8, iconScale: 1.2, sidebarWidth: 19.5, showLabels: false }
+    const expected = { mapZoom: 0.8, iconScale: 1.2, sidebarWidth: 19.5, showLabels: true }
     expect(shown()).toEqual(expected)
     expect(stored()).toEqual(expected)
   })
 
   it('reads what an earlier visit saved', () => {
-    localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"mapZoom":0.5,"iconScale":1.4,"sidebarWidth":22,"showLabels":true}')
+    localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"mapZoom":0.5,"iconScale":1.4,"sidebarWidth":22,"showLabels":false}')
     render(<Harness />)
-    expect(shown()).toEqual({ mapZoom: 0.5, iconScale: 1.4, sidebarWidth: 22, showLabels: true })
+    expect(shown()).toEqual({ mapZoom: 0.5, iconScale: 1.4, sidebarWidth: 22, showLabels: false })
     const dialog = within(openPanel())
     expect((dialog.getByLabelText('Status icon size') as HTMLInputElement).value).toBe('1.4')
-    expect((dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement).checked).toBe(true)
+    // An explicit off is respected, not replaced by the default.
+    expect((dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement).checked).toBe(false)
     expect((dialog.getByRole('switch', { name: 'Auto' }) as HTMLInputElement).checked).toBe(false)
   })
 
@@ -106,34 +107,35 @@ describe('DisplaySettings', () => {
   })
 
   it('Reset to defaults restores every setting and the saved copy', () => {
-    localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"mapZoom":0.5,"iconScale":1.4,"sidebarWidth":22,"showLabels":true}')
+    localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"mapZoom":0.5,"iconScale":1.4,"sidebarWidth":22,"showLabels":false}')
     render(<Harness />)
     const dialog = within(openPanel())
+    expect((dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement).checked).toBe(false)
     fireEvent.click(dialog.getByRole('button', { name: 'Reset to defaults' }))
-    const defaults = { mapZoom: 'auto', iconScale: 1, sidebarWidth: 16.5, showLabels: false }
+    const defaults = { mapZoom: 'auto', iconScale: 1, sidebarWidth: 16.5, showLabels: true }
     expect(shown()).toEqual(defaults)
     expect(stored()).toEqual(defaults)
     expect((dialog.getByRole('switch', { name: 'Auto' }) as HTMLInputElement).checked).toBe(true)
-    expect((dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement).checked).toBe(false)
+    expect((dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement).checked).toBe(true)
   })
 
-  it('Show labels is a switch that is off by default, has a help sentence, toggles and saves', () => {
+  it('Show labels is a switch that is on by default, has a help sentence, toggles and saves', () => {
     render(<Harness />)
     const dialog = within(openPanel())
     const labels = dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement
-    expect(labels.checked).toBe(false)
+    expect(labels.checked).toBe(true)
     expect(labels.getAttribute('aria-describedby')).toBe(
       dialog.getByText('Name every status value above its icon instead of waiting for a tooltip').id,
     )
 
     fireEvent.click(labels)
-    expect(labels.checked).toBe(true)
-    expect(shown()).toMatchObject({ showLabels: true })
-    expect(stored()).toMatchObject({ showLabels: true })
+    expect(labels.checked).toBe(false)
+    expect(shown()).toMatchObject({ showLabels: false })
+    expect(stored()).toMatchObject({ showLabels: false })
 
     fireEvent.click(labels)
-    expect(labels.checked).toBe(false)
-    expect(stored()).toMatchObject({ showLabels: false })
+    expect(labels.checked).toBe(true)
+    expect(stored()).toMatchObject({ showLabels: true })
   })
 
   it('Show labels keeps the other settings, and they keep it', () => {
@@ -141,7 +143,7 @@ describe('DisplaySettings', () => {
     const dialog = within(openPanel())
     fireEvent.click(dialog.getByRole('switch', { name: 'Show labels' }))
     fireEvent.change(dialog.getByLabelText('Status icon size'), { target: { value: '1.3' } })
-    expect(shown()).toMatchObject({ mapZoom: 'auto', iconScale: 1.3, sidebarWidth: 16.5, showLabels: true })
+    expect(shown()).toMatchObject({ mapZoom: 'auto', iconScale: 1.3, sidebarWidth: 16.5, showLabels: false })
   })
 
   it('Escape closes the panel and returns focus to the gear', () => {

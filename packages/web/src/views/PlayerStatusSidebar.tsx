@@ -15,6 +15,10 @@
  * target that opens a compact editor for that one value. Coins total, Culture
  * hand size and Combat are calculated and stay read-only; the Coins counters are
  * edited in the Player status panel.
+ *
+ * Stacked under the map (900px and below) it can be collapsed to its heading, and
+ * the choice is remembered like the other panels'. Beside the map it is always
+ * fully shown: the stylesheet hides the heading there and ignores the collapsed state.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -38,6 +42,7 @@ import './PlayerStatusSidebar.css'
 import { parseStatInput } from './statInput.js'
 import type { StatInputKind } from './statInput.js'
 import { focusPlayer } from './turnFocus.js'
+import { usePanelOpen } from './usePanelOpen.js'
 
 interface Props {
   readonly gameId: string
@@ -66,6 +71,14 @@ const ICON_DIR = '/status-icons'
 /** The full name of an investment card (`Endowment for the Arts`), as the engine names it. */
 const investmentName = (key: InvestmentCardInfo['key']): string =>
   INVESTMENT_CARDS.find((card) => card.key === key)?.label ?? key
+
+/** What the label slot shows for an investment: the abbreviation of its full name. */
+const INVESTMENT_LABELS: Readonly<Record<InvestmentCardInfo['key'], string>> = {
+  efta: 'EftA',
+  infra: 'Infra',
+  mic: 'MIC',
+  pe: 'PE',
+}
 
 /** The name of each editable stat in the editor and in its accessible names. */
 const EDIT_LABELS: Readonly<Record<EditableStatKey, string>> = {
@@ -204,13 +217,17 @@ type StatControl =
     }
 
 function Stat({
-  label,
+  name,
+  label = name,
   children,
   value,
   className,
   control,
 }: {
-  readonly label: string
+  /** The full name: the tooltip of the cell, and what its icon is called to assistive technology. */
+  readonly name: string
+  /** What the label slot shows, when that is shorter than the name (`MIC`). */
+  readonly label?: string | undefined
   readonly children: React.ReactNode
   readonly value: React.ReactNode
   readonly className?: string | undefined
@@ -218,10 +235,10 @@ function Stat({
   readonly control?: StatControl | undefined
 }): React.JSX.Element {
   // Label slot, icon box, value: the same three parts in every cell, so the icons and the
-  // values line up across a row. The label repeats the accessible name (the alt, the
-  // aria-label), so it is hidden from assistive technology; the Display settings decide
-  // whether it is shown at all. `lang` because the page is not English and the label
-  // wraps with hyphenation.
+  // values line up across a row. The label is the name, or an abbreviation of it, and is
+  // hidden from assistive technology, which gets the full name from the alt and the
+  // aria-label; the Display settings decide whether the label is shown at all. `lang`
+  // because the page is not English and the label wraps with hyphenation.
   const content = (
     <>
       <span className="pss-label" lang="en" aria-hidden="true">
@@ -232,7 +249,7 @@ function Stat({
     </>
   )
   return (
-    <li className={`pss-stat${className === undefined ? '' : ` ${className}`}`} title={label}>
+    <li className={`pss-stat${className === undefined ? '' : ` ${className}`}`} title={name}>
       {control === undefined ? (
         <div className="pss-stat-body">{content}</div>
       ) : control.kind === 'edit' ? (
@@ -454,6 +471,7 @@ function PlayerBlock({
   busy,
   readOnly,
   run,
+  collapseSignal,
   onShowReference,
 }: {
   readonly block: Block
@@ -461,6 +479,8 @@ function PlayerBlock({
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
+  /** Goes up each time the panel is collapsed: an open editor closes, as the cells it belongs to are hidden. */
+  readonly collapseSignal: number
   /** Opens the government card reference; the button is where focus returns to. */
   readonly onShowReference: (opener: HTMLElement) => void
 }): React.JSX.Element {
@@ -495,6 +515,11 @@ function PlayerBlock({
     pendingOpen.current = null
     if (next !== null) setEditing(next)
   }, [readOnly, busy])
+
+  useEffect(() => {
+    setEditing(null)
+    pendingOpen.current = null
+  }, [collapseSignal])
 
   const save = (key: PlayerStatKey, value: number | string | boolean): void => {
     saving.current = true
@@ -605,32 +630,32 @@ function PlayerBlock({
         </button>
       </p>
       <ul className="pss-grid" aria-label="Economy">
-        <Stat label="Coins" value={totalCoins(stats.coinSources)}>
+        <Stat name="Coins" value={totalCoins(stats.coinSources)}>
           <FileIcon file="coins.png" label="Coins" />
         </Stat>
-        <Stat label="Trade" value={stats.trade} control={edit('trade')}>
+        <Stat name="Trade" value={stats.trade} control={edit('trade')}>
           <FileIcon file="trade.png" label="Trade" />
         </Stat>
-        <Stat label="Culture" value={stats.culture} control={edit('culture')}>
+        <Stat name="Culture" value={stats.culture} control={edit('culture')}>
           <FileIcon file="culture.png" label="Culture" />
         </Stat>
-        <Stat label="Culture hand size" value={stats.cultureHandSize}>
+        <Stat name="Culture hand size" value={stats.cultureHandSize}>
           <FileIcon file="culture-hand-size.svg" label="Culture hand size" />
         </Stat>
         {editorIn(['trade', 'culture'])}
       </ul>
       <ul className="pss-grid" aria-label="Units">
-        <Stat label="Infantry" value={stats.infantry} control={edit('infantry')}>
+        <Stat name="Infantry" value={stats.infantry} control={edit('infantry')}>
           <FileIcon file="infantry.png" label="Infantry" />
         </Stat>
-        <Stat label="Artillery" value={stats.artillery} control={edit('artillery')}>
+        <Stat name="Artillery" value={stats.artillery} control={edit('artillery')}>
           <FileIcon file="artillery.png" label="Artillery" />
         </Stat>
-        <Stat label="Mounted" value={stats.mounted} control={edit('mounted')}>
+        <Stat name="Mounted" value={stats.mounted} control={edit('mounted')}>
           <FileIcon file="mounted.png" label="Mounted" />
         </Stat>
         <Stat
-          label={`Aircraft ${stats.aircraft ? 'unlocked' : 'locked'}`}
+          name={`Aircraft ${stats.aircraft ? 'unlocked' : 'locked'}`}
           value={stats.aircraft ? '✓' : '–'}
           className={stats.aircraft ? 'pss-unlocked' : 'pss-locked-stat'}
           control={
@@ -656,17 +681,17 @@ function PlayerBlock({
         {editorIn(['infantry', 'artillery', 'mounted'])}
       </ul>
       <ul className="pss-grid" aria-label="Modifiers">
-        <Stat label="Stacking" value={stats.stacking} control={edit('stacking')}>
+        <Stat name="Stacking" value={stats.stacking} control={edit('stacking')}>
           <FileIcon file="stacking.png" label="Stacking" />
         </Stat>
-        <Stat label="Movement" value={stats.mvmt} control={edit('mvmt')}>
+        <Stat name="Movement" value={stats.mvmt} control={edit('mvmt')}>
           <MovementIcon color={block.color} />
         </Stat>
-        <Stat label="Combat" value={formatCombat(stats.combat)}>
+        <Stat name="Combat" value={formatCombat(stats.combat)}>
           <CombatIcon value={stats.combat} />
         </Stat>
         <Stat
-          label="Combat hand size"
+          name="Combat hand size"
           value={combatHandSize === '' ? '–' : combatHandSize}
           className={combatHandSize === '' ? 'pss-empty' : undefined}
           control={edit('combatHandSize')}
@@ -676,16 +701,16 @@ function PlayerBlock({
         {editorIn(['stacking', 'mvmt', 'combatHandSize'])}
       </ul>
       <ul className="pss-grid" aria-label="Investments">
-        <Stat label={EDIT_LABELS.efta} value={stats.efta} control={edit('efta')}>
+        <Stat name={EDIT_LABELS.efta} label={INVESTMENT_LABELS.efta} value={stats.efta} control={edit('efta')}>
           <FileIcon file="efta.png" label={EDIT_LABELS.efta} />
         </Stat>
-        <Stat label={EDIT_LABELS.infra} value={stats.infra} control={edit('infra')}>
+        <Stat name={EDIT_LABELS.infra} label={INVESTMENT_LABELS.infra} value={stats.infra} control={edit('infra')}>
           <FileIcon file="infra.png" label={EDIT_LABELS.infra} />
         </Stat>
-        <Stat label={EDIT_LABELS.mic} value={stats.mic} control={edit('mic')}>
+        <Stat name={EDIT_LABELS.mic} label={INVESTMENT_LABELS.mic} value={stats.mic} control={edit('mic')}>
           <FileIcon file="mic.png" label={EDIT_LABELS.mic} />
         </Stat>
-        <Stat label={EDIT_LABELS.pe} value={stats.pe} control={edit('pe')}>
+        <Stat name={EDIT_LABELS.pe} label={INVESTMENT_LABELS.pe} value={stats.pe} control={edit('pe')}>
           <FileIcon file="pe.png" label={EDIT_LABELS.pe} />
         </Stat>
         {editorIn(['efta', 'infra', 'mic', 'pe'])}
@@ -694,27 +719,55 @@ function PlayerBlock({
   )
 }
 
+/** The `localStorage` id of the collapsed state (`civ.panel.player-status`), as for the other panels. */
+const PANEL_ID = 'player-status'
+
 export function PlayerStatusSidebar({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const blocks = blocksOf(view)
   const [showReference, setShowReference] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
+  // Only meaningful where the sidebar is stacked under the map (900px and below): the heading
+  // with the toggle is hidden by the stylesheet beside the map, where the content is always shown.
+  const [open, setOpen] = usePanelOpen(PANEL_ID, true)
+  const [collapseSignal, setCollapseSignal] = useState(0)
+  const contentId = `${PANEL_ID}-content`
   return (
     <aside className="player-status-sidebar" aria-label="Player status sidebar">
-      {blocks.map((block) => (
-        <PlayerBlock
-          key={block.playerId}
-          block={block}
-          gameId={gameId}
-          busy={busy}
-          readOnly={readOnly}
-          run={run}
-          onShowReference={(button) => {
-            opener.current = button
-            setShowReference(true)
+      <h2 className="pss-panel-heading">
+        <button
+          type="button"
+          className="pss-panel-toggle"
+          aria-expanded={open}
+          aria-controls={contentId}
+          onClick={() => {
+            if (open) setCollapseSignal((signal) => signal + 1)
+            setOpen(!open)
           }}
-        />
-      ))}
-      {blocks.length === 0 && <p className="muted">Nobody has joined yet.</p>}
+        >
+          <span>Player overview</span>
+          <span className="pss-panel-indicator" aria-hidden="true">
+            {open ? '−' : '+'}
+          </span>
+        </button>
+      </h2>
+      <div id={contentId} className="pss-content" hidden={!open}>
+        {blocks.map((block) => (
+          <PlayerBlock
+            key={block.playerId}
+            block={block}
+            gameId={gameId}
+            busy={busy}
+            readOnly={readOnly}
+            run={run}
+            collapseSignal={collapseSignal}
+            onShowReference={(button) => {
+              opener.current = button
+              setShowReference(true)
+            }}
+          />
+        ))}
+        {blocks.length === 0 && <p className="muted">Nobody has joined yet.</p>}
+      </div>
       {showReference && (
         <GovernmentReferenceDialog returnFocusTo={opener} onClose={() => setShowReference(false)} />
       )}

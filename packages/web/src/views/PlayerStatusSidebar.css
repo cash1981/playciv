@@ -2,6 +2,20 @@
    stats per row, so a block is about as wide as the sidebar. */
 
 .player-status-sidebar {
+  min-width: 0;
+}
+
+/* The heading with the collapse toggle exists only where the sidebar is stacked under
+   the map (see the 900px rules below). */
+.pss-panel-heading {
+  display: none;
+  margin: 0;
+}
+
+/* The blocks. `display` here beats the UA rule of the `hidden` attribute, so beside the
+   map the content is shown whatever the stored collapsed state says; the 900px rules
+   below bring `hidden` back for the stacked layout. */
+.pss-content {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -208,10 +222,43 @@
 }
 
 @media (max-width: 900px) {
-  /* Stacked under the map: blocks sit side by side as far as the width allows. */
-  .player-status-sidebar {
+  .pss-panel-heading {
+    display: block;
+  }
+
+  .pss-panel-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0;
+    padding: 0 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .pss-panel-indicator {
+    color: var(--muted);
+    font-size: 1.25rem;
+  }
+
+  /* Stacked under the map: blocks sit side by side as far as the width allows, and
+     the content is hidden while the panel is collapsed, leaving only the heading. */
+  .pss-content {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    margin-top: 0.6rem;
+  }
+
+  .pss-content[hidden] {
+    display: none;
   }
 }
 

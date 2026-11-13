@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+
+import { usePanelOpen } from './usePanelOpen.js'
 
 interface Props {
   readonly id: string
@@ -11,8 +12,8 @@ interface Props {
 
 /**
  * A panel whose open state is remembered across a page reload, keyed by
- * `id` in `localStorage` (issue #71). `defaultOpen` is only the fallback for
- * the first time a given `id` is ever seen on this browser.
+ * `id` in `localStorage` (issue #71; see `usePanelOpen`). `defaultOpen` is only
+ * the fallback for the first time a given `id` is ever seen on this browser.
  */
 export function CollapsiblePanel({
   id,
@@ -21,20 +22,8 @@ export function CollapsiblePanel({
   className = '',
   children,
 }: Props): React.JSX.Element {
-  const storageKey = `civ.panel.${id}`
-  const [open, setOpen] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(storageKey)
-      return stored === null ? defaultOpen : stored === 'true'
-    } catch {
-      return defaultOpen
-    }
-  })
+  const [open, setOpen] = usePanelOpen(id, defaultOpen)
   const contentId = `${id}-content`
-
-  useEffect(() => {
-    try { localStorage.setItem(storageKey, String(open)) } catch {}
-  }, [storageKey, open])
 
   return (
     <section className={`panel collapsible-panel ${className}`.trim()}>
@@ -44,7 +33,7 @@ export function CollapsiblePanel({
           className="collapsible-toggle"
           aria-expanded={open}
           aria-controls={contentId}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => setOpen(!open)}
         >
           <span>{title}</span>
           <span className="collapsible-indicator" aria-hidden="true">

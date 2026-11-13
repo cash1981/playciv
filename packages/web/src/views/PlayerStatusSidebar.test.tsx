@@ -30,7 +30,18 @@ function cssRules(selector: string): string {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  // The collapsed state of the panel is kept in localStorage.
+  localStorage.clear()
 })
+
+/** The full name of each investment (tooltip, alt, aria-label) and the abbreviation its label slot shows. */
+const INVESTMENT_ABBREVIATIONS = new Map([
+  ['Endowment for the Arts', 'EftA'],
+  ['Infrastructure', 'Infra'],
+  ['Military-Industrial Complex', 'MIC'],
+  ['Public Education', 'PE'],
+])
 
 const aliceStats: PlayerStats = {
   ...DEFAULT_PLAYER_STATS,
@@ -262,7 +273,7 @@ describe('PlayerStatusSidebar', () => {
     expect(stacked).not.toContain('--pss-width')
   })
 
-  it('names the four investments in full everywhere the stat is named', () => {
+  it('names the four investments in full in every tooltip and accessible name, and shows the abbreviation as the label', () => {
     render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
     const alice = within(block('Alice'))
     const names = ['Endowment for the Arts', 'Infrastructure', 'Military-Industrial Complex', 'Public Education']
@@ -272,6 +283,10 @@ describe('PlayerStatusSidebar', () => {
       expect(icon.getAttribute('src')).toMatch(/\/status-icons\/(efta|infra|mic|pe)\.png$/)
       expect(icon.getAttribute('title')).toBe(name)
       expect(icon.closest('li')?.getAttribute('title')).toBe(name)
+      // What is shown above the icon is the abbreviation; it is aria-hidden, so it is not the name.
+      const label = icon.closest('li')?.querySelector('.pss-label')
+      expect(label?.textContent).toBe(INVESTMENT_ABBREVIATIONS.get(name))
+      expect(label?.getAttribute('aria-hidden')).toBe('true')
       expect(alice.getByRole('button', { name: `Edit Alice ${name}, currently ${values[index]}` })).toBeTruthy()
     })
     // The old abbreviations are gone from every accessible name.
@@ -284,7 +299,7 @@ describe('PlayerStatusSidebar', () => {
     expect(screen.getByRole('button', { name: 'Done editing Alice Military-Industrial Complex' })).toBeTruthy()
   })
 
-  it('has a label slot in every cell with the name of the value, hidden from assistive technology', () => {
+  it('has a label slot in every cell with the name of the value (the abbreviation for an investment), hidden from assistive technology', () => {
     const { container } = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
     const alice = block('Alice')
     const cells = Array.from(alice.querySelectorAll('li.pss-stat'))
@@ -294,7 +309,8 @@ describe('PlayerStatusSidebar', () => {
       expect(labels).toHaveLength(1)
       const label = labels[0] as HTMLElement
       expect(label.getAttribute('aria-hidden')).toBe('true')
-      expect(label.textContent).toBe(cell.getAttribute('title'))
+      // The label is the name of the stat, except that an investment shows its abbreviation.
+      expect(label.textContent).toBe(INVESTMENT_ABBREVIATIONS.get(cell.getAttribute('title') ?? '') ?? cell.getAttribute('title'))
       // Label slot, then icon box, then value: the structure that keeps rows aligned.
       expect(Array.from(cell.querySelector('.pss-stat-body')?.children ?? []).map((child) => child.className)).toEqual([
         'pss-label',
@@ -303,7 +319,11 @@ describe('PlayerStatusSidebar', () => {
       ])
     }
     expect(Array.from(alice.querySelectorAll('.pss-label')).map((label) => label.textContent)).toEqual(
-      expect.arrayContaining(['Endowment for the Arts', 'Infrastructure', 'Military-Industrial Complex', 'Public Education', 'Aircraft locked']),
+      expect.arrayContaining(['EftA', 'Infra', 'MIC', 'PE', 'Aircraft locked']),
+    )
+    // The full names are only in the tooltip and the accessible text, never shown as a label.
+    expect(Array.from(alice.querySelectorAll('.pss-label')).map((label) => label.textContent)).not.toEqual(
+      expect.arrayContaining(['Endowment for the Arts']),
     )
     // A hidden label is not read a second time: the cell is still found by its single accessible name.
     expect(screen.getAllByRole('button', { name: 'Edit Alice Trade, currently 7' })).toHaveLength(1)
@@ -376,7 +396,7 @@ describe('PlayerStatusSidebar', () => {
     expect(block('Alice').querySelector('.pss-label')?.getAttribute('lang')).toBe('en')
   })
 
-  it('is plain display when readOnly: no inputs, selects or api calls, and only the government reference button', () => {
+  it('is plain display when readOnly: no inputs, selects or api calls, and only the collapse toggle and the government reference button', () => {
     const methods = api as unknown as Record<string, (...args: unknown[]) => unknown>
     const calls = Object.keys(methods)
       .filter((key) => typeof methods[key] === 'function')
@@ -386,7 +406,9 @@ describe('PlayerStatusSidebar', () => {
 
     expect(container.querySelectorAll('input, select, textarea, a')).toHaveLength(0)
     const buttons = [...container.querySelectorAll('button')]
-    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+    // The toggle is named by its text, the others by their aria-label.
+    expect(buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent)).toEqual([
+      expect.stringContaining('Player overview'),
       'Show government card reference',
       'Show government card reference',
     ])
@@ -962,6 +984,173 @@ describe('PlayerStatusSidebar editing while the game is busy', () => {
     const hover = rule(".pss-stat-button[aria-disabled='true']:hover")
     expect(hover).toContain('border-color: transparent')
     expect(hover).toContain('background: transparent')
+  })
+})
+
+describe('PlayerStatusSidebar collapsing', () => {
+  const STORAGE_KEY = 'civ.panel.player-status'
+  const toggle = (name: string): HTMLElement => screen.getByRole('button', { name })
+  const content = (container: HTMLElement): HTMLElement => container.querySelector('.pss-content') as HTMLElement
+  const css = readFileSync('src/views/PlayerStatusSidebar.css', 'utf8').replaceAll('\r\n', '\n')
+  /** The part of the stylesheet that applies at 900px and below, and the part that applies always. */
+  const stackedCss = /@media \(max-width: 900px\) \{[\s\S]*?\n\}\n/.exec(css)?.[0] ?? ''
+  const baseCss = css.replace(stackedCss, '')
+  const ruleIn = (source: string, selector: string): string =>
+    Array.from(
+      source.matchAll(new RegExp(`^ {0,2}${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`, 'gm')),
+      (match) => match[1] ?? '',
+    ).join('\n')
+
+  it('is open by default, with a toggle named by the heading text that points at the content', () => {
+    const { container } = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    const button = toggle('Player overview')
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    // No aria-label of its own: the heading text names it, and aria-expanded carries the state.
+    expect(button.hasAttribute('aria-label')).toBe(false)
+    expect(content(container).hidden).toBe(false)
+    expect(button.getAttribute('aria-controls')).toBe(content(container).id)
+    expect(container.querySelector(`#${content(container).id}`)).toBe(content(container))
+    // The name does not flip with the state, and is not the one of the Player status panel's heading.
+    expect(screen.getByRole('heading', { name: 'Player overview', level: 2 })).toBeTruthy()
+    fireEvent.click(button)
+    expect(screen.getByRole('heading', { name: 'Player overview', level: 2 })).toBeTruthy()
+    expect(toggle('Player overview').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('collapses and expands with a click or the keyboard, and the blocks stay in the document', () => {
+    const { container } = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    fireEvent.click(toggle('Player overview'))
+    expect(content(container).hidden).toBe(true)
+    expect(toggle('Player overview').getAttribute('aria-expanded')).toBe('false')
+    // Hidden by the attribute, not removed: beside the map the stylesheet shows it regardless.
+    expect(within(content(container)).getAllByRole('region', { hidden: true })).toHaveLength(2)
+
+    // A real button, so Enter and Space activate it; jsdom turns the click such a key press makes
+    // into the same event, which is all the component handles.
+    expect(toggle('Player overview').tagName).toBe('BUTTON')
+    fireEvent.click(toggle('Player overview'))
+    expect(content(container).hidden).toBe(false)
+    expect(toggle('Player overview').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('remembers the choice in localStorage like the other panels, and reads it back', () => {
+    const first = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('true')
+    fireEvent.click(toggle('Player overview'))
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('false')
+    first.unmount()
+
+    const second = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    expect(content(second.container).hidden).toBe(true)
+    expect(toggle('Player overview').getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle('Player overview'))
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('true')
+  })
+
+  it('works with storage that throws: open to begin with, and it still collapses', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => { throw new Error('blocked') },
+      setItem: () => { throw new Error('blocked') },
+    })
+    const { container } = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    expect(content(container).hidden).toBe(false)
+    fireEvent.click(toggle('Player overview'))
+    expect(content(container).hidden).toBe(true)
+  })
+
+  it('closes an open editor when the panel collapses, as a browser does it: the press blurs and saves, then the click collapses', () => {
+    const save = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(makeView())
+    const { container } = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Alice Trade, currently 7' }))
+    const field = screen.getByRole('textbox', { name: 'Alice Trade' })
+    fireEvent.change(field, { target: { value: '9' } })
+    expect(screen.getByRole('group', { name: 'Edit Alice Trade' })).toBeTruthy()
+
+    // Pressing the toggle moves focus to it first: leaving the editor saves the typed value (the
+    // editor's design) and closes it. Only then does the click collapse the panel.
+    fireEvent.blur(field, { relatedTarget: toggle('Player overview') })
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenCalledWith('game-1', 'player-me', 'trade', 9)
+    fireEvent.click(toggle('Player overview'))
+    expect(container.querySelector('.pss-editor')).toBeNull()
+    fireEvent.click(toggle('Player overview'))
+    expect(container.querySelector('.pss-editor')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Edit Alice Trade, currently 7' }).getAttribute('aria-expanded')).toBe('false')
+    expect(save).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes an editor that is still open when the panel collapses without a blur, saving nothing', () => {
+    const save = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(makeView())
+    const { container } = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Alice Trade, currently 7' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Alice Trade' }), { target: { value: '9' } })
+    // Where no blur comes first (a browser that sends focus nowhere, or a script), the collapse
+    // itself closes the editor and drops the draft.
+    fireEvent.click(toggle('Player overview'))
+    expect(container.querySelector('.pss-editor')).toBeNull()
+    fireEvent.click(toggle('Player overview'))
+    expect(container.querySelector('.pss-editor')).toBeNull()
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('does not open a tap that was waiting for a save inside the collapsed panel, nor on expanding', () => {
+    const save = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(makeView())
+    const view = makeView()
+    const { container, rerender } = render(<PlayerStatusSidebar {...EDITABLE} view={view} />)
+    // Editor A (Trade) is open; tapping stat B (Culture) blurs A, which saves and makes the sidebar busy.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Alice Trade, currently 7' }))
+    const field = screen.getByRole('textbox', { name: 'Alice Trade' })
+    fireEvent.change(field, { target: { value: '9' } })
+    const cultureCell = screen.getByRole('button', { name: 'Edit Alice Culture, currently 11' })
+    fireEvent.mouseDown(cultureCell)
+    fireEvent.blur(field, { relatedTarget: cultureCell })
+    expect(save).toHaveBeenCalledTimes(1)
+    rerender(<PlayerStatusSidebar {...EDITABLE} busy view={view} />)
+    // The click that follows is kept for when the save is done...
+    fireEvent.click(cultureCell)
+    // ...but the user collapses the panel before that.
+    fireEvent.click(toggle('Player overview'))
+    rerender(<PlayerStatusSidebar {...EDITABLE} view={view} />)
+    expect(container.querySelector('.pss-editor')).toBeNull()
+    fireEvent.click(toggle('Player overview'))
+    expect(container.querySelector('.pss-editor')).toBeNull()
+  })
+
+  it('leaves the government reference dialog outside the collapsible content', () => {
+    const { container } = render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    fireEvent.click(within(block('Alice')).getByRole('button', { name: 'Show government card reference' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(content(container).contains(screen.getByRole('dialog'))).toBe(false)
+  })
+
+  it('hides the heading above 900px and shows the content whatever the stored state says', () => {
+    // Always: no heading (display: none, so it is not exposed to assistive technology either),
+    // and a content rule whose `display` overrides the UA rule of the `hidden` attribute.
+    expect(ruleIn(baseCss, '.pss-panel-heading')).toContain('display: none')
+    expect(ruleIn(baseCss, '.pss-content')).toContain('display: flex')
+    expect(baseCss).not.toMatch(/\.pss-content\[hidden\]/)
+    expect(ruleIn(baseCss, '.pss-panel-toggle')).toBe('')
+    // At 900px and below: the heading is back and the collapsed content is hidden again.
+    expect(stackedCss).toContain('(max-width: 900px)')
+    expect(ruleIn(stackedCss, '.pss-panel-heading')).toContain('display: block')
+    expect(ruleIn(stackedCss, '.pss-content[hidden]')).toContain('display: none')
+    expect(ruleIn(stackedCss, '.pss-content')).toContain('grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr))')
+  })
+
+  it('makes the toggle a full-width button of at least 44px where it is shown', () => {
+    const toggleRule = ruleIn(stackedCss, '.pss-panel-toggle')
+    expect(toggleRule).toContain('min-height: 44px')
+    expect(toggleRule).toContain('width: 100%')
+  })
+
+  it('keeps the breakpoint of the stacked sidebar and the wide layout unchanged', () => {
+    const layout = readFileSync('src/styles.css', 'utf8').replaceAll('\r\n', '\n')
+    // The same 900px as styles.css, whose rules stack .board-main and release the sidebar's max-height.
+    const wide = /\.board-main > \.player-status-sidebar \{[^}]*\}/.exec(layout)?.[0] ?? ''
+    expect(wide).toContain('max-height: 80vh')
+    expect(wide).toContain('overflow-y: auto')
+    const stacked = /@media \(max-width: 900px\) \{[\s\S]*?\n\}\n/.exec(layout.slice(layout.indexOf('.board-main {')))?.[0] ?? ''
+    expect(stacked).toContain('max-height: none')
   })
 })
 
