@@ -156,6 +156,7 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
         {city.productionSource === 'override'
           ? `Production override: ${city.production}`
           : `Production ${city.production}, ${SOURCE_TEXT[city.productionSource]}`}
+        {city.boost > 0 ? `, including ${city.boost} from a tech ability this turn` : ''}
         {city.caravan ? ', including 2 from the caravan, which this build uses up.' : '.'}
       </p>
 

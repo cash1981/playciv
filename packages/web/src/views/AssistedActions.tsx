@@ -17,8 +17,11 @@ import type { ReactNode } from 'react'
 
 import {
   ANY_RESOURCES,
+  ASSISTED_TECH_PICKERS,
+  INVESTABLE_COIN_SOURCES,
   brandenburgForbiddenCells,
   combustionTargets,
+  findCoinSource,
   isMapCell,
   itemName,
   occupancyOf,
@@ -27,7 +30,7 @@ import {
   steamPowerFiguresAt,
   steamPowerSources,
 } from '@civ/engine'
-import type { AssistedActionKind, CombustionTarget, PendingRewardView, TurnPhase } from '@civ/engine'
+import type { AssistedActionKind, CombustionTarget, PendingRewardView, TechPicker, TurnPhase } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
@@ -186,6 +189,209 @@ function cardLinkOf(
   return undefined
 }
 
+/** What a tech picker has chosen so far, one shape per kind of picker (`ASSISTED_TECH_PICKERS`). */
+type TechPick =
+  | { readonly kind: 'resources'; readonly resources: readonly string[] }
+  | { readonly kind: 'city'; readonly cityPieceId: string }
+  | { readonly kind: 'player'; readonly targetId: string; readonly note: string }
+  | { readonly kind: 'coin'; readonly targetId: string; readonly source: string }
+  | { readonly kind: 'monarchy'; readonly mode: 'obsolete' | 'kill'; readonly targetId: string }
+
+type Opponent = PlayerView['opponents'][number]
+
+/** The coin counters of an opponent that hold a coin token (the public status board), with what is on each. */
+function coinCountersOf(opponent: Opponent): readonly { readonly key: string; readonly label: string; readonly coins: number }[] {
+  return INVESTABLE_COIN_SOURCES.flatMap((key) => {
+    const coins = opponent.stats?.coinSources?.[key] ?? 0
+    return coins > 0 ? [{ key, label: findCoinSource(key)?.label ?? key, coins }] : []
+  })
+}
+
+interface PickerFormProps {
+  readonly pick: TechPick
+  readonly setPick: (pick: TechPick | null) => void
+  readonly view: PlayerView
+  readonly label: string
+  readonly canSubmit: boolean
+  readonly picker: TechPicker | undefined
+  readonly send: (args: Record<string, unknown>) => void
+}
+
+/**
+ * The question a tech ability asks before it is sent: which resources to pay, which city, which other player (and,
+ * for a cancel, what is cancelled as free text), which coin counter, or Monarchy's mode. It decides no rule: it sends
+ * what was picked and the engine accepts or refuses it. Nothing is sent by opening it; only the submit button sends.
+ */
+function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }: PickerFormProps): React.JSX.Element {
+  const opponents = view.opponents ?? []
+  const cancel = (
+    <button type="button" className="small" onClick={() => setPick(null)}>
+      Cancel
+    </button>
+  )
+  const playerSelect = (value: string, onChange: (id: string) => void, hint?: (opponent: Opponent) => string) => (
+    <select aria-label="Player" value={value} onChange={(event) => onChange(event.target.value)}>
+      {opponents.map((opponent) => (
+        <option key={opponent.playerId} value={opponent.playerId}>
+          {opponent.username}
+          {hint === undefined ? '' : ` (${hint(opponent)})`}
+        </option>
+      ))}
+    </select>
+  )
+
+  if (pick.kind === 'resources' && picker?.kind === 'resources') {
+    const { resources } = pick
+    const repeats = picker.distinct && new Set(resources).size !== resources.length
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${label}`}>
+        {resources.map((resource, index) => (
+          <select
+            key={index}
+            aria-label={`Resource ${index + 1}`}
+            value={resource}
+            onChange={(event) =>
+              setPick({ kind: 'resources', resources: resources.map((current, at) => (at === index ? event.target.value : current)) })
+            }
+          >
+            {ANY_RESOURCES.map((kind) => (
+              <option key={kind} value={kind}>
+                {kind}
+              </option>
+            ))}
+          </select>
+        ))}
+        <span className="muted">
+          {picker.distinct
+            ? 'One of each kind. Tokens you hold pay for their own kind; culture cards only for a kind with no token.'
+            : 'Tokens you hold pay for any you lack; culture cards only if tokens run out.'}
+        </span>
+        {repeats && <span role="status" className="assisted-warning">Pick {resources.length} different resources.</span>}
+        <button type="button" className="small" disabled={!canSubmit || repeats} onClick={() => send({ resources })}>
+          Pay {listOf(resources)}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  if (pick.kind === 'city') {
+    const cities = view.you?.cities ?? []
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`City for ${label}`}>
+        <select aria-label="City" value={pick.cityPieceId} onChange={(event) => setPick({ kind: 'city', cityPieceId: event.target.value })}>
+          {cities.map((city) => (
+            <option key={city.pieceId} value={city.pieceId}>
+              {city.label} (production {city.estimate})
+            </option>
+          ))}
+        </select>
+        <span className="muted">The Wheat is paid from a token first, then a culture card. The bonus lasts this turn.</span>
+        <button type="button" className="small" disabled={!canSubmit} onClick={() => send({ cityPieceId: pick.cityPieceId })}>
+          Boost {cities.find((city) => city.pieceId === pick.cityPieceId)?.label ?? 'this city'}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  if (pick.kind === 'player') {
+    const target = opponents.find((opponent) => opponent.playerId === pick.targetId)
+    const note = picker?.kind === 'player' ? picker.noteLabel : undefined
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`Player for ${label}`}>
+        {playerSelect(pick.targetId, (targetId) => setPick({ ...pick, targetId }))}
+        {note !== undefined && (
+          <input
+            type="text"
+            aria-label={note}
+            placeholder={note}
+            maxLength={80}
+            value={pick.note}
+            onChange={(event) => setPick({ ...pick, note: event.target.value })}
+          />
+        )}
+        <button
+          type="button"
+          className="small"
+          disabled={!canSubmit || target === undefined}
+          onClick={() => send({ targetId: pick.targetId, ...(pick.note.trim() === '' ? {} : { note: pick.note.trim() }) })}
+        >
+          Use {label} on {target?.username ?? 'a player'}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  if (pick.kind === 'coin') {
+    const target = opponents.find((opponent) => opponent.playerId === pick.targetId)
+    const counters = target === undefined ? [] : coinCountersOf(target)
+    const chosen = counters.find((counter) => counter.key === pick.source)
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`Coin to discard with ${label}`}>
+        {playerSelect(
+          pick.targetId,
+          (targetId) => {
+            const next = opponents.find((opponent) => opponent.playerId === targetId)
+            setPick({ kind: 'coin', targetId, source: (next === undefined ? undefined : coinCountersOf(next)[0])?.key ?? '' })
+          },
+          (opponent) => `${coinCountersOf(opponent).reduce((total, counter) => total + counter.coins, 0)} coin tokens`,
+        )}
+        <select aria-label="Coin counter" value={pick.source} onChange={(event) => setPick({ ...pick, source: event.target.value })}>
+          {counters.map((counter) => (
+            <option key={counter.key} value={counter.key}>
+              {counter.label} ({counter.coins})
+            </option>
+          ))}
+        </select>
+        {counters.length === 0 && <span role="status" className="assisted-warning">{target?.username ?? 'That player'} holds no coin token.</span>}
+        <button
+          type="button"
+          className="small"
+          disabled={!canSubmit || chosen === undefined}
+          onClick={() => send({ targetId: pick.targetId, source: pick.source })}
+        >
+          Discard a coin from {chosen?.label ?? 'a counter'}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  if (pick.kind === 'monarchy') {
+    const target = opponents.find((opponent) => opponent.playerId === pick.targetId)
+    const kill = pick.mode === 'kill'
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
+        <label>
+          <input type="radio" name={`${label}-mode`} checked={!kill} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient wonder
+        </label>
+        <label>
+          <input type="radio" name={`${label}-mode`} checked={kill} onChange={() => setPick({ ...pick, mode: 'kill' })} /> Kill a random unit
+        </label>
+        {kill && playerSelect(pick.targetId, (targetId) => setPick({ ...pick, targetId }), (opponent) => `${opponent.publicHand.units} units in hand`)}
+        <span className="muted">
+          {kill
+            ? 'A random unit card is taken from that player\'s hand and discarded. The game refuses if they hold none.'
+            : 'Obsolescence is not tracked: the game only logs it, and you mark the wonder by hand.'}
+        </span>
+        <button
+          type="button"
+          className="small"
+          disabled={!canSubmit || (kill && target === undefined)}
+          onClick={() => send(kill ? { mode: 'kill', targetId: pick.targetId } : { mode: 'obsolete' })}
+        >
+          {kill ? `Kill a unit of ${target?.username ?? 'a player'}` : 'Obsolete a wonder'}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  return <></>
+}
+
 interface ButtonProps {
   readonly action: AssistedActionKind
   readonly gameId: string
@@ -209,28 +415,44 @@ interface ButtonProps {
   readonly onBeforePress?: (() => void) | undefined
 }
 
+/** What a resource list looks like in a button: "Iron", "Iron and Wheat", "Iron, Wheat and Silk". */
+const listOf = (names: readonly string[]): string =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
+
+/** The kinds a fallback pick is filled from, in the order the card texts list the resources. */
+const FALLBACK_KINDS: readonly string[] = ['Iron', 'Wheat', 'Silk', 'Incense', 'Spy', 'Uranium']
+
 /**
- * The two resources the Gunpowder picker starts on: the first two tokens the player holds (a hut in the hand or a
- * resource piece in their own area), so the default pays with tokens. The engine pays any other token before it
- * would play a culture card, so this is only a convenience; with fewer than two tokens it falls back to Iron and Wheat.
+ * The resources a picker starts on: the tokens the player holds (a hut in the hand or a resource piece in their own
+ * area), so the default pays with tokens, in the order held; `distinct` keeps one of each kind. The engine pays any other
+ * token before it would play a culture card, so this is only a convenience; what is missing is filled from the kinds
+ * not picked yet (Iron, Wheat, ...), so the picker never starts on a repeat where the kinds must differ.
  */
-function defaultAnyPick(view: PlayerView): readonly [string, string] {
+function defaultResourcePick(view: PlayerView, count: number, distinct: boolean): readonly string[] {
   const viewer = view.you
-  if (viewer === null) return ['Iron', 'Wheat']
   const name = (raw: string): string | undefined => ANY_RESOURCES.find((resource) => resource.toLowerCase() === raw.toLowerCase())
-  const huts = viewer.items.flatMap((item) => (item.kind === 'hut' && !item.used ? [name(item.name)] : []))
-  const own = view.boardAreas.find((area) => area.playerId === viewer.playerId)
-  const pieces =
-    own === undefined
-      ? []
-      : view.board.pieces.flatMap((piece) => {
-          const x = piece.x + piece.width / 2
-          const y = piece.y + piece.height / 2
-          const inside = x >= own.x && x < own.x + own.width && y >= own.y && y < own.y + own.height
-          return piece.category === 'resource' && inside ? [name(piece.assetId.replace('resources/', ''))] : []
-        })
-  const held = [...huts, ...pieces].filter((resource): resource is string => resource !== undefined)
-  return [held[0] ?? 'Iron', held[1] ?? (held[0] === 'Wheat' ? 'Iron' : 'Wheat')]
+  const held: string[] = []
+  if (viewer !== null) {
+    const huts = viewer.items.flatMap((item) => (item.kind === 'hut' && !item.used ? [name(item.name)] : []))
+    const own = view.boardAreas.find((area) => area.playerId === viewer.playerId)
+    const pieces =
+      own === undefined
+        ? []
+        : view.board.pieces.flatMap((piece) => {
+            const x = piece.x + piece.width / 2
+            const y = piece.y + piece.height / 2
+            const inside = x >= own.x && x < own.x + own.width && y >= own.y && y < own.y + own.height
+            return piece.category === 'resource' && inside ? [name(piece.assetId.replace('resources/', ''))] : []
+          })
+    for (const resource of [...huts, ...pieces]) {
+      if (resource !== undefined && held.length < count && (!distinct || !held.includes(resource))) held.push(resource)
+    }
+  }
+  const picked = [...held]
+  while (picked.length < count) {
+    picked.push(FALLBACK_KINDS.find((kind) => !picked.includes(kind)) ?? 'Iron')
+  }
+  return picked
 }
 
 /**
@@ -267,8 +489,8 @@ export function AssistedActionButton({
   const state = view.you?.availableActions?.find((candidate) => candidate.action === action)
   const mapPicker = useMapPicker()
   const [hint, setHint] = useState<string | null>(null)
-  // Gunpowder: the two resources the player names before paying ("Any 2"), or `null` while the picker is closed
-  const [anyPick, setAnyPick] = useState<readonly [string, string] | null>(null)
+  // The tech abilities that ask something first (`ASSISTED_TECH_PICKERS`): what the player has picked so far, or `null` while the picker is closed
+  const [pick, setPick] = useState<TechPick | null>(null)
   // Combustion: the armies standing on something to destroy, one entry each; the player picks the army that acts
   const [armyPick, setArmyPick] = useState<readonly CombustionTarget[] | null>(null)
   if (view.you === null || state === undefined) return null
@@ -423,26 +645,70 @@ export function AssistedActionButton({
     })
   }
 
-  const payGunpowder = (resources: readonly [string, string]): void => {
+  // One submit for every picker: the same guard as the button, a repeat use is confirmed now and not when the picker
+  // opened, and declining keeps the picker open
+  const sendPick = (args: Record<string, unknown>): void => {
     if (!canSubmit) return
-    const key = `${gameId}:${playerId}:gunpowder:${resources.join(',')}`
+    const key = `${gameId}:${playerId}:${action}:${JSON.stringify(args)}`
     if (inFlight.has(key)) return
-    // Cancelling the question keeps the picker open
     if (used && !window.confirm(usedAgainQuestion(state.label))) return
-    setAnyPick(null)
+    setPick(null)
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, 'gunpowder', requestId, rev, { resources }, used),
+      (requestId) => api.actionWithArgs(gameId, action, requestId, rev, args, used),
       view,
     ).then((done) => {
       if (done) onDone?.()
     })
   }
 
+  const openPicker = (picker: TechPicker): void => {
+    const opponents = view.opponents ?? []
+    setHint(null)
+    switch (picker.kind) {
+      case 'resources':
+        setPick({ kind: 'resources', resources: defaultResourcePick(view, picker.count, picker.distinct) })
+        return
+      case 'city': {
+        const city = view.you?.cities?.[0]
+        if (city === undefined) {
+          setHint('You have no city on the map to give production to.')
+          return
+        }
+        setPick({ kind: 'city', cityPieceId: city.pieceId })
+        return
+      }
+      case 'player': {
+        const first = opponents[0]
+        if (first === undefined) {
+          setHint('There is no other player.')
+          return
+        }
+        setPick({ kind: 'player', targetId: first.playerId, note: '' })
+        return
+      }
+      case 'coin': {
+        const target = opponents.find((opponent) => coinCountersOf(opponent).length > 0)
+        if (target === undefined) {
+          setHint('No opponent holds a coin token.')
+          return
+        }
+        setPick({ kind: 'coin', targetId: target.playerId, source: coinCountersOf(target)[0]?.key ?? '' })
+        return
+      }
+      case 'monarchy': {
+        const target = opponents.find((opponent) => opponent.publicHand.units > 0)
+        setPick({ kind: 'monarchy', mode: 'obsolete', targetId: (target ?? opponents[0])?.playerId ?? '' })
+        return
+      }
+    }
+  }
+
   const press = (): void => {
-    if (action === 'gunpowder') {
-      setAnyPick(defaultAnyPick(view))
+    const picker = ASSISTED_TECH_PICKERS.get(action)
+    if (picker !== undefined) {
+      openPicker(picker)
       return
     }
     if (action === 'combustion') {
@@ -522,32 +788,16 @@ export function AssistedActionButton({
           </button>
         </span>
       )}
-      {anyPick !== null && (
-        <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${state.label}`}>
-          {([0, 1] as const).map((index) => (
-            <select
-              key={index}
-              aria-label={`Resource ${index + 1}`}
-              value={anyPick[index]}
-              onChange={(event) =>
-                setAnyPick(index === 0 ? [event.target.value, anyPick[1]] : [anyPick[0], event.target.value])
-              }
-            >
-              {ANY_RESOURCES.map((resource) => (
-                <option key={resource} value={resource}>
-                  {resource}
-                </option>
-              ))}
-            </select>
-          ))}
-          <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
-          <button type="button" className="small" disabled={!canSubmit} onClick={() => payGunpowder(anyPick)}>
-            Pay {anyPick.join(' and ')}
-          </button>
-          <button type="button" className="small" onClick={() => setAnyPick(null)}>
-            Cancel
-          </button>
-        </span>
+      {pick !== null && (
+        <TechPickerForm
+          pick={pick}
+          setPick={setPick}
+          view={view}
+          label={state.label}
+          canSubmit={canSubmit}
+          picker={ASSISTED_TECH_PICKERS.get(action)}
+          send={sendPick}
+        />
       )}
     </span>
   )
