@@ -149,6 +149,15 @@ const CHICHEN_ITZA_BONUS = 3
 const SUSAN_B_ANTHONY_BONUS = 2
 const COINS_PER_MILITARY_SCIENCE_POINT = 3
 
+/** The city-state piece standing on a square, if any. */
+function cityStateOn(board: Board, cell: Cell): BoardPiece | undefined {
+  return board.pieces.find((other) => {
+    if (other.category !== 'citystate') return false
+    const at = mapCellOf(board, other)
+    return at !== null && sameCell(at, cell)
+  })
+}
+
 const sameCell = (a: Cell, b: Cell): boolean => a.column === b.column && a.row === b.row
 
 /**
@@ -188,6 +197,9 @@ function bestBuilding(buildings: readonly BoardPiece[]): BoardPiece {
  * as an outskirts square, without the blockade: a scout may gather a blockaded square.
  */
 function scoutSquareProduction(board: Board, cell: Cell): { readonly source: string; readonly amount: number } {
+  // A city-state gives its printed icons, once, in place of the terrain under it
+  const cityState = cityStateOn(board, cell)
+  if (cityState !== undefined) return { source: cityState.label, amount: CITY_STATE_ICONS[cityState.assetId]?.production ?? 0 }
   const here = iconPiecesOn(board, cell)
   const buildings = here.filter((other) => other.category === 'building')
   if (buildings.length > 0) {
@@ -217,6 +229,8 @@ function bareSquareTrade(board: Board, cell: Cell): { readonly source: string; r
  * blockade: a scout may gather a blockaded square.
  */
 function scoutSquareTrade(board: Board, cell: Cell): { readonly source: string; readonly amount: number } {
+  const cityState = cityStateOn(board, cell)
+  if (cityState !== undefined) return { source: cityState.label, amount: CITY_STATE_ICONS[cityState.assetId]?.trade ?? 0 }
   const here = iconPiecesOn(board, cell)
   const buildings = here.filter((other) => other.category === 'building')
   if (buildings.length > 0) {
@@ -484,11 +498,16 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
         if (cityState.category !== 'citystate' || cityStateHolderColour(state, cityState) !== colour) continue
         const cell = mapCellOf(board, cityState)
         if (cell === null) continue
+        // A scout on the square sends it to a city, which counts the city-state's icons through the scout
+        if (assignments.some((assignment) => sameCell(assignment, cell))) continue
         const square = squareLabel(cell)
         const icons = CITY_STATE_ICONS[cityState.assetId]
         const source = `${cityState.label} (held)`
-        if ((icons?.production ?? 0) > 0) detail.push({ square, source, amount: icons?.production ?? 0, blockaded: false })
-        addTrade(square, source, icons?.trade ?? 0, false)
+        const blockaded = footprint.hasEnemyFigureAt(cell)
+        if ((icons?.production ?? 0) > 0) {
+          detail.push({ square, source, amount: blockaded ? 0 : (icons?.production ?? 0), blockaded })
+        }
+        addTrade(square, source, icons?.trade ?? 0, blockaded)
       }
     }
 

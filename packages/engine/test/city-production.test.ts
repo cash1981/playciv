@@ -432,6 +432,23 @@ describe('trade', () => {
       expect(city.trade.outskirts).toBe(3)
     })
 
+    it('counts nothing from a held city-state that an enemy figure also stands on', () => {
+      const base = only(capital())
+      const contested = put(held('city-states/cs5'), KARANDRAS1, 'figures/bluearmy', 8, 8)
+      const city = only(contested)
+      expect(city.outskirts).toBe(base.outskirts)
+      expect(city.trade.outskirts).toBe(base.trade.outskirts)
+      expect(city.trade.detail.some((entry) => entry.source.includes('held') && entry.blockaded)).toBe(true)
+    })
+
+    it('counts the icons once when a scout holds it on a forest outside the outskirts', () => {
+      // B4 is a forest outside the outskirts of a capital on B2. The city-state's icons replace the forest's.
+      const base = only(capital())
+      const city = only(put(put(capital(), CASH1981, 'city-states/cs5', 1, 3), CASH1981, 'figures/redscout', 1, 3))
+      expect(city.outskirts).toBe(base.outskirts + 1)
+      expect(city.trade.outskirts).toBe(base.trade.outskirts + 1)
+    })
+
     it('adds nothing for a city-state nobody holds, and only to the capital', () => {
       expect(only(put(capital(), CASH1981, 'city-states/cs1', 8, 8)).trade.outskirts).toBe(3)
       const withCity = put(held('city-states/cs1'), CASH1981, 'cities/redcity2', 8, 1)
