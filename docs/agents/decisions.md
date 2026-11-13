@@ -892,7 +892,7 @@ Source: `engine/src/assisted-tech-wounds.ts`, `assisted-gunpowder.ts`, `assisted
 
 Second slice (human, 2026-11-13): Animal Husbandry, Construction, Banking, Plastics, Pottery, Philosophy, Education, Horseback
 Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy and Printing Press were already automated
-(`coinPurchase`, covered by `assisted.test.ts`). Batch 2 (Metalworking, Atomic Theory, Bureaucracy) is separate.
+(`coinPurchase`, covered by `assisted.test.ts`). Batch 2 (Metalworking, Atomic Theory, Bureaucracy) follows below.
 
 - **One shape** (`assisted-tech-abilities.ts`, `techAbility`): tech revealed, phase open, `card:<tech>` once per turn with the
   confirmed repeat, payload checked BEFORE anything is paid (a refusal spends nothing), every payment through the shared
@@ -937,7 +937,29 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   number as Gustavus Adolphus' discards do, and only after the discard; the rest of the hand stays private. Refused, with
   nothing paid, when the opponent holds no such card. The undo returns the card while it is still in the discard pile.
 
-Source: `engine/src/assisted-tech-abilities.ts`, `assisted-resources.ts` (`spendDistinctResources`), `city-production.ts`
+- **Metalworking** (Iron, Battle; button in the Battle panel beside Mathematics and Ballistics): adds 3 to the typed `attack`
+  of one of the player's own living arena units (`placedBy`), once per turn. A unit not yet announced is not named in the
+  public line (as the arena's own lines do not name it); the owner's private line names it. The undo is refused when the unit
+  is gone or its attack was edited since (it must still read the value the action set).
+- **Atomic Theory** (Uranium; Marie Curie's substitution applies through the shared layer): one action, one use a turn, two modes.
+  `extraActions` (City Management): every city may take one more city action. The allowance is derived from the applied record
+  (`atomicExtraActionFor`): a city that has acted once acts again without the question, noted in its line, and one that has acted
+  twice is back to the question (and to an Ada Lovelace credit, which Atomic Theory covers first so none is wasted). The undo
+  is refused while any city has taken two actions this turn. `nuke` (Movement, `cityPieceId`): the target is a city of another
+  player (nobody nukes their own) that is not a capital, i.e. not the capital marker and not the metropolis, which only a
+  capital grows into (`capitalOf`). It removes, as separate board history entries, every building, wonder, figure and Great
+  Person marker on a square of the city's outskirts, the caravan, fortification and Building Program markers on its centre, and
+  the city; a figure standing on the centre square, resource tokens, huts and city-states stay. The line names everything
+  destroyed with its square. Only the undo vote puts it back, each piece exactly as it stood (`placeBack`), refused if one is on
+  the board again; the board Undo cannot take a removal alone and cannot walk back through the restoration (`undoFloor`). The web
+  lists the same targets from the public board (`nukeTargetsOf`) and asks before a nuke. With no legal target the action is
+  refused and nothing is spent.
+- **Bureaucracy** (once per turn, Research): the engine never limits when or how often a social policy is chosen, removed or
+  revealed (`actions/player.ts`), so there is nothing to permit. The action is a once-per-turn logged note in the open Research
+  phase, costs nothing, and the switch itself stays manual in the social policy panel. The 1 coin is the existing flat-coin
+  handling on reveal (`coinOnReveal`, tested).
+
+Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-resources.ts` (`spendDistinctResources`), `city-production.ts`
 (`boost`), `build-options.ts`, `actions/player.ts` (`revealTech`), `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
 `web/src/views/AssistedActions.tsx` (`TechPickerForm`); tests `assisted-tech-abilities`, `assisted-tech-abilities-api`,
 `TechPanelAssisted.test.tsx`.
