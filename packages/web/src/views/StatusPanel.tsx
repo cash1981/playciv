@@ -18,10 +18,7 @@ import {
   ALWAYS_AVAILABLE_COIN_SOURCES,
   activeWonderOwnerIds,
   COIN_SOURCES,
-  GOVERNMENT_CARDS,
   GOVERNMENTS,
-  isCombatHandSizeValue,
-  isMovementValue,
   MAX_COMBAT_HAND_SIZE_LENGTH,
   socialPolicyCoinSource,
   techCoinSource,
@@ -37,8 +34,9 @@ import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
 import { PlayerTabs } from './PlayerTabs.js'
 import './PlayerTabs.css'
-import { ReferenceCard } from './ReferenceCard.js'
-import { ReferenceDialog } from './ReferenceDialog.js'
+import { GovernmentReferenceDialog } from './GovernmentReferenceDialog.js'
+import { parseStatInput } from './statInput.js'
+import type { StatInputKind } from './statInput.js'
 import { focusPlayer } from './turnFocus.js'
 
 interface Props {
@@ -396,28 +394,10 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
         )}
       </div>
       {showGovernmentReference && (
-        <ReferenceDialog
-          titleId="government-reference-title"
-          title="Government card reference"
+        <GovernmentReferenceDialog
           returnFocusTo={governmentHelpRef}
           onClose={() => setShowGovernmentReference(false)}
-        >
-          <p className="muted">
-            Card effects are shown for reference only; the status dropdown does not enforce them.
-          </p>
-          <div className="reference-card-grid">
-            {GOVERNMENT_CARDS.map((card) => (
-              <ReferenceCard
-                key={card.government}
-                name={card.government}
-                image={`/governments/${card.government.toLowerCase()}.jpg`}
-                imageAlt={`${card.government} government card`}
-              >
-                {card.effects.map((effect) => <p key={effect}>{effect}</p>)}
-              </ReferenceCard>
-            ))}
-          </div>
-        </ReferenceDialog>
+        />
       )}
     </CollapsiblePanel>
   )
@@ -692,33 +672,16 @@ export function StatCell({
     setDraft(displayValue)
   }, [displayValue])
 
+  const kind: StatInputKind = freeText ? 'freeText' : text ? 'movement' : 'number'
+
   function commit(): void {
-    const trimmed = draft.trim()
-    if (freeText) {
-      // Combat hand size: anything goes up to the engine's length limit.
-      if (!isCombatHandSizeValue(trimmed)) {
-        setDraft(displayValue)
-        return
-      }
-      if (trimmed !== value) onCommit(trimmed)
-      return
-    }
-    if (text) {
-      // Movement: `3`, `3+1` and `2+1+1` are allowed; a typo reverts.
-      if (!isMovementValue(trimmed)) {
-        setDraft(displayValue)
-        return
-      }
-      if (trimmed !== value) onCommit(trimmed)
-      return
-    }
-    const parsed = Number(trimmed)
-    // Empty or partial input (e.g. "" or "-") must revert, not save 0.
-    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0 || (max !== undefined && parsed > max)) {
+    const result = parseStatInput(kind, draft, max)
+    // A typo, an empty or partial entry, or a number over the cap reverts.
+    if (!result.ok) {
       setDraft(displayValue)
       return
     }
-    if (parsed !== value) onCommit(parsed)
+    if (result.value !== value) onCommit(result.value)
   }
 
   return (

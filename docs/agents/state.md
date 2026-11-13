@@ -30,8 +30,9 @@ deployment reports do not establish present health.
   Program, Upgrades, Devote to the Arts and Harvest). End turn ends the viewer's
   open phase. Used policies and wonders are disabled; a repeat of a Great Person
   or culture card asks first.
-- Player status sidebar (#342): a read-only per-player overview with icons sits
-  beside the map; the editable Player status panel remains.
+- Player status sidebar (#342): a per-player overview with icons sits beside the
+  map and edits the same fields as the Player status panel (government select
+  included); Coins are still edited in the panel.
 - Display settings (#342): a gear in the Board header opens sliders for map zoom,
   status icon size and status panel width, saved per browser.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,

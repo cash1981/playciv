@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### status-sidebar-edit
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/status-sidebar-edit`
-- **Brief:** `docs/agents/tasks/status-sidebar-edit.md`
-- **Status:** claimed
-- **Claimed paths:** `packages/web/src/views/PlayerStatusSidebar.*`, `packages/web/src/views/StatusPanel.*` (extraction only), `packages/web/src/views/GameView.tsx`, `packages/web/src/styles.css`, new shared validation and government-reference files
-- **Notes:** stacked on PR #344 (display settings) which is stacked on #343; retarget as each merges.
+_None._
 
 ## Format
 

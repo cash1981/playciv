@@ -126,3 +126,140 @@
     grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   }
 }
+
+/* --- Editing (issue: editable sidebar) ------------------------------------- */
+
+/* The stat cell is the tap target: a full-width button of at least 44px. */
+.pss-stat {
+  /* Lets the button take the whole cell. */
+  align-items: stretch;
+}
+
+.pss-stat > .pss-icon,
+.pss-stat > .pss-value {
+  align-self: center;
+}
+
+.pss-stat-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0.15rem 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pss-stat-button:hover:not([aria-disabled='true']) {
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+
+.pss-stat-button[aria-expanded='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.pss-stat-button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* aria-disabled is not :disabled, so the global dimming and hover highlight of
+   disabled buttons do not apply; this keeps a busy stat looking and behaving inert. */
+.pss-stat-button[aria-disabled='true']:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* The editor takes a whole grid row of its own under the cells, so the four
+   columns above keep their shape. */
+.pss-editor {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.pss-editor-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.pss-editor-input {
+  flex: 1 1 2.5rem;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  box-sizing: border-box;
+  text-align: center;
+  /* 16px keeps iOS from zooming the page when the field takes focus. */
+  font-size: 1rem;
+}
+
+.pss-step,
+.pss-done {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 0.5rem;
+  cursor: pointer;
+}
+
+.pss-step {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.pss-step:disabled {
+  cursor: default;
+}
+
+.pss-editor-hint {
+  flex: 1 0 100%;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* The government dropdown and its "?" share the line with the seal. */
+.pss-government .government-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2rem;
+  font-size: 0.85rem;
+}
+
+.pss-government-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pss-help {
+  flex: 0 0 auto;
+}
+
+@media (pointer: coarse) {
+  /* Fingers need the 44px target on the government controls as well. */
+  .pss-government .government-select {
+    min-height: 44px;
+  }
+
+  .pss-help {
+    width: 44px;
+    height: 44px;
+  }
+}

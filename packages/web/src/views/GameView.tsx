@@ -681,7 +681,15 @@ export function GameView({
         movementLocks={displayedView.communismLocks}
         movementForbidden={movementForbidden}
         {...(pickSquares === undefined ? {} : { pickSquares })}
-        statusSidebar={<PlayerStatusSidebar view={displayedView} />}
+        statusSidebar={
+          <PlayerStatusSidebar
+            gameId={gameId}
+            view={displayedView}
+            busy={interactionBusy}
+            readOnly={displayedView.you === null || replaying || locked}
+            run={run}
+          />
+        }
         run={run}
       />
 

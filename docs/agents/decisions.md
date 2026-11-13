@@ -122,14 +122,23 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   three-player saves with pieces and five-player saves keep their old rectangle
   so pieces do not move; see [legacy layout limitations](limitations.md#game-behavior).
 - Culture track: 21 positions with freely placed markers.
-- Player status sidebar (#342): a read-only view beside the map (under it at
-  900px and below) shows every Player status value per player with an icon whose
+- Player status sidebar (#342): a view beside the map (under it at 900px and
+  below) shows every Player status value per player with an icon whose
   `alt`/`title` names it. It reads only fields the Player status panel already
   shows (`username`, `color`, civilization name, `government`, `stats`) and adds
   nothing to `PlayerView`; a hidden civilization shows a colour swatch, not a
   leader marker. Combat is the engine-calculated bonus inside a starburst, Movement
-  is the player's colour flag, and Aircraft is dimmed until unlocked. The Player
-  status panel stays for editing and is expected to be retired later.
+  is the player's colour flag, and Aircraft is dimmed until unlocked.
+  It edits the same fields the Player status panel edits, with the same shared
+  validation (`parseStatInput`): tap a value to edit it, Aircraft is a switch,
+  Government is a select with a `?` that opens the government card reference.
+  Coins (the per-source counters), Culture hand size and Combat stay
+  read-only, and Coins are still edited in the Player status panel's Coins tab.
+  Spectators, replay and locked games get no edit controls (the government is
+  text, `?` still works); controls are disabled while a save is running. An
+  untouched editor never saves, so a value another member changed during a
+  refresh is not overwritten. The Player status panel stays until Coins move over
+  and is expected to be retired later.
 - Display settings (#342): the Zoom dropdown in the Board header is replaced by a
   gear that opens a Display settings panel with sliders for map zoom (25-150 %,
   with an Auto switch), status icon size (70-150 %) and status panel width
