@@ -44,6 +44,9 @@ Source: `packages/engine/src/`, `packages/server/src/app.ts`,
   with its number. Tech and policy numbers stay the per-player ones. The private log never falls
   back to the public line (the route drops empty private entries), so a line everyone can read is
   written to both (`appendOpenLog`, the played-card line).
+- A log line that gains or spends trade, culture or coins gives the new total in parentheses after
+  the amount: "gained 4 (14) trade", "spent 6 (8) trade to learn a level I tech". For a conversion
+  each side shows its own new total. The advance cost on the culture track is not in its line.
 - Never reconstruct historical revealed cards by matching display names to a
   current hand: duplicate names and redraws can reveal private cards.
 

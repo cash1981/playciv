@@ -35,7 +35,7 @@ function payForRevealedTech(
   return appendLog(next, {
     username: holder.username,
     playerId: holder.playerId,
-    publicLog: `${holder.username} gained 3 culture from Archimedes`,
+    publicLog: `${holder.username} gained 3 (${holder.stats.culture + 3}) culture from Archimedes`,
     privateLog: '',
     createdAt: at ?? null,
   })

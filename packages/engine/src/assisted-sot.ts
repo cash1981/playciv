@@ -94,10 +94,15 @@ import type { Government } from './government.js'
 
 
 /** "3 trade", "2 culture", "1 trade and 2 culture". */
-function describeGain(gain: { readonly trade: number; readonly culture: number }): string {
+function describeGain(
+  gain: { readonly trade: number; readonly culture: number },
+  totals?: { readonly trade: number; readonly culture: number },
+): string {
+  // In the log the new total follows the amount: "4 (14) trade"
+  const amount = (value: number, total: number | undefined): string => (total === undefined ? `${value}` : `${value} (${total})`)
   const parts = [
-    ...(gain.trade > 0 ? [`${gain.trade} trade`] : []),
-    ...(gain.culture > 0 ? [`${gain.culture} culture`] : []),
+    ...(gain.trade > 0 ? [`${amount(gain.trade, totals?.trade)} trade`] : []),
+    ...(gain.culture > 0 ? [`${amount(gain.culture, totals?.culture)} culture`] : []),
   ]
   return parts.length === 0 ? 'nothing' : parts.join(' and ')
 }
@@ -232,7 +237,7 @@ export function statGainAction(spec: StatGainSpec): AssistedActionDefinition {
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used ${spec.label}: gained ${describeGain(gain)}` +
+          `${player.username} used ${spec.label}: gained ${describeGain(gain, stats)}` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -386,7 +391,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used Rationalism: spent ${row.cost} trade to learn a level ${ROMAN[row.level]} tech` +
+          `${player.username} used Rationalism: spent ${row.cost} (${stats.trade}) trade to learn a level ${ROMAN[row.level]} tech` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -533,7 +538,7 @@ const patronage: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} used Patronage: spent 1 culture and drew ${plural(candidates.length, `culture ${ROMAN[level]} card`)} (${numbers})` +
+        `${player.username} used Patronage: spent 1 (${stats.culture}) culture and drew ${plural(candidates.length, `culture ${ROMAN[level]} card`)} (${numbers})` +
         (context.confirmedRepeat ? REPEAT_NOTE : ''),
       privateLog: '',
       createdAt: context.at ?? null,

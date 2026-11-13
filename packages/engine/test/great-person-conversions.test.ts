@@ -98,7 +98,7 @@ describe('Frank Lloyd Wright', () => {
     // Three buildings stand in the outskirts of the red city, whoever placed them; the one outside does not count
     expect(me(played).stats.trade).toBe(7)
     expect(me(played).stats.culture).toBe(5)
-    expect(played.log.at(-1)?.publicLog).toContain('gaining 3 trade and 3 culture for 3 buildings')
+    expect(played.log.at(-1)?.publicLog).toContain('gaining 3 (7) trade and 3 (5) culture for 3 buildings')
     expect(me(played).items.some((item) => item.id === card.itemId)).toBe(false)
 
     const undone = undoByVote(played, 'flw-1')
@@ -120,7 +120,7 @@ describe('Frank Lloyd Wright', () => {
     const played = unwrap(play(nearCeiling.state, 'flw-2', nearCeiling.itemId))
     expect(me(played).stats.trade).toBe(25) // Japanese ceiling
     expect(me(played).stats.culture).toBe(2 + 3)
-    expect(played.log.at(-1)?.publicLog).toContain('gaining 1 trade and 3 culture')
+    expect(played.log.at(-1)?.publicLog).toContain('gaining 1 (25) trade and 3 (5) culture')
   })
 })
 
@@ -158,7 +158,7 @@ describe('Albert Einstein', () => {
     const played = unwrap(play(card.state, 'e-1', card.itemId, { from: 'trade', amount: 5 }))
     expect(me(played).stats.trade).toBe(3)
     expect(me(played).stats.culture).toBe(6)
-    expect(played.log.at(-1)?.publicLog).toContain('turning 5 trade into 5 culture')
+    expect(played.log.at(-1)?.publicLog).toContain('turning 5 (3) trade into 5 (6) culture')
 
     const undone = undoByVote(played, 'e-1')
     expect(me(undone).stats.trade).toBe(8)

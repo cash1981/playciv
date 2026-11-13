@@ -1035,7 +1035,7 @@ export function sunTzuPass(state: GameState, input: SunTzuPassInput): ActionResu
     paid,
     player.username,
     player.playerId,
-    `uses ${SUN_TZU}: spends ${SUN_TZU_COST} trade and passes the battle turn`,
+    `uses ${SUN_TZU}: spends ${SUN_TZU_COST} (${player.stats.trade - SUN_TZU_COST}) trade and passes the battle turn`,
   )
   return ok({
     ...next,

@@ -295,7 +295,7 @@ describe('founding a city', () => {
     const result = unwrap(found(state, scoutOf(state).id))
     expect(result.board.pieces.some((piece) => piece.category === 'citystate')).toBe(false)
     expect(me(result).stats.culture).toBe(7)
-    expect(result.log.at(-1)?.publicLog).toContain('destroying the city-state there (+3 culture)')
+    expect(result.log.at(-1)?.publicLog).toContain('destroying the city-state there (+3 (7) culture)')
     const undone = undoByVote(result, 'req-1')
     expect(undone.board.pieces.some((piece) => piece.category === 'citystate')).toBe(true)
     expect(me(undone).stats.culture).toBe(4)

@@ -173,7 +173,7 @@ export const foundCity: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         `${player.username} founded a city on ${square} with ${withFigure}` +
-        (destroyed === null ? '' : `, destroying the city-state there (+${CITY_STATE_CULTURE} culture)`) +
+        (destroyed === null ? '' : `, destroying the city-state there (+${CITY_STATE_CULTURE} (${holder.stats.culture}) culture)`) +
         (check.zuluHuts.length === 0 ? '' : `, next to a hut they may explore (${check.zuluHuts.join(', ')})`) +
         policyNote,
       privateLog: '',

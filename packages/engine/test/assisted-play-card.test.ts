@@ -186,7 +186,7 @@ describe('playing a card', () => {
     const marco = withCardInHand(startOfTurn(), 'Marco Polo')
     const discarded = unwrap(play(marco.state, 'req-1', marco.itemId))
     expect(discarded.discardedItems.some((item) => item.id === marco.itemId)).toBe(true)
-    expect(discarded.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo item number #357 (any time) and discarded it, gaining 27 trade')
+    expect(discarded.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo item number #357 (any time) and discarded it, gaining 27 (27) trade')
 
     const shakespeare = withCardInHand(startOfTurn(), 'William Shakespeare')
     const kept = unwrap(play(shakespeare.state, 'req-2', shakespeare.itemId))
@@ -401,7 +401,7 @@ describe('Great Persons the game carries out', () => {
     const { state, itemId } = withCardInHand(withTrade(startOfTurn(), 10), 'Marco Polo')
     const played = unwrap(play(state, 'req-1', itemId))
     expect(player(played).stats.trade).toBe(27)
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo item number #357 (any time) and discarded it, gaining 17 trade')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo item number #357 (any time) and discarded it, gaining 17 (27) trade')
     expect(player(undoneBy(played)).stats.trade).toBe(10)
   })
 

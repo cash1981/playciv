@@ -164,7 +164,7 @@ describe.each(CARDS)('%s (%s, %i culture)', (kind, techName, culture) => {
     const lines = done.log.filter((entry) => entry.assistedActionId === 'req-1')
     expect(lines).toHaveLength(1)
     expect(lines[0]?.publicLog).toBe(
-      `cash1981 used ${techName}: spent 1 Incense and gained ${culture} culture`,
+      `cash1981 used ${techName}: spent 1 Incense and gained ${culture} (${culture}) culture`,
     )
   })
 

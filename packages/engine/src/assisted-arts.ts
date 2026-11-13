@@ -61,7 +61,7 @@ export function payKurosawa(
       }),
     state,
   )
-  const said = holders.map((holder) => ` (Akira Kurosawa gives ${holder.username} ${cities} culture)`).join('')
+  const said = holders.map((holder) => ` (Akira Kurosawa gives ${holder.username} ${cities} (${holder.stats.culture + cities}) culture)`).join('')
   return { state: next, paid, said }
 }
 

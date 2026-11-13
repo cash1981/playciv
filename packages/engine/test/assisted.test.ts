@@ -127,7 +127,7 @@ describe('Chivalry', () => {
     const lines = done.log.filter((entry) => entry.assistedActionId === 'req-1')
     expect(lines).toHaveLength(1)
     expect(lines[0]?.id).toBe(record?.logId)
-    expect(lines[0]?.publicLog).toBe('cash1981 used Chivalry: spent 1 Incense and gained 5 culture')
+    expect(lines[0]?.publicLog).toBe('cash1981 used Chivalry: spent 1 Incense and gained 5 (5) culture')
     expect(player(done).playerTurns[0]?.usedActions).toContain('card:Chivalry')
   })
 
@@ -453,7 +453,7 @@ describe('the projection', () => {
           turnNumber: 1,
           phase: 'CM',
           status: 'applied',
-          text: 'cash1981 used Chivalry: spent 1 Incense and gained 5 culture',
+          text: 'cash1981 used Chivalry: spent 1 Incense and gained 5 (5) culture',
           logId,
         },
       ])

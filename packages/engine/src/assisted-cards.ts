@@ -502,11 +502,11 @@ function automate(
   switch (name) {
     case 'Marco Polo': {
       const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + 27) - player.stats.trade)
-      return gained(trade, 0, `, gaining ${trade} trade`)
+      return gained(trade, 0, `, gaining ${trade} (${player.stats.trade + trade}) trade`)
     }
     case 'St. Francis of Assisi': {
       const armies = unbuiltArmies(state, player)
-      return gained(0, armies * 3, `, gaining ${armies * 3} culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
+      return gained(0, armies * 3, `, gaining ${armies * 3} (${player.stats.culture + armies * 3}) culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
     }
     case 'Frank Lloyd Wright': {
       const buildings = buildingsInCitiesOf(state, player)
@@ -514,7 +514,7 @@ function automate(
       return gained(
         trade,
         buildings,
-        `, gaining ${trade} trade and ${buildings} culture for ${buildings} ${buildings === 1 ? 'building' : 'buildings'}`,
+        `, gaining ${trade} (${player.stats.trade + trade}) trade and ${buildings} (${player.stats.culture + buildings}) culture for ${buildings} ${buildings === 1 ? 'building' : 'buildings'}`,
       )
     }
     case 'Albert Einstein': {
@@ -532,9 +532,9 @@ function automate(
         if (convert.amount > room) {
           return err(`Your trade track has room for only ${Math.max(0, room)} more trade.`)
         }
-        return gained(convert.amount, -convert.amount, `, turning ${convert.amount} culture into ${convert.amount} trade`)
+        return gained(convert.amount, -convert.amount, `, turning ${convert.amount} (${player.stats.culture - convert.amount}) culture into ${convert.amount} (${player.stats.trade + convert.amount}) trade`)
       }
-      return gained(-convert.amount, convert.amount, `, turning ${convert.amount} trade into ${convert.amount} culture`)
+      return gained(-convert.amount, convert.amount, `, turning ${convert.amount} (${player.stats.trade - convert.amount}) trade into ${convert.amount} (${player.stats.culture + convert.amount}) culture`)
     }
     case 'Andrew Carnegie': {
       const marker = cultureMarkerOf(state, player)
@@ -592,7 +592,7 @@ function automate(
         },
         said:
           `, devoting ${devoted.length} ${devoted.length === 1 ? 'city' : 'cities'} to the arts as the action of ${capital.label} ` +
-          `and gaining ${culture} culture (${list})` +
+          `and gaining ${culture} (${player.stats.culture + culture}) culture (${list})` +
           (acted.length === 0
             ? ''
             : extraCityActionsLeft(state, player) > 0
@@ -892,7 +892,7 @@ function automate(
           coin: { source: known.key, targetId: target.playerId },
           advance: advanced.value.effect,
         },
-        said: `, gave their ${known.label} coin to ${target.username} and advanced one space for free`,
+        said: `, gave their ${known.label} coin (${totalCoins(coinSourcesOf(paid, playerOf(paid, player.playerId) ?? player))}) to ${target.username} (${totalCoins(coinSourcesOf(paid, playerOf(paid, target.playerId) ?? target))}) and advanced one space for free`,
       })
     }
     case 'Captain James Cook': {

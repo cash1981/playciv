@@ -540,11 +540,11 @@ describe('Urban Development', () => {
     const before = me(state).stats.culture
     const next = unwrap(devote(state))
     expect(me(next).stats.culture).toBe(before + 6)
-    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 6 culture')
+    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 6 (6) culture')
 
     const typed = unwrap(devote(state, { culture: 3 }))
     expect(me(typed).stats.culture).toBe(before + 3)
-    expect(lastLine(typed)).toBe('cash1981 devoted City B2 to the arts and gained 3 culture (set by the player; the estimate was 6)')
+    expect(lastLine(typed)).toBe('cash1981 devoted City B2 to the arts and gained 3 (3) culture (set by the player; the estimate was 6)')
   })
 
   it('is added to the squares of the scouts the player sends', () => {
@@ -718,7 +718,7 @@ describe('devoting a city to the arts', () => {
     const before = me(state).stats.culture
     const next = unwrap(devote(state))
     expect(me(next).stats.culture).toBe(before + 3)
-    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 3 culture')
+    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 3 (3) culture')
     expect(next.assistedActions).toHaveLength(1)
     expect(next.assistedActions[0]?.effect).toEqual({
       kind: 'devoteToTheArts',
@@ -741,7 +741,7 @@ describe('devoting a city to the arts', () => {
     if (scout === undefined) throw new Error('no scout offered')
     const next = unwrap(devote(state, { scoutPieceIds: [scout.pieceId] }))
     expect(me(next).stats.culture).toBe(me(state).stats.culture + 2)
-    expect(lastLine(next)).toBe('cash1981 devoted City B1 to the arts and gained 2 culture, with the squares of the scouts at B4')
+    expect(lastLine(next)).toBe('cash1981 devoted City B1 to the arts and gained 2 (2) culture, with the squares of the scouts at B4')
   })
 
   it('adds the culture of a wonder under a scout the player sends', () => {
@@ -752,18 +752,18 @@ describe('devoting a city to the arts', () => {
     if (scout === undefined) throw new Error('no scout offered')
     const next = unwrap(devote(state, { scoutPieceIds: [scout.pieceId] }))
     expect(me(next).stats.culture).toBe(me(state).stats.culture + 1 + 2)
-    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 3 culture, with the squares of the scouts at D1')
+    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 3 (3) culture, with the squares of the scouts at D1')
   })
 
   it('takes the number the player typed and says what the estimate was', () => {
     const next = unwrap(devote(america(), { culture: 5 }))
     expect(me(next).stats.culture).toBe(me(america()).stats.culture + 5)
-    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 5 culture (set by the player; the estimate was 1)')
+    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 5 (5) culture (set by the player; the estimate was 1)')
     expect(next.assistedActions[0]?.effect).toMatchObject({ culture: 5 })
   })
 
   it('a typed number equal to the estimate is not described as typed', () => {
-    expect(lastLine(unwrap(devote(america(), { culture: 1 })))).toBe('cash1981 devoted City B2 to the arts and gained 1 culture')
+    expect(lastLine(unwrap(devote(america(), { culture: 1 })))).toBe('cash1981 devoted City B2 to the arts and gained 1 (1) culture')
   })
 
   it('refuses a typed number that is not a whole number from 0 to 99', () => {
@@ -823,7 +823,7 @@ describe('devoting a city to the arts', () => {
   it('is public: the line reaches an opponent, and no effect is projected', () => {
     const next = unwrap(devote(america()))
     const view = toPlayerView(next, KARANDRAS1)
-    expect(view.assistedActions.at(-1)?.text).toBe('cash1981 devoted City B2 to the arts and gained 1 culture')
+    expect(view.assistedActions.at(-1)?.text).toBe('cash1981 devoted City B2 to the arts and gained 1 (1) culture')
     expect(JSON.stringify(view)).not.toContain('"effect"')
   })
 })

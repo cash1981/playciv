@@ -816,7 +816,7 @@ describe('building', () => {
     const done = build(state, UNIVERSITY, square, 'req-1', true)
     expect(me(done).stats.trade).toBe(3)
     expect(done.log.at(-1)?.publicLog).toBe(
-      'cash1981 built a University in City B2 on square C2, paying 9 trade for the missing production',
+      'cash1981 built a University in City B2 on square C2, paying 9 (3) trade for the missing production',
     )
     expect(done.assistedActions[0]?.effect).toMatchObject({ kind: 'build', trade: 9 })
   })

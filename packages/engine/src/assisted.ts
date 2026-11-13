@@ -107,7 +107,7 @@ import { BUILDING_UPGRADES, buildingNameOf } from './building-data.js'
 import { WONDERS_IN_ERA, WONDERS_PER_ERA, WONDER_ERAS } from './wonder-data.js'
 import type { WonderEra } from './wonder-data.js'
 import { BUILDING_PROGRAM_ASSET_ID } from './city-production.js'
-import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
+import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { activeGreatPerson } from './great-person-effects.js'
 import type { EngineError } from './errors.js'
 import { MAX_DEVOTE_CULTURE } from './limits.js'
@@ -218,7 +218,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} culture` +
+          `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} (${stats.culture}) culture` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -358,7 +358,7 @@ export function applyCoinPurchase(
     username: player.username,
     playerId: player.playerId,
     publicLog:
-      `${player.username} spent ${terms.paidWith} to add 1 coin to ${terms.techName}` +
+      `${player.username} spent ${terms.cost} (${stats[terms.resource]}) ${terms.resource} to add 1 coin (${totalCoins(coinSourcesOf(used, { ...player, stats }))}) to ${terms.techName}` +
       (options.confirmedRepeat === true ? REPEAT_NOTE : ''),
     privateLog: '',
     createdAt: options.at ?? null,
@@ -858,7 +858,7 @@ const build: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
-        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
+        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} (${paying.stats.trade - choice.tradeToPay}) trade for the missing production` : '') +
         (removal === null ? '' : ', using up the Building Program marker') +
         (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
         (hensonWound ? ', and Jim Henson took a wound marker' : '') +
@@ -1368,8 +1368,8 @@ const devoteToTheArts: AssistedActionDefinition = {
     const darwinActivationId = payload.darwin === true ? greatPersonActionIdOf(state, player, DARWIN_NAME) : undefined
     const gained =
       darwin === undefined
-        ? `gained ${culture} culture`
-        : `turned its ${culture} culture into ${darwinTrade} trade with Charles Darwin${darwinTrade < culture ? ' (the trade track has no room for more)' : ''}`
+        ? `gained ${culture} (${stats.culture}) culture`
+        : `turned its ${culture} culture into ${darwinTrade} (${stats.trade}) trade with Charles Darwin${darwinTrade < culture ? ' (the trade track has no room for more)' : ''}`
     const logged = appendLog(kurosawa.state, {
       username: player.username,
       playerId: player.playerId,

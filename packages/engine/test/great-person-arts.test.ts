@@ -416,7 +416,7 @@ describe('Charles Darwin', () => {
     const devoted = unwrap(devote(held.state, 'd1', city, { darwin: true }))
     expect(me(devoted).stats.culture).toBe(0)
     expect(me(devoted).stats.trade).toBe(3 + culture)
-    expect(devoted.log.at(-1)?.publicLog).toContain(`turned its ${culture} culture into ${culture} trade with Charles Darwin`)
+    expect(devoted.log.at(-1)?.publicLog).toContain(`turned its ${culture} culture into ${culture} (${3 + culture}) trade with Charles Darwin`)
     expect(cityActionsOf(devoted, me(devoted))[0]?.devoteToTheArts.darwin).toBe('used')
 
     // The next city's devotion is plain culture, and Darwin cannot be used again
@@ -453,7 +453,7 @@ describe('Charles Darwin', () => {
     const full = withStats(held.state, { trade: ceiling - 1 })
     const devoted = unwrap(devote(full, 'd1', capitalId(full), { darwin: true, culture: 5 }))
     expect(me(devoted).stats.trade).toBe(ceiling)
-    expect(devoted.log.at(-1)?.publicLog).toContain('turned its 5 culture into 1 trade')
+    expect(devoted.log.at(-1)?.publicLog).toContain('turned its 5 culture into 1 (27) trade')
     expect(undoByVote(devoted, 'd1').players.find((p) => p.playerId === CASH1981)?.stats.trade).toBe(ceiling - 1)
   })
 
