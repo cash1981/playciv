@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### player-status-sidebar
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/player-status-sidebar`
+- **Brief:** `docs/agents/tasks/player-status-sidebar.md`
+- **Status:** claimed
+- **Claimed paths:** `packages/web/src/views/PlayerStatusSidebar.*`, `packages/web/src/views/BoardView.tsx`, `packages/web/src/views/GameView.tsx`, `packages/web/src/styles.css`, `packages/web/public/status-icons/`
+- **Notes:** read-only view; the old StatusPanel is untouched.
 
 ## Format
 
