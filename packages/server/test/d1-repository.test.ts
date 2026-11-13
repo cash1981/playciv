@@ -325,7 +325,8 @@ describe('D1Repository', () => {
     const summaries = await repo.finishedGamesForHighscore()
     expect(summaries).toHaveLength(2)
     expect(summaries.find((entry) => entry.winner === 'Alice')?.numOfPlayers).toBe(4)
-    expect(summaries.find((entry) => entry.winner === 'Bob')?.players.map((p) => p.username)).toEqual([
+    // The seat order is shuffled when the game fills up, so only the set of players is checked.
+    expect(summaries.find((entry) => entry.winner === 'Bob')?.players.map((p) => p.username).sort()).toEqual([
       'Alice',
       'Bob',
     ])
