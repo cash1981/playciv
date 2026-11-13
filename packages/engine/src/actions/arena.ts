@@ -12,7 +12,7 @@ import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
 import { isUnit, revealAll } from '../item.js'
-import { appendOpenLog, appendPublicLog, itemNumberText } from '../log.js'
+import { appendPrivatePublicLog, appendPublicLog, itemNumberText } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -931,7 +931,7 @@ function announcePlacements(state: GameState, playerId: string): GameState {
   let next = state
   for (const u of [...battle.arena, ...battle.departedUnits]) {
     if (u.placedBy !== playerId || u.announced !== false) continue
-    next = appendOpenLog(
+    next = appendPrivatePublicLog(
       next,
       owner.username,
       owner.playerId,

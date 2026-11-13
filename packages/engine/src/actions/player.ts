@@ -1030,7 +1030,7 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
   next = appendLog(next, {
     username: fromPlayer.username,
     playerId: fromPlayer.playerId,
-    privateLog: `${toPlayer.username} has received - ${revealAll(traded)}${`. Item number #${loggedItemNumber(state.logSecret, toPlayer.username, traded)}`}`,
+    privateLog: `${toPlayer.username} has received - ${revealAll(traded)}. Item number #${loggedItemNumber(state.logSecret, toPlayer.username, traded)}`,
     publicLog: '',
   })
 

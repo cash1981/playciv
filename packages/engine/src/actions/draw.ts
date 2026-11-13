@@ -20,7 +20,6 @@ import { isTradable, isUnit, itemName, revealAll, revealPublic } from '../item.j
 import {
   appendInfoLog,
   appendItemLog,
-  appendOpenLog,
   appendPrivateLog,
   appendPrivatePublicLog,
   appendPublicLog,
@@ -543,7 +542,7 @@ export function revealAndDiscardBattlehand(
   })
 
   return ok(
-    appendOpenLog(
+    appendPrivatePublicLog(
       next,
       player.username,
       player.playerId,

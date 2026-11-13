@@ -494,21 +494,6 @@ export function appendPublicLog(
   })
 }
 
-/**
- * A line about something everyone sees, written to the public and the owner's
- * private log alike. The private log never falls back to the public one, so
- * the owner's copy has to be written.
- */
-export function appendOpenLog(
-  state: GameState,
-  username: string,
-  playerId: string,
-  message: string,
-): GameState {
-  const text = `${username} ${message}`
-  return appendLog(state, { username, playerId, publicLog: text, privateLog: text })
-}
-
 /** Java: `GameLogAction.createCommonPrivateLog`. */
 export function appendPrivateLog(
   state: GameState,
