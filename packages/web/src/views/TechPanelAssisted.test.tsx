@@ -217,6 +217,44 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('asks about a repeat Gunpowder use when the player pays, not when the picker opens, and keeps the picker if declined', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(viewOf([tech('Gunpowder', 3)]))
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    renderPanel(unitView('Gunpowder', 'gunpowder', 'used', 'Gunpowder has already been used this turn. You will be asked to confirm.'))
+    fireEvent.click(await screen.findByText('Gunpowder'))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder' }))
+    // Opening the picker asks nothing: the state can still change before the player submits
+    expect(confirm).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(send).not.toHaveBeenCalled()
+    // Declining keeps the picker open
+    expect(screen.getByLabelText('Resource 1')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[5]).toBe(true)
+    expect(screen.queryByLabelText('Resource 1')).toBeNull()
+  })
+
+  it('cannot pay Gunpowder from an open picker while another request is running', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(viewOf([tech('Gunpowder', 3)]))
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const view = unitView('Gunpowder', 'gunpowder', 'ready', 'Ready to use.')
+    const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Gunpowder'))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder' }))
+    expect((screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement).disabled).toBe(false)
+
+    rerender(<TechPanel gameId="game-1" busy={true} run={run} view={view} reloadCount={0} />)
+    const pay = screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement
+    expect(pay.disabled).toBe(true)
+    fireEvent.click(pay)
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('shows Mathematics with the reason it is not usable outside a battle', async () => {
     renderPanel(unitView('Mathematics', 'mathematics', 'wrong-phase', 'Used during a battle you are fighting in.'))
     fireEvent.click(await screen.findByText('Mathematics'))
@@ -268,6 +306,44 @@ describe('the Combustion army picker (issue #327)', () => {
     expect(send).toHaveBeenCalledTimes(1)
     const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
     expect([gameId, kind, rev, args]).toEqual(['game-1', 'combustion', 7, { pieceId: 'a2' }])
+  })
+
+  it('asks about a repeat Combustion use when an army is chosen, and keeps the picker if declined', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(combustionView(twoArmies))
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const used = combustionView(twoArmies)
+    renderPanel({
+      ...used,
+      you: { ...used.you!, availableActions: [action('combustion', 'Combustion', 'used', 'Combustion has already been used this turn.')] },
+    } as unknown as PlayerView)
+    fireEvent.click(await screen.findByText('Combustion'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
+    expect(confirm).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Army on / })[0] as HTMLElement)
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(send).not.toHaveBeenCalled()
+    // Declining keeps the picker open
+    expect(screen.getAllByRole('button', { name: /^Army on / })).toHaveLength(2)
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Army on / })[0] as HTMLElement)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[5]).toBe(true)
+  })
+
+  it('cannot send an army from an open picker while another request is running', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(combustionView(twoArmies))
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const view = combustionView(twoArmies)
+    const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Combustion'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
+
+    rerender(<TechPanel gameId="game-1" busy={true} run={run} view={view} reloadCount={0} />)
+    const entry = screen.getAllByRole('button', { name: /^Army on / })[0] as HTMLButtonElement
+    expect(entry.disabled).toBe(true)
+    fireEvent.click(entry)
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('says so when no army stands on something it may destroy, and sends nothing', async () => {

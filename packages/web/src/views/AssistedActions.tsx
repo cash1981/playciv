@@ -390,9 +390,12 @@ export function AssistedActionButton({
     })
   }
 
+  // The two pickers submit later than the button that opened them, so they carry the button's own guard
+  // (busy, read-only, still pressable), and a repeat use is confirmed when they submit, against the state then
+  const canSubmit = !busy && !readOnly && pressable
+
   const pressCombustion = (): void => {
     if (view.you === null) return
-    if (used && !window.confirm(usedAgainQuestion(state.label))) return
     // The map in the projection carries every city and building; the owner of a building is read from the cities' outskirts
     const targets = combustionTargets({ board: view.board, players: [] }, view.you)
     if (targets.length === 0) {
@@ -404,9 +407,12 @@ export function AssistedActionButton({
   }
 
   const burnWith = (target: CombustionTarget): void => {
-    setArmyPick(null)
+    if (!canSubmit) return
     const key = `${gameId}:${playerId}:combustion:${target.pieceId}`
     if (inFlight.has(key)) return
+    // Cancelling the question keeps the picker open
+    if (used && !window.confirm(usedAgainQuestion(state.label))) return
+    setArmyPick(null)
     void pressOnce(
       key,
       run,
@@ -418,9 +424,12 @@ export function AssistedActionButton({
   }
 
   const payGunpowder = (resources: readonly [string, string]): void => {
-    setAnyPick(null)
+    if (!canSubmit) return
     const key = `${gameId}:${playerId}:gunpowder:${resources.join(',')}`
     if (inFlight.has(key)) return
+    // Cancelling the question keeps the picker open
+    if (used && !window.confirm(usedAgainQuestion(state.label))) return
+    setAnyPick(null)
     void pressOnce(
       key,
       run,
@@ -433,7 +442,6 @@ export function AssistedActionButton({
 
   const press = (): void => {
     if (action === 'gunpowder') {
-      if (used && !window.confirm(usedAgainQuestion(state.label))) return
       setAnyPick(defaultAnyPick(view))
       return
     }
@@ -505,7 +513,7 @@ export function AssistedActionButton({
       {armyPick !== null && (
         <span className="assisted-any-pick" role="group" aria-label="Army that uses Combustion">
           {armyPick.map((target) => (
-            <button key={target.pieceId} type="button" className="small" onClick={() => burnWith(target)}>
+            <button key={target.pieceId} type="button" className="small" disabled={!canSubmit} onClick={() => burnWith(target)}>
               Army on {squareLabel(target)}: destroy {target.subject}
             </button>
           ))}
@@ -533,7 +541,7 @@ export function AssistedActionButton({
             </select>
           ))}
           <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
-          <button type="button" className="small" onClick={() => payGunpowder(anyPick)}>
+          <button type="button" className="small" disabled={!canSubmit} onClick={() => payGunpowder(anyPick)}>
             Pay {anyPick.join(' and ')}
           </button>
           <button type="button" className="small" onClick={() => setAnyPick(null)}>
