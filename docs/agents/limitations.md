@@ -70,6 +70,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - A. P. Giannini's Start of Turn section stays hidden when no building can be placed, with no explanation. Frida Kahlo is listed as ready on the culture start space and refuses only when played.
 - Zheng He's look is a list in the private log; the map shows no marker on the squares it read. A token drawn from keeps its piece on the map, and a later look would give that piece a new item. An undone draw puts the item in the shuffled deck, so earlier lines can then be stale. A piece collected into an area is not listed by a later look.
 - Jerry Garcia's all-city devotion counts no scout's square and offers no Charles Darwin conversion; a figure can be corrected on the culture counter by hand.
+- Unit tech abilities (#327): wounds dealt by Mathematics or Ballistics cannot be undone (health is corrected by hand). Gunpowder's effect (obsolete a wonder or destroy a building) and Combustion's building or wall removal stay manual, and a Combustion undo only frees the turn's use. Open rules checks: which resources count as "Any" for Gunpowder, and whether Combustion may destroy the player's own buildings.
 
 ## Battle cards
 
