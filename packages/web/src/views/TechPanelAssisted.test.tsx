@@ -645,6 +645,20 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['monarchy', expect.any(String), 7, { mode: 'kill', targetId: 'p2' }])
     })
 
+    it('cannot kill while a battle is on: the mode is disabled and falls back to obsolete', async () => {
+      const view = { ...abilityView('Monarchy', 'monarchy'), battle: { arena: [] } } as unknown as PlayerView
+      const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+      vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+      render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
+      fireEvent.click(await screen.findByText('Monarchy'))
+      fireEvent.click(screen.getByRole('button', { name: /^Use Monarchy/ }))
+      const kill = screen.getByLabelText(/Kill a random unit/) as HTMLInputElement
+      expect(kill.disabled).toBe(true)
+      expect(screen.getByRole('group').textContent).toContain('not while a battle is on')
+      fireEvent.click(screen.getByRole('button', { name: 'Obsolete a wonder' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete' })
+    })
+
     it('does not send anything by choosing a mode', async () => {
       const send = await open('Monarchy', 'monarchy')
       fireEvent.click(screen.getByLabelText(/Kill a random unit/))

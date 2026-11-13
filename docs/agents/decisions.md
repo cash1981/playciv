@@ -941,8 +941,12 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   has no pending action, so it never blocks the cancelled thing: the other player undoes it with the vote or corrects it by
   hand, and the line says so.
 - **Monarchy** (Silk, City Management): `obsolete` is only logged (obsolescence is not tracked). `kill` takes one random
-  unit card from the chosen opponent's hand with the game's seed and discards it. A unit already placed in an arena is not
-  a standing force and cannot be picked. A discard is open information, so the line names the unit in full with its item
+  unit card from the chosen other player's hand with the game's seed and discards it. The kill cannot be used while a battle
+  is on at all (human, 2026-11-13): it is refused with a reason and nothing is paid, in the action and, as a warning, on the
+  button (which stays ready because `obsolete` is not limited; the web disables the kill mode). A battle set aside by End
+  battle is over, so a kill is allowed then, but the units of that battle's arena stay out of the pick, since undoing End
+  battle puts them back in it; with no live arena the old `inBattle` check is no longer needed. Units drawn for a battle and
+  not placed (the battlehand) are in the hand and can be picked; an undo puts such a card back in the battlehand too. A discard is open information, so the line names the unit in full with its item
   number as Gustavus Adolphus' discards do, and only after the discard; the rest of the hand stays private. Refused, with
   nothing paid, when the opponent holds no such card. The undo returns the card while it is still in the discard pile.
 

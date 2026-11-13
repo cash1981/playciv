@@ -458,14 +458,16 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
   if (pick.kind === 'monarchy') {
     const targetId = stillThere(playerIds, pick.targetId)
     const target = opponents.find((opponent) => opponent.playerId === targetId)
-    const kill = pick.mode === 'kill'
+    // No unit is killed while a battle is on (the game refuses it); the mode falls back to obsolete, which is not limited
+    const battleOn = view.battle != null
+    const kill = pick.mode === 'kill' && !battleOn
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
         <label>
           <input type="radio" name={radioName} checked={!kill} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient wonder
         </label>
         <label>
-          <input type="radio" name={radioName} checked={kill} onChange={() => setPick({ ...pick, mode: 'kill' })} /> Kill a random unit
+          <input type="radio" name={radioName} checked={kill} disabled={battleOn} onChange={() => setPick({ ...pick, mode: 'kill' })} /> Kill a random unit{battleOn ? ' (not while a battle is on)' : ''}
         </label>
         {kill && playerSelect(targetId, (id) => setPick({ ...pick, targetId: id }), (opponent) => `${opponent.publicHand.units} units in hand`)}
         <span className="muted">

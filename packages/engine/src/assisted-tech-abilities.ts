@@ -123,6 +123,8 @@ export interface TechAbility<K extends EffectKind, Plan> {
   readonly payment: Payment
   /** Refusals that do not depend on what the player chose; used by the availability and checked again on apply. */
   block?(state: GameState, player: Playerhand): BlockedAvailability | undefined
+  /** A word of caution for a button that is ready (part of what the ability cannot do now); shown with the payment's own warning. */
+  warn?(state: GameState, player: Playerhand): string | undefined
   /** Reads and checks the payload before anything is paid. The sentence is the reason for a refusal. */
   plan(state: GameState, player: Playerhand, payload: Payload): Result<Plan, string>
   /** Does the part that is not the payment, on the state after paying. */
@@ -248,7 +250,10 @@ export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Pla
       if (turn.usedActions.includes(usageKey)) return blocked('used', usedReason(spec.techName))
       const stopped = spec.block?.(state, player)
       if (stopped !== undefined) return stopped
-      return paymentAvailability(state, playerId, spec.payment)
+      const payable = paymentAvailability(state, playerId, spec.payment)
+      const caution = payable.status === 'ready' ? spec.warn?.(state, player) : undefined
+      if (payable.status !== 'ready' || caution === undefined) return payable
+      return { ...payable, warning: payable.warning === undefined ? caution : `${payable.warning} ${caution}` }
     },
 
     apply(state, player, context) {
@@ -677,8 +682,16 @@ type MonarchyPlan =
   | { readonly mode: 'obsolete' }
   | { readonly mode: 'kill'; readonly target: Playerhand; readonly units: readonly UnitItem[] }
 
-/** The unit cards in a hand that a kill may take: not one placed in a battle's arena. */
-const unitCardsOf = (player: Playerhand): readonly UnitItem[] => player.items.filter(isUnit).filter((unit) => !unit.inBattle)
+const BATTLE_ON = 'A battle is on, so no unit can be killed until it is over. Obsolete is still possible.'
+
+/**
+ * The unit cards in a hand that a kill may take. No battle is on (a kill is refused then), so no card is in a live arena;
+ * the units of the battle End battle set aside stay out, since undoing End battle puts them back in the arena.
+ */
+function unitCardsOf(state: GameState, player: Playerhand): readonly UnitItem[] {
+  const setAside = new Set((state.endedBattle?.battle === undefined ? [] : [...state.endedBattle.battle.arena, ...state.endedBattle.battle.departedUnits]).map((unit) => unit.unit.id))
+  return player.items.filter(isUnit).filter((unit) => !setAside.has(unit.id))
+}
 
 const monarchy = techAbility<'monarchy', MonarchyPlan>({
   kind: 'monarchy',
@@ -688,13 +701,17 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
   buttonText: 'Use Monarchy (Silk: obsolete a wonder, or kill a random unit)',
   payment: { kind: 'one', resource: 'Silk' },
 
+  // Obsolete works at any time; only the kill waits for the end of a battle
+  warn: (state) => (state.battle === null ? undefined : BATTLE_ON),
+
   plan(state, player, payload) {
     const mode = payload['mode']
     if (mode === 'obsolete') return ok({ mode })
     if (mode !== 'kill') return err('Choose obsolete or kill.')
+    if (state.battle !== null) return err('A battle is on: kill a unit when it is over (obsolete is still possible). Nothing was spent.')
     const target = otherPlayer(state, player, payload)
     if (!target.ok) return target
-    const units = unitCardsOf(target.value)
+    const units = unitCardsOf(state, target.value)
     if (units.length === 0) return err(`${target.value.username} holds no unit card to kill.`)
     return ok({ mode, target: target.value, units })
   },

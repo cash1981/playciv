@@ -7,7 +7,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { draw } from '../src/actions/draw.js'
+import { endBattleAction, initiateBattle, placeUnitInArena } from '../src/actions/arena.js'
+import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { placePiece, setCityProductionOverride, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
@@ -740,15 +741,52 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
     expect(hasHut(state, 'Silk')).toBe(true)
     expect(state.assistedActions).toHaveLength(0)
     expect(usedKeys(state)).not.toContain('card:Monarchy')
-    // A unit already placed in a battle is not a standing force that can be killed
-    const placed = drawUnits(state, KARANDRAS1, 'INFANTRY')
-    const inArena: GameState = {
-      ...placed,
-      players: placed.players.map((p) =>
-        p.playerId === KARANDRAS1 ? { ...p, items: p.items.map((item) => (isUnit(item) ? { ...item, inBattle: true } : item)) } : p,
-      ),
+  })
+
+  describe('while a battle is on', () => {
+    /** Cash attacks Karandras; Karandras holds three infantry, one of them placed in the arena. */
+    function battle(): GameState {
+      let state = drawUnits(ready(), KARANDRAS1, 'INFANTRY', 'INFANTRY', 'INFANTRY')
+      state = unwrap(drawUnitsForBattle(drawUnits(state, CASH1981, 'INFANTRY'), { playerId: CASH1981, numberOfDraws: 1 }))
+      state = unwrap(drawUnitsForBattle(state, { playerId: KARANDRAS1, numberOfDraws: 1 }))
+      state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+      const placed = player(state, KARANDRAS1).battlehand[0]
+      if (placed === undefined) throw new Error('no battlehand unit')
+      return unwrap(placeUnitInArena(state, { playerId: KARANDRAS1, unitId: placed.id, side: 'defender', position: 1, attack: 1, health: 3 }))
     }
-    expect(refused(press(inArena, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))).toBe('ASSISTED_ACTION_REJECTED')
+
+    it('refuses a kill with a reason, spends nothing and leaves the hand alone; obsolete is not limited', () => {
+      const state = battle()
+      expect(state.battle).not.toBeNull()
+      expect(refused(press(state, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))).toBe('ASSISTED_ACTION_REJECTED')
+      expect(JSON.stringify(unwrapErr(press(state, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 })))).toContain('A battle is on')
+      expect(hasHut(state, 'Silk')).toBe(true)
+      expect(state.assistedActions).toHaveLength(0)
+      expect(unitsOf(state)).toHaveLength(3)
+      // The button says so but stays ready, since obsolete works
+      expect(assistedAvailability(state, CASH1981, 'monarchy')).toMatchObject({ status: 'ready', warning: expect.stringContaining('A battle is on') })
+      expect(assistedAvailability(ready(), CASH1981, 'monarchy')).not.toHaveProperty('warning')
+      expect(unwrap(press(state, 'monarchy', { mode: 'obsolete' })).assistedActions).toHaveLength(1)
+    })
+
+    it('allows the kill once the battle is over, but never takes a unit of the battle End battle set aside', () => {
+      const ended = unwrap(endBattleAction(battle(), { playerId: CASH1981 }))
+      expect(ended.battle).toBeNull()
+      expect(ended.endedBattle).not.toBeNull()
+      expect(assistedAvailability(ended, CASH1981, 'monarchy')).not.toHaveProperty('warning')
+      const inArena = new Set((ended.endedBattle?.battle.arena ?? []).map((unit) => unit.unit.id))
+      expect(inArena.size).toBe(1)
+      const used = unwrap(press(ended, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
+      const gone = unitsOf(ended).find((unit) => !unitsOf(used).some((kept) => kept.id === unit.id))
+      expect(gone).toBeDefined()
+      expect(inArena.has(gone?.id ?? '')).toBe(false)
+      // With only the set-aside unit left in the hand there is nothing to kill
+      const onlyThat: GameState = {
+        ...ended,
+        players: ended.players.map((p) => (p.playerId === KARANDRAS1 ? { ...p, items: p.items.filter((item) => !isUnit(item) || inArena.has(item.id)) } : p)),
+      }
+      expect(refused(press(onlyThat, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))).toBe('ASSISTED_ACTION_REJECTED')
+    })
   })
 
   it('refuses yourself, a stranger, a missing mode and extra shapes', () => {
