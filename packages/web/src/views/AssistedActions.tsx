@@ -264,7 +264,6 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
 
   if (pick.kind === 'resources' && picker?.kind === 'resources') {
     const { resources } = pick
-    const repeats = picker.distinct && new Set(resources).size !== resources.length
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${label}`}>
         {resources.map((resource, index) => (
@@ -283,13 +282,8 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
             ))}
           </select>
         ))}
-        <span className="muted">
-          {picker.distinct
-            ? 'One of each kind. Tokens you hold pay for their own kind; culture cards only for a kind with no token.'
-            : 'Tokens you hold pay for any you lack; culture cards only if tokens run out.'}
-        </span>
-        {repeats && <span role="status" className="assisted-warning">Pick {resources.length} different resources.</span>}
-        <button type="button" className="small" disabled={!canSubmit || repeats} onClick={() => send({ resources })}>
+        <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
+        <button type="button" className="small" disabled={!canSubmit} onClick={() => send({ resources })}>
           Pay {listOf(resources)}
         </button>
         {cancel}
@@ -523,11 +517,11 @@ const FALLBACK_KINDS: readonly string[] = ['Iron', 'Wheat', 'Silk', 'Incense', '
 
 /**
  * The resources a picker starts on: the tokens the player holds (a hut in the hand or a resource piece in their own
- * area), so the default pays with tokens, in the order held; `distinct` keeps one of each kind. The engine pays any other
+ * area), so the default pays with tokens, in the order held. The engine pays any other
  * token before it would play a culture card, so this is only a convenience; what is missing is filled from the kinds
- * not picked yet (Iron, Wheat, ...), so the picker never starts on a repeat where the kinds must differ.
+ * not picked yet (Iron, Wheat, ...).
  */
-function defaultResourcePick(view: PlayerView, count: number, distinct: boolean): readonly string[] {
+function defaultResourcePick(view: PlayerView, count: number): readonly string[] {
   const viewer = view.you
   const name = (raw: string): string | undefined => ANY_RESOURCES.find((resource) => resource.toLowerCase() === raw.toLowerCase())
   const held: string[] = []
@@ -544,7 +538,7 @@ function defaultResourcePick(view: PlayerView, count: number, distinct: boolean)
             return piece.category === 'resource' && inside ? [name(piece.assetId.replace('resources/', ''))] : []
           })
     for (const resource of [...huts, ...pieces]) {
-      if (resource !== undefined && held.length < count && (!distinct || !held.includes(resource))) held.push(resource)
+      if (resource !== undefined && held.length < count) held.push(resource)
     }
   }
   const picked = [...held]
@@ -767,7 +761,7 @@ export function AssistedActionButton({
     setHint(null)
     switch (picker.kind) {
       case 'resources':
-        setPick({ kind: 'resources', resources: defaultResourcePick(view, picker.count, picker.distinct) })
+        setPick({ kind: 'resources', resources: defaultResourcePick(view, picker.count) })
         return
       case 'city': {
         const city = view.you?.cities?.[0]

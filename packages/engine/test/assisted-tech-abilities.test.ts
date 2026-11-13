@@ -21,7 +21,7 @@ import { GREAT_PERSON_CARD_TYPES } from '../src/blockade.js'
 import { isUnit } from '../src/item.js'
 import { nextInt } from '../src/random.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import { findPlayer, toPlayerView } from '../src/state.js'
+import { toPlayerView } from '../src/state.js'
 import type { AssistedActionKind, GameState, Playerhand } from '../src/state.js'
 
 import { player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
@@ -375,23 +375,28 @@ describe('Philosophy (Any 3, City Management: a random great person)', () => {
 // Education
 // ---------------------------------------------------------------------------
 
-describe('Education (4 different resources, City Management: a free tech)', () => {
-  const FOUR = ['Iron', 'Wheat', 'Silk', 'Incense']
+describe('Education (Incense, Iron, Silk and Wheat, City Management: a free tech)', () => {
+  const FOUR = ['Incense', 'Iron', 'Silk', 'Wheat']
   const ready = (): GameState => huts(cmTurn('Education'), ...FOUR)
+  const cardsHeld = (state: GameState, ...names: string[]): GameState => names.reduce((next, name) => withCardInHand(next, name).state, state)
+  const inHand = (state: GameState, name: string): boolean => player(state).items.some((item) => 'name' in item && item.name === name)
 
-  it('needs four different resources: two of one kind do not make four', () => {
+  it('needs one of each of the four: two of one kind do not make two kinds, and a different kind never stands in', () => {
     expect(assistedAvailability(ready(), CASH1981, 'education').status).toBe('ready')
-    expect(assistedAvailability(huts(cmTurn('Education'), 'Iron', 'Iron', 'Wheat', 'Silk'), CASH1981, 'education').status).toBe('needs-resource')
-    expect(assistedAvailability(huts(cmTurn('Education'), 'Iron', 'Wheat', 'Silk'), CASH1981, 'education').status).toBe('needs-resource')
-    // The kinds may be any four of the six
-    expect(assistedAvailability(huts(cmTurn('Education'), 'Spy', 'Wheat', 'Silk', 'Iron'), CASH1981, 'education').status).toBe('ready')
+    expect(assistedAvailability(ready(), CASH1981, 'education')).not.toHaveProperty('warning')
+    expect(assistedAvailability(huts(cmTurn('Education'), 'Incense', 'Iron', 'Iron', 'Wheat'), CASH1981, 'education').status).toBe('needs-resource')
+    expect(assistedAvailability(huts(cmTurn('Education'), 'Incense', 'Iron', 'Wheat'), CASH1981, 'education').status).toBe('needs-resource')
+    // Spy is not one of the four
+    expect(assistedAvailability(huts(cmTurn('Education'), 'Incense', 'Iron', 'Wheat', 'Spy'), CASH1981, 'education').status).toBe('needs-resource')
+    expect(assistedAvailability(huts(withTech(firstCivGame(), 'Education'), ...FOUR), CASH1981, 'education').status).toBe('wrong-phase')
   })
 
-  it('pays one token of each named kind and grants a free tech that is spent by revealing one in City Management', () => {
-    const used = unwrap(press(ready(), 'education', { resources: FOUR }))
+  it('pays one token of each, takes no names, and grants a free tech that is spent by revealing one in City Management', () => {
+    // The payload is not read: whatever it carries, the same four are paid
+    const used = unwrap(press(ready(), 'education', { resources: ['Spy', 'Spy', 'Spy', 'Spy'] }))
     expect(FOUR.map((name) => hasHut(used, name))).toEqual([false, false, false, false])
     expect(player(used).techGrants).toEqual([{ id: 'req-1', source: 'Education', level: null, turnNumber: 1, phase: 'CM' }])
-    expect(used.log.at(-1)?.publicLog).toMatch(/used Education: spent Iron, Wheat, Silk and Incense, and may learn a new tech of their choice for free/)
+    expect(used.log.at(-1)?.publicLog).toMatch(/used Education: spent Incense, Iron, Silk and Wheat, and may learn a new tech of their choice for free/)
     expect(toPlayerView(used, CASH1981).you?.startOfTurn?.techGrants).toEqual([{ id: 'req-1', source: 'Education', level: null, phase: 'CM' }])
 
     // Choosing and revealing a tech now spends it
@@ -404,7 +409,7 @@ describe('Education (4 different resources, City Management: a free tech)', () =
   })
 
   it('does not give the free tech in the Start of Turn, and an ordinary grant is not spent in City Management', () => {
-    const used = unwrap(press(ready(), 'education', { resources: FOUR }))
+    const used = unwrap(press(ready(), 'education'))
     const open: GameState = {
       ...used,
       players: used.players.map((p) =>
@@ -426,36 +431,51 @@ describe('Education (4 different resources, City Management: a free tech)', () =
     expect(player(cm).techGrants[0]?.usedFor).toBeUndefined()
   })
 
-  it('refuses names that repeat a kind, fewer than four and unknown ones, and a kind it cannot pay, without paying', () => {
-    const state = huts(ready(), 'Iron')
-    for (const resources of [
-      ['Iron', 'Iron', 'Wheat', 'Silk'],
-      ['Iron', 'Wheat', 'Silk'],
-      ['Iron', 'Wheat', 'Silk', 'Gold'],
-      // Spy is not held and no card can pay it; Iron does not stand in for it, because the kinds must differ
-      ['Iron', 'Wheat', 'Silk', 'Spy'],
-      undefined,
-    ]) {
-      expect(refused(press(state, 'education', { resources }))).toBe('ASSISTED_ACTION_REJECTED')
-    }
-    expect(FOUR.every((name) => hasHut(state, name))).toBe(true)
-    expect(player(state).techGrants).toEqual([])
+  it('an Incense token is always needed: no culture card can be played as Incense, and the reason says so', () => {
+    const noIncense = cardsHeld(huts(cmTurn('Education'), 'Iron', 'Silk', 'Wheat'), 'A Gift from Afar', 'A Generous Gift', 'A Princely Gift')
+    expect(assistedAvailability(noIncense, CASH1981, 'education')).toMatchObject({
+      status: 'needs-resource',
+      reason: expect.stringContaining('No culture card can be played as Incense, so a token is always needed'),
+    })
+    expect(refused(press(noIncense, 'education'))).toBe('ASSISTED_ACTION_REJECTED')
+    expect(hasHut(noIncense, 'Iron')).toBe(true)
+    expect(player(noIncense).techGrants).toEqual([])
+    expect(noIncense.assistedActions).toHaveLength(0)
   })
 
-  it('pays a kind that has no token with a culture card that can be played as it, and says so first', () => {
-    const state = withCardInHand(huts(cmTurn('Education'), 'Iron', 'Wheat', 'Silk'), 'A Generous Gift').state
-    expect(assistedAvailability(state, CASH1981, 'education')).toMatchObject({ status: 'ready', warning: expect.stringContaining('A Generous Gift') })
-    const used = unwrap(press(state, 'education', { resources: ['Iron', 'Wheat', 'Silk', 'Spy'] }))
-    expect(used.log.at(-1)?.publicLog).toMatch(/spent Iron, Wheat and Silk and played A Generous Gift item number #\d+ as Spy/)
-    expect(used.discardedItems.some((item) => 'name' in item && item.name === 'A Generous Gift')).toBe(true)
-    // Undo puts the card back in the hand
+  it('pays each kind that has no token with a culture card that can be played as it, several cards at once, each card once, and warns first naming every card', () => {
+    const state = cardsHeld(huts(cmTurn('Education'), 'Incense', 'Wheat'), 'A Gift from Afar', 'A Generous Gift')
+    const availability = assistedAvailability(state, CASH1981, 'education')
+    expect(availability).toMatchObject({ status: 'ready', warning: expect.stringContaining('A Gift from Afar') })
+    expect(availability).toMatchObject({ warning: expect.stringContaining('A Generous Gift') })
+    // The Gift from Afar's coin token goes to another player by hand, and the warning says so
+    expect(availability).toMatchObject({ warning: expect.stringContaining('give it by hand') })
+    const used = unwrap(press(state, 'education'))
+    const line = used.log.at(-1)?.publicLog ?? ''
+    expect(line).toMatch(/spent Incense and Wheat and played A Gift from Afar item number #\d+ as Iron \(another player of your choice also gets a coin token: give it by hand\) and played A Generous Gift item number #\d+ as Silk/)
+    expect(line).toContain('give it by hand')
+    expect(inHand(used, 'A Gift from Afar') || inHand(used, 'A Generous Gift')).toBe(false)
+    expect(used.discardedItems.filter((item) => 'name' in item && (item.name === 'A Gift from Afar' || item.name === 'A Generous Gift'))).toHaveLength(2)
+    // Undo puts both cards back in the hand and the tokens too
     const undone = voted(used, 'req-1')
-    expect(player(undone).items.some((item) => 'name' in item && item.name === 'A Generous Gift')).toBe(true)
+    expect(inHand(undone, 'A Gift from Afar') && inHand(undone, 'A Generous Gift')).toBe(true)
+    expect(hasHut(undone, 'Incense') && hasHut(undone, 'Wheat')).toBe(true)
     expect(player(undone).techGrants).toEqual([])
   })
 
+  it('does not count one card twice: two missing kinds need two cards', () => {
+    const one = cardsHeld(huts(cmTurn('Education'), 'Incense', 'Wheat'), 'A Princely Gift')
+    expect(assistedAvailability(one, CASH1981, 'education').status).toBe('needs-resource')
+    expect(refused(press(one, 'education'))).toBe('ASSISTED_ACTION_REJECTED')
+    expect(inHand(one, 'A Princely Gift')).toBe(true)
+    // Three cards cover Iron, Silk and Wheat with only the Incense token
+    const three = cardsHeld(huts(cmTurn('Education'), 'Incense'), 'A Gift from Afar', 'A Generous Gift', 'A Princely Gift')
+    expect(assistedAvailability(three, CASH1981, 'education').status).toBe('ready')
+    expect(player(unwrap(press(three, 'education'))).items.filter((item) => 'name' in item && item.name.startsWith('A ') && item.name.includes('Gift'))).toHaveLength(0)
+  })
+
   it('an undo by vote returns the tokens and takes the grant while it is unused; refused once a tech was learned with it', () => {
-    const used = unwrap(press(ready(), 'education', { resources: FOUR }))
+    const used = unwrap(press(ready(), 'education'))
     const undone = voted(used, 'req-1')
     expect(FOUR.every((name) => hasHut(undone, name))).toBe(true)
     expect(player(undone).techGrants).toEqual([])
@@ -466,10 +486,10 @@ describe('Education (4 different resources, City Management: a free tech)', () =
   })
 
   it('is once per turn, with a confirmed repeat', () => {
-    const first = unwrap(press(ready(), 'education', { resources: FOUR }))
+    const first = unwrap(press(ready(), 'education'))
     const more = huts(first, ...FOUR)
-    expect(refused(press(more, 'education', { resources: FOUR }, 'req-2'))).toBe('ASSISTED_ACTION_REJECTED')
-    expect(player(unwrap(press(more, 'education', { resources: FOUR }, 'req-2', true))).techGrants).toHaveLength(2)
+    expect(refused(press(more, 'education', undefined, 'req-2'))).toBe('ASSISTED_ACTION_REJECTED')
+    expect(player(unwrap(press(more, 'education', undefined, 'req-2', true))).techGrants).toHaveLength(2)
   })
 })
 
@@ -843,7 +863,7 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
 // The shared layer, generalised
 // ---------------------------------------------------------------------------
 
-describe('Any N and N different resources share the token-first, culture-cards-last rule', () => {
+describe('Any N shares the token-first, culture-cards-last rule', () => {
   const card = (state: GameState, name: string): GameState => withCardInHand(state, name).state
 
   it('three resources use tokens of every kind before any card is played', () => {
@@ -856,12 +876,5 @@ describe('Any N and N different resources share the token-first, culture-cards-l
     expect(assistedAvailability(rich, CASH1981, 'philosophy')).not.toHaveProperty('warning')
     const used = unwrap(press(rich, 'philosophy', { resources: ['Iron', 'Wheat', 'Silk'] }))
     expect(player(used).items.some((item) => 'name' in item && item.name === 'A Generous Gift')).toBe(true)
-  })
-
-  it('does not count one card twice for two kinds', () => {
-    // A single card cannot make four different resources
-    const state = card(huts(cmTurn('Education'), 'Iron', 'Wheat'), 'A Generous Gift')
-    expect(assistedAvailability(state, CASH1981, 'education').status).toBe('needs-resource')
-    expect(findPlayer(state, CASH1981)).toBeDefined()
   })
 })

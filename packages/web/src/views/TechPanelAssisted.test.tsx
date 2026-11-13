@@ -406,7 +406,7 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
   }
 
   describe('the resource pickers', () => {
-    it('Pottery asks for two resources, Philosophy for three and Education for four, and sends them as args', async () => {
+    it('Pottery asks for two resources and Philosophy for three, and sends them as args', async () => {
       const pottery = await open('Pottery', 'pottery')
       expect(screen.getAllByLabelText(/^Resource \d$/)).toHaveLength(2)
       fireEvent.change(screen.getByLabelText('Resource 2'), { target: { value: 'Silk' } })
@@ -419,24 +419,42 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(screen.getAllByLabelText(/^Resource \d$/)).toHaveLength(3)
       fireEvent.click(screen.getByRole('button', { name: 'Pay Iron, Wheat and Silk' }))
       expect(philosophy.mock.calls.at(-1)?.[4]).toEqual({ resources: ['Iron', 'Wheat', 'Silk'] })
-      cleanup()
-
-      const education = await open('Education', 'education')
-      expect(screen.getAllByLabelText(/^Resource \d$/)).toHaveLength(4)
-      fireEvent.click(screen.getByRole('button', { name: 'Pay Iron, Wheat, Silk and Incense' }))
-      expect(education.mock.calls.at(-1)?.[4]).toEqual({ resources: ['Iron', 'Wheat', 'Silk', 'Incense'] })
     })
 
-    it('starts Education on one token of each kind the player holds, and will not send a repeated kind', async () => {
-      const send = await open('Education', 'education', { items: [hut('Spy'), hut('Spy', 'hut-spy-2'), hut('Silk')] })
-      expect(screen.getAllByLabelText(/^Resource \d$/).map((select) => (select as HTMLSelectElement).value)).toEqual(['Spy', 'Silk', 'Iron', 'Wheat'])
+    it('starts a resource picker on the tokens the player holds, and fills what is missing with kinds not picked yet', async () => {
+      await open('Philosophy', 'philosophy', { items: [hut('Spy'), hut('Silk')] })
+      expect(screen.getAllByLabelText(/^Resource \d$/).map((select) => (select as HTMLSelectElement).value)).toEqual(['Spy', 'Silk', 'Iron'])
+    })
 
-      fireEvent.change(screen.getByLabelText('Resource 3'), { target: { value: 'Spy' } })
-      const pay = screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement
-      expect(pay.disabled).toBe(true)
-      expect(screen.getByRole('group').textContent).toContain('Pick 4 different resources.')
-      fireEvent.click(pay)
-      expect(send).not.toHaveBeenCalled()
+    it('Education has no picker: it pays Incense, Iron, Silk and Wheat directly, naming every card that would be played', async () => {
+      const base = abilityView('Education', 'education')
+      const view = {
+        ...base,
+        you: { ...base.you!, availableActions: [{ ...action('education', 'Education', 'ready', 'Ready to use.'), warning: 'Not enough resource tokens: A Gift from Afar and A Generous Gift in your hand would be played as a resource and discarded.' }] },
+      } as unknown as PlayerView
+      const perform = vi.spyOn(api, 'performAction').mockResolvedValue(view)
+      const withArgs = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+      renderPanel(view)
+      fireEvent.click(await screen.findByText('Education'))
+      expect(screen.getByRole('dialog').textContent).toContain('A Gift from Afar and A Generous Gift')
+      fireEvent.click(screen.getByRole('button', { name: 'Use Education' }))
+      expect(screen.queryByLabelText('Resource 1')).toBeNull()
+      expect(withArgs).not.toHaveBeenCalled()
+      expect(perform).toHaveBeenCalledTimes(1)
+      expect(perform.mock.calls[0]?.slice(0, 2)).toEqual(['game-1', 'education'])
+    })
+
+    it('Education asks before a repeat use and sends confirmedRepeat after a yes', async () => {
+      const base = abilityView('Education', 'education', { status: 'used' })
+      const perform = vi.spyOn(api, 'performAction').mockResolvedValue(base)
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+      renderPanel(base)
+      fireEvent.click(await screen.findByText('Education'))
+      fireEvent.click(screen.getByRole('button', { name: 'Use Education' }))
+      expect(perform).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Use Education' }))
+      expect(confirm).toHaveBeenCalledTimes(2)
+      expect(perform).toHaveBeenCalledWith('game-1', 'education', expect.any(String), 7, true)
     })
 
     it('asks about a repeat use when the player pays, not when the picker opens, and keeps the picker if declined', async () => {

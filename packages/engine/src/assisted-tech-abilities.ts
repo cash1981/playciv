@@ -30,13 +30,14 @@ import {
   ANY_RESOURCES,
   anyResourceName,
   anyResourcesAvailability,
-  distinctResourcesAvailability,
+  eachResourceAvailability,
+  missingEachText,
   joinList,
   resourceAvailability,
   returnedText,
   returnResources,
   spendAnyResources,
-  spendDistinctResources,
+  spendEachResource,
   spendResource,
 } from './assisted-resources.js'
 import {
@@ -94,8 +95,8 @@ export type Payment =
   | { readonly kind: 'one'; readonly resource: string }
   /** `count` resource tokens of the player's own choosing (Gunpowder's rule). */
   | { readonly kind: 'any'; readonly count: number }
-  /** `count` resource tokens of different kinds. */
-  | { readonly kind: 'distinct'; readonly count: number }
+  /** One resource of each of these kinds, nothing named by the player (Education). */
+  | { readonly kind: 'each'; readonly kinds: readonly string[] }
   /** Nothing is paid (Bureaucracy). */
   | { readonly kind: 'none' }
 
@@ -171,16 +172,13 @@ export function otherPlayer(state: GameState, player: Playerhand, payload: Paylo
   return target === undefined ? err('That player is not in this game.') : ok(target)
 }
 
-/** The resource names a payment takes from the payload: exactly `count`, known, and different for `distinct`. */
-function namedResources(payload: Payload, payment: Extract<Payment, { readonly count: number }>): Result<readonly string[], string> {
+/** The resource names an "Any N" payment takes from the payload: exactly `count`, each a known resource. */
+function namedResources(payload: Payload, count: number): Result<readonly string[], string> {
   const named = payload['resources']
-  const asked = `Name exactly ${payment.count} ${payment.kind === 'distinct' ? 'different ' : ''}resources to pay: ${ANY_RESOURCES.join(', ')}.`
-  if (!Array.isArray(named) || named.length !== payment.count) return err(asked)
+  const asked = `Name exactly ${count} resources to pay: ${ANY_RESOURCES.join(', ')}.`
+  if (!Array.isArray(named) || named.length !== count) return err(asked)
   const names = (named as readonly unknown[]).map(anyResourceName)
-  if (names.some((name) => name === undefined)) return err(asked)
-  const known = names as readonly string[]
-  if (payment.kind === 'distinct' && new Set(known).size !== known.length) return err(asked)
-  return ok(known)
+  return names.some((name) => name === undefined) ? err(asked) : ok(names as readonly string[])
 }
 
 interface Paid {
@@ -203,18 +201,16 @@ function pay(state: GameState, player: Playerhand, payment: Payment, payload: Pa
           ),
         )
   }
-  const names = namedResources(payload, payment)
+  if (payment.kind === 'each') {
+    const each = spendEachResource(state, player.playerId, payment.kinds, at)
+    return each.ok ? ok(each.value) : err(blocked('needs-resource', missingEachText(each.error.missing)))
+  }
+  const names = namedResources(payload, payment.count)
   if (!names.ok) return err(blocked('unavailable', names.error))
-  const paid =
-    payment.kind === 'any'
-      ? spendAnyResources(state, player.playerId, names.value, at)
-      : spendDistinctResources(state, player.playerId, names.value, undefined, at)
+  const paid = spendAnyResources(state, player.playerId, names.value, at)
   if (!paid.ok) {
     return err(
-      blocked(
-        'needs-resource',
-        `You cannot pay ${payment.count} ${payment.kind === 'distinct' ? 'different ' : ''}resources: you hold too few resource tokens or culture cards that can be played as ${payment.kind === 'distinct' ? `a ${paid.error.missing}` : 'a resource'}.`,
-      ),
+      blocked('needs-resource', `You cannot pay ${payment.count} resources: you hold too few resource tokens or culture cards that can be played as a resource.`),
     )
   }
   return ok(paid.value)
@@ -223,9 +219,8 @@ function pay(state: GameState, player: Playerhand, payment: Payment, payload: Pa
 function paymentAvailability(state: GameState, playerId: string, payment: Payment): AssistedAvailability {
   if (payment.kind === 'none') return READY
   if (payment.kind === 'one') return resourceAvailability(state, playerId, payment.resource)
-  return payment.kind === 'any'
-    ? anyResourcesAvailability(state, playerId, payment.count)
-    : distinctResourcesAvailability(state, playerId, payment.count)
+  if (payment.kind === 'each') return eachResourceAvailability(state, playerId, payment.kinds)
+  return anyResourcesAvailability(state, playerId, payment.count)
 }
 
 export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Plan>): AssistedActionDefinition {
@@ -475,7 +470,7 @@ const philosophy = techAbility<'philosophy', null>({
 })
 
 // ---------------------------------------------------------------------------
-// Education: four different resources, a free tech in City Management
+// Education: one of each of Incense, Iron, Silk and Wheat, a free tech in City Management
 // ---------------------------------------------------------------------------
 
 /**
@@ -487,8 +482,10 @@ const education = techAbility<'education', null>({
   techName: 'Education',
   effectKind: 'education',
   phase: 'CM',
-  buttonText: 'Use Education (4 different resources: a free tech)',
-  payment: { kind: 'distinct', count: 4 },
+  buttonText: 'Use Education (Incense, Iron, Silk and Wheat: a free tech)',
+  // Exactly these four, one of each (human, 2026-11-13): nothing is chosen, so the button pays directly. A token of the kind,
+  // else a culture card that can be played as it; no card can be Incense, so an Incense token is always needed
+  payment: { kind: 'each', kinds: ['Incense', 'Iron', 'Silk', 'Wheat'] },
 
   plan: () => ok(null),
 

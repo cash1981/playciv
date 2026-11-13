@@ -192,7 +192,7 @@ function parseCombustion(args: Record<string, unknown>): CombustionPayload | str
 /** The most characters of free text a cancel may carry for what it cancels. */
 const MAX_NOTE = 80
 
-/** `resources`: exactly `count` names, each a short text; which kinds are legal (and different, for Education) is the engine's call. */
+/** `resources`: exactly `count` names, each a short text; which names are legal is the engine's call. */
 function parseResources(action: string, count: number) {
   return (args: Record<string, unknown>): ResourcesPayload | string => {
     const extra = extraKeys(args, ['resources'])
@@ -375,7 +375,6 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['plastics', parseProductionBoost('plastics')],
   ['pottery', parseResources('pottery', 2)],
   ['philosophy', parseResources('philosophy', 3)],
-  ['education', parseResources('education', 4)],
   ['horsebackRiding', parseTargetPlayer('horsebackRiding', false)],
   ['writing', parseTargetPlayer('writing', true)],
   ['civilService', parseTargetPlayer('civilService', true)],

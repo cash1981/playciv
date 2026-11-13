@@ -147,25 +147,35 @@ describe('resources through args: Pottery, Philosophy and Education', () => {
     expect(JSON.stringify((await view(t.gameId, t.other)).assistedActions)).not.toContain(card.name)
   })
 
-  it('Education takes exactly four names', async () => {
+  it('Education takes no args at all and pays Incense, Iron, Silk and Wheat', async () => {
     const t = await table('edu', 'Education', ['resources/iron', 'resources/wheat', 'resources/silk', 'resources/incense'])
     await doneThrough(t, 'TRADE')
     const before = await view(t.gameId, t.starter)
     expect(entryOf(before, 'education')).toMatchObject({ status: 'ready' })
-    for (const args of [{ resources: ['Iron', 'Wheat', 'Silk'] }, { resources: ['Iron', 'Wheat', 'Silk', 'Incense', 'Spy'] }]) {
-      expect((await post(t.starter, actions(t.gameId), { action: 'education', requestId: 'req-bad', rev: before.rev, args })).status).toBe(400)
+    // The route reads no names: any args are refused, nothing is paid
+    for (const args of [{ resources: ['Iron', 'Wheat', 'Silk', 'Incense'] }, {}, { extra: 1 }]) {
+      const bad = await post(t.starter, actions(t.gameId), { action: 'education', requestId: 'req-bad', rev: before.rev, args })
+      expect(bad.status).toBe(400)
     }
-    // Four names that repeat a kind are the engine's refusal, and nothing is paid
-    const repeated = await post(t.starter, actions(t.gameId), { action: 'education', requestId: 'req-dup', rev: before.rev, args: { resources: ['Iron', 'Iron', 'Wheat', 'Silk'] } })
-    expect(repeated.status).toBe(400)
-    expect(await repeated.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
     expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
 
-    const paid = await post(t.starter, actions(t.gameId), { action: 'education', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Wheat', 'Silk', 'Incense'] } })
+    const paid = await post(t.starter, actions(t.gameId), { action: 'education', requestId: 'req-1', rev: before.rev })
     expect(paid.status).toBe(200)
-    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/used Education: spent Iron, Wheat, Silk and Incense, and may learn a new tech/)
+    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/used Education: spent Incense, Iron, Silk and Wheat, and may learn a new tech/)
     const state = await repo.findGame(t.gameId)
     expect(state?.players.find((p) => p.playerId === t.starterId)?.techGrants).toMatchObject([{ source: 'Education', phase: 'CM' }])
+    expect(state?.board.pieces.some((piece) => piece.assetId.startsWith('resources/'))).toBe(false)
+  })
+
+  it('Education without an Incense token is refused whatever else is held, and pays nothing', async () => {
+    const t = await table('edu2', 'Education', ['resources/iron', 'resources/wheat', 'resources/silk'])
+    await doneThrough(t, 'TRADE')
+    const before = await view(t.gameId, t.starter)
+    expect(entryOf(before, 'education')).toMatchObject({ status: 'needs-resource' })
+    const refused = await post(t.starter, actions(t.gameId), { action: 'education', requestId: 'req-1', rev: before.rev })
+    expect(refused.status).toBe(400)
+    expect(await refused.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    expect((await repo.findGame(t.gameId))?.board.pieces.filter((piece) => piece.assetId.startsWith('resources/'))).toHaveLength(3)
   })
 })
 

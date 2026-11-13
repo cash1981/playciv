@@ -356,57 +356,34 @@ export function spendAnyResources(
 }
 
 // ---------------------------------------------------------------------------
-// "N different resources" (Education: 4 resources, one of each)
+// One of each of a fixed list of kinds (Education: Incense, Iron, Silk and Wheat)
 // ---------------------------------------------------------------------------
 
 /**
- * Whether the player can pay `count` resources of different kinds, for the availability of an action: tokens first,
- * one for each kind the player holds, then culture cards for the kinds that have no token, each card at most once
- * and played as the kind it is assigned (the fewest-allowed card first, as everywhere). The Marie Curie
- * substitution is included, as `spendResource` pays it.
+ * Pays one resource of each of the `kinds`, no choice left to the player: a token of the kind first (a hut, then a piece
+ * in the player's area), else a culture card that can be played as that kind (`findResourceCard`: the fewest-allowed card
+ * first, each card at most once, so several cards may be used when the player holds several). A token of another kind never
+ * stands in. `missing` lists every kind neither can pay, and nothing is spent then.
  */
-export function distinctResourcesAvailability(state: GameState, playerId: string, count: number): AssistedAvailability {
-  const paid = spendDistinctResources(state, playerId, ANY_RESOURCES, count)
-  if (!paid.ok) {
-    return blocked(
-      'needs-resource',
-      `You need ${count} different resources, one of each kind: resource huts in your hand or resource pieces in your player area, or culture cards that can be played as a resource.`,
-    )
-  }
-  return paidAvailability(state, playerId, paid.value.spent)
-}
-
-/**
- * Pays one resource of each of the kinds in `kinds` (each at most once), stopping at `count` payments when `count` is
- * given: a token of the kind, else, for what tokens cannot cover, a culture card played as that kind. A kind that
- * neither can pay is skipped; `missing` is the first kind left unpaid when fewer than `count` could be (or any, with
- * no `count`), and nothing is spent then. Unlike {@link spendAnyResources} a token of another kind never stands in:
- * the kinds must differ.
- */
-export function spendDistinctResources(
+export function spendEachResource(
   state: GameState,
   playerId: string,
   kinds: readonly string[],
-  count?: number,
   at?: string,
-): Result<SpendAnyOutcome, { readonly missing: string }> {
-  const wanted = count ?? kinds.length
+): Result<SpendAnyOutcome, { readonly missing: readonly string[] }> {
   let current = state
   const slots: (SpentResource | undefined)[] = kinds.map(() => undefined)
-  const paidCount = (): number => slots.filter((slot) => slot !== undefined).length
   for (const tokensOnly of [true, false]) {
     for (const [index, kind] of kinds.entries()) {
-      if (slots[index] !== undefined || paidCount() >= wanted) continue
+      if (slots[index] !== undefined) continue
       const paid = spendResource(current, playerId, kind, at, tokensOnly)
       if (!paid.ok) continue
       current = paid.value.state
       slots[index] = paid.value.spent
     }
   }
-  if (paidCount() < wanted) {
-    const missingAt = slots.findIndex((slot) => slot === undefined)
-    return err({ missing: kinds[missingAt] ?? '' })
-  }
+  const missing = kinds.filter((_, index) => slots[index] === undefined)
+  if (missing.length > 0) return err({ missing })
   const spent = slots.filter((slot): slot is SpentResource => slot !== undefined)
   const holder = playerOf(state, playerId)
   const tokens = spent.filter((payment) => payment.kind !== 'card').map((payment) => payment.resource)
@@ -415,6 +392,24 @@ export function spendDistinctResources(
   )
   const said = [...(tokens.length === 0 ? [] : [`spent ${joinList(tokens)}`]), ...cards].join(' and ')
   return ok({ state: current, spent, said })
+}
+
+/** What the player lacks for {@link spendEachResource}, in words: Incense can never be a card. */
+export function missingEachText(missing: readonly string[]): string {
+  const noCard = missing.filter((kind) => !cardCanPay(kind))
+  return (
+    `You lack ${joinList(missing)}: each needs a resource token (a hut in your hand or a piece in your player area) or a culture card that can be played as it.` +
+    (noCard.length === 0 ? '' : ` No culture card can be played as ${joinList(noCard)}, so ${noCard.length === 1 ? 'a token is' : 'tokens are'} always needed.`)
+  )
+}
+
+/**
+ * Whether the player can pay one of each of the `kinds`, for the availability of an action: ready with a `warning`
+ * naming every card that would be played (the Gift from Afar note included), or `needs-resource` saying what is missing.
+ */
+export function eachResourceAvailability(state: GameState, playerId: string, kinds: readonly string[]): AssistedAvailability {
+  const paid = spendEachResource(state, playerId, kinds)
+  return paid.ok ? paidAvailability(state, playerId, paid.value.spent) : blocked('needs-resource', missingEachText(paid.error.missing))
 }
 
 /** Puts back every token of {@link spendAnyResources}, the last paid first. */

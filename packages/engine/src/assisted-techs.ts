@@ -42,11 +42,11 @@ export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = ne
 
 /**
  * What a tech action asks the player before it is sent (#327), so the web builds the right picker without knowing the
- * rule: resource tokens to name (`distinct`: one of each kind), a city, another player (with free text for what is
+ * rule: resource tokens to name, a city, another player (with free text for what is
  * cancelled), an opponent and one of their coin counters, or Monarchy's mode. An action not listed is one press.
  */
 export type TechPicker =
-  | { readonly kind: 'resources'; readonly count: number; readonly distinct: boolean }
+  | { readonly kind: 'resources'; readonly count: number }
   | { readonly kind: 'city' }
   | { readonly kind: 'player'; readonly noteLabel?: string }
   | { readonly kind: 'coin' }
@@ -57,10 +57,9 @@ export type TechPicker =
   | { readonly kind: 'atomic' }
 
 export const ASSISTED_TECH_PICKERS: ReadonlyMap<AssistedActionKind, TechPicker> = new Map<AssistedActionKind, TechPicker>([
-  ['gunpowder', { kind: 'resources', count: 2, distinct: false }],
-  ['pottery', { kind: 'resources', count: 2, distinct: false }],
-  ['philosophy', { kind: 'resources', count: 3, distinct: false }],
-  ['education', { kind: 'resources', count: 4, distinct: true }],
+  ['gunpowder', { kind: 'resources', count: 2 }],
+  ['pottery', { kind: 'resources', count: 2 }],
+  ['philosophy', { kind: 'resources', count: 3 }],
   ['animalHusbandry', { kind: 'city' }],
   ['construction', { kind: 'city' }],
   ['banking', { kind: 'city' }],

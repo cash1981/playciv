@@ -924,8 +924,13 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   number, the name only the player's own log. The undo puts the card back in the deck, shuffled twice as every undo of a
   draw does, and takes the marker; it is refused once the card has left the hand. (The brief said "at its place": the shared
   convention was kept, because the owner has seen the card and a known top card would be a leak.)
-- **Education** (four different resources): read as four of the six kinds, one token each; a token of another kind never
-  stands in, and a card pays only a kind without a token. The free tech reuses `TechGrant` with `phase: 'CM'`: `revealTech`
+- **Education** (Incense, Iron, Silk and Wheat, one of each; human, 2026-11-13): exactly these four, so nothing is chosen: no
+  picker and no names in the payload (the route takes no args), and the button pays directly with the usual repeat
+  confirmation. Each kind is paid by its own token first, else by a culture card that can be played as it (Gift from Afar,
+  Generous Gift, Princely Gift: Iron, Wheat, Spy, Silk), several cards when the player holds several and each card once; a
+  token of another kind never stands in. No card can be played as Incense, so an Incense token is always needed, which the
+  availability reason says. The warning names every card that would be played (the Gift from Afar note included), and the
+  line says "played <card> item number #N as <kind>" for each (`spendEachResource`). The free tech reuses `TechGrant` with `phase: 'CM'`: `revealTech`
   spends a grant whose phase equals the open phase (no phase means Start of Turn), so a Start of Turn grant is not spent in
   City Management and the reverse. The player chooses and reveals the tech in the tech tree; the grant is listed in the
   Start of Turn view. The undo is refused once a tech was learned with it (the existing rule). Education's coin for building
@@ -979,7 +984,7 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   phase, costs nothing, and the switch itself stays manual in the social policy panel. The 1 coin is the existing flat-coin
   handling on reveal (`coinOnReveal`, tested).
 
-Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-resources.ts` (`spendDistinctResources`), `city-production.ts`
+Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-resources.ts` (`spendEachResource`), `city-production.ts`
 (`boost`), `build-options.ts`, `actions/player.ts` (`revealTech`), `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
 `web/src/views/AssistedActions.tsx` (`TechPickerForm`); tests `assisted-tech-abilities`, `assisted-tech-abilities-api`,
 `TechPanelAssisted.test.tsx`.
