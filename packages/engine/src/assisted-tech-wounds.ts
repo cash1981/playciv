@@ -9,9 +9,8 @@
  * is gone altogether, since wounds already dealt cannot then be ruled out.
  */
 
-import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
 import {
-  READY,
   REPEAT_NOTE,
   blocked,
   lastLogId,
@@ -65,10 +64,7 @@ function woundTech(kind: AssistedActionKind, tech: string): AssistedActionDefini
         return blocked('unavailable', 'You are not fighting in this battle.')
       }
       if (turnOf(state, player).usedActions.includes(usageKey)) return blocked('used', usedReason(tech))
-      if (findResourceToken(state, playerId, 'Iron') === undefined) {
-        return blocked('needs-resource', 'You need an Iron token: an Iron hut in your hand or an Iron piece in your player area.')
-      }
-      return READY
+      return resourceAvailability(state, playerId, 'Iron')
     },
 
     apply(state, player, context) {
@@ -90,7 +86,7 @@ function woundTech(kind: AssistedActionKind, tech: string): AssistedActionDefini
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used ${tech}: spent 1 Iron to deal up to ${wounds} wounds, spread across enemy units in the battle` +
+          `${player.username} used ${tech}: ${spend.value.said} to deal up to ${wounds} wounds, spread across enemy units in the battle` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -133,7 +129,7 @@ function woundTech(kind: AssistedActionKind, tech: string): AssistedActionDefini
       if (!returned.ok) return returned
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${tech} was undone: the Iron returned and the wounds are no longer owed`,
+        text: `${player.username}'s ${tech} was undone: ${effect.spent.kind === 'card' ? returnedText(effect.spent) : 'the Iron'} returned and the wounds are no longer owed`,
       })
     },
   }

@@ -485,7 +485,16 @@ the engine; the browser decides no rule.
 - **Resources** (human): pay with an unspent hut item of that name first, else a
   `resources/<name>` piece whose centre lies in the player's own area, which goes
   back to stock. Applies to every resource kind; a piece outside every area is
-  never taken.
+  never taken. **A culture card counts as a resource** (human, 2026-11-13): with no
+  token, a culture card in the hand whose play rule lists the resource (A Gift from
+  Afar, A Generous Gift: Iron, Wheat, Spy, Silk; A Princely Gift: Iron, Uranium, Spy,
+  Wheat, Silk; `card-timing.ts`) is played as it and discarded to `discardedItems` as
+  `playCard` does. This is in the shared payment layer (`assisted-resources.ts`), so
+  every resource ability benefits (Chivalry-style Incense abilities cannot: no card
+  can be played as Incense). The action stays ready with a `warning` naming the card
+  (the viewer's own availability only); the public log line says "played <card> item
+  number #N as <resource>" as `playCard` writes it; the Marie Curie substitute applies
+  as for a token; undo puts the card back in the hand and out of the discard pile.
 - **Undo** is the existing vote, extended to assisted log lines
   (`assistedActionId`). A reversal writes a "System:" line and refuses, vote left
   open, when a marker or token moved or a card left the hand. Board Undo refuses
@@ -825,21 +834,30 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   been dealt there (as for Zhukov; health is corrected by hand). It is also refused once the battle is gone
   altogether (a new battle started), since wounds already dealt cannot be ruled out; the Iron is not refunded
   then. A confirmed repeat owes a second set; the first set is dealt first, and each record is undone on its own. The Battle panel lists the button and the wound buttons; the tech dialog and phase tabs show the button.
-- **Gunpowder (Any 2, City Management):** pays two tokens the player names (`payload.resources`, exactly two
-  names; the same resource twice needs two tokens), through `spendAnyResources` in `assisted-resources.ts`,
-  reusable for Pottery (Any 2) and Philosophy (Any 3). The web tech dialog asks for the two resources before
-  paying. Undo returns exactly the tokens spent. The effect (obsolete an ancient or medieval wonder, or destroy a
-  building of the player's choice) stays manual: obsolescence is not tracked in the engine and the choice is the
-  player's; the log line says so. **Open rules question:** which resources count as "Any" could not be checked
-  (the rulebooks are not readable in this environment); Incense, Iron, Silk, Wheat, Spy and Uranium are accepted.
+- **Gunpowder (Any 2, City Management):** pays two resources the player names (`payload.resources`, exactly two
+  names; the same resource twice needs two), through `spendAnyResources` in `assisted-resources.ts`, reusable for
+  Pottery (Any 2) and Philosophy (Any 3). The accepted names are Incense, Iron, Silk, Wheat, Spy and Uranium
+  (human, 2026-11-13). Each is paid token first, else a culture card as above, never the same card twice; the
+  availability counts tokens first and warns when cards would be played. The web tech dialog asks for the two
+  resources before paying. Undo returns exactly the tokens and cards spent. The effect (obsolete an ancient or
+  medieval wonder, or destroy a building of the player's choice) stays manual: obsolescence is not tracked in the
+  engine and the choice is the player's; the log line says so.
 - **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
-  no-cost assisted action in the open Movement phase (group "Movement abilities"): the player picks a square
-  where one of their armies stands on a building or on another player's walled city (`combustionTargetAt`; the
-  owner's own walls are never offered, the city colour read with `pieceColorOf` as elsewhere); the log line names
-  the building or "the walls of ..." and says to remove it by hand. **Manual:** removing the building, turning
-  the walled city marker back to its unwalled side, and judging that the army really ended its movement there or
-  attacked the city. Undo by vote only frees the use for the turn. **Open rules question:** whether the player's
-  own buildings may be destroyed is not settled; they are currently accepted and need a rulebook check by the human.
+  no-cost assisted action in the open Movement phase (group "Movement abilities"). The player chooses which army
+  acts: the payload is the army's piece id (`pieceId`), the square, and the building or walls, follow from it
+  (`combustionTargetFor`; the web picker lists one entry per army that stands on something to destroy). The army
+  must be the player's own army on a map square. **Never the player's own:** an army cannot attack its own city,
+  so the owner's walled city is never a target (colour read with `pieceColorOf` as elsewhere); a building is the
+  player's own when it stands in the outskirts of the player's city, i.e. its square is in the footprint of exactly
+  one colour's cities (`pieceCityOwnerColor`, the owner the coin and blockade rules use, without the "placed by"
+  fallback). A building in the outskirts of another player's city is a target; so is one outside every city's
+  outskirts, or in outskirts of cities of two colours (it has no owner). Walls come before buildings. The log line
+  names the building or "the walls of ..." and says to remove it by hand. **Manual:** removing the building,
+  turning the walled city marker back to its unwalled side, and judging that the army really ended its movement
+  there or attacked the city. Undo by vote only frees the use for the turn.
+- **Once per turn, not per battle** (human, 2026-11-13): Mathematics, Ballistics and every tech card are once per
+  turn, which is the `card:<tech>` usage key with the confirmed repeat; only the healing abilities (Animal
+  Husbandry, Biology) are once per battle.
 
 Source: `engine/src/assisted-tech-wounds.ts`, `assisted-gunpowder.ts`, `assisted-combustion.ts`, `combustion.ts`,
 `assisted-resources.ts`, `battle-cards.ts` (`TECH_WOUNDS`), `actions/arena.ts` (`techWound`),

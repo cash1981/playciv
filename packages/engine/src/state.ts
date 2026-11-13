@@ -467,13 +467,15 @@ export type AssistedStatus =
   | 'unavailable'
 
 /**
- * The resource token an action spent, exactly, so an undo puts back the same
- * one: a hut from the hand (moved to `discardedItems`), or the board piece that
- * was removed, with its position.
+ * The resource an action paid, exactly, so an undo puts back the same
+ * one: a hut from the hand (moved to `discardedItems`), the board piece that
+ * was removed, with its position, or the culture card played as the resource.
  */
 export type SpentResource =
   | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
   | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string }
+  // A culture card played as the resource (A Gift from Afar, A Generous Gift, A Princely Gift), discarded like a played card
+  | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
 
 /**
  * The Great Person marker a culture advance put in the player's area: which piece, where it
@@ -787,8 +789,9 @@ export type AssistedEffect =
       readonly spent: readonly SpentResource[]
     }
   | {
-      /** Combustion: the square an army stands on and what is to be destroyed there, for the log and the undo line. */
+      /** Combustion: the army that acted, the square it stands on and what is to be destroyed there, for the log and the undo line. */
       readonly kind: 'combustion'
+      readonly pieceId: string
       readonly square: { readonly column: number; readonly row: number }
       readonly walls: boolean
       readonly subject: string

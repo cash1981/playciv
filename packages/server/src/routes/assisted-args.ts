@@ -176,10 +176,10 @@ function parseCommunism(args: Record<string, unknown>): CommunismPayload | strin
 }
 
 function parseCombustion(args: Record<string, unknown>): CombustionPayload | string {
-  const extra = extraKeys(args, ['square'])
-  if (extra.length > 0) return `combustion takes only square, not ${extra.join(', ')}`
-  const square = wholeSquare(args['square'], 'square')
-  return typeof square === 'string' ? square : { square }
+  const extra = extraKeys(args, ['pieceId'])
+  if (extra.length > 0) return `combustion takes only pieceId, not ${extra.join(', ')}`
+  if (!isId(args['pieceId'])) return 'pieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  return { pieceId: args['pieceId'] }
 }
 
 function parseGunpowder(args: Record<string, unknown>): GunpowderPayload | string {

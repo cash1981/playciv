@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createBoard, mapTop } from '@civ/engine'
 import type { TechItem } from '@civ/engine'
 
 import { api } from '../lib/api.js'
@@ -210,5 +211,59 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     const button = screen.getByRole('button', { name: 'Use Mathematics' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     expect(screen.getByRole('dialog').textContent).toContain('Used during a battle you are fighting in.')
+  })
+})
+
+describe('the Combustion army picker (issue #327)', () => {
+  const piece = (id: string, assetId: string, category: string, label: string, column: number, row: number) => {
+    const board = createBoard()
+    return { id, assetId, category, label, x: column * board.squareSize + 20, y: mapTop(board) + row * board.squareSize + 20, width: 50, height: 50, rotation: 0 }
+  }
+  const combustionView = (pieces: readonly object[]): PlayerView => {
+    const base = viewOf([tech('Combustion', 4)])
+    return {
+      ...base,
+      board: { ...createBoard(), pieces },
+      you: {
+        ...base.you!,
+        color: 'Red',
+        availableActions: [action('combustion', 'Combustion', 'ready', 'Ready to use.')],
+      },
+    } as unknown as PlayerView
+  }
+  const twoArmies = [
+    piece('a1', 'figures/redarmy', 'figure', 'Red Army', 3, 3),
+    piece('b1', 'buildings/granary', 'building', 'Granary', 3, 3),
+    piece('a2', 'figures/redarmy', 'figure', 'Red Army', 6, 6),
+    piece('b2', 'buildings/market', 'building', 'Market', 6, 6),
+    piece('a3', 'figures/redarmy', 'figure', 'Red Army', 9, 2),
+  ]
+
+  it('lists one entry for each army on something to destroy, and sends the chosen army, not a square', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(combustionView(twoArmies))
+    renderPanel(combustionView(twoArmies))
+    fireEvent.click(await screen.findByText('Combustion'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
+    expect(send).not.toHaveBeenCalled()
+
+    const entries = screen.getAllByRole('button', { name: /^Army on / })
+    // The army on an empty square is not offered
+    expect(entries.map((entry) => entry.textContent)).toEqual([
+      expect.stringContaining('Granary'),
+      expect.stringContaining('Market'),
+    ])
+    fireEvent.click(entries[1] as HTMLElement)
+    expect(send).toHaveBeenCalledTimes(1)
+    const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
+    expect([gameId, kind, rev, args]).toEqual(['game-1', 'combustion', 7, { pieceId: 'a2' }])
+  })
+
+  it('says so when no army stands on something it may destroy, and sends nothing', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(combustionView([]))
+    renderPanel(combustionView([piece('a3', 'figures/redarmy', 'figure', 'Red Army', 9, 2)]))
+    fireEvent.click(await screen.findByText('Combustion'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
+    expect(screen.getByRole('dialog').textContent).toContain('None of your armies stands on')
+    expect(send).not.toHaveBeenCalled()
   })
 })

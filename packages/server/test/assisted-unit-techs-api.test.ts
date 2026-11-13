@@ -171,18 +171,19 @@ describe('Gunpowder and Combustion args', () => {
     expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron' || piece.assetId === 'resources/wheat')).toBe(false)
   })
 
-  it('takes a square for Combustion and nothing else', async () => {
+  it('takes the id of an army for Combustion and nothing else', async () => {
     const t = await table('com', 'Combustion', [])
     expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'CM' })).status).toBe(200)
     const before = await view(t.gameId, t.starter)
     expect(entryOf(before, 'combustion')).toMatchObject({ status: 'ready' })
-    for (const args of [{}, { square: { column: 1 } }, { square: { column: 1, row: 1 }, extra: true }]) {
+    for (const args of [{}, { pieceId: 7 }, { pieceId: 'bad id!' }, { square: { column: 1, row: 1 } }, { pieceId: 'a1', extra: true }]) {
       const bad = await post(t.starter, actions(t.gameId), { action: 'combustion', requestId: 'req-bad', rev: before.rev, args })
       expect(bad.status).toBe(400)
     }
-    // A valid shape on an empty square is the engine's refusal
-    const empty = await post(t.starter, actions(t.gameId), { action: 'combustion', requestId: 'req-1', rev: before.rev, args: { square: { column: 1, row: 1 } } })
-    expect(empty.status).toBe(400)
-    expect(await empty.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    // A valid shape naming no army of the player is the engine's refusal
+    const missing = await post(t.starter, actions(t.gameId), { action: 'combustion', requestId: 'req-1', rev: before.rev, args: { pieceId: 'no-such-piece' } })
+    expect(missing.status).toBe(400)
+    expect(await missing.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
   })
 })

@@ -30,7 +30,6 @@ import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
   PHASE_REASON,
-  READY,
   REPEAT_NOTE,
   cityActionOf,
   blocked,
@@ -50,7 +49,7 @@ import {
 import { DARWIN_NAME, darwinTradeOf, greatPersonActionIdOf, payKurosawa, takeBackKurosawa, useDarwin } from './assisted-arts.js'
 import { playCard } from './assisted-cards.js'
 import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
-import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
+import { findResourceToken, resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
 import { CITY_ACTIONS } from './assisted-city.js'
 import { ABILITY_ACTIONS } from './assisted-abilities.js'
 import { SOT_ACTIONS } from './assisted-sot.js'
@@ -190,13 +189,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
       if (turn.usedActions.includes(usageKey)) {
         return blocked('used', usedReason(card.techName))
       }
-      if (findResourceToken(state, playerId, card.resource) === undefined) {
-        return blocked(
-          'needs-resource',
-          `You need an ${card.resource} token: an ${card.resource} hut in your hand or an ${card.resource} piece in your player area.`,
-        )
-      }
-      return READY
+      return resourceAvailability(state, playerId, card.resource)
     },
 
     apply(state, player, context) {
@@ -218,7 +211,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} (${stats.culture}) culture` +
+          `${player.username} used ${card.techName}: ${spend.value.said} and gained ${card.culture} (${stats.culture}) culture` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -244,7 +237,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
       if (!returned.ok) return returned
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and the ${effect.spent.resource} token returned`,
+        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and ${returnedText(effect.spent)} returned`,
       })
     },
   }

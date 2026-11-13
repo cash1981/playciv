@@ -7,9 +7,8 @@
 import { isMapCell } from './board.js'
 import { squareLabel } from './build-options.js'
 import { COMMUNISM_USAGE_KEY } from './communism.js'
-import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
 import {
-  READY,
   REPEAT_NOTE,
   blocked,
   lastLogId,
@@ -51,13 +50,7 @@ export const communism: AssistedActionDefinition = {
     if (turn.usedActions.includes(COMMUNISM_USAGE_KEY)) {
       return blocked('used', 'Communism has already been used this turn.')
     }
-    if (findResourceToken(state, playerId, 'Spy') === undefined) {
-      return blocked(
-        'needs-resource',
-        'You need a Spy token: a Spy hut in your hand or a Spy piece in your player area.',
-      )
-    }
-    return READY
+    return resourceAvailability(state, playerId, 'Spy')
   },
 
   apply(state, player, context) {
@@ -87,7 +80,7 @@ export const communism: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} used Communism: spent 1 Spy and locked ${squareLabel(square)} this turn` +
+        `${player.username} used Communism: ${spend.value.said} and locked ${squareLabel(square)} this turn` +
         (context.confirmedRepeat ? REPEAT_NOTE : ''),
       privateLog: '',
       createdAt: context.at ?? null,
@@ -107,7 +100,7 @@ export const communism: AssistedActionDefinition = {
     if (!returned.ok) return returned
     return ok({
       state: returned.value,
-      text: `${player.username}'s Communism was undone: the Spy returned and the square is no longer locked`,
+      text: `${player.username}'s Communism was undone: ${effect.spent.kind === 'card' ? returnedText(effect.spent) : 'the Spy'} returned and the square is no longer locked`,
     })
   },
 }

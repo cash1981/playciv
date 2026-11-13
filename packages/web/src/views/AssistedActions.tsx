@@ -27,7 +27,7 @@ import {
   steamPowerFiguresAt,
   steamPowerSources,
 } from '@civ/engine'
-import type { AssistedActionKind, PendingRewardView, TurnPhase } from '@civ/engine'
+import type { AssistedActionKind, CombustionTarget, PendingRewardView, TurnPhase } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
@@ -245,6 +245,8 @@ export function AssistedActionButton({
   const [hint, setHint] = useState<string | null>(null)
   // Gunpowder: the two resources the player names before paying ("Any 2"), or `null` while the picker is closed
   const [anyPick, setAnyPick] = useState<readonly [string, string] | null>(null)
+  // Combustion: the armies standing on something to destroy, one entry each; the player picks the army that acts
+  const [armyPick, setArmyPick] = useState<readonly CombustionTarget[] | null>(null)
   if (view.you === null || state === undefined) return null
 
   const ready = state.status === 'ready'
@@ -364,32 +366,27 @@ export function AssistedActionButton({
     })
   }
 
-  const pressCombustion = async (): Promise<void> => {
-    if (mapPicker === null || view.you === null) return
+  const pressCombustion = (): void => {
+    if (view.you === null) return
     if (used && !window.confirm(usedAgainQuestion(state.label))) return
-    const targets = combustionTargets(view.board, view.you)
+    // The map in the projection carries every city and building; the owner of a building is read from the cities' outskirts
+    const targets = combustionTargets({ board: view.board, players: [] }, view.you)
     if (targets.length === 0) {
-      setHint('None of your armies stands on a building or on a walled city.')
+      setHint('None of your armies stands on a building of another player or outside every city, or on another player\'s walled city.')
       return
     }
     setHint(null)
-    onBeforePress?.()
-    const picked = await mapPicker.begin({
-      title: 'the Combustion square',
-      cells: targets.map((target) => ({ column: target.column, row: target.row, label: squareLabel(target) })),
-      describeCell: (cell) => {
-        const target = targets.find((candidate) => candidate.column === cell.column && candidate.row === cell.row)
-        return `Destroy ${target?.subject ?? `what stands on ${cell.label}`} with Combustion`
-      },
-    })
-    if (picked === null) return
-    const square = { column: picked.column, row: picked.row }
-    const key = `${gameId}:${playerId}:combustion:${square.column},${square.row}`
+    setArmyPick(targets)
+  }
+
+  const burnWith = (target: CombustionTarget): void => {
+    setArmyPick(null)
+    const key = `${gameId}:${playerId}:combustion:${target.pieceId}`
     if (inFlight.has(key)) return
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, 'combustion', requestId, rev, { square }, used),
+      (requestId) => api.actionWithArgs(gameId, 'combustion', requestId, rev, { pieceId: target.pieceId }, used),
       view,
     ).then((done) => {
       if (done) onDone?.()
@@ -417,7 +414,7 @@ export function AssistedActionButton({
       return
     }
     if (action === 'combustion') {
-      void pressCombustion()
+      pressCombustion()
       return
     }
     if (action === 'communism') {
@@ -459,7 +456,7 @@ export function AssistedActionButton({
       <button
         type="button"
         className={className}
-        disabled={busy || readOnly || !pressable || ((action === 'communism' || action === 'steamPower' || action === 'combustion') && mapPicker === null)}
+        disabled={busy || readOnly || !pressable || ((action === 'communism' || action === 'steamPower') && mapPicker === null)}
         title={shownReason}
         onClick={press}
       >
@@ -479,6 +476,18 @@ export function AssistedActionButton({
       {hint !== null && (
         <span role="status" className="assisted-warning">
           {hint}
+        </span>
+      )}
+      {armyPick !== null && (
+        <span className="assisted-any-pick" role="group" aria-label="Army that uses Combustion">
+          {armyPick.map((target) => (
+            <button key={target.pieceId} type="button" className="small" onClick={() => burnWith(target)}>
+              Army on {squareLabel(target)}: destroy {target.subject}
+            </button>
+          ))}
+          <button type="button" className="small" onClick={() => setArmyPick(null)}>
+            Cancel
+          </button>
         </span>
       )}
       {anyPick !== null && (

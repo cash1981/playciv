@@ -6,9 +6,8 @@
  */
 
 import { moveFigureWithMovementUnchecked } from './actions/board.js'
-import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
 import {
-  READY,
   REPEAT_NOTE,
   blocked,
   lastLogId,
@@ -71,13 +70,7 @@ export const steamPower: AssistedActionDefinition = {
     if (turnOf(state, player).usedActions.includes(STEAM_POWER_USAGE_KEY)) {
       return blocked('used', 'Steam Power has already been used this turn.')
     }
-    if (findResourceToken(state, playerId, 'Silk') === undefined) {
-      return blocked(
-        'needs-resource',
-        'You need a Silk token: a Silk hut in your hand or a Silk piece in your player area.',
-      )
-    }
-    return READY
+    return resourceAvailability(state, playerId, 'Silk')
   },
 
   apply(state, player, context) {
@@ -157,7 +150,7 @@ export const steamPower: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} used ${STEAM_POWER_NAME}: spent 1 Silk and ` +
+        `${player.username} used ${STEAM_POWER_NAME}: ${spend.value.said} and ` +
         (sameSquare
           ? `locked ${count} on ${squareLabel(from)}`
           : `moved ${count} from ${squareLabel(from)} to ${squareLabel(to)}`) +
@@ -214,7 +207,7 @@ export const steamPower: AssistedActionDefinition = {
     if (!returned.ok) return returned
     return ok({
       state: returned.value,
-      text: `${player.username}'s ${STEAM_POWER_NAME} was undone: the figures went back and the Silk returned`,
+      text: `${player.username}'s ${STEAM_POWER_NAME} was undone: the figures went back and ${effect.spent.kind === 'card' ? returnedText(effect.spent) : 'the Silk'} returned`,
     })
   },
 }

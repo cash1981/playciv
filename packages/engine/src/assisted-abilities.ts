@@ -49,7 +49,7 @@ import {
   restoreDrawnCards,
   reverseAdvanceEffect,
 } from './assisted-culture.js'
-import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
 import { startOfTurnGate, statGainAction } from './assisted-sot.js'
 import type { StatGainSpec } from './assisted-sot.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
@@ -363,13 +363,17 @@ const afterInvesting = (state: GameState, player: Playerhand): BlockedAvailabili
 }
 
 const needsResource = (resource: string) =>
-  (state: GameState, player: Playerhand): BlockedAvailability | undefined =>
-    findResourceToken(state, player.playerId, resource) === undefined
-      ? blocked(
-          'needs-resource',
-          `You need a ${resource} token: a ${resource} hut in your hand or a ${resource} piece in your player area.`,
-        )
-      : undefined
+  (state: GameState, player: Playerhand): BlockedAvailability | undefined => {
+    const payment = resourceAvailability(state, player.playerId, resource)
+    return payment.status === 'ready' ? undefined : payment
+  }
+
+/** Ready, but only a culture card can pay the resource: the warning says which one would be played. */
+const cardWarning = (resource: string) =>
+  (state: GameState, player: Playerhand): string | undefined => {
+    const payment = resourceAvailability(state, player.playerId, resource)
+    return payment.status === 'ready' ? payment.warning : undefined
+  }
 
 const NOTES: readonly NoteSpec[] = [
   {
@@ -444,21 +448,28 @@ function noteAction(spec: NoteSpec): AssistedActionDefinition {
   return {
     ...shared(spec),
 
-    availability: availabilityOf(spec, () => `${spec.summary}. The game logs it; you do it on the map.`),
+    availability: availabilityOf(
+      spec,
+      () => `${spec.summary}. The game logs it; you do it on the map.`,
+      spec.resource === undefined ? undefined : cardWarning(spec.resource),
+    ),
 
     apply(state, player, context) {
       const opened = openGate(state, player, spec, context.confirmedRepeat)
       if ('blocked' in opened) return dismissed(spec, opened)
       let working = state
       let spent: SpentResource | null = null
+      let logText = spec.logText
       if (spec.resource !== undefined) {
         const paid = spendResource(state, player.playerId, spec.resource, context.at)
         if (!paid.ok) return err(rejected(kindOf(spec.id), blocked('needs-resource', `You need a ${spec.resource} token to use ${spec.label}.`)))
         working = paid.value.state
         spent = paid.value.spent
+        // "spent a Wheat to change ..." names the payment; a culture card played as the resource is named instead
+        if (spent.kind === 'card') logText = logText.replace(/^spent an? [A-Za-z]+/, paid.value.said)
       }
       const used = markUsed(working, player, opened.turn, spec)
-      const logged = announce(used, player, context, `${player.username} used ${spec.label}: ${spec.logText}`)
+      const logged = announce(used, player, context, `${player.username} used ${spec.label}: ${logText}`)
       return ok({
         state: logged,
         effect: { kind: 'sotNote', subject: spec.label, spent },
@@ -479,7 +490,7 @@ function noteAction(spec: NoteSpec): AssistedActionDefinition {
         state: working,
         text:
           `${player.username}'s ${effect.subject} was undone: take back by hand what you did on the map` +
-          (effect.spent === null ? '' : `, and the ${effect.spent.resource} token returned`),
+          (effect.spent === null ? '' : `, and ${returnedText(effect.spent)} returned`),
       })
     },
   }

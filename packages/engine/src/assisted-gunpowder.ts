@@ -8,10 +8,9 @@
  * says so. The undo vote returns exactly the tokens spent.
  */
 
-import { ANY_RESOURCES, anyResourceName, hasAnyResources, returnResources, spendAnyResources } from './assisted-resources.js'
+import { ANY_RESOURCES, anyResourceName, anyResourcesAvailability, returnedText, returnResources, spendAnyResources } from './assisted-resources.js'
 import {
   PHASE_REASON,
-  READY,
   REPEAT_NOTE,
   blocked,
   lastLogId,
@@ -53,13 +52,7 @@ export const gunpowder: AssistedActionDefinition = {
     const turn = openCityManagementTurn(state, player)
     if (turn === undefined) return blocked('wrong-phase', PHASE_REASON)
     if (turn.usedActions.includes(USAGE_KEY)) return blocked('used', usedReason(GUNPOWDER_NAME))
-    if (!hasAnyResources(state, playerId, GUNPOWDER_COST)) {
-      return blocked(
-        'needs-resource',
-        `You need ${GUNPOWDER_COST} resource tokens of your choice: resource huts in your hand or resource pieces in your player area.`,
-      )
-    }
-    return READY
+    return anyResourcesAvailability(state, playerId, GUNPOWDER_COST)
   },
 
   apply(state, player, context) {
@@ -77,13 +70,12 @@ export const gunpowder: AssistedActionDefinition = {
     }
     const after = playerOf(paid.value.state, player.playerId) ?? player
     const marked = useTurnAction(paid.value.state, after, turn, USAGE_KEY, after.stats)
-    const spentNames = paid.value.spent.map((token) => token.resource)
     const logged = appendLog(marked, {
       username: player.username,
       playerId: player.playerId,
       // The choice and the effect are made by hand, so the line says what the player has to do next
       publicLog:
-        `${player.username} used ${GUNPOWDER_NAME}: spent ${joinNames(spentNames)}. ` +
+        `${player.username} used ${GUNPOWDER_NAME}: ${paid.value.said}. ` +
         'Obsolete an ancient or medieval wonder, or destroy a building of your choice, by hand' +
         (context.confirmedRepeat ? REPEAT_NOTE : ''),
       privateLog: '',
@@ -104,7 +96,7 @@ export const gunpowder: AssistedActionDefinition = {
     if (!returned.ok) return returned
     return ok({
       state: returned.value,
-      text: `${player.username}'s ${GUNPOWDER_NAME} was undone: ${joinNames(effect.spent.map((token) => token.resource))} returned`,
+      text: `${player.username}'s ${GUNPOWDER_NAME} was undone: ${joinNames(effect.spent.map(returnedText))} returned`,
     })
   },
 }

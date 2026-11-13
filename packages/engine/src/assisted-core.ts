@@ -268,9 +268,9 @@ export interface CommunismPayload {
   readonly square: CardSquare
 }
 
-/** What `combustion` carries: the square an army of the player stands on, with the building or walls to destroy. */
+/** What `combustion` carries: the army figure that acts; the square, and the building or walls, follow from it. */
 export interface CombustionPayload {
-  readonly square: CardSquare
+  readonly pieceId: string
 }
 
 /** What `gunpowder` carries: the two resource tokens to pay, by name, in the player's own choice. */

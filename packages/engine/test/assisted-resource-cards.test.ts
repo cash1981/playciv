@@ -1,0 +1,196 @@
+/**
+ * A culture card played as a resource (human, 2026-11-13): when the player has no token, A Gift from Afar,
+ * A Generous Gift or A Princely Gift in the hand pays the resource and is discarded, in every resource ability.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import { chooseTech, revealTech } from '../src/actions/player.js'
+import { markPhasesDone } from '../src/actions/turn.js'
+import { initiateUndo, vote } from '../src/actions/undo.js'
+import { assistedAvailability, availableActionsFor, performAssistedAction } from '../src/assisted.js'
+import { unwrap, unwrapErr } from '../src/result.js'
+import { toPlayerView, withPlayer } from '../src/state.js'
+import type { AssistedActionKind, GameState } from '../src/state.js'
+
+import { player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { sotTurn } from './sot-fixture.js'
+
+const AT = '2026-11-13T12:00:00.000Z'
+
+const withTech = (state: GameState, techName: string): GameState =>
+  unwrap(revealTech(unwrap(chooseTech(state, { playerId: CASH1981, techName })), { playerId: CASH1981, techName }))
+
+const upTo = (state: GameState, phase: 'TRADE' | 'CM'): GameState =>
+  unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: phase }))
+
+const press = (state: GameState, action: AssistedActionKind, payload?: Record<string, unknown>, requestId = 'req-1') =>
+  performAssistedAction(state, { playerId: CASH1981, action, requestId, at: AT, ...(payload === undefined ? {} : { payload: payload as never }) })
+
+const voted = (state: GameState, requestId: string): GameState => {
+  const entry = state.log.find((candidate) => candidate.assistedActionId === requestId)
+  if (entry === undefined) throw new Error('no log line for the action')
+  let next = unwrap(initiateUndo(state, { logId: entry.id, playerId: CASH1981 }))
+  for (const playerId of [KARANDRAS1, ITCHI, CHUL]) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
+  return next
+}
+
+const inHand = (state: GameState, name: string): boolean =>
+  player(state).items.some((item) => 'name' in item && item.name === name)
+const inDiscard = (state: GameState, name: string): boolean =>
+  state.discardedItems.some((item) => 'name' in item && item.name === name)
+const handHut = (state: GameState, name: string): boolean =>
+  player(state).items.some((item) => item.kind === 'hut' && item.name === name && !item.used)
+
+const GENEROUS = 'A Generous Gift'
+const PRINCELY = 'A Princely Gift'
+const AFAR = 'A Gift from Afar'
+const card = (state: GameState, name: string): GameState => withCardInHand(state, name).state
+
+const movementTurn = (tech: string): GameState => upTo(withTech(firstCivGame(), tech), 'CM')
+const cmTurn = (tech: string): GameState => upTo(withTech(firstCivGame(), tech), 'TRADE')
+
+describe('a culture card pays a resource when there is no token', () => {
+  it('Communism pays its Spy with A Generous Gift, names the card in the public line and discards it', () => {
+    const state = card(movementTurn('Communism'), GENEROUS)
+    expect(assistedAvailability(state, CASH1981, 'communism').status).toBe('ready')
+    const used = unwrap(press(state, 'communism', { square: { column: 3, row: 3 } }))
+    expect(inHand(used, GENEROUS)).toBe(false)
+    expect(inDiscard(used, GENEROUS)).toBe(true)
+    expect(used.log.at(-1)?.publicLog).toMatch(/used Communism: played A Generous Gift item number #\d+ as Spy and locked/)
+    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'communism', spent: { kind: 'card', resource: 'Spy' } })
+  })
+
+  it('Steam Power and Gunpowder are ready with a card, with a warning naming the card', () => {
+    const steam = card(cmTurn('Steam Power'), GENEROUS)
+    expect(assistedAvailability(steam, CASH1981, 'steamPower')).toMatchObject({ status: 'ready', warning: expect.stringContaining(GENEROUS) })
+    const gunpowder = card(card(cmTurn('Gunpowder'), AFAR), PRINCELY)
+    expect(assistedAvailability(gunpowder, CASH1981, 'gunpowder').status).toBe('ready')
+  })
+
+  it('Ecology pays its Wheat with a card, names it, and gives it back on undo', () => {
+    const state = card(sotTurn({ techs: ['Ecology'] }), GENEROUS)
+    expect(assistedAvailability(state, CASH1981, 'sot:ecology')).toMatchObject({ status: 'ready', warning: expect.stringContaining(GENEROUS) })
+    const used = unwrap(press(state, 'sot:ecology'))
+    expect(used.log.at(-1)?.publicLog).toMatch(/used Ecology: played A Generous Gift item number #\d+ as Wheat to change an empty/)
+    expect(inDiscard(used, GENEROUS)).toBe(true)
+    const undone = voted(used, 'req-1')
+    expect(inHand(undone, GENEROUS)).toBe(true)
+    expect(inDiscard(undone, GENEROUS)).toBe(false)
+  })
+
+  it('Currency-style Incense abilities are not paid by a card: no card can be played as Incense', () => {
+    const state = card(card(card(cmTurn('Chivalry'), GENEROUS), PRINCELY), AFAR)
+    expect(assistedAvailability(state, CASH1981, 'chivalry').status).toBe('needs-resource')
+  })
+
+  it('a card that cannot be played as the resource does not pay it (A Princely Gift has no Incense, Gift from Afar no Uranium)', () => {
+    const state = card(cmTurn('Steam Power'), AFAR)
+    expect(assistedAvailability(state, CASH1981, 'steamPower').status).toBe('ready')
+    const other = card(movementTurn('Communism'), 'Migrants')
+    expect(assistedAvailability(other, CASH1981, 'communism').status).toBe('needs-resource')
+  })
+
+  it('a token is preferred over a card, and the card stays in the hand with no warning', () => {
+    const state = card(withHutInHand(movementTurn('Communism'), 'Spy').state, GENEROUS)
+    expect(assistedAvailability(state, CASH1981, 'communism')).not.toHaveProperty('warning')
+    const used = unwrap(press(state, 'communism', { square: { column: 3, row: 3 } }))
+    expect(handHut(used, 'Spy')).toBe(false)
+    expect(inHand(used, GENEROUS)).toBe(true)
+    expect(used.log.at(-1)?.publicLog).toContain('spent 1 Spy and locked')
+    // A piece in the player area also comes before a card
+    const withPiece = card(withPieceInArea(cmTurn('Steam Power'), 'resources/silk').state, GENEROUS)
+    expect(availableActionsFor(withPiece, CASH1981).find((entry) => entry.action === 'steamPower')).not.toHaveProperty('warning')
+  })
+
+  it('the warning and the card name reach only the owner: nothing about the hand is in an opponent view', () => {
+    const state = card(movementTurn('Communism'), GENEROUS)
+    const mine = availableActionsFor(state, CASH1981).find((entry) => entry.action === 'communism')
+    expect(mine).toMatchObject({ status: 'ready', warning: expect.stringContaining(GENEROUS) })
+    expect(JSON.stringify(toPlayerView(state, KARANDRAS1))).not.toContain(GENEROUS)
+    // Once played the card is open information in the public log, and only there
+    const used = unwrap(press(state, 'communism', { square: { column: 3, row: 3 } }))
+    const publicView = JSON.stringify(toPlayerView(used, KARANDRAS1))
+    expect(publicView).toContain(GENEROUS)
+    expect(publicView).not.toContain('"effect"')
+  })
+
+  it('an undo returns the card to the hand and takes it out of the discard pile', () => {
+    const state = card(movementTurn('Communism'), GENEROUS)
+    const used = unwrap(press(state, 'communism', { square: { column: 3, row: 3 } }))
+    const undone = voted(used, 'req-1')
+    expect(inHand(undone, GENEROUS)).toBe(true)
+    expect(inDiscard(undone, GENEROUS)).toBe(false)
+    expect(undone.discardedItems).toHaveLength(state.discardedItems.length)
+    expect(undone.log.at(-1)?.publicLog).toContain('the card played as Spy returned')
+  })
+
+  it('Marie Curie: an armed substitute is paid by a card that can be played as it, and the arm is used up', () => {
+    // Uranium is paid as Iron; the card is played as Iron
+    const armed = withPlayer(card(cmTurn('Gunpowder'), PRINCELY), { ...player(card(cmTurn('Gunpowder'), PRINCELY)), curieSubstitute: 'Iron' })
+    const state = card(armed, GENEROUS)
+    const used = unwrap(press(withHutInHand(state, 'Wheat').state, 'gunpowder', { resources: ['Uranium', 'Wheat'] }))
+    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ spent: [{ kind: 'card', resource: 'Iron' }, { kind: 'hut', resource: 'Wheat' }] })
+    expect(player(used).curieSubstitute).toBeNull()
+    expect(player(voted(used, 'req-1')).curieSubstitute).toBe('Iron')
+  })
+})
+
+describe('Gunpowder pays each of its two resources token first, else a card, never the same card twice', () => {
+  const gunpowder = (state: GameState, resources: readonly string[], requestId = 'req-1') =>
+    press(state, 'gunpowder', { resources }, requestId)
+
+  it('one token and one card', () => {
+    const state = card(withHutInHand(cmTurn('Gunpowder'), 'Iron').state, GENEROUS)
+    const availability = assistedAvailability(state, CASH1981, 'gunpowder')
+    expect(availability).toMatchObject({ status: 'ready', warning: expect.stringContaining(GENEROUS) })
+    const paid = unwrap(gunpowder(state, ['Iron', 'Wheat']))
+    expect(handHut(paid, 'Iron')).toBe(false)
+    expect(inDiscard(paid, GENEROUS)).toBe(true)
+    expect(paid.log.at(-1)?.publicLog).toMatch(/used Gunpowder: spent Iron and played A Generous Gift item number #\d+ as Wheat\. /)
+  })
+
+  it('two cards', () => {
+    const state = card(card(cmTurn('Gunpowder'), GENEROUS), PRINCELY)
+    expect(assistedAvailability(state, CASH1981, 'gunpowder')).toMatchObject({ status: 'ready', warning: expect.stringContaining(' and ') })
+    const paid = unwrap(gunpowder(state, ['Iron', 'Wheat']))
+    expect(inDiscard(paid, GENEROUS)).toBe(true)
+    expect(inDiscard(paid, PRINCELY)).toBe(true)
+    expect(paid.log.at(-1)?.publicLog).toMatch(/played A Generous Gift item number #\d+ as Iron and played A Princely Gift item number #\d+ as Wheat/)
+  })
+
+  it('never plays one card for both resources, so a single card is not enough', () => {
+    const state = card(cmTurn('Gunpowder'), PRINCELY)
+    expect(assistedAvailability(state, CASH1981, 'gunpowder').status).toBe('needs-resource')
+    expect(unwrapErr(gunpowder(state, ['Iron', 'Wheat'])).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(inHand(state, PRINCELY)).toBe(true)
+  })
+
+  it('tokens are used before any card is, across both resources', () => {
+    const state = card(withHutInHand(withHutInHand(cmTurn('Gunpowder'), 'Silk').state, 'Wheat').state, GENEROUS)
+    expect(assistedAvailability(state, CASH1981, 'gunpowder')).not.toHaveProperty('warning')
+    const paid = unwrap(gunpowder(state, ['Silk', 'Wheat']))
+    expect(inHand(paid, GENEROUS)).toBe(true)
+  })
+
+  it('an undo returns exactly the card and the tokens that were spent', () => {
+    const { state: base } = withPieceInArea(cmTurn('Gunpowder'), 'resources/iron')
+    const state = card(base, GENEROUS)
+    const before = {
+      hand: player(state).items.map((item) => item.id).sort(),
+      discard: state.discardedItems.map((item) => item.id).sort(),
+      pieces: state.board.pieces.map((piece) => piece.id).sort(),
+    }
+    const paid = unwrap(gunpowder(state, ['Iron', 'Silk']))
+    expect(paid.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(false)
+    expect(inDiscard(paid, GENEROUS)).toBe(true)
+    const undone = voted(paid, 'req-1')
+    expect({
+      hand: player(undone).items.map((item) => item.id).sort(),
+      discard: undone.discardedItems.map((item) => item.id).sort(),
+      pieces: undone.board.pieces.map((piece) => piece.id).sort(),
+    }).toEqual(before)
+    expect(player(undone).playerTurns.at(-1)?.usedActions).not.toContain('card:Gunpowder')
+  })
+})

@@ -8,8 +8,8 @@
  * turning the city marker back to its unwalled side, stays manual; the log line says so.
  */
 
-import { isMapCell } from './board.js'
-import { COMBUSTION_NAME, COMBUSTION_USAGE_KEY, combustionTargetAt } from './combustion.js'
+import { COMBUSTION_NAME, COMBUSTION_USAGE_KEY, combustionTargetFor } from './combustion.js'
+import { figureBelongsTo } from './movement.js'
 import {
   READY,
   REPEAT_NOTE,
@@ -22,7 +22,6 @@ import {
   usedReason,
 } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
-import { squareLabel } from './build-options.js'
 import { appendLog } from './log.js'
 import { err, ok } from './result.js'
 import { openPhaseOf } from './sot.js'
@@ -60,23 +59,20 @@ export const combustion: AssistedActionDefinition = {
 
   apply(state, player, context) {
     const payload = context.payload
-    const square =
-      payload !== undefined &&
-      'square' in payload &&
-      typeof payload.square === 'object' &&
-      payload.square !== null &&
-      !Array.isArray(payload.square)
-        ? payload.square
-        : undefined
-    if (square === undefined || !isMapCell(state.board, square.column, square.row)) {
-      return err(rejected('combustion', blocked('unavailable', 'Choose a square on the map.')))
+    const pieceId = payload !== undefined && 'pieceId' in payload && typeof payload.pieceId === 'string' ? payload.pieceId : undefined
+    if (pieceId === undefined) {
+      return err(rejected('combustion', blocked('unavailable', 'Choose the army that acts.')))
     }
     if (openPhaseOf(state, player.playerId) !== 'MOVEMENT') {
       return err(rejected('combustion', blocked('wrong-phase', PHASE_REASON)))
     }
-    const target = combustionTargetAt(state.board, player, { column: square.column, row: square.row })
+    const army = state.board.pieces.find((piece) => piece.id === pieceId)
+    if (army === undefined || !figureBelongsTo(player, army) || !army.assetId.endsWith('army')) {
+      return err(rejected('combustion', blocked('unavailable', 'Choose one of your own armies.')))
+    }
+    const target = combustionTargetFor(state, player, army)
     if (target === undefined) {
-      return err(rejected('combustion', blocked('unavailable', `One of your armies must stand on a building or on a walled city on ${squareLabel(square)}.`)))
+      return err(rejected('combustion', blocked('unavailable', 'That army must stand on a building, or on the walled city of another player. Your own buildings and walls are never destroyed.')))
     }
     const turn = turnOf(state, player)
     const marked = useTurnAction(state, player, turn, COMBUSTION_USAGE_KEY, player.stats)
@@ -94,7 +90,7 @@ export const combustion: AssistedActionDefinition = {
     })
     return ok({
       state: logged,
-      effect: { kind: 'combustion', square: { column: square.column, row: square.row }, walls: target.walls, subject: target.subject },
+      effect: { kind: 'combustion', pieceId, square: { column: target.column, row: target.row }, walls: target.walls, subject: target.subject },
       logId: lastLogId(logged),
     })
   },

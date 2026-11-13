@@ -14,12 +14,13 @@ import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction, availableActionsFor } from '../src/assisted.js'
 import type { AssistedActionKind } from '../src/state.js'
 import { techWoundsOwed } from '../src/battle-cards.js'
+import { mapCellOf } from '../src/blockade.js'
 import { combustionTargets } from '../src/combustion.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
-import { player, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { coverMap } from './cover-map.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 import { put, sotTurn } from './sot-fixture.js'
@@ -286,6 +287,20 @@ describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
     expect(unwrapErr(vote(asked, { logId: entry.id, playerId: CHUL, vote: true, at: AT })).kind).toBe('ASSISTED_UNDO_BLOCKED')
   })
 
+  it('is paid by a culture card that can be played as Iron when the player has no Iron token', () => {
+    const state = withCardInHand(withTech(fight(), tech), 'A Princely Gift').state
+    expect(assistedAvailability(state, CASH1981, kind)).toMatchObject({ status: 'ready', warning: expect.stringContaining('A Princely Gift') })
+    const paid = unwrap(press(state, kind))
+    expect(paid.log.at(-1)?.publicLog).toMatch(new RegExp(`used ${tech}: played A Princely Gift item number #\\d+ as Iron to deal up to ${wounds} wounds`))
+    expect(techWoundsOwed(paid.battle!, CASH1981, tech)).toBe(wounds)
+    // An Iron token is used first, and the card stays
+    const both = withHutInHand(state, 'Iron').state
+    expect(assistedAvailability(both, CASH1981, kind)).not.toHaveProperty('warning')
+    const undone = voted(paid, 'req-1')
+    expect(player(undone).items.some((item) => 'name' in item && item.name === 'A Princely Gift')).toBe(true)
+    expect(undone.battle?.techWounds).toBeUndefined()
+  })
+
   it('is listed in availableActions with its tech name and the Battle group, for the viewer only', () => {
     const state = armed()
     const mine = availableActionsFor(state, CASH1981).find((entry) => entry.action === kind)
@@ -418,9 +433,25 @@ function combustionTurn(): GameState {
   return unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'CM' }))
 }
 
+/** The id of the piece of `assetId` standing on the square (the last one placed there). */
+function pieceAt(state: GameState, assetId: string, column: number, row: number): string {
+  const found = state.board.pieces.filter((piece) => {
+    const at = mapCellOf(state.board, piece)
+    return piece.assetId === assetId && at?.column === column && at.row === row
+  })
+  const piece = found.at(-1)
+  if (piece === undefined) throw new Error(`no ${assetId} on ${column},${row}`)
+  return piece.id
+}
+
+const burn = (state: GameState, pieceId: string, requestId = 'req-1', confirmedRepeat = false) =>
+  press(state, 'combustion', requestId, { pieceId }, confirmedRepeat)
+
 describe('Combustion (once per turn, in Movement)', () => {
+  // Cash is Red, Karandras Blue
   const onBuilding = (): GameState => put(put(combustionTurn(), CASH1981, 'buildings/granary', 3, 3), CASH1981, 'figures/redarmy', 3, 3)
   const onWalls = (): GameState => put(put(combustionTurn(), KARANDRAS1, 'cities/bluecitywalled2', 5, 4), CASH1981, 'figures/redarmy', 5, 4)
+  const armyOf = (state: GameState, column: number, row: number): string => pieceAt(state, 'figures/redarmy', column, row)
 
   it('is ready in the open Movement phase only, with the tech revealed', () => {
     expect(assistedAvailability(combustionTurn(), CASH1981, 'combustion').status).toBe('ready')
@@ -429,58 +460,90 @@ describe('Combustion (once per turn, in Movement)', () => {
     expect(assistedAvailability(unwrap(markPhasesDone(sotTurn(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'CM' })), CASH1981, 'combustion').status).toBe('not-owned')
   })
 
-  it('finds the squares where an army stands on a building or on a walled city', () => {
-    expect(combustionTargets(onBuilding().board, player(onBuilding()))).toMatchObject([{ column: 3, row: 3, walls: false }])
-    expect(combustionTargets(onWalls().board, player(onWalls()))).toMatchObject([{ column: 5, row: 4, walls: true }])
+  it('lists one entry for each army standing on a building or another player walled city', () => {
+    const state = onBuilding()
+    expect(combustionTargets(state, player(state))).toMatchObject([{ pieceId: armyOf(state, 3, 3), column: 3, row: 3, walls: false }])
+    const walls = onWalls()
+    expect(combustionTargets(walls, player(walls))).toMatchObject([{ pieceId: armyOf(walls, 5, 4), column: 5, row: 4, walls: true }])
     // A building with no army on it, and an army on an empty square, are not targets
     const idle = put(put(combustionTurn(), CASH1981, 'buildings/granary', 3, 3), CASH1981, 'figures/redarmy', 4, 4)
-    expect(combustionTargets(idle.board, player(idle))).toEqual([])
+    expect(combustionTargets(idle, player(idle))).toEqual([])
     // A scout is not an army
     const scout = put(put(combustionTurn(), CASH1981, 'buildings/granary', 3, 3), CASH1981, 'figures/redscout', 3, 3)
-    expect(combustionTargets(scout.board, player(scout))).toEqual([])
+    expect(combustionTargets(scout, player(scout))).toEqual([])
+  })
+
+  it('the player chooses which army acts, among armies on different squares', () => {
+    let state = put(put(onBuilding(), CASH1981, 'buildings/market', 6, 6), CASH1981, 'figures/redarmy', 6, 6)
+    state = put(state, CASH1981, 'figures/redarmy', 7, 7)
+    const targets = combustionTargets(state, player(state))
+    expect(targets.map((target) => [target.column, target.row])).toEqual([[3, 3], [6, 6]])
+    const second = armyOf(state, 6, 6)
+    const used = unwrap(burn(state, second))
+    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'combustion', pieceId: second, square: { column: 6, row: 6 } })
+    expect(used.log.at(-1)?.publicLog).toContain('Market')
+    // An army on a square with nothing to destroy is refused
+    expect(unwrapErr(burn(state, armyOf(state, 7, 7))).kind).toBe('ASSISTED_ACTION_REJECTED')
+  })
+
+  it('refuses a piece that is not an army of the player, or not on the map', () => {
+    const state = put(onBuilding(), CASH1981, 'figures/redscout', 3, 3)
+    expect(unwrapErr(burn(state, pieceAt(state, 'figures/redscout', 3, 3))).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(unwrapErr(burn(state, pieceAt(state, 'buildings/granary', 3, 3))).kind).toBe('ASSISTED_ACTION_REJECTED')
+    // Another player's army on a building is not the player's to use
+    const theirs = put(put(combustionTurn(), CASH1981, 'buildings/granary', 3, 3), KARANDRAS1, 'figures/bluearmy', 3, 3)
+    expect(unwrapErr(burn(theirs, pieceAt(theirs, 'figures/bluearmy', 3, 3))).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(unwrapErr(burn(state, 'no-such-piece')).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(unwrapErr(press(state, 'combustion', 'req-1')).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(state.assistedActions).toHaveLength(0)
   })
 
   it('never targets the walls of the player own city, but still those of another player', () => {
     const own = put(put(combustionTurn(), CASH1981, 'cities/redcitywalled2', 5, 4), CASH1981, 'figures/redarmy', 5, 4)
-    expect(combustionTargets(own.board, player(own))).toEqual([])
-    const refused = unwrapErr(press(own, 'combustion', 'req-1', { square: { column: 5, row: 4 } }))
-    expect(refused.kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(combustionTargets(own, player(own))).toEqual([])
+    expect(unwrapErr(burn(own, armyOf(own, 5, 4))).kind).toBe('ASSISTED_ACTION_REJECTED')
+    const enemy = onWalls()
+    expect(unwrap(burn(enemy, armyOf(enemy, 5, 4), 'req-2')).assistedActions).toHaveLength(1)
+  })
+
+  it('never targets a building in the outskirts of the player own city, but does one in another player city', () => {
+    // The city stands on (2,2); (3,3) is in its outskirts
+    const own = put(onBuilding(), CASH1981, 'cities/redcity2', 2, 2)
+    expect(combustionTargets(own, player(own))).toEqual([])
+    expect(unwrapErr(burn(own, armyOf(own, 3, 3))).kind).toBe('ASSISTED_ACTION_REJECTED')
     expect(own.assistedActions).toHaveLength(0)
-    // Cash is Red; a Blue walled city on the same square is a target
-    expect(combustionTargets(onWalls().board, player(onWalls()))).toMatchObject([{ column: 5, row: 4, walls: true }])
-    expect(unwrap(press(onWalls(), 'combustion', 'req-2', { square: { column: 5, row: 4 } })).assistedActions).toHaveLength(1)
+    const enemy = put(onBuilding(), KARANDRAS1, 'cities/bluecity2', 2, 2)
+    expect(combustionTargets(enemy, player(enemy))).toMatchObject([{ column: 3, row: 3, walls: false }])
+    expect(unwrap(burn(enemy, armyOf(enemy, 3, 3))).assistedActions).toHaveLength(1)
+    // Outside every city's outskirts a building belongs to nobody, whoever placed it
+    expect(unwrap(burn(onBuilding(), armyOf(onBuilding(), 3, 3))).assistedActions).toHaveLength(1)
   })
 
   it('logs the destruction of a building, once per turn, and says the removal is by hand', () => {
-    const used = unwrap(press(onBuilding(), 'combustion', 'req-1', { square: { column: 3, row: 3 } }))
+    const state = onBuilding()
+    const army = armyOf(state, 3, 3)
+    const used = unwrap(burn(state, army))
     expect(used.log.at(-1)?.publicLog).toContain('used Combustion: an army destroys')
     expect(used.log.at(-1)?.publicLog).toContain('Remove the building from the map by hand')
     expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'combustion', walls: false, square: { column: 3, row: 3 } })
     // The engine does not remove the building: that is manual
     expect(used.board.pieces.some((piece) => piece.assetId === 'buildings/granary')).toBe(true)
     expect(assistedAvailability(used, CASH1981, 'combustion').status).toBe('used')
-    expect(unwrapErr(press(used, 'combustion', 'req-2', { square: { column: 3, row: 3 } })).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrap(press(used, 'combustion', 'req-2', { square: { column: 3, row: 3 } }, true)).log.at(-1)?.publicLog).toContain('confirmed by the player')
+    expect(unwrapErr(burn(used, army, 'req-2')).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(unwrap(burn(used, army, 'req-2', true)).log.at(-1)?.publicLog).toContain('confirmed by the player')
   })
 
   it('names the walls of a walled city an army attacks', () => {
-    const used = unwrap(press(onWalls(), 'combustion', 'req-1', { square: { column: 5, row: 4 } }))
+    const state = onWalls()
+    const used = unwrap(burn(state, armyOf(state, 5, 4)))
     expect(used.log.at(-1)?.publicLog).toContain('the walls of')
     expect(used.log.at(-1)?.publicLog).toContain('unwalled side by hand')
     expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'combustion', walls: true })
   })
 
-  it('refuses a square with no army on a building or walled city, or off the map', () => {
-    const state = onBuilding()
-    expect(unwrapErr(press(state, 'combustion', 'req-1', { square: { column: 4, row: 4 } })).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrapErr(press(state, 'combustion', 'req-1', { square: { column: 999, row: 999 } })).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrapErr(press(state, 'combustion', 'req-1')).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(state.assistedActions).toHaveLength(0)
-  })
-
   it('an undo by vote frees the use for the turn', () => {
-    const used = unwrap(press(onBuilding(), 'combustion', 'req-1', { square: { column: 3, row: 3 } }))
-    const undone = voted(used, 'req-1')
+    const state = onBuilding()
+    const undone = voted(unwrap(burn(state, armyOf(state, 3, 3))), 'req-1')
     expect(assistedAvailability(undone, CASH1981, 'combustion').status).toBe('ready')
     expect(undone.log.at(-1)?.publicLog).toContain('Combustion was undone')
   })
