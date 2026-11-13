@@ -532,6 +532,7 @@ export function AssistedActionButton({
               ))}
             </select>
           ))}
+          <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
           <button type="button" className="small" onClick={() => payGunpowder(anyPick)}>
             Pay {anyPick.join(' and ')}
           </button>

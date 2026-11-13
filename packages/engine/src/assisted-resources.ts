@@ -303,8 +303,8 @@ export interface SpendAnyOutcome {
 /**
  * Pays one resource for each name in `resources`; the names are a preference, not a requirement. Each name is paid
  * by its own token first; then each one left over by any other unspent token the player holds (a hut or a piece,
- * of the six kinds); and only what tokens cannot cover is paid with culture cards, never one card twice. A card
- * is never burned while any token could pay. `missing` is the first name left unpaid, and nothing is spent then.
+ * of the six kinds); and only what tokens cannot cover is paid with culture cards (the fewest-allowed card first,
+ * whatever was named), never one card twice. A card is never burned while any token could pay. `missing` is the first name left unpaid, and nothing is spent then.
  */
 export function spendAnyResources(
   state: GameState,
@@ -328,10 +328,11 @@ export function spendAnyResources(
     if (slots[index] !== undefined) continue
     for (const resource of ANY_RESOURCES) if (pay(index, resource, true)) break
   }
-  // 3. Cards, for the shortfall: as the named resource, else as any resource a card allows
-  for (const [index, named] of resources.entries()) {
+  // 3. Cards, for the shortfall, by the rule and in the order the availability uses: the fewest-allowed card
+  // first over the six resources. The names do not steer which card is played, so the warning names exactly them
+  for (const [index] of resources.entries()) {
     if (slots[index] !== undefined) continue
-    for (const resource of [named, ...ANY_RESOURCES]) if (pay(index, resource, false)) break
+    for (const resource of ANY_RESOURCES) if (pay(index, resource, false)) break
   }
   const missingAt = slots.findIndex((slot) => slot === undefined)
   if (missingAt !== -1) return err({ missing: resources[missingAt] ?? '' })

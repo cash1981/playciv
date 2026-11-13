@@ -181,12 +181,13 @@ describe('a culture card pays a resource when there is no token', () => {
     expect(undone.log.at(-1)?.publicLog).toContain('the card played as Spy returned')
   })
 
-  it('Marie Curie: an armed substitute is paid by a card that can be played as it, and the arm is used up', () => {
-    // Uranium is paid as Iron; the card is played as Iron
-    const base = withHutInHand(card(card(cmTurn('Gunpowder'), PRINCELY), GENEROUS), 'Wheat').state
+  it('Marie Curie: an armed substitute replaces a real Uranium token as before, and the arm is used up', () => {
+    // Uranium is named; the armed Iron is what is paid, from the Iron token
+    const base = withHutInHand(withHutInHand(card(cmTurn('Gunpowder'), GENEROUS), 'Iron').state, 'Wheat').state
     const state = withPlayer(base, { ...player(base), curieSubstitute: 'Iron' })
     const used = unwrap(press(state, 'gunpowder', { resources: ['Uranium', 'Wheat'] }))
-    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ spent: [{ kind: 'card', resource: 'Iron' }, { kind: 'hut', resource: 'Wheat' }] })
+    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ spent: [{ kind: 'hut', resource: 'Iron' }, { kind: 'hut', resource: 'Wheat' }] })
+    expect(inHand(used, GENEROUS)).toBe(true)
     expect(player(used).curieSubstitute).toBeNull()
     expect(player(voted(used, 'req-1')).curieSubstitute).toBe('Iron')
   })
@@ -203,7 +204,7 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
     const paid = unwrap(gunpowder(state, ['Iron', 'Wheat']))
     expect(handHut(paid, 'Iron')).toBe(false)
     expect(inDiscard(paid, GENEROUS)).toBe(true)
-    expect(paid.log.at(-1)?.publicLog).toMatch(/used Gunpowder: spent Iron and played A Generous Gift item number #\d+ as Wheat\. /)
+    expect(paid.log.at(-1)?.publicLog).toMatch(/used Gunpowder: spent Iron and played A Generous Gift item number #\d+ as Iron\. /)
   })
 
   it('two cards', () => {
@@ -212,7 +213,7 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
     const paid = unwrap(gunpowder(state, ['Iron', 'Wheat']))
     expect(inDiscard(paid, GENEROUS)).toBe(true)
     expect(inDiscard(paid, PRINCELY)).toBe(true)
-    expect(paid.log.at(-1)?.publicLog).toMatch(/played A Generous Gift item number #\d+ as Iron and played A Princely Gift item number #\d+ as Wheat/)
+    expect(paid.log.at(-1)?.publicLog).toMatch(/played A Generous Gift item number #\d+ as Iron and played A Princely Gift item number #\d+ as Iron/)
   })
 
   it('names are a preference: other tokens pay before any card is played', () => {
@@ -236,6 +237,29 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
     expect(paid.board.pieces.some((piece) => piece.assetId === 'resources/incense')).toBe(false)
     expect(handHut(paid, 'Wheat')).toBe(false)
     expect(inHand(paid, GENEROUS)).toBe(true)
+  })
+
+  it('the names do not steer which card is played: the warning names exactly the cards that are played', () => {
+    // Iron hut, A Generous Gift and A Princely Gift; Wheat and Uranium named. Uranium does not pull Princely in
+    const state = card(card(withHutInHand(cmTurn('Gunpowder'), 'Iron').state, GENEROUS), PRINCELY)
+    const warning = (assistedAvailability(state, CASH1981, 'gunpowder') as { warning?: string }).warning ?? ''
+    expect(warning).toContain(GENEROUS)
+    expect(warning).not.toContain(PRINCELY)
+    const paid = unwrap(gunpowder(state, ['Wheat', 'Uranium']))
+    expect(handHut(paid, 'Iron')).toBe(false)
+    expect(inDiscard(paid, GENEROUS)).toBe(true)
+    expect(inHand(paid, PRINCELY)).toBe(true)
+
+    // No tokens, A Gift from Afar, A Generous Gift and A Princely Gift; Uranium and Iron named
+    const bare = card(card(card(cmTurn('Gunpowder'), AFAR), GENEROUS), PRINCELY)
+    const bareWarning = (assistedAvailability(bare, CASH1981, 'gunpowder') as { warning?: string }).warning ?? ''
+    const playedBare = unwrap(gunpowder(bare, ['Uranium', 'Iron']))
+    for (const name of [AFAR, GENEROUS]) {
+      expect(bareWarning).toContain(name)
+      expect(inDiscard(playedBare, name)).toBe(true)
+    }
+    expect(bareWarning).not.toContain(PRINCELY)
+    expect(inHand(playedBare, PRINCELY)).toBe(true)
   })
 
   it('never plays one card for both resources, so a single card is not enough', () => {

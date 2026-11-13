@@ -167,6 +167,19 @@ describe('Gunpowder and Combustion args', () => {
     expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron' || piece.assetId === 'resources/wheat')).toBe(false)
   })
 
+  it('refuses Gunpowder with a lone token and no card: 400, nothing paid, nothing persisted', async () => {
+    const t = await table('lone', 'Gunpowder', ['resources/iron'])
+    expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'TRADE' })).status).toBe(200)
+    const before = await view(t.gameId, t.starter)
+    expect(entryOf(before, 'gunpowder')).toMatchObject({ status: 'needs-resource' })
+    const refused = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Wheat'] } })
+    expect(refused.status).toBe(400)
+    expect(await refused.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    const state = await repo.findGame(t.gameId)
+    expect(state?.assistedActions).toHaveLength(0)
+    expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(true)
+  })
+
   it('takes the id of an army for Combustion and nothing else', async () => {
     const t = await table('com', 'Combustion', [])
     expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'CM' })).status).toBe(200)

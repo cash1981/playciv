@@ -67,7 +67,7 @@ export const gunpowder: AssistedActionDefinition = {
     const names = resources as readonly string[]
     const paid = spendAnyResources(state, player.playerId, names, context.at)
     if (!paid.ok) {
-      return err(rejected('gunpowder', blocked('needs-resource', `You cannot pay for ${paid.error.missing}: you hold too few resources, tokens or culture cards that can be played as a resource, to pay two.`)))
+      return err(rejected('gunpowder', blocked('needs-resource', `You cannot pay ${GUNPOWDER_COST} resources for ${GUNPOWDER_NAME}: you hold too few resource tokens or culture cards that can be played as a resource.`)))
     }
     const after = playerOf(paid.value.state, player.playerId) ?? player
     const marked = useTurnAction(paid.value.state, after, turn, USAGE_KEY, after.stats)
