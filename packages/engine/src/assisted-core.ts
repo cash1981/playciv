@@ -278,7 +278,7 @@ export interface GunpowderPayload {
   readonly resources: readonly string[]
 }
 
-/** What Pottery, Philosophy and Education carry, as Gunpowder does: the resource tokens to pay, by name (2, 3 and 4 different). */
+/** What Pottery and Philosophy carry, as Gunpowder does: the resource tokens to pay, by name (2 and 3). Education carries nothing. */
 export interface ResourcesPayload {
   readonly resources: readonly string[]
 }

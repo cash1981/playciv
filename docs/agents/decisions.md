@@ -949,9 +949,9 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   unit card from the chosen other player's hand with the game's seed and discards it. The kill cannot be used while a battle
   is on at all (human, 2026-11-13): it is refused with a reason and nothing is paid, in the action and, as a warning, on the
   button (which stays ready because `obsolete` is not limited; the web disables the kill mode). A battle set aside by End
-  battle is over, so a kill is allowed then, but the units of that battle's arena stay out of the pick, since undoing End
-  battle puts them back in it; with no live arena the old `inBattle` check is no longer needed. Units drawn for a battle and
-  not placed (the battlehand) are in the hand and can be picked; an undo puts such a card back in the battlehand too. A discard is open information, so the line names the unit in full with its item
+  battle is over, so a kill is allowed then, and the pick is every unit card in the hand: a unit End battle sent back to the
+  hand is an ordinary standing unit, and undoing End battle already skips a card that has left the hand (tested). Units drawn for
+  a battle and not placed (the battlehand) are in the hand and can be picked; an undo puts such a card back in the battlehand too. A discard is open information, so the line names the unit in full with its item
   number as Gustavus Adolphus' discards do, and only after the discard; the rest of the hand stays private. Refused, with
   nothing paid, when the opponent holds no such card. The undo returns the card while it is still in the discard pile.
 
@@ -970,9 +970,12 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   a capital, the player's own included (human, 2026-11-13: the point may be to kill the many enemy figures standing around it),
   i.e. not the capital marker and not the metropolis, which only a capital grows into (`capitalOf`). What stands in the outskirts
   goes whoever owns it, so a nuke of an own city also destroys the player's own buildings, wonders, figures and great persons;
-  the web marks the player's own city and says so when it asks. Records that point at the destroyed city (a production boost,
-  city actions, scout assignments) are read only for cities still on the map, so they stay harmless and count again when the
-  undo brings the city back. It removes, as separate board history entries, every building, wonder, figure and Great
+  the web marks the player's own city and says so when it asks. Records that point at the destroyed city: a production boost and a scout assignment are read only for cities still on the
+  map, so they are harmless and count again when the undo brings the city back; city-action records are not checked against
+  the board (`cityActionCountsThisTurn`), so they stay and still count. The dead end: after a nuke of an own city the undo of
+  `extraActions` can be refused because of a record for the destroyed city that has taken two actions; undoing the nuke first
+  recovers it. The web lists other players' cities first and never preselects the player's own (with only their own none is
+  preselected until one is picked, and a confirm still guards it). It removes, as separate board history entries, every building, wonder, figure and Great
   Person marker on a square of the city's outskirts, the caravan, fortification and Building Program markers on its centre, and
   the city; a figure standing on the centre square, resource tokens, huts and city-states stay. The line names everything
   destroyed with its square. Only the undo vote puts it back, each piece exactly as it stood (`placeBack`), refused if one is on

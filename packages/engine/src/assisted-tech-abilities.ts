@@ -1,7 +1,7 @@
 /**
  * The resource abilities of the techs that are not in the unit slice (issue #327, slice 2): the production boosts of
- * Animal Husbandry, Construction, Banking and Plastics (Wheat), Pottery (Any 2), Philosophy (Any 3), Education (four
- * different resources), Horseback Riding (Silk, Trade), Mysticism (Spy), the cancelling Spy abilities of Writing,
+ * Animal Husbandry, Construction, Banking and Plastics (Wheat), Pottery (Any 2), Philosophy (Any 3), Education (one each
+ * of Incense, Iron, Silk and Wheat), Horseback Riding (Silk, Trade), Mysticism (Spy), the cancelling Spy abilities of Writing,
  * Civil Service and Mass Media, and Monarchy (Silk).
  *
  * They share one shape, so one factory ({@link techAbility}) builds them: the tech must be revealed, the phase open, the
@@ -682,13 +682,11 @@ type MonarchyPlan =
 const BATTLE_ON = 'A battle is on, so no unit can be killed until it is over. Obsolete is still possible.'
 
 /**
- * The unit cards in a hand that a kill may take. No battle is on (a kill is refused then), so no card is in a live arena;
- * the units of the battle End battle set aside stay out, since undoing End battle puts them back in the arena.
+ * The unit cards in a hand that a kill may take: every one of them. No battle is on (a kill is refused then), so none is in a
+ * live arena; a unit that went back into the hand when End battle set its battle aside is an ordinary standing unit, and
+ * undoing End battle already skips a card that has left the hand.
  */
-function unitCardsOf(state: GameState, player: Playerhand): readonly UnitItem[] {
-  const setAside = new Set((state.endedBattle?.battle === undefined ? [] : [...state.endedBattle.battle.arena, ...state.endedBattle.battle.departedUnits]).map((unit) => unit.unit.id))
-  return player.items.filter(isUnit).filter((unit) => !setAside.has(unit.id))
-}
+const unitCardsOf = (player: Playerhand): readonly UnitItem[] => player.items.filter(isUnit)
 
 const monarchy = techAbility<'monarchy', MonarchyPlan>({
   kind: 'monarchy',
@@ -708,7 +706,7 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
     if (state.battle !== null) return err('A battle is on: kill a unit when it is over (obsolete is still possible). Nothing was spent.')
     const target = otherPlayer(state, player, payload)
     if (!target.ok) return target
-    const units = unitCardsOf(state, target.value)
+    const units = unitCardsOf(target.value)
     if (units.length === 0) return err(`${target.value.username} holds no unit card to kill.`)
     return ok({ mode, target: target.value, units })
   },

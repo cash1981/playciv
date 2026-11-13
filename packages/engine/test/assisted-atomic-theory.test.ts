@@ -202,9 +202,10 @@ describe('Atomic Theory: nuke a non-capital city (Uranium, Movement)', () => {
     const state = scene()
     expect(assistedAvailability(state, CASH1981, 'atomicTheory').status).toBe('ready')
     const targets = nukeTargetsFor(state, CASH1981)
+    // Other players' cities first, so a list never defaults to the player's own
     expect(targets.map((target) => [target.label, target.ownerUsername, target.own])).toEqual([
-      ['City B2', 'cash1981', true],
       ['City J10', 'Karandras1', false],
+      ['City B2', 'cash1981', true],
     ])
     const theirs = targets.find((target) => target.pieceId === blueCity(state))
     // Figures first, then great persons, wonders, buildings and the markers of the city itself

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { endBattleAction, initiateBattle, placeUnitInArena } from '../src/actions/arena.js'
+import { endBattleAction, initiateBattle, placeUnitInArena, undoEndBattle } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { placePiece, setCityProductionOverride, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
@@ -789,23 +789,27 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
       expect(unwrap(press(state, 'monarchy', { mode: 'obsolete' })).assistedActions).toHaveLength(1)
     })
 
-    it('allows the kill once the battle is over, but never takes a unit of the battle End battle set aside', () => {
+    it('allows the kill once the battle is over: a unit End battle sent back to the hand is an ordinary unit, and undoing End battle still works', () => {
       const ended = unwrap(endBattleAction(battle(), { playerId: CASH1981 }))
       expect(ended.battle).toBeNull()
       expect(ended.endedBattle).not.toBeNull()
       expect(assistedAvailability(ended, CASH1981, 'monarchy')).not.toHaveProperty('warning')
-      const inArena = new Set((ended.endedBattle?.battle.arena ?? []).map((unit) => unit.unit.id))
-      expect(inArena.size).toBe(1)
-      const used = unwrap(press(ended, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
-      const gone = unitsOf(ended).find((unit) => !unitsOf(used).some((kept) => kept.id === unit.id))
-      expect(gone).toBeDefined()
-      expect(inArena.has(gone?.id ?? '')).toBe(false)
-      // With only the set-aside unit left in the hand there is nothing to kill
-      const onlyThat: GameState = {
-        ...ended,
-        players: ended.players.map((p) => (p.playerId === KARANDRAS1 ? { ...p, items: p.items.filter((item) => !isUnit(item) || inArena.has(item.id)) } : p)),
-      }
-      expect(refused(press(onlyThat, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))).toBe('ASSISTED_ACTION_REJECTED')
+      const fought = (ended.endedBattle?.battle.arena ?? []).map((unit) => unit.unit.id)
+      expect(fought).toHaveLength(1)
+      const units = unitsOf(ended)
+      expect(units).toHaveLength(3)
+      expect(units.some((unit) => fought.includes(unit.id))).toBe(true)
+      // A seed that names the unit that fought, found by looking, so the test does not rest on luck
+      const index = units.findIndex((unit) => fought.includes(unit.id))
+      const seed = Array.from({ length: 200 }, (_, at) => at + 1).find((rng) => nextInt(rng, units.length)[0] === index)
+      if (seed === undefined) throw new Error('no seed names that unit')
+      const used = unwrap(press({ ...ended, rng: seed }, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
+      expect(unitsOf(used)).toHaveLength(2)
+      expect(used.discardedItems.some((item) => fought.includes(item.id))).toBe(true)
+      // The card has left the hand: End battle can still be undone and the battle comes back without it
+      const back = unwrap(undoEndBattle(used, { playerId: CASH1981 }))
+      expect(back.battle).not.toBeNull()
+      expect(unitsOf(back)).toHaveLength(2)
     })
   })
 

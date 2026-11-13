@@ -50,8 +50,9 @@ const kindOf = (piece: BoardPiece): string =>
 const ORDER = ['figure', 'greatperson', 'wonder', 'building', 'marker'] as const
 
 /**
- * The cities the viewer may nuke now, in board order: every city that is not a capital, their own included. `owners` lists
- * every player. A city whose colour no player has is nobody's and is left out.
+ * The cities the viewer may nuke now: every city that is not a capital, their own included. Other players' cities come first
+ * (so a list defaults to one of them, never to the player's own city), each group in board order. `owners` lists every
+ * player. A city whose colour no player has is nobody's and is left out.
  */
 export function nukeTargetsOf(
   state: Pick<GameState, 'board' | 'players'>,
@@ -59,7 +60,7 @@ export function nukeTargetsOf(
   owners: readonly NukeOwner[],
 ): readonly NukeTarget[] {
   const { board } = state
-  return owners.flatMap((owner): readonly NukeTarget[] => {
+  const targets = owners.flatMap((owner): readonly NukeTarget[] => {
     const colour = owner.color?.toLowerCase()
     if (colour === undefined) return []
     const footprints = cityFootprintsOf(state, colour)
@@ -95,6 +96,8 @@ export function nukeTargetsOf(
       ]
     })
   })
+  // Stable: other players' cities first, then the player's own
+  return [...targets.filter((target) => !target.own), ...targets.filter((target) => target.own)]
 }
 
 /** The same for the engine: the owners are the game's players. */

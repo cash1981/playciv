@@ -404,7 +404,10 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
   if (pick.kind === 'atomic') {
     const targets = nukeTargetsInView(view)
     const nuke = pick.mode === 'nuke'
-    const nukeId = stillThere(targets.map((candidate) => candidate.pieceId), pick.cityPieceId)
+    // Never preselect the player's own city: the default is another player's city, and with only their own the player picks one
+    const nukeId = targets.some((candidate) => candidate.pieceId === pick.cityPieceId)
+      ? pick.cityPieceId
+      : (targets.find((candidate) => !candidate.own)?.pieceId ?? '')
     const target = targets.find((candidate) => candidate.pieceId === nukeId)
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
@@ -417,6 +420,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
         {nuke && (
           <>
             <select aria-label="City to nuke" value={nukeId} onChange={(event) => setPick({ ...pick, cityPieceId: event.target.value })}>
+              {nukeId === '' && targets.length > 0 && <option value="">Choose a city</option>}
               {targets.map((candidate) => (
                 <option key={candidate.pieceId} value={candidate.pieceId}>
                   {candidate.label} of {candidate.ownerUsername}{candidate.own ? ' (yours)' : ''}
@@ -802,7 +806,7 @@ export function AssistedActionButton({
       case 'atomic': {
         // The mode of the phase the player has open, so a quick press is not refused
         const phase = endTurnState(view)
-        setPick({ kind: 'atomic', mode: phase?.kind === 'open' && phase.phase === 'MOVEMENT' ? 'nuke' : 'extraActions', cityPieceId: nukeTargetsInView(view)[0]?.pieceId ?? '' })
+        setPick({ kind: 'atomic', mode: phase?.kind === 'open' && phase.phase === 'MOVEMENT' ? 'nuke' : 'extraActions', cityPieceId: nukeTargetsInView(view).find((target) => !target.own)?.pieceId ?? '' })
         return
       }
       case 'monarchy': {
