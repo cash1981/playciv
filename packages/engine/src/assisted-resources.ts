@@ -26,6 +26,10 @@ import type { GameState, Playerhand, SpentResource } from './state.js'
 
 const normalize = (name: string): string => name.trim().toLowerCase()
 
+/** "Iron", "Iron and Wheat", "Iron, Wheat and Silk": a list as the public lines say it. */
+export const joinList = (names: readonly string[]): string =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
+
 /** The culture cards that can be played as a resource, by name (`card-timing.ts` lists what each allows). */
 const RESOURCE_CARD_NAMES: readonly string[] = ['A Gift from Afar', 'A Generous Gift', 'A Princely Gift']
 const AFAR = 'A Gift from Afar'
@@ -282,6 +286,11 @@ export function anyResourcesAvailability(state: GameState, playerId: string, cou
       `You need ${count} resources of your choice: resource huts in your hand or resource pieces in your player area, or culture cards that can be played as a resource.`,
     )
   }
+  return paidAvailability(state, playerId, spent)
+}
+
+/** Ready, with a `warning` naming exactly the cards that `spent` would play (none when tokens pay it all). */
+function paidAvailability(state: GameState, playerId: string, spent: readonly SpentResource[]): AssistedAvailability {
   const holder = playerOf(state, playerId)
   const cards = spent.flatMap((payment) => {
     const card = payment.kind === 'card' ? holder?.items.find((item) => item.id === payment.itemId) : undefined
@@ -342,7 +351,69 @@ export function spendAnyResources(
   const cards = spent.flatMap((payment) =>
     payment.kind === 'card' && holder !== undefined ? [paymentText(current, holder, payment)] : [],
   )
-  const said = [...(tokens.length === 0 ? [] : [`spent ${tokens.join(' and ')}`]), ...cards].join(' and ')
+  const said = [...(tokens.length === 0 ? [] : [`spent ${joinList(tokens)}`]), ...cards].join(' and ')
+  return ok({ state: current, spent, said })
+}
+
+// ---------------------------------------------------------------------------
+// "N different resources" (Education: 4 resources, one of each)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the player can pay `count` resources of different kinds, for the availability of an action: tokens first,
+ * one for each kind the player holds, then culture cards for the kinds that have no token, each card at most once
+ * and played as the kind it is assigned (the fewest-allowed card first, as everywhere). The Marie Curie
+ * substitution is included, as `spendResource` pays it.
+ */
+export function distinctResourcesAvailability(state: GameState, playerId: string, count: number): AssistedAvailability {
+  const paid = spendDistinctResources(state, playerId, ANY_RESOURCES, count)
+  if (!paid.ok) {
+    return blocked(
+      'needs-resource',
+      `You need ${count} different resources, one of each kind: resource huts in your hand or resource pieces in your player area, or culture cards that can be played as a resource.`,
+    )
+  }
+  return paidAvailability(state, playerId, paid.value.spent)
+}
+
+/**
+ * Pays one resource of each of the kinds in `kinds` (each at most once), stopping at `count` payments when `count` is
+ * given: a token of the kind, else, for what tokens cannot cover, a culture card played as that kind. A kind that
+ * neither can pay is skipped; `missing` is the first kind left unpaid when fewer than `count` could be (or any, with
+ * no `count`), and nothing is spent then. Unlike {@link spendAnyResources} a token of another kind never stands in:
+ * the kinds must differ.
+ */
+export function spendDistinctResources(
+  state: GameState,
+  playerId: string,
+  kinds: readonly string[],
+  count?: number,
+  at?: string,
+): Result<SpendAnyOutcome, { readonly missing: string }> {
+  const wanted = count ?? kinds.length
+  let current = state
+  const slots: (SpentResource | undefined)[] = kinds.map(() => undefined)
+  const paidCount = (): number => slots.filter((slot) => slot !== undefined).length
+  for (const tokensOnly of [true, false]) {
+    for (const [index, kind] of kinds.entries()) {
+      if (slots[index] !== undefined || paidCount() >= wanted) continue
+      const paid = spendResource(current, playerId, kind, at, tokensOnly)
+      if (!paid.ok) continue
+      current = paid.value.state
+      slots[index] = paid.value.spent
+    }
+  }
+  if (paidCount() < wanted) {
+    const missingAt = slots.findIndex((slot) => slot === undefined)
+    return err({ missing: kinds[missingAt] ?? '' })
+  }
+  const spent = slots.filter((slot): slot is SpentResource => slot !== undefined)
+  const holder = playerOf(state, playerId)
+  const tokens = spent.filter((payment) => payment.kind !== 'card').map((payment) => payment.resource)
+  const cards = spent.flatMap((payment) =>
+    payment.kind === 'card' && holder !== undefined ? [paymentText(current, holder, payment)] : [],
+  )
+  const said = [...(tokens.length === 0 ? [] : [`spent ${joinList(tokens)}`]), ...cards].join(' and ')
   return ok({ state: current, spent, said })
 }
 

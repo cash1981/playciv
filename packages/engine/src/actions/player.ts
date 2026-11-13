@@ -224,10 +224,13 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
   // change during the next Start of Turn) and spends a free tech the player was
   // owed in this Start of Turn (Rationalism, a hut, an investment).
   const turnNumber = turnStatus(state).currentTurn
+  const openPhase = openPhaseOf(state, player.playerId)
   const grant =
-    tech.hidden && openPhaseOf(state, player.playerId) === 'SOT'
+    tech.hidden && (openPhase === 'SOT' || openPhase === 'CM')
       ? player.techGrants.find(
           (candidate) =>
+            // A grant is spent in the Start of Turn, or in City Management when it says so (Education)
+            (candidate.phase ?? 'SOT') === openPhase &&
             candidate.usedFor === undefined &&
             candidate.turnNumber === turnNumber &&
             (candidate.level === null || candidate.level === tech.level) &&

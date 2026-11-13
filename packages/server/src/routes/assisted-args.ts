@@ -15,6 +15,11 @@ import type {
   CombustionPayload,
   CommunismPayload,
   GunpowderPayload,
+  MonarchyPayload,
+  MysticismPayload,
+  ProductionBoostPayload,
+  ResourcesPayload,
+  TargetPlayerPayload,
   SteamPowerPayload,
   FoundCityPayload,
   GovernmentPayload,
@@ -182,18 +187,69 @@ function parseCombustion(args: Record<string, unknown>): CombustionPayload | str
   return { pieceId: args['pieceId'] }
 }
 
-function parseGunpowder(args: Record<string, unknown>): GunpowderPayload | string {
-  const extra = extraKeys(args, ['resources'])
-  if (extra.length > 0) return `gunpowder takes only resources, not ${extra.join(', ')}`
-  const resources = args['resources']
-  if (
-    !Array.isArray(resources) ||
-    resources.length !== 2 ||
-    !resources.every((name) => typeof name === 'string' && name.length > 0 && name.length <= 20)
-  ) {
-    return 'resources must be a list of exactly 2 resource names'
+/** The most characters of free text a cancel may carry for what it cancels. */
+const MAX_NOTE = 80
+
+/** `resources`: exactly `count` names, each a short text; which kinds are legal (and different, for Education) is the engine's call. */
+function parseResources(action: string, count: number) {
+  return (args: Record<string, unknown>): ResourcesPayload | string => {
+    const extra = extraKeys(args, ['resources'])
+    if (extra.length > 0) return `${action} takes only resources, not ${extra.join(', ')}`
+    const resources = args['resources']
+    if (
+      !Array.isArray(resources) ||
+      resources.length !== count ||
+      !resources.every((name) => typeof name === 'string' && name.length > 0 && name.length <= 20)
+    ) {
+      return `resources must be a list of exactly ${count} resource names`
+    }
+    return { resources: resources as readonly string[] }
   }
-  return { resources: resources as readonly string[] }
+}
+
+const parseGunpowder = (args: Record<string, unknown>): GunpowderPayload | string => parseResources('gunpowder', 2)(args)
+
+function parseProductionBoost(action: string) {
+  return (args: Record<string, unknown>): ProductionBoostPayload | string => {
+    const extra = extraKeys(args, ['cityPieceId'])
+    if (extra.length > 0) return `${action} takes only cityPieceId, not ${extra.join(', ')}`
+    if (!isId(args['cityPieceId'])) return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+    return { cityPieceId: args['cityPieceId'] }
+  }
+}
+
+/** Horseback Riding names the player who gains 6 trade; Writing, Civil Service and Mass Media may add free text for what is cancelled. */
+function parseTargetPlayer(action: string, withNote: boolean) {
+  return (args: Record<string, unknown>): TargetPlayerPayload | string => {
+    const extra = extraKeys(args, withNote ? ['targetId', 'note'] : ['targetId'])
+    if (extra.length > 0) return `${action} takes only ${withNote ? 'targetId and note' : 'targetId'}, not ${extra.join(', ')}`
+    if (!isId(args['targetId'])) return 'targetId is required: a player id'
+    const note = args['note']
+    if (note === undefined) return { targetId: args['targetId'] }
+    if (typeof note !== 'string' || note.length > MAX_NOTE) return `note must be text of at most ${MAX_NOTE} characters`
+    return { targetId: args['targetId'], note }
+  }
+}
+
+function parseMysticism(args: Record<string, unknown>): MysticismPayload | string {
+  const extra = extraKeys(args, ['targetId', 'source'])
+  if (extra.length > 0) return `mysticism takes only targetId and source, not ${extra.join(', ')}`
+  if (!isId(args['targetId'])) return 'targetId is required: a player id'
+  const source = args['source']
+  if (typeof source !== 'string' || source.length === 0 || source.length > 30) return 'source must be a short text'
+  return { targetId: args['targetId'], source }
+}
+
+function parseMonarchy(args: Record<string, unknown>): MonarchyPayload | string {
+  const extra = extraKeys(args, ['mode', 'targetId'])
+  if (extra.length > 0) return `monarchy takes only mode and targetId, not ${extra.join(', ')}`
+  const mode = args['mode']
+  if (mode !== 'obsolete' && mode !== 'kill') return 'mode must be obsolete or kill'
+  if (mode === 'obsolete') {
+    return args['targetId'] === undefined ? { mode } : 'obsolete takes no targetId'
+  }
+  if (!isId(args['targetId'])) return 'kill needs targetId: the player whose hand loses a unit'
+  return { mode, targetId: args['targetId'] }
 }
 
 function wholeSquare(value: unknown, name: string): { column: number; row: number } | string {
@@ -292,6 +348,19 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['steamPower', parseSteamPower],
   ['combustion', parseCombustion],
   ['gunpowder', parseGunpowder],
+  ['animalHusbandry', parseProductionBoost('animalHusbandry')],
+  ['construction', parseProductionBoost('construction')],
+  ['banking', parseProductionBoost('banking')],
+  ['plastics', parseProductionBoost('plastics')],
+  ['pottery', parseResources('pottery', 2)],
+  ['philosophy', parseResources('philosophy', 3)],
+  ['education', parseResources('education', 4)],
+  ['horsebackRiding', parseTargetPlayer('horsebackRiding', false)],
+  ['writing', parseTargetPlayer('writing', true)],
+  ['civilService', parseTargetPlayer('civilService', true)],
+  ['massMedia', parseTargetPlayer('massMedia', true)],
+  ['mysticism', parseMysticism],
+  ['monarchy', parseMonarchy],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['gianniniBuild', parseGianniniBuild],

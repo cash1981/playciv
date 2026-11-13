@@ -1692,6 +1692,7 @@ import { steamPower } from './assisted-steam-power.js'
 import { ballistics, mathematics } from './assisted-tech-wounds.js'
 import { gunpowder } from './assisted-gunpowder.js'
 import { combustion } from './assisted-combustion.js'
+import { TECH_ABILITY_ACTIONS } from './assisted-tech-abilities.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 
 /** Every assisted action, in the order the projection lists them. */
@@ -1705,6 +1706,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ballistics,
   gunpowder,
   combustion,
+  ...TECH_ABILITY_ACTIONS,
   cultureAdvance,
   cultureAdvanceSkip,
   chooseReward,

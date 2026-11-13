@@ -250,6 +250,11 @@ export interface TechGrant {
   /** When set, only these tech names can be learned with the grant (Thomas Edison). */
   readonly allowedTechNames?: readonly string[]
   /**
+   * The phase the free tech is learned in, when it is not the Start of Turn (Education: City Management). A grant
+   * without it is spent by a reveal in the Start of Turn.
+   */
+  readonly phase?: 'CM'
+  /**
    * The tech that was learned with it, once one was. The grant stays on the player so that removing that
    * tech (or taking its reveal back by vote) gives the free tech back, and so the action that granted
    * it can still be undone after the tech has been taken off again.
@@ -446,6 +451,20 @@ export type AssistedActionKind =
   | 'ballistics'
   | 'gunpowder'
   | 'combustion'
+  // The resource abilities of the other techs (#327, slice 2): production boosts, Any N, Spy and Silk (assisted-tech-abilities.ts)
+  | 'animalHusbandry'
+  | 'construction'
+  | 'banking'
+  | 'plastics'
+  | 'pottery'
+  | 'philosophy'
+  | 'education'
+  | 'horsebackRiding'
+  | 'mysticism'
+  | 'writing'
+  | 'civilService'
+  | 'massMedia'
+  | 'monarchy'
   // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
   | `militaryTradition:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
@@ -788,6 +807,7 @@ export type AssistedEffect =
       readonly kind: 'gunpowder'
       readonly spent: readonly SpentResource[]
     }
+  | TechAbilityEffect
   | {
       /** Combustion: the army that acted, the square it stands on and what is to be destroyed there, for the log and the undo line. */
       readonly kind: 'combustion'
@@ -958,6 +978,75 @@ export type AssistedEffect =
         readonly removedHistoryId: string
         readonly placedHistoryId: string
       }[]
+    }
+
+/**
+ * What the resource abilities of the techs did (#327, slice 2), enough to take each back. Every one paid `spent`
+ * (a token or a culture card each), which an undo puts back. Server side only, like every effect: the drawn card of
+ * Philosophy and the discarded card of Monarchy are never projected.
+ */
+export type TechAbilityEffect =
+  | {
+      /** Animal Husbandry, Construction, Banking, Plastics: one city produces `amount` more this turn. */
+      readonly kind: 'productionBoost'
+      readonly tech: string
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      readonly amount: number
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /** Pottery: one coin added to its counter (max 4). */
+      readonly kind: 'pottery'
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /** Philosophy: a Great Person gained, as a culture advance gains one: the cards drawn, those discarded faceup, the one kept and its marker. */
+      readonly kind: 'philosophy'
+      readonly spent: readonly SpentResource[]
+      readonly drawn: readonly string[]
+      readonly rejected: readonly string[]
+      readonly kept: string | null
+      readonly marker: GreatPersonMarker | null
+    }
+  | {
+      /** Education: a free tech that may be learned in City Management (`TechGrant.phase`). */
+      readonly kind: 'education'
+      readonly spent: readonly SpentResource[]
+      readonly grantId: string
+    }
+  | {
+      /** Horseback Riding: the trade each player was given, as actually added. */
+      readonly kind: 'horsebackRiding'
+      readonly spent: readonly SpentResource[]
+      readonly gained: number
+      readonly targetId: string
+      readonly targetGained: number
+    }
+  | {
+      /** Mysticism: one coin token taken off the named counter of another player. */
+      readonly kind: 'mysticism'
+      readonly spent: readonly SpentResource[]
+      readonly targetId: string
+      readonly source: string
+    }
+  | {
+      /** Writing, Civil Service, Mass Media: a Spy paid to cancel something of another player, which the game only logs. */
+      readonly kind: 'cancelAbility'
+      readonly tech: string
+      readonly spent: readonly SpentResource[]
+      readonly targetId: string
+      readonly note: string
+    }
+  | {
+      /** Monarchy: `obsolete` only logs; `kill` discarded one unit card from the target's hand, as it stood, so an undo can return it. */
+      readonly kind: 'monarchy'
+      readonly spent: readonly SpentResource[]
+      readonly mode: 'obsolete' | 'kill'
+      readonly targetId?: string
+      readonly killed?: UnitItem
+      /** The card was one of the units drawn for a battle (in the battlehand), so an undo puts it back there too. */
+      readonly inBattlehand?: true
     }
 
 /** Culture Akira Kurosawa gave his holder for another player's devotion, kept for the undo. */
@@ -1633,6 +1722,8 @@ export interface StartOfTurnView {
     readonly source: string
     readonly level: 1 | 2 | 3 | 4 | 5 | null
     readonly allowedTechNames?: readonly string[]
+    /** `CM` for a free tech learned in City Management (Education); absent for the Start of Turn. */
+    readonly phase?: 'CM'
   }[]
 }
 

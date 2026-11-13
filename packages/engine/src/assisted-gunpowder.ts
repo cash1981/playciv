@@ -9,7 +9,7 @@
  * says so. The undo vote returns exactly the tokens spent.
  */
 
-import { ANY_RESOURCES, anyResourceName, anyResourcesAvailability, returnedText, returnResources, spendAnyResources } from './assisted-resources.js'
+import { ANY_RESOURCES, anyResourceName, anyResourcesAvailability, joinList, returnedText, returnResources, spendAnyResources } from './assisted-resources.js'
 import {
   PHASE_REASON,
   REPEAT_NOTE,
@@ -31,9 +31,6 @@ export const GUNPOWDER_COST = 2
 const USAGE_KEY = `card:${GUNPOWDER_NAME}`
 
 const NAMES_NOT_TOKENS = `Name exactly ${GUNPOWDER_COST} resources to pay: ${ANY_RESOURCES.join(', ')}.`
-
-/** "Iron and Wheat", "Iron and Iron". */
-const joinNames = (names: readonly string[]): string => names.join(' and ')
 
 export const gunpowder: AssistedActionDefinition = {
   kind: 'gunpowder',
@@ -97,7 +94,7 @@ export const gunpowder: AssistedActionDefinition = {
     if (!returned.ok) return returned
     return ok({
       state: returned.value,
-      text: `${player.username}'s ${GUNPOWDER_NAME} was undone: ${joinNames(effect.spent.map(returnedText))} returned`,
+      text: `${player.username}'s ${GUNPOWDER_NAME} was undone: ${joinList(effect.spent.map(returnedText))} returned`,
     })
   },
 }

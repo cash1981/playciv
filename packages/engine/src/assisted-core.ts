@@ -278,6 +278,34 @@ export interface GunpowderPayload {
   readonly resources: readonly string[]
 }
 
+/** What Pottery, Philosophy and Education carry, as Gunpowder does: the resource tokens to pay, by name (2, 3 and 4 different). */
+export interface ResourcesPayload {
+  readonly resources: readonly string[]
+}
+
+/** What Animal Husbandry, Construction, Banking and Plastics carry: the city that produces more this turn. */
+export interface ProductionBoostPayload {
+  readonly cityPieceId: string
+}
+
+/** What Horseback Riding, Writing, Civil Service and Mass Media carry: the other player, and for a cancel what is cancelled, as free text. */
+export interface TargetPlayerPayload {
+  readonly targetId: string
+  readonly note?: string
+}
+
+/** What Mysticism carries: the opponent and the coin counter (`CoinSourceKey`) one coin token is taken from. */
+export interface MysticismPayload {
+  readonly targetId: string
+  readonly source: string
+}
+
+/** What Monarchy carries: `obsolete` is only logged; `kill` names the opponent whose hand loses a unit card. */
+export interface MonarchyPayload {
+  readonly mode: 'obsolete' | 'kill'
+  readonly targetId?: string
+}
+
 /** What `steamPower` carries: the square whose figures move, and the water square they move to. */
 export interface SteamPowerPayload {
   readonly from: CardSquare
@@ -315,6 +343,11 @@ export type AssistedPayload =
   | CommunismPayload
   | CombustionPayload
   | GunpowderPayload
+  | ResourcesPayload
+  | ProductionBoostPayload
+  | TargetPlayerPayload
+  | MysticismPayload
+  | MonarchyPayload
   | SteamPowerPayload
   | FeudalismHarvestPayload
   | FoundCityPayload

@@ -1095,6 +1095,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         effect.reserved?.historyId === entry.id
       )
     }
+    // Philosophy put the Great Person marker in the player's area, as a culture advance does
+    if (effect.kind === 'philosophy' && effect.marker?.historyId === entry.id) return true
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
     // A harvest put one resource token in the player's area

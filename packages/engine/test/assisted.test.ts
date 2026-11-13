@@ -68,6 +68,20 @@ describe('the registry', () => {
       'combustion',
       'gunpowder',
       'mathematics',
+      // The resource abilities of the other techs (issue #327, slice 2)
+      'animalHusbandry',
+      'banking',
+      'civilService',
+      'construction',
+      'education',
+      'horsebackRiding',
+      'massMedia',
+      'monarchy',
+      'mysticism',
+      'philosophy',
+      'plastics',
+      'pottery',
+      'writing',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -89,9 +103,13 @@ describe('the registry', () => {
           ? 'SOT'
           : action.action === 'mathematics' || action.action === 'ballistics'
             ? 'ANY'
-            : action.action === 'communism' || action.action === 'combustion'
-              ? 'MOVEMENT'
-              : 'CM',
+            : action.action === 'civilService' || action.action === 'massMedia'
+              ? 'ANY'
+              : action.action === 'horsebackRiding'
+                ? 'TRADE'
+                : action.action === 'communism' || action.action === 'combustion'
+                  ? 'MOVEMENT'
+                  : 'CM',
       )
     }
     expect(actions.find((action) => action.action === 'chivalry')?.group).toBe('Resource abilities')
