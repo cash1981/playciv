@@ -74,3 +74,16 @@ the matching `decisions.md` topic. Update the checklist in the issue only after 
 ## Open questions
 
 None.
+
+## Amendment 2026-11-13 (human answers after review)
+
+- **Gunpowder "Any":** the six resources (Incense, Iron, Silk, Wheat, Spy, Uranium) are right. Resources
+  from culture cards count too (A Gift from Afar, A Generous Gift, A Princely Gift: played as a resource,
+  see `card-timing.ts` `asResource`). Shared payment layer in `assisted-resources.ts`: token first (existing rule),
+  else a culture card in hand that can be played as that resource, which is discarded; availability counts
+  such a card and carries a `warning` naming the card; the log names it; undo returns the card to the hand.
+  This applies to every resource ability, not only Gunpowder.
+- **Combustion:** the player's own buildings are never targets (own walls already excluded). The player
+  chooses WHICH army figure acts (payload names the figure, the square is derived); one use per turn.
+- **Mathematics/Ballistics and every tech card except healing:** once per turn (not per battle); only
+  healing abilities (Animal Husbandry, Biology) are once per battle. Record this in decisions.md.
