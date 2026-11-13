@@ -1029,6 +1029,11 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   their capital's outskirts, so the capital may build a figure on it wherever it
   lies, under the same stacking, water and blockade rules. Other cities and
   buildings and wonders still may not.
+- **Held city-states in the estimate** (W&W p. 9, human, hotfix): the capital's
+  production and trade estimate counts each held city-state: its printed trade
+  (cs1 3, cs5 1) and production (cs3 1, cs5 1). There is no base +1 trade per
+  city-state; Expansionism's 1 per city-state is its own Start of Turn gain. Culture, coin, resource and combat icons are not counted. Other
+  cities get nothing.
 - **The metropolis is the capital** (human, #319): only the capital can grow into
   a metropolis, so `capitalOf` falls back to the metropolis when no capital marker
   is on the map. This applies to held city-states and to unsent scouts.
