@@ -505,7 +505,7 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(send).not.toHaveBeenCalled()
     })
 
-    it('confirms a repeat use at submit, and a busy page cannot send', async () => {
+    it('confirms a repeat use at submit and keeps the picker if declined', async () => {
       const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
       const send = await open('Construction', 'construction', { status: 'used' })
       expect(confirm).not.toHaveBeenCalled()
@@ -514,6 +514,53 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(screen.getByLabelText('City')).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: /^Boost / }))
       expect(send.mock.calls[0]?.[5]).toBe(true)
+    })
+  })
+
+  describe('a picker follows the view when what was picked is gone', () => {
+    const rerenderable = async (techName: string, kind: string, before: Parameters<typeof abilityView>[2]) => {
+      const view = abilityView(techName, kind, before)
+      const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+      vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+      const utils = render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
+      fireEvent.click(await screen.findByText(techName))
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Use ${techName}`) }))
+      const show = (after: Parameters<typeof abilityView>[2]) =>
+        utils.rerender(<TechPanel gameId="game-1" busy={false} run={run} view={abilityView(techName, kind, after)} reloadCount={0} />)
+      return { send, show }
+    }
+
+    it('the city that was picked is gone: the city shown is the city sent, also when it is the only one', async () => {
+      const { send, show } = await rerenderable('Animal Husbandry', 'animalHusbandry', {})
+      fireEvent.change(screen.getByLabelText('City'), { target: { value: 'c2' } })
+      show({ cities: [CITIES[0]!] })
+      expect((screen.getByLabelText('City') as HTMLSelectElement).value).toBe('c1')
+      fireEvent.click(screen.getByRole('button', { name: 'Boost Capital B2' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ cityPieceId: 'c1' })
+    })
+
+    it('the only city left is sendable though the picker opened on another', async () => {
+      const { send, show } = await rerenderable('Banking', 'banking', {})
+      show({ cities: [CITIES[1]!] })
+      fireEvent.click(screen.getByRole('button', { name: 'Boost City F6' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ cityPieceId: 'c2' })
+    })
+
+    it('the coin counter that was picked is gone: the counter shown is the one sent', async () => {
+      const { send, show } = await rerenderable('Mysticism', 'mysticism', {})
+      fireEvent.change(screen.getByLabelText('Coin counter'), { target: { value: 'pottery' } })
+      show({ opponents: [rival('p2', 'Karandras1', 2, { sheet: 2 }), RIVALS[1]!] })
+      expect((screen.getByLabelText('Coin counter') as HTMLSelectElement).value).toBe('sheet')
+      fireEvent.click(screen.getByRole('button', { name: 'Discard a coin from Sheet' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p2', source: 'sheet' })
+    })
+
+    it('the player that was picked has left: the player shown is the player sent', async () => {
+      const { send, show } = await rerenderable('Horseback Riding', 'horsebackRiding', {})
+      fireEvent.change(screen.getByLabelText('Player'), { target: { value: 'p3' } })
+      show({ opponents: [RIVALS[0]!] })
+      fireEvent.click(screen.getByRole('button', { name: 'Use Horseback Riding on Karandras1' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p2' })
     })
   })
 
@@ -679,6 +726,32 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     expect(send).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Allow an extra action with each city' }))
     expect(send.mock.calls[0]?.[5]).toBe(true)
+  })
+
+  it('opens on the mode of the phase the player has open: Movement is a nuke, City Management an extra action', async () => {
+    const inPhase = (phase: string): PlayerView => ({ ...atomicView(MAP), active: true, activeTurn: { turnNumber: 1, waitingFor: [{ username: 'cash1981', phase }] } }) as unknown as PlayerView
+    await open(inPhase('MOVEMENT'))
+    expect((screen.getByLabelText(/Nuke a city/) as HTMLInputElement).checked).toBe(true)
+    cleanup()
+    await open(inPhase('CM'))
+    expect((screen.getByLabelText(/An extra action with each city/) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('the city to nuke that was picked is gone: the city shown is the city sent', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const twoCities = [...MAP, piece('city2', 'cities/bluecity2', 'city', 'Blue city 2', 12, 12)]
+    const first = atomicView(twoCities)
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(first)
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={first} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Atomic Theory'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Atomic Theory/ }))
+    fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'city2' } })
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={atomicView(MAP)} reloadCount={0} />)
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1'])
+    fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
+    expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'city' })
   })
 
   it('Bureaucracy is one press with no picker, through the one route', async () => {

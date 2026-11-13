@@ -157,7 +157,7 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
           ? `Production override: ${city.production}`
           : `Production ${city.production}, ${SOURCE_TEXT[city.productionSource]}`}
         {city.boost > 0 ? `, including ${city.boost} from a tech ability this turn` : ''}
-        {city.caravan ? ', including 2 from the caravan, which this build uses up.' : '.'}
+        {city.caravan ? `${city.boost > 0 ? ' and' : ', including'} 2 from the caravan, which this build uses up.` : '.'}
       </p>
 
       {/* Plain text: the bar above the board is the live region that announces these. */}

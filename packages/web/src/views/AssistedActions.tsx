@@ -12,7 +12,7 @@
  * only a press does.
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import {
@@ -241,6 +241,11 @@ interface PickerFormProps {
  */
 function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }: PickerFormProps): React.JSX.Element {
   const opponents = view.opponents ?? []
+  // The view is fetched again while the picker is open: what was picked may be gone (a city, a unit, a counter, a player).
+  // The selection is worked out here, so the option the list shows is the one that is sent and the one the button names
+  const radioName = useId()
+  const stillThere = (ids: readonly string[], wanted: string): string => (ids.includes(wanted) ? wanted : (ids[0] ?? ''))
+  const playerIds = opponents.map((opponent) => opponent.playerId)
   const cancel = (
     <button type="button" className="small" onClick={() => setPick(null)}>
       Cancel
@@ -294,9 +299,10 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
 
   if (pick.kind === 'city') {
     const cities = view.you?.cities ?? []
+    const cityId = stillThere(cities.map((city) => city.pieceId), pick.cityPieceId)
     return (
       <span className="assisted-any-pick" role="group" aria-label={`City for ${label}`}>
-        <select aria-label="City" value={pick.cityPieceId} onChange={(event) => setPick({ kind: 'city', cityPieceId: event.target.value })}>
+        <select aria-label="City" value={cityId} onChange={(event) => setPick({ kind: 'city', cityPieceId: event.target.value })}>
           {cities.map((city) => (
             <option key={city.pieceId} value={city.pieceId}>
               {city.label} (production {city.estimate})
@@ -304,8 +310,8 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           ))}
         </select>
         <span className="muted">The Wheat is paid from a token first, then a culture card. The bonus lasts this turn.</span>
-        <button type="button" className="small" disabled={!canSubmit} onClick={() => send({ cityPieceId: pick.cityPieceId })}>
-          Boost {cities.find((city) => city.pieceId === pick.cityPieceId)?.label ?? 'this city'}
+        <button type="button" className="small" disabled={!canSubmit || cityId === ''} onClick={() => send({ cityPieceId: cityId })}>
+          Boost {cities.find((city) => city.pieceId === cityId)?.label ?? 'this city'}
         </button>
         {cancel}
       </span>
@@ -313,11 +319,12 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
   }
 
   if (pick.kind === 'player') {
-    const target = opponents.find((opponent) => opponent.playerId === pick.targetId)
+    const targetId = stillThere(playerIds, pick.targetId)
+    const target = opponents.find((opponent) => opponent.playerId === targetId)
     const note = picker?.kind === 'player' ? picker.noteLabel : undefined
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Player for ${label}`}>
-        {playerSelect(pick.targetId, (targetId) => setPick({ ...pick, targetId }))}
+        {playerSelect(targetId, (id) => setPick({ ...pick, targetId: id }))}
         {note !== undefined && (
           <input
             type="text"
@@ -332,7 +339,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           type="button"
           className="small"
           disabled={!canSubmit || target === undefined}
-          onClick={() => send({ targetId: pick.targetId, ...(pick.note.trim() === '' ? {} : { note: pick.note.trim() }) })}
+          onClick={() => send({ targetId, ...(pick.note.trim() === '' ? {} : { note: pick.note.trim() }) })}
         >
           Use {label} on {target?.username ?? 'a player'}
         </button>
@@ -342,20 +349,22 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
   }
 
   if (pick.kind === 'coin') {
-    const target = opponents.find((opponent) => opponent.playerId === pick.targetId)
+    const targetId = stillThere(playerIds, pick.targetId)
+    const target = opponents.find((opponent) => opponent.playerId === targetId)
     const counters = target === undefined ? [] : coinCountersOf(target)
-    const chosen = counters.find((counter) => counter.key === pick.source)
+    const sourceKey = stillThere(counters.map((counter) => counter.key), pick.source)
+    const chosen = counters.find((counter) => counter.key === sourceKey)
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Coin to discard with ${label}`}>
         {playerSelect(
-          pick.targetId,
-          (targetId) => {
-            const next = opponents.find((opponent) => opponent.playerId === targetId)
-            setPick({ kind: 'coin', targetId, source: (next === undefined ? undefined : coinCountersOf(next)[0])?.key ?? '' })
+          targetId,
+          (id) => {
+            const next = opponents.find((opponent) => opponent.playerId === id)
+            setPick({ kind: 'coin', targetId: id, source: (next === undefined ? undefined : coinCountersOf(next)[0])?.key ?? '' })
           },
           (opponent) => `${coinCountersOf(opponent).reduce((total, counter) => total + counter.coins, 0)} coin tokens`,
         )}
-        <select aria-label="Coin counter" value={pick.source} onChange={(event) => setPick({ ...pick, source: event.target.value })}>
+        <select aria-label="Coin counter" value={sourceKey} onChange={(event) => setPick({ ...pick, source: event.target.value })}>
           {counters.map((counter) => (
             <option key={counter.key} value={counter.key}>
               {counter.label} ({counter.coins})
@@ -367,7 +376,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           type="button"
           className="small"
           disabled={!canSubmit || chosen === undefined}
-          onClick={() => send({ targetId: pick.targetId, source: pick.source })}
+          onClick={() => send({ targetId, source: sourceKey })}
         >
           Discard a coin from {chosen?.label ?? 'a counter'}
         </button>
@@ -378,10 +387,11 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
 
   if (pick.kind === 'arenaUnit') {
     const units = ownArenaUnits(view)
-    const chosen = units.find((unit) => unit.id === pick.arenaUnitId)
+    const unitId = stillThere(units.map((unit) => unit.id), pick.arenaUnitId)
+    const chosen = units.find((unit) => unit.id === unitId)
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Unit for ${label}`}>
-        <select aria-label="Unit" value={pick.arenaUnitId} onChange={(event) => setPick({ kind: 'arenaUnit', arenaUnitId: event.target.value })}>
+        <select aria-label="Unit" value={unitId} onChange={(event) => setPick({ kind: 'arenaUnit', arenaUnitId: event.target.value })}>
           {units.map((unit) => (
             <option key={unit.id} value={unit.id}>
               {itemName(unit.unit)} (front {unit.position + 1}, attack {unit.attack})
@@ -389,7 +399,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           ))}
         </select>
         <span className="muted">Adds 3 to the attack shown on the unit. The Iron is paid from a token first.</span>
-        <button type="button" className="small" disabled={!canSubmit || chosen === undefined} onClick={() => send({ arenaUnitId: pick.arenaUnitId })}>
+        <button type="button" className="small" disabled={!canSubmit || chosen === undefined} onClick={() => send({ arenaUnitId: unitId })}>
           Add 3 attack to {chosen === undefined ? 'a unit' : itemName(chosen.unit)}
         </button>
         {cancel}
@@ -400,18 +410,19 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
   if (pick.kind === 'atomic') {
     const targets = nukeTargetsInView(view)
     const nuke = pick.mode === 'nuke'
-    const target = targets.find((candidate) => candidate.pieceId === pick.cityPieceId)
+    const nukeId = stillThere(targets.map((candidate) => candidate.pieceId), pick.cityPieceId)
+    const target = targets.find((candidate) => candidate.pieceId === nukeId)
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
         <label>
-          <input type="radio" name={`${label}-mode`} checked={!nuke} onChange={() => setPick({ ...pick, mode: 'extraActions' })} /> An extra action with each city (City Management)
+          <input type="radio" name={radioName} checked={!nuke} onChange={() => setPick({ ...pick, mode: 'extraActions' })} /> An extra action with each city (City Management)
         </label>
         <label>
-          <input type="radio" name={`${label}-mode`} checked={nuke} onChange={() => setPick({ ...pick, mode: 'nuke' })} /> Nuke a city (Movement)
+          <input type="radio" name={radioName} checked={nuke} onChange={() => setPick({ ...pick, mode: 'nuke' })} /> Nuke a city (Movement)
         </label>
         {nuke && (
           <>
-            <select aria-label="City to nuke" value={pick.cityPieceId} onChange={(event) => setPick({ ...pick, cityPieceId: event.target.value })}>
+            <select aria-label="City to nuke" value={nukeId} onChange={(event) => setPick({ ...pick, cityPieceId: event.target.value })}>
               {targets.map((candidate) => (
                 <option key={candidate.pieceId} value={candidate.pieceId}>
                   {candidate.label} of {candidate.ownerUsername}
@@ -445,17 +456,18 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
   }
 
   if (pick.kind === 'monarchy') {
-    const target = opponents.find((opponent) => opponent.playerId === pick.targetId)
+    const targetId = stillThere(playerIds, pick.targetId)
+    const target = opponents.find((opponent) => opponent.playerId === targetId)
     const kill = pick.mode === 'kill'
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
         <label>
-          <input type="radio" name={`${label}-mode`} checked={!kill} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient wonder
+          <input type="radio" name={radioName} checked={!kill} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient wonder
         </label>
         <label>
-          <input type="radio" name={`${label}-mode`} checked={kill} onChange={() => setPick({ ...pick, mode: 'kill' })} /> Kill a random unit
+          <input type="radio" name={radioName} checked={kill} onChange={() => setPick({ ...pick, mode: 'kill' })} /> Kill a random unit
         </label>
-        {kill && playerSelect(pick.targetId, (targetId) => setPick({ ...pick, targetId }), (opponent) => `${opponent.publicHand.units} units in hand`)}
+        {kill && playerSelect(targetId, (id) => setPick({ ...pick, targetId: id }), (opponent) => `${opponent.publicHand.units} units in hand`)}
         <span className="muted">
           {kill
             ? 'A random unit card is taken from that player\'s hand and discarded. The game refuses if they hold none.'
@@ -465,7 +477,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           type="button"
           className="small"
           disabled={!canSubmit || (kill && target === undefined)}
-          onClick={() => send(kill ? { mode: 'kill', targetId: pick.targetId } : { mode: 'obsolete' })}
+          onClick={() => send(kill ? { mode: 'kill', targetId } : { mode: 'obsolete' })}
         >
           {kill ? `Kill a unit of ${target?.username ?? 'a player'}` : 'Obsolete a wonder'}
         </button>
@@ -792,7 +804,9 @@ export function AssistedActionButton({
         return
       }
       case 'atomic': {
-        setPick({ kind: 'atomic', mode: 'extraActions', cityPieceId: nukeTargetsInView(view)[0]?.pieceId ?? '' })
+        // The mode of the phase the player has open, so a quick press is not refused
+        const phase = endTurnState(view)
+        setPick({ kind: 'atomic', mode: phase?.kind === 'open' && phase.phase === 'MOVEMENT' ? 'nuke' : 'extraActions', cityPieceId: nukeTargetsInView(view)[0]?.pieceId ?? '' })
         return
       }
       case 'monarchy': {

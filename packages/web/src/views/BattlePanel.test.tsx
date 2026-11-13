@@ -701,6 +701,19 @@ describe('BattlePanel Metalworking', () => {
     expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a3' }, false)
   })
 
+  it('the unit that was picked is gone: the unit shown is the unit sent', () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue(view)
+    const { getByText, getByRole, getByLabelText, rerender } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView()} />)
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(getByText('Use Metalworking (Iron: +3 attack)'))
+    fireEvent.change(getByLabelText('Unit'), { target: { value: 'a3' } })
+    // The unit a3 is killed; a1 is the only one left and must be what is shown and sent
+    rerender(<BattlePanel gameId="game" busy={false} run={run} view={metalView('ready', [unit('a1', 'attacker', false, 0, 'me'), unit('a3', 'attacker', true, 2, 'me'), unit('d1', 'defender', false, 3, 'other')])} />)
+    expect((getByLabelText('Unit') as HTMLSelectElement).value).toBe('a1')
+    fireEvent.click(getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a1' }, false)
+  })
+
   it('says so when no unit of the player stands in the arena, and sends nothing', () => {
     const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView('ready', [unit('d1', 'defender', false, 1, 'other')])} />)
     fireEvent.click(getByText('Battle'))

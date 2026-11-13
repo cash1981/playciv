@@ -249,7 +249,7 @@ describe('BuildPicker', () => {
     cleanup()
     renderPicker(options({ production: 10, boost: 3, caravan: true }))
     expect(
-      screen.getByText('Production 10, estimate, including 3 from a tech ability this turn, including 2 from the caravan, which this build uses up.'),
+      screen.getByText('Production 10, estimate, including 3 from a tech ability this turn and 2 from the caravan, which this build uses up.'),
     ).toBeTruthy()
   })
 
