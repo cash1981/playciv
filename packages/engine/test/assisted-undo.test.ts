@@ -113,12 +113,12 @@ describe('a passed vote reverses the action', () => {
 
     // The original line stays, and a new one says what was reversed
     expect(undone.log.find((entry) => entry.id === logId)?.publicLog).toBe(
-      'cash1981 used Chivalry: spent 1 Incense and gained 5 culture',
+      'cash1981 used Chivalry: spent 1 Incense and gained 5 (5) culture',
     )
     expect(undone.log.length).toBeGreaterThan(before)
     expect(undone.log.at(-1)).toMatchObject({
       username: 'System',
-      publicLog: "System: cash1981's Chivalry was undone: 5 culture removed and the Incense token returned",
+      publicLog: "System: cash1981's Chivalry was undone: 5 (0) culture removed and the Incense token returned",
     })
     expect(undone.log.at(-1)?.assistedActionId).toBeUndefined()
   })

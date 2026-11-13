@@ -58,10 +58,9 @@ import { activeWonderOwnerIds, coinSourcesOf, totalCoins } from './coins.js'
 import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import { cultureMarkerOf, rewardDrawCount } from './culture-track.js'
 import type { CultureLevel } from './culture-track.js'
-import { itemName } from './item.js'
 import type { GreatPersonItem, HutItem, Item } from './item.js'
 import { tradeCeilingOf } from './limits.js'
-import { appendLog } from './log.js'
+import { appendLog, itemNumbersText, numberedItemName } from './log.js'
 import { err, ok } from './result.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import { INVESTMENT_CARDS } from './sot.js'
@@ -808,7 +807,7 @@ function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
         used,
         player,
         context,
-        `${player.username} used Cristo Redentor: drew ${plural(cards.length, `level ${ROMAN[level]} culture event card`)}` +
+        `${player.username} used Cristo Redentor: drew ${plural(cards.length, `level ${ROMAN[level]} culture event card`)} (${itemNumbersText(state.logSecret, player.username, cards)})` +
           (rewards.length === 0 ? '' : ', keeping one of each pair'),
       )
       const logId = lastLogId(publicLine)
@@ -816,7 +815,7 @@ function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
         username: player.username,
         playerId: player.playerId,
         privateLog:
-          `${player.username} drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with Cristo Redentor` +
+          `${player.username} drew ${cards.map((card) => numberedItemName(state.logSecret, player.username, card)).join(', ')} (${SHEET_LABEL[sheetName]}) with Cristo Redentor` +
           (rewards.length === 0 ? '' : ', keeps one of each pair'),
         createdAt: context.at ?? null,
       })

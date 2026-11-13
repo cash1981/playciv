@@ -180,7 +180,7 @@ describe('advancing', () => {
     expect(piece === undefined ? null : cultureStepOf(done.board, piece)).toBe(1)
   })
 
-  it('writes one public line without card names or numbers, one private line with the name, and no item line', () => {
+  it('writes one public line with item numbers but no card names, one private line with the name, and no item line', () => {
     const ready = advanceTurn()
     const [card] = topCards(ready, 'CULTURE_1', 1)
     const done = advance(ready, 'req-1')
@@ -188,13 +188,13 @@ describe('advancing', () => {
 
     const publicLines = added.filter((entry) => entry.publicLog !== '')
     expect(publicLines.map((entry) => entry.publicLog)).toEqual([
-      'cash1981 advanced on the culture track to space 1 and drew 1 culture I card',
+      'cash1981 advanced on the culture track to space 1, spending 3 (97) culture, and drew 1 culture I card (item number #303)',
     ])
     expect(publicLines[0]?.assistedActionId).toBe('req-1')
     const privateLines = added.filter((entry) => entry.privateLog !== '')
     expect(privateLines).toHaveLength(1)
     expect(privateLines[0]?.playerId).toBe(CASH1981)
-    expect(privateLines[0]?.privateLog).toContain(itemName(card as Item))
+    expect(privateLines[0]?.privateLog).toContain(`${itemName(card as Item)} item number #${card?.itemNumber}`)
     expect(privateLines[0]?.publicLog).toBe('')
     // No line carries the item, so the old item undo cannot target a single card
     expect(added.every((entry) => entry.item === null)).toBe(true)
@@ -251,7 +251,7 @@ describe('advancing', () => {
     expect(handItem(done, card?.id ?? '')).toBeDefined()
     // Since the markers: the line names the marker type taken, not the card (assisted-gp.test.ts)
     expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toMatch(
-      /^cash1981 advanced on the culture track to space 3 and took a [a-z]+ great person marker into reserve$/,
+      /^cash1981 advanced on the culture track to space 3, spending 3 \(\d+\) culture, and took a [a-z]+ great person marker into reserve \(item number #\d+\)$/,
     )
   })
 
@@ -302,7 +302,7 @@ describe('a choice of reward', () => {
     for (const card of candidates) expect(handItem(done, card.id)).toMatchObject({ hidden: true })
     expect(done.items).toHaveLength(ready.items.length - 2)
     expect(done.log.filter((entry) => entry.publicLog.includes('advanced on the culture track'))[0]?.publicLog).toBe(
-      'cash1981 advanced on the culture track to space 1 and drew 2 culture I cards',
+      'cash1981 advanced on the culture track to space 1, spending 3 (97) culture, and drew 2 culture I cards (item numbers #303, #59)',
     )
   })
 
@@ -311,7 +311,7 @@ describe('a choice of reward', () => {
     const done = advance(ready, 'req-1')
     expect(me(done).pendingRewards[0]?.candidateIds).toHaveLength(3)
     expect(done.log.filter((entry) => entry.publicLog.includes('advanced'))[0]?.publicLog).toBe(
-      'cash1981 advanced on the culture track to space 3 and drew 3 Great Person cards',
+      'cash1981 advanced on the culture track to space 3, spending 3 (97) culture, and drew 3 Great Person cards (item numbers #187, #317, #281)',
     )
   })
 
@@ -355,7 +355,7 @@ describe('a choice of reward', () => {
     const added = chosen.log.slice(pending.log.length)
 
     expect(added.filter((entry) => entry.publicLog !== '').map((entry) => entry.publicLog)).toEqual([
-      `cash1981 kept a card and discarded ${itemName(second as Item)}`,
+      `cash1981 kept a card (item number #${first?.itemNumber}) and discarded ${itemName(second as Item)} item number #${second?.itemNumber}`,
     ])
     expect(added.map((entry) => entry.publicLog).join('\n')).not.toContain(itemName(first as Item))
     const privateLine = added.find((entry) => entry.privateLog !== '')
@@ -488,7 +488,7 @@ describe('step 21, the Culture Victory space', () => {
     expect(me(done).stats.trade).toBe(19)
     const lines = done.log.slice(ready.log.length).filter((entry) => entry.publicLog !== '')
     expect(lines.map((entry) => entry.publicLog)).toEqual([
-      'cash1981 advanced on the culture track to space 21 and drew 1 culture III card',
+      'cash1981 advanced on the culture track to space 21, spending 7 (93) culture and 6 (19) trade, and drew 1 culture III card (item number #45)',
       'cash1981 has reached the Culture Victory space on the culture track',
     ])
     // Only the advance line is a target for the undo vote
@@ -567,7 +567,7 @@ describe('what the others can see', () => {
     const chosen = unwrap(choose(pending, 'req-2', 'req-1', keep ?? ''))
     expect(toPlayerView(chosen, CASH1981).you?.pendingRewards).toEqual([])
     const publicLines = chosen.log.map(toPublicLog).map((entry) => entry.publicLog)
-    expect(publicLines.filter((line) => line.includes('kept'))).toEqual([expect.stringMatching(/^cash1981 kept a card and discarded /)])
+    expect(publicLines.filter((line) => line.includes('kept'))).toEqual([expect.stringMatching(/^cash1981 kept a card \(item number #\d+\) and discarded .+ item number #\d+$/)])
   })
 })
 
@@ -586,7 +586,7 @@ describe('undoing an advance with the vote', () => {
     expect(undone.items).toHaveLength(ready.items.length)
     expect(undone.assistedActions[0]?.status).toBe('undone')
     expect(undone.log.at(-1)?.publicLog).toBe(
-      "System: cash1981's culture advance was undone: the leader marker is back on space 7, 5 culture and 3 trade returned and the drawn cards were put back in the deck",
+      "System: cash1981's culture advance was undone: the leader marker is back on space 7, 5 (20) culture and 3 (20) trade returned and the drawn cards were put back in the deck",
     )
     // The original line stays, and the move back is on the board history
     expect(undone.log.some((entry) => entry.assistedActionId === 'req-1')).toBe(true)

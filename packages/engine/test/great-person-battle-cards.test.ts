@@ -105,7 +105,7 @@ describe('Leonidas', () => {
     expect(bonusOf(after, CASH1981)).toBe(bonusOf(base, CASH1981))
     // Leonidas is revealed, not discarded: he stays in the hand, faceup, and works again in a later battle
     expect(findPlayer(after, KARANDRAS1)?.items.find((item) => item.id === cardId)?.hidden).toBe(false)
-    expect(after.log.at(-1)?.publicLog).toContain('used Leonidas (battle)')
+    expect(after.log.at(-1)?.publicLog).toContain('used Leonidas item number #10 (battle)')
     expect(after.log.at(-1)?.publicLog).toContain('combat bonus')
   })
 

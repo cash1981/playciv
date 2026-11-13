@@ -28,9 +28,8 @@ import { policyBlock } from './assisted-sot.js'
 import { UNIT_TYPES } from './build-item.js'
 import type { UnitType } from './build-item.js'
 import { unitCardAvailable, unitSheetOf } from './build-options.js'
-import { itemName } from './item.js'
 import type { Item } from './item.js'
-import { appendLog } from './log.js'
+import { appendLog, itemNumberText, numberedItemName } from './log.js'
 import { err, ok } from './result.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import type { AssistedActionRecord, GameState, Playerhand } from './state.js'
@@ -140,7 +139,7 @@ function militaryTradition(unitType: UnitType): AssistedActionDefinition {
       const logged = appendLog(used, {
         username: player.username,
         playerId: player.playerId,
-        publicLog: `${player.username} used ${POLICY} and drew a free ${unitNoun(unitType)}`,
+        publicLog: `${player.username} used ${POLICY} and drew a free ${unitNoun(unitType)} (${itemNumberText(state.logSecret, player.username, card)})`,
         privateLog: '',
         createdAt: context.at ?? null,
         assistedActionId: context.requestId,
@@ -149,7 +148,7 @@ function militaryTradition(unitType: UnitType): AssistedActionDefinition {
       const withPrivate = appendLog(logged, {
         username: player.username,
         playerId: player.playerId,
-        privateLog: `${player.username} drew ${itemName(card)} (${SHEET_LABEL[sheetName]}) with ${POLICY}`,
+        privateLog: `${player.username} drew ${numberedItemName(state.logSecret, player.username, card)} (${SHEET_LABEL[sheetName]}) with ${POLICY}`,
         createdAt: context.at ?? null,
       })
       return ok({

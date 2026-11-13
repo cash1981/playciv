@@ -63,8 +63,7 @@ import { cultureMarkerOf, rewardDrawCount } from './culture-track.js'
 import type { CultureLevel } from './culture-track.js'
 import { err, ok } from './result.js'
 import type { Item } from './item.js'
-import { itemName } from './item.js'
-import { appendLog } from './log.js'
+import { appendLog, itemNumbersText, numberedItemName } from './log.js'
 import type { SheetName } from './sheet-name.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import {
@@ -95,10 +94,15 @@ import type { Government } from './government.js'
 
 
 /** "3 trade", "2 culture", "1 trade and 2 culture". */
-function describeGain(gain: { readonly trade: number; readonly culture: number }): string {
+function describeGain(
+  gain: { readonly trade: number; readonly culture: number },
+  totals?: { readonly trade: number; readonly culture: number },
+): string {
+  // In the log the new total follows the amount: "4 (14) trade"
+  const amount = (value: number, total: number | undefined): string => (total === undefined ? `${value}` : `${value} (${total})`)
   const parts = [
-    ...(gain.trade > 0 ? [`${gain.trade} trade`] : []),
-    ...(gain.culture > 0 ? [`${gain.culture} culture`] : []),
+    ...(gain.trade > 0 ? [`${amount(gain.trade, totals?.trade)} trade`] : []),
+    ...(gain.culture > 0 ? [`${amount(gain.culture, totals?.culture)} culture`] : []),
   ]
   return parts.length === 0 ? 'nothing' : parts.join(' and ')
 }
@@ -233,7 +237,7 @@ export function statGainAction(spec: StatGainSpec): AssistedActionDefinition {
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used ${spec.label}: gained ${describeGain(gain)}` +
+          `${player.username} used ${spec.label}: gained ${describeGain(gain, stats)}` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -256,7 +260,7 @@ export function statGainAction(spec: StatGainSpec): AssistedActionDefinition {
       }
       return ok({
         state: withPlayerHand(state, { ...player, stats }),
-        text: `${player.username}'s ${effect.subject} was undone: ${describeGain(effect)} removed`,
+        text: `${player.username}'s ${effect.subject} was undone: ${describeGain({ trade: player.stats.trade - stats.trade, culture: player.stats.culture - stats.culture }, stats)} removed`,
       })
     },
   }
@@ -387,7 +391,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used Rationalism: spent ${row.cost} trade to learn a level ${ROMAN[row.level]} tech` +
+          `${player.username} used Rationalism: spent ${row.cost} (${stats.trade}) trade to learn a level ${ROMAN[row.level]} tech` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -412,7 +416,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
       }
       return ok({
         state: withPlayerHand(state, back),
-        text: `${player.username}'s ${effect.subject} was undone: ${effect.trade} trade returned`,
+        text: `${player.username}'s ${effect.subject} was undone: ${effect.trade} (${back.stats.trade}) trade returned`,
       })
     },
   }
@@ -528,12 +532,13 @@ const patronage: AssistedActionDefinition = {
       'policy:Patronage',
       stats,
     )
-    const names = candidates.map(itemName).join(', ')
+    const names = candidates.map((card) => numberedItemName(state.logSecret, player.username, card)).join(', ')
+    const numbers = itemNumbersText(state.logSecret, player.username, candidates)
     const publicLine = appendLog(used, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} used Patronage: spent 1 culture and drew ${plural(candidates.length, `culture ${ROMAN[level]} card`)}` +
+        `${player.username} used Patronage: spent 1 (${stats.culture}) culture and drew ${plural(candidates.length, `culture ${ROMAN[level]} card`)} (${numbers})` +
         (context.confirmedRepeat ? REPEAT_NOTE : ''),
       privateLog: '',
       createdAt: context.at ?? null,
@@ -583,7 +588,7 @@ const patronage: AssistedActionDefinition = {
     }
     return ok({
       state: restored.value,
-      text: `${player.username}'s Patronage was undone: 1 culture returned and the drawn cards were put back in the deck`,
+      text: `${player.username}'s Patronage was undone: 1 (${paidBack.stats.culture}) culture returned and the drawn cards were put back in the deck`,
     })
   },
 }

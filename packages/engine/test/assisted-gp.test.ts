@@ -170,7 +170,7 @@ describe('one valid card', () => {
 
     const added = publicLines(done).slice(publicLines(ready).length)
     expect(added).toEqual([
-      'cash1981 advanced on the culture track to space 3 and took a scientist great person marker into reserve',
+      'cash1981 advanced on the culture track to space 3, spending 3 (97) culture, and took a scientist great person marker into reserve (item number #19)',
     ])
     expect(JSON.stringify(done.log.slice(ready.log.length).map(toPublicLog))).not.toContain(itemName(card as Item))
   })
@@ -239,11 +239,14 @@ describe('a card whose marker type is exhausted', () => {
     const added = publicLines(done).slice(publicLines(exhausted).length)
     // The rejected card is public by the rulebook: named, with the type that was out
     expect(added).toEqual([
-      `cash1981 drew the Great Person card ${itemName(first as Item)}, but no scientist marker is left, so it was discarded faceup`,
-      'cash1981 advanced on the culture track to space 3 and took a general great person marker into reserve',
+      `cash1981 drew the Great Person card ${itemName(first as Item)} item number #${first?.itemNumber}, but no scientist marker is left, so it was discarded faceup`,
+      'cash1981 advanced on the culture track to space 3, spending 3 (97) culture, and took a general great person marker into reserve (item number #281)',
     ])
     // The card that was kept is not named
     expect(added.join('\n')).not.toContain(itemName(second as Item))
+    // The owner's log has the rejection too: the private log never falls back to the public line
+    const rejection = done.log.find((entry) => entry.publicLog.includes('so it was discarded faceup'))
+    expect(rejection?.privateLog).toBe(rejection?.publicLog)
   })
 
   it('the rejected card has no item log line and is not in any hand', () => {
@@ -278,7 +281,7 @@ describe('a card whose marker type is exhausted', () => {
     )
     const lines = publicLines(done).slice(publicLines(state).length)
     expect(lines).toEqual([
-      'cash1981 advanced on the culture track to space 3 and gained no Great Person, because no marker was available',
+      'cash1981 advanced on the culture track to space 3, spending 3 (97) culture, and gained no Great Person, because no marker was available',
     ])
     // No card name reaches the public log, the discard pile or any viewer
     const everything = JSON.stringify([done.log.map(toPublicLog), ...[...OTHERS, ''].map((id) => toPlayerView(done, id).log)])
@@ -326,7 +329,7 @@ describe('a card whose marker type is exhausted', () => {
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
     expect(me(done).items).toEqual([])
     expect(publicLines(done).at(-1)).toBe(
-      'cash1981 advanced on the culture track to space 3 and gained no Great Person, because no Great Person card could be drawn',
+      'cash1981 advanced on the culture track to space 3, spending 3 (97) culture, and gained no Great Person, because no Great Person card could be drawn',
     )
   })
 
@@ -341,7 +344,7 @@ describe('a card whose marker type is exhausted', () => {
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
     expect(me(done).stats.culture).toBe(97)
     expect(publicLines(done).slice(publicLines(none).length)).toEqual([
-      'cash1981 advanced on the culture track to space 3 and gained no Great Person, because no Great Person card could be drawn',
+      'cash1981 advanced on the culture track to space 3, spending 3 (97) culture, and gained no Great Person, because no Great Person card could be drawn',
     ])
   })
 
@@ -383,7 +386,9 @@ describe('Greeks and Organized Religion', () => {
 
     const three = advance(greeks([SCIENTIST, GENERAL, ARTIST], { policies: ['Organized Religion'] }), 'req-1')
     expect(me(three).pendingRewards[0]?.candidateIds).toHaveLength(3)
-    expect(publicLines(three).at(-1)).toBe('cash1981 advanced on the culture track to space 3 and drew 3 Great Person cards')
+    expect(publicLines(three).at(-1)).toMatch(
+      /^cash1981 advanced on the culture track to space 3, spending 3 \(\d+\) culture, and drew 3 Great Person cards \(item numbers #\d+, #\d+, #\d+\)$/,
+    )
 
     const one = advance(withTop(gpTurn({ policies: ['Organized Religion'] }), [SCIENTIST, GENERAL]), 'req-1')
     expect(me(one).pendingRewards[0]?.candidateIds).toHaveLength(2)
@@ -415,7 +420,7 @@ describe('Greeks and Organized Religion', () => {
     expect(me(chosen).pendingRewards).toEqual([])
     const discarded = chosen.discardedItems.find((item) => item.id === scientist) as Item
     expect(publicLines(chosen).at(-1)).toBe(
-      `cash1981 took a general great person marker into reserve and discarded ${itemName(discarded)}`,
+      `cash1981 took a general great person marker into reserve (item number #281) and discarded ${itemName(discarded)} item number #${discarded?.itemNumber}`,
     )
     expect(publicLines(chosen).join('\n')).not.toContain('kept a card')
     const effect = effectOf(chosen, 'req-1')
@@ -439,7 +444,7 @@ describe('Greeks and Organized Religion', () => {
     expect(handItem(done, onlyGeneral?.id ?? '')).toBeDefined()
     expect(markersInOwnArea(done).map((piece) => piece.assetId)).toEqual(['great people/general'])
     expect(publicLines(done).at(-1)).toBe(
-      'cash1981 advanced on the culture track to space 3 and took a general great person marker into reserve',
+      'cash1981 advanced on the culture track to space 3, spending 3 (97) culture, and took a general great person marker into reserve (item number #281)',
     )
     expect(effectOf(done, 'req-1').kept).toBe(onlyGeneral?.id)
   })
@@ -489,7 +494,7 @@ describe('Greeks and Organized Religion', () => {
     const [keep] = me(old).pendingRewards[0]?.candidateIds ?? []
     const chosen = unwrap(choose(old, 'req-2', 'req-1', keep ?? ''))
     expect(chosen.board.pieces.filter((piece) => piece.category === 'greatperson')).toEqual([])
-    expect(publicLines(chosen).at(-1)).toMatch(/^cash1981 kept a card and discarded /)
+    expect(publicLines(chosen).at(-1)).toMatch(/^cash1981 kept a card \(item number #\d+\) and discarded .+ item number #\d+$/)
     // Its undo is the old one: no marker to remove
     const undone = undoByVote(chosen, 'req-1')
     expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(2)
@@ -514,7 +519,7 @@ describe('undoing a Great Person advance with the vote', () => {
     expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(2)
     expect(undone.assistedActions[0]?.status).toBe('undone')
     expect(undone.log.at(-1)?.publicLog).toBe(
-      "System: cash1981's culture advance was undone: the leader marker is back on space 2, 3 culture returned and the drawn cards were put back in the deck and the scientist great person marker was removed",
+      "System: cash1981's culture advance was undone: the leader marker is back on space 2, 3 (100) culture returned and the drawn cards were put back in the deck and the scientist great person marker was removed",
     )
     const lengths = undone.board.history.map((entry) => entry.logLength)
     expect(lengths).toEqual([...lengths].sort((a, b) => a - b))

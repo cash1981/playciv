@@ -159,7 +159,7 @@ describe('the free unit', () => {
     expect(unitsOf(done, 'ARTILLERY')).toHaveLength(unitsOf(built, 'ARTILLERY').length + 1)
     expect(me(done).stats.trade).toBe(me(built).stats.trade)
     const line = done.log.find((entry) => entry.assistedActionId === 'free-1')
-    expect(line?.publicLog).toBe('cash1981 used Military Tradition and drew a free artillery unit')
+    expect(line?.publicLog).toBe('cash1981 used Military Tradition and drew a free artillery unit (item number #297)')
   })
 
   it('names the card in a private line only, and no other viewer sees it', () => {
@@ -167,8 +167,10 @@ describe('the free unit', () => {
     const done = free(built, 'infantry')
     const card = unitsOf(done, 'INFANTRY').find((item) => !unitsOf(built, 'INFANTRY').some((before) => before.id === item.id))
     if (card === undefined) throw new Error('no card drawn')
-    expect(done.log.at(-1)?.privateLog).toBe(`cash1981 drew ${itemName(card)} (Infantry) with Military Tradition`)
-    const secret = [`${itemName(card)} (Infantry)`, `drew ${itemName(card)}`]
+    expect(done.log.at(-1)?.privateLog).toBe(
+      `cash1981 drew ${itemName(card)} item number #${card.itemNumber} (Infantry) with Military Tradition`,
+    )
+    const secret = [`${itemName(card)} item number #${card.itemNumber} (Infantry)`, `drew ${itemName(card)}`]
     for (const viewerId of [KARANDRAS1, ITCHI, CHUL, 'spectator']) {
       const json = JSON.stringify(toPlayerView(done, viewerId))
       for (const text of secret) expect(json, `${viewerId} must not see ${text}`).not.toContain(text)

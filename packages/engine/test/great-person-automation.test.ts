@@ -108,7 +108,7 @@ describe('Archimedes', () => {
 
     const done = finishResearch(revealedTech)
     expect(me(done).stats.culture).toBe(3)
-    expect(done.log.at(-2)?.publicLog).toBe('cash1981 gained 3 culture from Archimedes')
+    expect(done.log.at(-2)?.publicLog).toBe('cash1981 gained 3 (3) culture from Archimedes')
 
     const removed = unwrap(removeTech(done, { playerId: CASH1981, techName: 'Code of Laws' }))
     expect(me(removed).stats.culture).toBe(0)
@@ -158,7 +158,7 @@ describe('Archimedes', () => {
     expect(me(unwrap(revealTech(matching, { playerId: CASH1981, techName: 'Code of Laws' }))).stats.culture).toBe(0)
     const revealedPottery = unwrap(revealTech(different, { playerId: CASH1981, techName: 'Pottery' }))
     expect(me(revealedPottery).stats.culture).toBe(3)
-    expect(revealedPottery.log.at(-1)?.publicLog).toBe('cash1981 gained 3 culture from Archimedes')
+    expect(revealedPottery.log.at(-1)?.publicLog).toBe('cash1981 gained 3 (3) culture from Archimedes')
   })
 })
 
@@ -285,7 +285,7 @@ describe('Michelangelo', () => {
     const played = unwrap(play(state, 'michelangelo-1', card.itemId))
     expect(me(played).wonderDiscount).toBe(5)
     expect(played.log.at(-1)?.publicLog).toBe(
-      'cash1981 played Michelangelo (city management) and discarded it, taking 5 production off their next wonder',
+      'cash1981 played Michelangelo item number #264 (city management) and discarded it, taking 5 production off their next wonder',
     )
     const after = buildOptionsOf(played, me(played))[0]
     const wonderAfter = after?.choices.find((choice) => choice.item.kind === 'wonder')
@@ -365,7 +365,7 @@ describe('Jacques Cousteau', () => {
     const harbor = played.board.pieces.find((piece) => piece.assetId === 'buildings/harbor')
     expect(harbor).toBeDefined()
     expect(played.discardedItems.some((item) => item.id === itemId)).toBe(true)
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Jacques Cousteau (start of turn) and discarded it, building a Harbor for free on C1')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Jacques Cousteau item number #129 (start of turn) and discarded it, building a Harbor for free on C1')
     expect(me(played).stats.trade).toBe(me(state).stats.trade)
 
     const undone = undoByVote(played, 'cousteau-1')
@@ -456,7 +456,7 @@ describe('Mother Teresa', () => {
     expect(me(done, KARANDRAS1).stats.coinSources.sheet).toBe(1)
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(1)
     expect(done.log.find((entry) => entry.assistedActionId === 'teresa-1')?.publicLog).toContain(
-      'gave their Sheet coin to Karandras1 and advanced one space for free',
+      'gave their Sheet coin (0) to Karandras1 (1) and advanced one space for free',
     )
 
     const undone = undoByVote(done, 'teresa-1')

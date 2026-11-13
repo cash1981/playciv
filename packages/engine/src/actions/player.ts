@@ -48,6 +48,7 @@ import {
   appendLog,
   appendRandomDiscardLog,
   createLogTexts,
+  loggedItemNumber,
 } from '../log.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -1029,7 +1030,7 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
   next = appendLog(next, {
     username: fromPlayer.username,
     playerId: fromPlayer.playerId,
-    privateLog: `${toPlayer.username} has received - ${revealAll(traded)}`,
+    privateLog: `${toPlayer.username} has received - ${revealAll(traded)}. Item number #${loggedItemNumber(state.logSecret, toPlayer.username, traded)}`,
     publicLog: '',
   })
 

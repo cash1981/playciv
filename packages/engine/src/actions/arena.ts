@@ -12,7 +12,7 @@ import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
 import { isUnit, revealAll } from '../item.js'
-import { appendPublicLog } from '../log.js'
+import { appendPrivatePublicLog, appendPublicLog, itemNumberText } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -931,11 +931,11 @@ function announcePlacements(state: GameState, playerId: string): GameState {
   let next = state
   for (const u of [...battle.arena, ...battle.departedUnits]) {
     if (u.placedBy !== playerId || u.announced !== false) continue
-    next = appendPublicLog(
+    next = appendPrivatePublicLog(
       next,
       owner.username,
       owner.playerId,
-      `places ${revealAll(u.unit)} (${u.attack}/${u.health}) into the arena`,
+      `places ${revealAll(u.unit)} ${itemNumberText(state.logSecret, owner.username, u.unit)} (${u.attack}/${u.health}) into the arena`,
     )
   }
   const markAnnounced = (u: ArenaUnit): ArenaUnit =>
@@ -1035,7 +1035,7 @@ export function sunTzuPass(state: GameState, input: SunTzuPassInput): ActionResu
     paid,
     player.username,
     player.playerId,
-    `uses ${SUN_TZU}: spends ${SUN_TZU_COST} trade and passes the battle turn`,
+    `uses ${SUN_TZU}: spends ${SUN_TZU_COST} (${player.stats.trade - SUN_TZU_COST}) trade and passes the battle turn`,
   )
   return ok({
     ...next,

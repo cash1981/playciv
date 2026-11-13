@@ -107,7 +107,7 @@ import { BUILDING_UPGRADES, buildingNameOf } from './building-data.js'
 import { WONDERS_IN_ERA, WONDERS_PER_ERA, WONDER_ERAS } from './wonder-data.js'
 import type { WonderEra } from './wonder-data.js'
 import { BUILDING_PROGRAM_ASSET_ID } from './city-production.js'
-import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
+import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { activeGreatPerson } from './great-person-effects.js'
 import type { EngineError } from './errors.js'
 import { MAX_DEVOTE_CULTURE } from './limits.js'
@@ -218,7 +218,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} culture` +
+          `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} (${stats.culture}) culture` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -244,7 +244,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
       if (!returned.ok) return returned
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} culture removed and the ${effect.spent.resource} token returned`,
+        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and the ${effect.spent.resource} token returned`,
       })
     },
   }
@@ -358,7 +358,7 @@ export function applyCoinPurchase(
     username: player.username,
     playerId: player.playerId,
     publicLog:
-      `${player.username} spent ${terms.paidWith} to add 1 coin to ${terms.techName}` +
+      `${player.username} spent ${terms.cost} (${stats[terms.resource]}) ${terms.resource} to add 1 coin (${totalCoins(coinSourcesOf(used, { ...player, stats }))}) to ${terms.techName}` +
       (options.confirmedRepeat === true ? REPEAT_NOTE : ''),
     privateLog: '',
     createdAt: options.at ?? null,
@@ -424,7 +424,7 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
       }
       return ok({
         state: withPlayerHand(state, { ...player, stats }),
-        text: `${player.username}'s ${terms.techName} purchase was undone: ${terms.paidWith} returned and 1 coin removed`,
+        text: `${player.username}'s ${terms.techName} purchase was undone: ${effect.cost} (${stats[effect.resource]}) ${effect.resource} returned and 1 coin (${totalCoins(coinSourcesOf(state, { ...player, stats }))}) removed`,
       })
     },
   }
@@ -858,7 +858,7 @@ const build: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
-        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
+        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} (${paying.stats.trade - choice.tradeToPay}) trade for the missing production` : '') +
         (removal === null ? '' : ', using up the Building Program marker') +
         (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
         (hensonWound ? ', and Jim Henson took a wound marker' : '') +
@@ -986,7 +986,7 @@ const build: AssistedActionDefinition = {
         : cityMarkerMayReturn(state.board, effect.caravan.piece)
           ? ' and the caravan was put back'
           : ' (the caravan stays off: the city has another marker now)')
-    const tradeText = effect.trade > 0 ? `, ${effect.trade} trade returned` : ''
+    const tradeText = effect.trade > 0 ? `, ${effect.trade} (${refunded.stats.trade}) trade returned` : ''
     const freeUnit = militaryTraditionUndoBlock(state, record)
     if (freeUnit !== undefined) return err(refused(freeUnit))
 
@@ -1368,8 +1368,8 @@ const devoteToTheArts: AssistedActionDefinition = {
     const darwinActivationId = payload.darwin === true ? greatPersonActionIdOf(state, player, DARWIN_NAME) : undefined
     const gained =
       darwin === undefined
-        ? `gained ${culture} culture`
-        : `turned its ${culture} culture into ${darwinTrade} trade with Charles Darwin${darwinTrade < culture ? ' (the trade track has no room for more)' : ''}`
+        ? `gained ${culture} (${stats.culture}) culture`
+        : `turned its ${culture} culture into ${darwinTrade} (${stats.trade}) trade with Charles Darwin${darwinTrade < culture ? ' (the trade track has no room for more)' : ''}`
     const logged = appendLog(kurosawa.state, {
       username: player.username,
       playerId: player.playerId,
@@ -1417,7 +1417,7 @@ const devoteToTheArts: AssistedActionDefinition = {
       undone = freeTurnAction(undone, playerOf(undone, player.playerId) ?? player, effect.usedAction.turnNumber, effect.usedAction.key)
     }
     const kurosawa = takeBackKurosawa(undone, effect.kurosawa ?? [])
-    const removed = trade > 0 || effect.usedAction !== undefined ? `${trade} trade removed` : `${effect.culture} culture removed`
+    const removed = trade > 0 || effect.usedAction !== undefined ? `${trade} (${stats.trade}) trade removed` : `${effect.culture} (${stats.culture}) culture removed`
     return ok({
       state: kurosawa.state,
       text: `${player.username}'s devotion of ${effect.cityLabel} to the arts was undone: ${removed}${kurosawa.said}`,

@@ -347,7 +347,7 @@ describe('Cristo Redentor', () => {
     expect(drawn).toHaveLength(2)
     expect(drawn.every((card) => card.hidden)).toBe(true)
     expect(used.items.length).toBe(state.items.length - 2)
-    expect(used.log.at(-2)?.publicLog).toBe('cash1981 used Cristo Redentor: drew 2 level II culture event cards')
+    expect(used.log.at(-2)?.publicLog).toBe('cash1981 used Cristo Redentor: drew 2 level II culture event cards (item numbers #259, #359)')
     // The public line names no card
     expect(used.log.at(-2)?.publicLog).not.toContain(drawn[0]?.id ?? '?')
   })
@@ -366,7 +366,7 @@ describe('Cristo Redentor', () => {
     expect(rewards.every((reward) => reward.candidateIds.length === 2 && reward.keep === 1)).toBe(true)
     expect(me(used).items.length).toBe(me(state).items.length + 4)
     expect(used.log.at(-2)?.publicLog).toBe(
-      'cash1981 used Cristo Redentor: drew 4 level II culture event cards, keeping one of each pair',
+      'cash1981 used Cristo Redentor: drew 4 level II culture event cards (item numbers #259, #359, #255, #179), keeping one of each pair',
     )
 
     // Both choices are made through the record of the action

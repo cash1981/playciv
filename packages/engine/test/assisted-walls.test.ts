@@ -257,7 +257,7 @@ describe('building City Walls', () => {
     const before = ready({ production: null, trade: 10 })
     const done = build(before, { rush: true })
     expect(me(done).stats.trade).toBe(4)
-    expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain('paying 6 trade for the missing production')
+    expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain('paying 6 (4) trade for the missing production')
     expect(me(undoByVote(done, 'req-1')).stats.trade).toBe(10)
   })
 

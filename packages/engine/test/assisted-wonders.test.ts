@@ -400,7 +400,7 @@ describe('building a wonder', () => {
     expect(describeError(unwrapErr(tryBuild(state, COLOSSUS, C2)))).toContain('Confirm paying 15 trade to build it.')
     const done = build(state, COLOSSUS, C2, 'req-1', true)
     expect(me(done).stats.trade).toBe(1)
-    expect(buildLine(done)).toBe('cash1981 built the Colossus in City B2 on square C2, paying 15 trade for the missing production')
+    expect(buildLine(done)).toBe('cash1981 built the Colossus in City B2 on square C2, paying 15 (1) trade for the missing production')
     expect(piecesOf(done, COLOSSUS)[0]?.ownerId).toBe(CASH1981)
     expect(me(undoByVote(done, 'req-1')).stats.trade).toBe(16)
     // Removing the piece before End turn takes the build back and gives the trade back too

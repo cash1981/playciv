@@ -823,7 +823,7 @@ describe('building a figure', () => {
     expect(Math.abs(piece.x + piece.width / 2 - (C2.column + 0.5) * SQUARE_SIZE)).toBeLessThanOrEqual(0.5)
     expect(Math.abs(piece.y + piece.height / 2 - (mapTop(done.board) + (C2.row + 0.5) * SQUARE_SIZE))).toBeLessThanOrEqual(0.5)
     expect(piece.placedBy).toBe(CASH1981)
-    expect(lastLine(done)).toBe(kind === 'scout' ? `${line}, paying 3 trade for the missing production` : line)
+    expect(lastLine(done)).toBe(kind === 'scout' ? `${line}, paying 3 (0) trade for the missing production` : line)
     expect(me(done).stats.trade).toBe(kind === 'scout' ? 0 : 3)
     expect(done.log.at(-1)?.assistedActionId).toBe('req-1')
     expect(done.assistedActions).toHaveLength(1)
@@ -950,7 +950,7 @@ describe('building a unit', () => {
     const done = build(state, unit('mounted'), undefined, 'req-1', true)
     expect(me(done).stats.trade).toBe(0)
     expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
-      'cash1981 built a mounted unit in City B2, paying 9 trade for the missing production',
+      'cash1981 built a mounted unit in City B2, paying 9 (0) trade for the missing production',
     )
   })
 
@@ -1015,7 +1015,7 @@ describe('undoing a unit', () => {
     expect(undone.items.map((item) => item.id).sort()).toEqual(before.items.map((item) => item.id).sort())
     expect(me(undone).stats.trade).toBe(9)
     expect(undone.assistedActions[0]?.status).toBe('undone')
-    expect(lastLine(undone)).toBe("System: cash1981's mounted unit was undone: the card was put back in the deck, 9 trade returned")
+    expect(lastLine(undone)).toBe("System: cash1981's mounted unit was undone: the card was put back in the deck, 9 (9) trade returned")
   })
 
   const idsOf = (items: readonly Item[]): readonly string[] => items.map((item) => item.id)
