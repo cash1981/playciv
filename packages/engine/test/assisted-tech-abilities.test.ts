@@ -18,6 +18,7 @@ import { cityProductionsOf } from '../src/city-production.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import { GREAT_PERSON_CARD_TYPES } from '../src/blockade.js'
 import { isUnit } from '../src/item.js'
+import { nextInt } from '../src/random.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { AssistedActionKind, GameState, Playerhand } from '../src/state.js'
@@ -629,6 +630,12 @@ describe.each([
     expect(player(used, KARANDRAS1)).toEqual(player(ready(), KARANDRAS1))
   })
 
+  it('flattens line breaks and control characters in the note, so the public line stays one line', () => {
+    const used = unwrap(press(ready(), kind, { targetId: ITCHI, note: 'Build\nin\r\n  Capital\u0000!' }))
+    expect(used.log.at(-1)?.publicLog).toContain('(Build in Capital !)')
+    expect(used.log.at(-1)?.publicLog).not.toMatch(/[\u0000-\u001f]/)
+  })
+
   it('works without a note, refuses yourself, a stranger and a long note, and pays nothing', () => {
     expect(unwrap(press(ready(), kind, { targetId: ITCHI })).log.at(-1)?.publicLog).toContain(`cancelling ${what} of Itchi`)
     for (const payload of [undefined, {}, { targetId: CASH1981 }, { targetId: 'nobody' }, { targetId: ITCHI, note: 'x'.repeat(81) }, { targetId: ITCHI, note: 4 }]) {
@@ -701,6 +708,29 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
     // The same state kills the same card: the pick comes from the game's seed
     const again = unwrap(press(state, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
     expect(unitsOf(again).map((unit) => unit.id)).toEqual(after.map((unit) => unit.id))
+  })
+
+  it('picks the card the seed names, a different seed another card, and leaves the advanced seed in the state', () => {
+    const state = drawUnits(ready(), KARANDRAS1, 'INFANTRY', 'MOUNTED', 'ARTILLERY', 'INFANTRY')
+    const units = unitsOf(state)
+    expect(units).toHaveLength(4)
+    const indexFor = (rng: number): number => nextInt(rng, units.length)[0]
+    // Two seeds that name different cards, found by looking, so the test does not rest on luck
+    const first = 1
+    const second = Array.from({ length: 200 }, (_, at) => at + 2).find((seed) => indexFor(seed) !== indexFor(first))
+    if (second === undefined) throw new Error('no seed names another card')
+    for (const rng of [first, second]) {
+      const used = unwrap(press({ ...state, rng }, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
+      const killed = units[indexFor(rng)]
+      expect(used.discardedItems.some((item) => item.id === killed?.id)).toBe(true)
+      expect(unitsOf(used).map((unit) => unit.id)).toEqual(units.filter((unit) => unit.id !== killed?.id).map((unit) => unit.id))
+      // The pick consumed a step of the seed: the same press in obsolete mode (one line, no pick) ends on another seed
+      const noPick = unwrap(press({ ...state, rng }, 'monarchy', { mode: 'obsolete' }))
+      expect(used.rng).not.toBe(noPick.rng)
+    }
+    const a = unwrap(press({ ...state, rng: first }, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
+    const b = unwrap(press({ ...state, rng: second }, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
+    expect(unitsOf(a).map((unit) => unit.id)).not.toEqual(unitsOf(b).map((unit) => unit.id))
   })
 
   it('refuses a kill when the opponent holds no unit card, and spends nothing', () => {

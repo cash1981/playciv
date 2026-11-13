@@ -102,6 +102,10 @@ describe('Metalworking (Iron, Battle: +3 attack on one of your own arena units)'
     expect(hiddenLine).toBe('cash1981 used Metalworking: spent 1 Iron, adding 3 to the attack of a unit it placed (1 → 4)')
     expect(hidden.log.some((entry) => entry.playerId === CASH1981 && entry.privateLog.includes('Metalworking: ') && entry.privateLog.includes('item number'))).toBe(true)
     // The card named in the owner's private line never reaches the other player's log
+    // The private line follows the public one and carries the time of the press
+    const lines = hidden.log.filter((entry) => entry.createdAt === AT)
+    expect(lines.at(-2)?.assistedActionId).toBe('req-1')
+    expect(lines.at(-1)?.privateLog).toContain('attack 1 → 4')
     expect(JSON.stringify(toPlayerView(hidden, KARANDRAS1).log)).not.toContain('attack 1 → 4')
 
     const announced: GameState = {
@@ -142,7 +146,8 @@ describe('Metalworking (Iron, Battle: +3 attack on one of your own arena units)'
     expect(unwrapErr(press(first, { arenaUnitId: own.id }, 'req-2')).kind).toBe('ASSISTED_ACTION_REJECTED')
     const second = unwrap(press(first, { arenaUnitId: own.id }, 'req-2', true))
     expect(mine(second)[0]?.attack).toBe(7)
-    expect(second.log.at(-1)?.publicLog).toContain('confirmed by the player')
+    // The player's own private line follows the public one, so the public line is found by its action
+    expect(second.log.find((entry) => entry.assistedActionId === 'req-2')?.publicLog).toContain('confirmed by the player')
   })
 
   it('an undo by vote returns the Iron and takes the 3 back', () => {

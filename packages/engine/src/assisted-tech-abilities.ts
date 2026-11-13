@@ -649,7 +649,8 @@ function cancelAbility(spec: CancelSpec): AssistedActionDefinition {
       if (!target.ok) return target
       const note = payload['note']
       if (note !== undefined && (typeof note !== 'string' || note.length > MAX_NOTE)) return err(`The note must be text of at most ${MAX_NOTE} characters.`)
-      return ok({ target: target.value, note: (note ?? '').trim() })
+      // Control characters would break the public line; runs of them become one space (the route does the same)
+      return ok({ target: target.value, note: (note ?? '').replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim() })
     },
 
     act(state, _player, plan, spent) {
@@ -803,9 +804,12 @@ const metalworking = techAbility<'metalworking', ArenaUnit>({
     const named = unit.announced === false ? 'a unit it placed' : `${revealAll(unit.unit)} ${itemNumberText(state.logSecret, player.username, unit.unit)}`
     const next = withArenaUnit(state, battleId, { ...unit, attack: after })
     return ok({
-      state: unit.announced === false
-        ? appendLog(next, { username: player.username, playerId: player.playerId, privateLog: `Metalworking: ${revealAll(unit.unit)} ${itemNumberText(state.logSecret, player.username, unit.unit)} attack ${unit.attack} → ${after}`, createdAt: null })
-        : next,
+      state: next,
+      // Not announced yet: the card is named in the player's own log, after the public line, and not in it
+      privateLines:
+        unit.announced === false
+          ? [`Metalworking: ${revealAll(unit.unit)} ${itemNumberText(state.logSecret, player.username, unit.unit)} attack ${unit.attack} → ${after}`]
+          : [],
       said: `, adding ${METALWORKING_BONUS} to the attack of ${named} (${unit.attack} → ${after})`,
       effect: { kind: 'metalworking', spent, battleId, arenaUnitId: unit.id, before: unit.attack, after },
     })

@@ -115,6 +115,13 @@ describe('Atomic Theory: an extra action with each city (Uranium, City Managemen
     expect(unwrap(devote(unwrap(devote(two, city, 'req-d')), city, 'req-e')).log.at(-1)?.publicLog).toContain('Atomic Theory')
   })
 
+  it('is refused in the Movement phase, which is for a nuke, and nothing is paid', () => {
+    const movement = upTo(ready(), 'CM')
+    expect(assistedAvailability(movement, CASH1981, 'atomicTheory').status).toBe('ready')
+    expect(refused(press(movement, 'atomicTheory', { mode: 'extraActions' }))).toBe('ASSISTED_ACTION_REJECTED')
+    expect(hasHut(movement, 'Uranium')).toBe(true)
+  })
+
   it('refuses outside City Management, without a city, and with a bad mode; nothing is paid', () => {
     const state = ready()
     for (const payload of [undefined, {}, { mode: 'raze' }, { mode: 'extraActions', cityPieceId: 'x' }]) {
@@ -264,6 +271,17 @@ describe('Atomic Theory: nuke a non-capital city (Uranium, Movement)', () => {
     expect(undone.log.at(-1)?.publicLog).toContain('City J10 was put back with everything that stood around it')
     // The board Undo cannot walk back through the restoration into the removals
     expect(undoLastBoardChange(undone, CASH1981)).toMatchObject({ ok: false })
+  })
+
+  it('refuses the undo when a city now stands where the destroyed city was, and changes nothing', () => {
+    const state = scene()
+    const used = unwrap(nuke(state, blueCity(state)))
+    const rebuilt = put(used, CASH1981, 'cities/redcity2', 9, 9)
+    const refusal = JSON.stringify(unwrapErr(tryVote(rebuilt, 'req-1')))
+    expect(refusal).toContain('A city now stands where the destroyed city was')
+    // A city elsewhere does not stop it
+    const elsewhere = put(used, CASH1981, 'cities/redcity2', 13, 2)
+    expect(unwrap(tryVote(elsewhere, 'req-1')).board.pieces.some((piece) => piece.assetId === 'cities/bluecity2')).toBe(true)
   })
 
   it('refuses the undo when a piece of the destroyed city is on the board again', () => {

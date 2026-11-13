@@ -21,7 +21,9 @@ import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './
 import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, undoTesla } from './tesla.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
+  ATOMIC_ACTION_NOTE,
   LOVELACE_ACTION_NOTE,
+  atomicExtraActionFor,
   LOVELACE_NAME,
   waitingCardIds,
   cityActionsTakenThisTurn,
@@ -605,9 +607,11 @@ function automate(
           `and gaining ${culture} (${player.stats.culture + culture}) culture (${list})` +
           (acted.length === 0
             ? ''
-            : extraCityActionsLeft(state, player) > 0
-              ? LOVELACE_ACTION_NOTE
-              : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
+            : atomicExtraActionFor(state, player, capital.cityPieceId)
+              ? ATOMIC_ACTION_NOTE
+              : extraCityActionsLeft(state, player) > 0
+                ? LOVELACE_ACTION_NOTE
+                : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
           kurosawa.said,
       })
     }

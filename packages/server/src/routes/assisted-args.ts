@@ -229,7 +229,9 @@ function parseTargetPlayer(action: string, withNote: boolean) {
     const note = args['note']
     if (note === undefined) return { targetId: args['targetId'] }
     if (typeof note !== 'string' || note.length > MAX_NOTE) return `note must be text of at most ${MAX_NOTE} characters`
-    return { targetId: args['targetId'], note }
+    // The note goes into a public log line: a line break or another control character would break the line, so runs of them become one space
+    const clean = note.replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim()
+    return clean === '' ? { targetId: args['targetId'] } : { targetId: args['targetId'], note: clean }
   }
 }
 

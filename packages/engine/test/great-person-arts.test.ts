@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { placePiece, removePiece } from '../src/actions/board.js'
+import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { cityActionsTakenThisTurn, performAssistedAction } from '../src/assisted.js'
@@ -20,7 +21,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
-import { withCardInHand } from './assisted-fixture.js'
+import { withCardInHand, withHutInHand } from './assisted-fixture.js'
 import { withStats } from './culture-advance-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -490,5 +491,57 @@ describe('hidden information', () => {
     // A facedown Darwin in the hand is not told to anyone, the owner included
     const facedown = withCardInHand(scene(), 'Charles Darwin')
     expect(toPlayerView(facedown.state, CASH1981).you?.cityActions?.[0]?.devoteToTheArts.darwin).toBeNull()
+  })
+})
+
+describe('Ada Lovelace together with Atomic Theory (extra action with each city)', () => {
+  /** Atomic Theory revealed, a Uranium in hand and Ada Lovelace's card in hand, City Management open. */
+  function both() {
+    const learned = unwrap(revealTech(unwrap(chooseTech(scene(), { playerId: CASH1981, techName: 'Atomic Theory' })), { playerId: CASH1981, techName: 'Atomic Theory' }))
+    const card = withCardInHand(withHutInHand(learned, 'Uranium').state, 'Ada Lovelace')
+    return { state: card.state, itemId: card.itemId }
+  }
+  const atomic = (state: GameState, requestId = 'at1') =>
+    performAssistedAction(state, { playerId: CASH1981, action: 'atomicTheory', requestId, at: AT, payload: { mode: 'extraActions' } })
+  const recordOf = (state: GameState, requestId: string) => state.assistedActions.find((record) => record.id === requestId)
+
+  it('Atomic Theory covers a city\'s second action first, so the Lovelace credit is kept for its third', () => {
+    const { state, itemId } = both()
+    const city = capitalId(state)
+    const first = unwrap(devote(state, 'a1', city))
+    const played = unwrap(play(first, 'l1', itemId))
+    const used = unwrap(atomic(played))
+
+    const second = unwrap(devote(used, 'a2', city))
+    expect(second.log.at(-1)?.publicLog).toContain(' (an extra city action from Atomic Theory)')
+    expect(second.log.at(-1)?.publicLog).not.toContain('Ada Lovelace')
+    expect(recordOf(second, 'a2')?.lovelaceCreditId).toBeUndefined()
+
+    // Her credit is still there: the third action uses it
+    expect(cityActionsOf(second, me(second)).find((option) => option.cityPieceId === city)?.extraAction).toBe(true)
+    const third = unwrap(devote(second, 'a3', city))
+    expect(third.log.at(-1)?.publicLog).toContain('an extra city action from Ada Lovelace')
+    expect(recordOf(third, 'a3')?.lovelaceCreditId).toBe('l1')
+    expect(JSON.stringify(unwrapErr(devote(third, 'a4', city)))).toContain('already acted')
+
+    // Undoing the third action frees the credit again
+    const freed = undoByVote(third, 'a3')
+    expect(cityActionsOf(freed, me(freed)).find((option) => option.cityPieceId === city)?.extraAction).toBe(true)
+    expect(recordOf(unwrap(devote(freed, 'a3b', city)), 'a3b')?.lovelaceCreditId).toBe('l1')
+  })
+
+  it("Jerry Garcia's capital action covered by Atomic Theory says so, and does not claim the Lovelace credit", () => {
+    const { state, itemId } = both()
+    const capital = capitalId(state)
+    const garcia = withCardInHand(state, 'Jerry Garcia')
+    const first = unwrap(devote(garcia.state, 'a1', capital))
+    const lovelace = unwrap(play(first, 'l1', itemId))
+    const used = unwrap(atomic(lovelace))
+    const played = unwrap(play(used, 'g1', garcia.itemId))
+    expect(played.log.at(-1)?.publicLog).toContain(' (an extra city action from Atomic Theory)')
+    expect(played.log.at(-1)?.publicLog).not.toContain('Ada Lovelace')
+    expect(recordOf(played, 'g1')?.lovelaceCreditId).toBeUndefined()
+    // The credit is untouched, so Lovelace's own play can still be undone
+    expect(me(undoByVote(played, 'g1')).items.length).toBeGreaterThan(0)
   })
 })

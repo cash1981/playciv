@@ -223,6 +223,11 @@ describe('Horseback Riding through args', () => {
     const self = await post(t.starter, actions(t.gameId), { action: 'horsebackRiding', requestId: 'req-self', rev: before.rev, args: { targetId: t.starterId } })
     expect(self.status).toBe(400)
     expect(await self.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    // Nothing was persisted: no record, the Silk is still on the board and the trade is where it was
+    const stored = await repo.findGame(t.gameId)
+    expect(stored?.assistedActions).toHaveLength(0)
+    expect(stored?.board.pieces.some((piece) => piece.assetId === 'resources/silk')).toBe(true)
+    expect(stored?.players.find((player) => player.playerId === t.starterId)?.stats.trade).toBe(before.you?.stats.trade)
 
     const paid = await post(t.starter, actions(t.gameId), { action: 'horsebackRiding', requestId: 'req-1', rev: before.rev, args: { targetId: t.otherId } })
     expect(paid.status).toBe(200)
@@ -273,6 +278,17 @@ describe('the Spy abilities through args', () => {
     const paid = await post(t.starter, actions(t.gameId), { action: 'civilService', requestId: 'req-1', rev: before.rev, args: { targetId: t.otherId, note: 'Sinbad' } })
     expect(paid.status).toBe(200)
     expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/used Civil Service: spent 1 Spy, cancelling a culture event of .* \(Sinbad\)/)
+  })
+
+  it('a note with line breaks and control characters is flattened to one line in the public log', async () => {
+    const t = await table('note', 'Writing', [])
+    await giveHut(t.gameId, t.starterId, 'Spy')
+    const before = await view(t.gameId, t.starter)
+    const paid = await post(t.starter, actions(t.gameId), { action: 'writing', requestId: 'req-1', rev: before.rev, args: { targetId: t.otherId, note: 'Build\nin\r\n  Capital\u0000!' } })
+    expect(paid.status).toBe(200)
+    const text = (await paid.json<View>()).assistedActions[0]?.text ?? ''
+    expect(text).toContain('(Build in Capital !)')
+    expect(text).not.toMatch(/[\u0000-\u001f]/)
   })
 
   it('Monarchy: obsolete takes no target, kill takes one and is refused when the opponent has no unit card', async () => {

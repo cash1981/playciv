@@ -15,7 +15,7 @@ import { nukeTargetsFor } from './atomic-theory.js'
 import type { NukeTarget } from './atomic-theory.js'
 import { blocked, cityActionCountsThisTurn, openCityManagementTurn, placeBack, playerOf } from './assisted-core.js'
 import { techAbility } from './assisted-tech-abilities.js'
-import { cityFootprintsOf } from './blockade.js'
+import { cityCenterCells, cityFootprintsOf } from './blockade.js'
 import { joinList } from './assisted-resources.js'
 import { err, ok } from './result.js'
 import { openPhaseOf } from './sot.js'
@@ -109,6 +109,17 @@ export const atomicTheory = techAbility<'atomicTheory', Plan>({
     }
     if (effect.removed.some((entry) => state.board.pieces.some((piece) => piece.id === entry.piece.id))) {
       return err('A piece of the destroyed city is on the board again, so the nuke cannot be taken back.')
+    }
+    // Only a city is checked: a city that now stands on a centre square of the destroyed one (a new city, or the city
+    // of another player) would be stacked on, which a restore must not do. Other overlaps (a figure or building that
+    // has moved in) are not checked (limitations.md)
+    const destroyed = effect.removed.find((entry) => entry.piece.id === effect.cityPieceId)?.piece
+    if (destroyed !== undefined) {
+      const wanted = new Set((cityCenterCells(state.board, destroyed) ?? []).map((cell) => `${cell.column},${cell.row}`))
+      const occupied = state.board.pieces.some(
+        (piece) => piece.category === 'city' && (cityCenterCells(state.board, piece) ?? []).some((cell) => wanted.has(`${cell.column},${cell.row}`)),
+      )
+      if (occupied) return err('A city now stands where the destroyed city was, so the nuke cannot be taken back.')
     }
     // Back in the reverse of the order they were taken off, each exactly as it stood
     let current = state

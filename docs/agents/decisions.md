@@ -945,13 +945,16 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   `extraActions` (City Management): every city may take one more city action. The allowance is derived from the applied record
   (`atomicExtraActionFor`): a city that has acted once acts again without the question, noted in its line, and one that has acted
   twice is back to the question (and to an Ada Lovelace credit, which Atomic Theory covers first so none is wasted). The undo
-  is refused while any city has taken two actions this turn. `nuke` (Movement, `cityPieceId`): the target is a city of another
+  is refused while any city has taken two actions this turn, whatever made the second action possible (a confirmed repeat,
+  Lovelace or Atomic Theory): the records cannot tell which, and a refusal is the safe side. A city that had already taken a
+  second action (confirmed, or with a Lovelace credit) before Atomic Theory was used gets no extra action from it: the extra is
+  the second action, so that city falls back to the confirm question for its third. `nuke` (Movement, `cityPieceId`): the target is a city of another
   player (nobody nukes their own) that is not a capital, i.e. not the capital marker and not the metropolis, which only a
   capital grows into (`capitalOf`). It removes, as separate board history entries, every building, wonder, figure and Great
   Person marker on a square of the city's outskirts, the caravan, fortification and Building Program markers on its centre, and
   the city; a figure standing on the centre square, resource tokens, huts and city-states stay. The line names everything
   destroyed with its square. Only the undo vote puts it back, each piece exactly as it stood (`placeBack`), refused if one is on
-  the board again; the board Undo cannot take a removal alone and cannot walk back through the restoration (`undoFloor`). The web
+  the board again or a city (any player's) now stands on a centre square of the destroyed one; the board Undo cannot take a removal alone and cannot walk back through the restoration (`undoFloor`). The web
   lists the same targets from the public board (`nukeTargetsOf`) and asks before a nuke. With no legal target the action is
   refused and nothing is spent.
 - **Bureaucracy** (once per turn, Research): the engine never limits when or how often a social policy is chosen, removed or
