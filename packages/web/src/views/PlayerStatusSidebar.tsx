@@ -22,12 +22,13 @@ import type { CSSProperties } from 'react'
 
 import {
   GOVERNMENTS,
+  INVESTMENT_CARDS,
   MAX_COMBAT_HAND_SIZE_LENGTH,
   leaderAssetId,
   totalCoins,
   tradeCeilingOf,
 } from '@civ/engine'
-import type { Government, PlayerStatKey } from '@civ/engine'
+import type { Government, InvestmentCardInfo, PlayerStatKey } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
@@ -62,6 +63,10 @@ interface Block {
 
 const ICON_DIR = '/status-icons'
 
+/** The full name of an investment card (`Endowment for the Arts`), as the engine names it. */
+const investmentName = (key: InvestmentCardInfo['key']): string =>
+  INVESTMENT_CARDS.find((card) => card.key === key)?.label ?? key
+
 /** The name of each editable stat in the editor and in its accessible names. */
 const EDIT_LABELS: Readonly<Record<EditableStatKey, string>> = {
   trade: 'Trade',
@@ -72,10 +77,10 @@ const EDIT_LABELS: Readonly<Record<EditableStatKey, string>> = {
   stacking: 'Stacking',
   mvmt: 'Movement',
   combatHandSize: 'Combat hand size',
-  efta: 'EftA',
-  infra: 'Infra',
-  mic: 'MIC',
-  pe: 'PE',
+  efta: investmentName('efta'),
+  infra: investmentName('infra'),
+  mic: investmentName('mic'),
+  pe: investmentName('pe'),
 }
 
 /** Player colour names to the hex of the army flag; anything else gets a neutral grey. */
@@ -212,20 +217,28 @@ function Stat({
   /** Absent when the stat is calculated or the viewer cannot edit. */
   readonly control?: StatControl | undefined
 }): React.JSX.Element {
+  // Label slot, icon box, value: the same three parts in every cell, so the icons and the
+  // values line up across a row. The label repeats the accessible name (the alt, the
+  // aria-label), so it is hidden from assistive technology; the Display settings decide
+  // whether it is shown at all. `lang` because the page is not English and the label
+  // wraps with hyphenation.
   const content = (
     <>
-      {children}
+      <span className="pss-label" lang="en" aria-hidden="true">
+        {label}
+      </span>
+      <span className="pss-icon-box">{children}</span>
       <span className="pss-value">{value}</span>
     </>
   )
   return (
     <li className={`pss-stat${className === undefined ? '' : ` ${className}`}`} title={label}>
       {control === undefined ? (
-        content
+        <div className="pss-stat-body">{content}</div>
       ) : control.kind === 'edit' ? (
         <button
           type="button"
-          className="pss-stat-button"
+          className="pss-stat-body pss-stat-button"
           ref={control.buttonRef}
           aria-label={control.label}
           aria-expanded={control.open}
@@ -241,7 +254,7 @@ function Stat({
         <button
           type="button"
           role="switch"
-          className="pss-stat-button"
+          className="pss-stat-body pss-stat-button"
           aria-label={control.label}
           aria-checked={control.checked}
           aria-disabled={control.disabled}
@@ -523,7 +536,7 @@ function PlayerBlock({
           },
         }
 
-  /** The editor, placed after the last cell of the grid that holds the edited stat. */
+  /** The editor, placed after the last cell of the grid that holds the edited stat. It must stay the last child of its grid: the grid's three-row pattern (see the CSS) depends on it. */
   const editorIn = (keys: readonly EditableStatKey[]): React.JSX.Element | null => {
     if (active === null || !keys.includes(active)) return null
     const kind: StatInputKind =
@@ -663,17 +676,17 @@ function PlayerBlock({
         {editorIn(['stacking', 'mvmt', 'combatHandSize'])}
       </ul>
       <ul className="pss-grid" aria-label="Investments">
-        <Stat label="EftA" value={stats.efta} control={edit('efta')}>
-          <FileIcon file="efta.png" label="EftA" />
+        <Stat label={EDIT_LABELS.efta} value={stats.efta} control={edit('efta')}>
+          <FileIcon file="efta.png" label={EDIT_LABELS.efta} />
         </Stat>
-        <Stat label="Infra" value={stats.infra} control={edit('infra')}>
-          <FileIcon file="infra.png" label="Infra" />
+        <Stat label={EDIT_LABELS.infra} value={stats.infra} control={edit('infra')}>
+          <FileIcon file="infra.png" label={EDIT_LABELS.infra} />
         </Stat>
-        <Stat label="MIC" value={stats.mic} control={edit('mic')}>
-          <FileIcon file="mic.png" label="MIC" />
+        <Stat label={EDIT_LABELS.mic} value={stats.mic} control={edit('mic')}>
+          <FileIcon file="mic.png" label={EDIT_LABELS.mic} />
         </Stat>
-        <Stat label="PE" value={stats.pe} control={edit('pe')}>
-          <FileIcon file="pe.png" label="PE" />
+        <Stat label={EDIT_LABELS.pe} value={stats.pe} control={edit('pe')}>
+          <FileIcon file="pe.png" label={EDIT_LABELS.pe} />
         </Stat>
         {editorIn(['efta', 'infra', 'mic', 'pe'])}
       </ul>

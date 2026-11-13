@@ -545,8 +545,9 @@ export function BoardView({
 
   const width = boardWidth(board)
   const zoom = displaySettings.mapZoom === 'auto' ? autoZoom : displaySettings.mapZoom
-  // The status sidebar reads its icon size and width from these; the stylesheet decides
-  // where they apply (the width not at all once the sidebar is stacked under the map).
+  // The status sidebar reads its icon size and width from these (and whether to show its
+  // labels from `data-pss-labels` below); the stylesheet decides where they apply (the width
+  // not at all once the sidebar is stacked under the map).
   const sidebarStyle = {
     '--pss-scale': displaySettings.iconScale,
     '--pss-width': `${displaySettings.sidebarWidth}rem`,
@@ -1001,7 +1002,7 @@ export function BoardView({
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="board-layout">
-        <div className="board-main" style={sidebarStyle}>
+        <div className="board-main" style={sidebarStyle} data-pss-labels={displaySettings.showLabels ? 'on' : 'off'}>
           <div className="board-scroll" ref={scrollRef}>
             <div
               ref={frameRef}

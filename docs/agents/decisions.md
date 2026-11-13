@@ -146,7 +146,12 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   values are kept per browser in `localStorage` under `civ.display`, so they
   persist across games and reloads (the old dropdown reset to Auto on each
   mount). Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
-  manual choice is continuous. Nothing is stored on the server.
+  manual choice is continuous. Nothing is stored on the server. A "Show labels"
+  switch (off by default) puts the name of every status value above its icon in
+  the sidebar instead of relying on tooltips; every cell is label, fixed icon box
+  and value, so icons line up across a row. The four investments are named in
+  full (Endowment for the Arts, Infrastructure, Military-Industrial Complex,
+  Public Education) in tooltips, accessible names and labels.
 - Board undo targets the caller's latest consecutive actions; a new board action
   clears redo. Undoing board edits does not undo game actions.
 - A moved piece keeps the pixel position where it is dropped, including in a
