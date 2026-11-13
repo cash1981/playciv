@@ -250,6 +250,20 @@ describe('Gunpowder: destroy a building', () => {
     expect(undoLastBoardChange(undone, CASH1981)).toMatchObject({ ok: false })
   })
 
+  it('refuses the undo, changing nothing, when another build has used the supply place the destroy freed', () => {
+    const state = scene()
+    const used = unwrap(destroy(state, idOf(state, 'buildings/library')))
+    // A Library and a University come from one pool of six: the freed place is taken by six others on the board
+    let full = used
+    for (const [index, assetId] of ['buildings/library', 'buildings/library', 'buildings/library', 'buildings/university', 'buildings/university', 'buildings/university'].entries()) {
+      full = put(full, ITCHI, assetId, 3 + index, 13)
+    }
+    expect(JSON.stringify(unwrapErr(tryVote(full, 'req-1')))).toContain('would use more of the supply than is left (0 left)')
+    // One fewer on the board and the place is there again
+    const room = { ...full, board: { ...full.board, pieces: full.board.pieces.slice(0, -1) } }
+    expect(pieceOf(unwrap(tryVote(room, 'req-1')), idOf(state, 'buildings/library'))).toBeDefined()
+  })
+
   it('refuses the undo when the piece is on the board again or another building or wonder now stands on its square', () => {
     const state = scene()
     const id = idOf(state, 'buildings/library')

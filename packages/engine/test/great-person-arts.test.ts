@@ -11,6 +11,7 @@ import { placePiece, removePiece } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
+import { turnStatus } from '../src/turn.js'
 import { cityActionsTakenThisTurn, performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
@@ -543,5 +544,59 @@ describe('Ada Lovelace together with Atomic Theory (extra action with each city)
     expect(recordOf(played, 'g1')?.lovelaceCreditId).toBeUndefined()
     // The credit is untouched, so Lovelace's own play can still be undone
     expect(me(undoByVote(played, 'g1')).items.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Atomic Theory: undoing the allowance after the turn has moved on', () => {
+  function atomicTurn() {
+    const learned = unwrap(revealTech(unwrap(chooseTech(scene(), { playerId: CASH1981, techName: 'Atomic Theory' })), { playerId: CASH1981, techName: 'Atomic Theory' }))
+    return withHutInHand(learned, 'Uranium').state
+  }
+  const atomic = (state: GameState) =>
+    performAssistedAction(state, { playerId: CASH1981, action: 'atomicTheory', requestId: 'at1', at: AT, payload: { mode: 'extraActions' } })
+  /** Every player ends the turn; Cash then has City Management open in turn 2. */
+  function nextTurn(state: GameState): GameState {
+    let next = state
+    for (const playerId of [CASH1981, ...OTHERS]) {
+      next = unwrap(markPhasesDone(next, { playerId, turnNumber: 1, upToPhase: 'RESEARCH' }))
+    }
+    return unwrap(markPhasesDone(next, { playerId: CASH1981, turnNumber: 2, upToPhase: 'TRADE' }))
+  }
+  const turnOf = (state: GameState): number => turnStatus(state).currentTurn
+
+  it('is refused while the second action of the turn it was given in is still applied', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const used = unwrap(atomic(state))
+    const second = unwrap(devote(unwrap(devote(used, 'a1', city)), 'a2', city))
+    const later = nextTurn(second)
+    expect(turnOf(later)).toBe(2)
+    // Turn 2 has no city action at all, but the dependent action of turn 1 is still applied
+    expect(JSON.stringify(unwrapErr(undoRejection(later, 'at1')))).toContain('already taken a second action that turn')
+    // Taking that action back first frees the allowance
+    const freed = undoByVote(later, 'a2')
+    expect(me(undoByVote(freed, 'at1')).items.some((item) => item.kind === 'hut' && item.name === 'Uranium')).toBe(true)
+  })
+
+  it('is allowed when only unrelated actions of the new turn exist, even two on one city', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const used = unwrap(atomic(state))
+    const first = unwrap(devote(used, 'a1', city))
+    const later = nextTurn(first)
+    // Two actions of the same city in turn 2, the second confirmed: unrelated to turn 1's allowance
+    const turn2 = unwrap(devote(unwrap(devote(later, 'b1', city)), 'b2', city, { confirmed: true }))
+    expect(cityActionsTakenThisTurn(turn2, me(turn2), city)).toHaveLength(2)
+    const undone = undoByVote(turn2, 'at1')
+    expect(me(undone).items.some((item) => item.kind === 'hut' && item.name === 'Uranium')).toBe(true)
+  })
+
+  it('the allowance itself belongs to the turn it was given in: the new turn gets no extra action from it', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const later = nextTurn(unwrap(atomic(state)))
+    const first = unwrap(devote(later, 'b1', city))
+    expect(cityActionsOf(first, me(first)).find((option) => option.cityPieceId === city)?.extraAction).toBe(false)
+    expect(JSON.stringify(unwrapErr(devote(first, 'b2', city)))).toContain('already acted')
   })
 })

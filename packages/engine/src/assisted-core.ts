@@ -9,8 +9,8 @@
  * `assisted.ts` documents. Keep it that way.
  */
 
-import { boardAreas, locationOf } from './board.js'
-import type { BoardPiece } from './board.js'
+import { boardAreas, findBoardAsset, locationOf, remainingBoardAssetCount, supplyPoolOf } from './board.js'
+import type { BoardAsset, BoardPiece } from './board.js'
 import type { BuildPayload } from './build-options.js'
 import type { CultureLevel } from './culture-track.js'
 import type { EngineError } from './errors.js'
@@ -488,6 +488,34 @@ export function grantUndoBlock(player: Playerhand, grantId: string): string | un
 }
 
 /**
+ * Why a set of pieces cannot all be put back on the board for lack of supply, or `undefined`. A piece taken off the board freed
+ * a place in its pool (the six Library, University and so on, the army or scout of a colour, a Great Person marker, a resource
+ * token), and another player's build or placement may have used it since. The whole restoration is counted together, per pool,
+ * against what the board holds now, so a refusal changes nothing. `placeBack` itself never refuses.
+ */
+export function restoreSupplyBlock(state: GameState, pieces: readonly BoardPiece[]): string | undefined {
+  const pools = new Map<string, { readonly asset: BoardAsset; count: number }>()
+  for (const piece of pieces) {
+    const asset = findBoardAsset(piece.assetId)
+    if (asset === undefined) continue
+    const key = supplyPoolOf(asset)
+    const found = pools.get(key)
+    if (found === undefined) pools.set(key, { asset, count: 1 })
+    else found.count += 1
+  }
+  for (const { asset, count } of pools.values()) {
+    const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
+    if (remaining !== undefined && remaining < count) {
+      return (
+        `Putting back ${count === 1 ? 'the' : count} ${asset.label}${count === 1 ? '' : ' pieces'} would use more of the supply than is left ` +
+        `(${remaining} left): another build or placement has used the freed place. Undo that first.`
+      )
+    }
+  }
+  return undefined
+}
+
+/**
  * Puts the exact piece back, same id and same place, as a board history entry
  * so the history bar and board replay see it. It lands on top of the stack, which
  * is what replaying a `place` change does. Not through `placePiece`: that would
@@ -557,8 +585,7 @@ export function cityActionOf(record: Pick<AssistedActionRecord, 'kind' | 'effect
 }
 
 /** The player's city actions of the current turn that have not been undone, oldest first. */
-function cityActionRecordsThisTurn(state: GameState, player: Playerhand): readonly CityActionRecord[] {
-  const turn = turnStatus(state).currentTurn
+function cityActionRecordsThisTurn(state: GameState, player: Playerhand, turn: number = turnStatus(state).currentTurn): readonly CityActionRecord[] {
   return state.assistedActions.flatMap((record) => {
     const action = cityActionOf(record)
     return action === undefined || record.status !== 'applied' || record.playerId !== player.playerId || record.turnNumber !== turn
@@ -623,10 +650,13 @@ export function atomicExtraActionsActive(state: GameState, player: Playerhand): 
 export const atomicExtraActionFor = (state: GameState, player: Playerhand, cityPieceId: string): boolean =>
   atomicExtraActionsActive(state, player) && cityActionsTakenThisTurn(state, player, cityPieceId).length === 1
 
-/** How many city actions still in force each of the player's cities has taken this turn, by city piece id. */
-export function cityActionCountsThisTurn(state: GameState, player: Playerhand): ReadonlyMap<string, number> {
+/**
+ * How many city actions still in force each of the player's cities has taken in a turn (the current one unless `turn` says
+ * another: an undo of an earlier turn's allowance counts that turn's actions, not the new turn's), by city piece id.
+ */
+export function cityActionCountsThisTurn(state: GameState, player: Playerhand, turn?: number): ReadonlyMap<string, number> {
   const counts = new Map<string, number>()
-  for (const record of cityActionRecordsThisTurn(state, player)) counts.set(record.cityPieceId, (counts.get(record.cityPieceId) ?? 0) + 1)
+  for (const record of cityActionRecordsThisTurn(state, player, turn)) counts.set(record.cityPieceId, (counts.get(record.cityPieceId) ?? 0) + 1)
   return counts
 }
 

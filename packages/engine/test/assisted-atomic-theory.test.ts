@@ -356,6 +356,22 @@ describe('Atomic Theory: nuke a non-capital city (Uranium, Movement)', () => {
     expect(unwrap(tryVote(elsewhere, 'req-1')).board.pieces.some((piece) => piece.assetId === 'cities/bluecity2')).toBe(true)
   })
 
+  it('refuses the undo when another build has used supply the nuke freed, counting all the pieces together, and changes nothing', () => {
+    // Two Libraries stand around the Blue city, one in the capital's outskirts and one outside: four of the six of the pool
+    const base = put(scene(), KARANDRAS1, 'buildings/library', 8, 10)
+    const used = unwrap(nuke(base, blueCity(base)))
+    expect(idsAt(used, 'buildings/library')).toHaveLength(2)
+    // Three more elsewhere: five on the board, so one place is left, which fits either Library alone but not both together
+    let crowded = used
+    for (const column of [0, 1, 2]) crowded = put(crowded, ITCHI, 'buildings/library', column, 14)
+    const refusal = JSON.stringify(unwrapErr(tryVote(crowded, 'req-1')))
+    expect(refusal).toContain('would use more of the supply than is left (1 left)')
+    expect(idsAt(crowded, 'cities/bluecity2')).toHaveLength(0)
+    // With room for both the whole city comes back
+    const room = unwrap(tryVote(used, 'req-1'))
+    expect(idsAt(room, 'buildings/library')).toHaveLength(4)
+  })
+
   it('refuses the undo when a piece of the destroyed city is on the board again', () => {
     const state = scene()
     const used = unwrap(nuke(state, blueCity(state)))

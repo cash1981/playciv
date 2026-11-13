@@ -14,7 +14,7 @@
  */
 
 import { removePiece } from './actions/board.js'
-import { blocked, placeBack } from './assisted-core.js'
+import { blocked, placeBack, restoreSupplyBlock } from './assisted-core.js'
 import { disableWonder, enableWonder, techAbility } from './assisted-tech-abilities.js'
 import { destroyableBuildingsOf } from './destroy-buildings.js'
 import type { DestroyableBuilding } from './destroy-buildings.js'
@@ -123,6 +123,9 @@ export const gunpowder = techAbility<'gunpowder', Plan>({
       return cell !== null && cell.column === where.column && cell.row === where.row
     })
     if (taken) return err(`A building, wonder, city or city-state now stands on ${building.square}, so ${building.label} cannot be put back.`)
+    // The place it freed in the supply may have been used by another build since
+    const supply = restoreSupplyBlock(state, [building.piece])
+    if (supply !== undefined) return err(supply)
     return ok({ state: placeBack(state, player, building.piece, at), said: ` and ${building.label} was put back on ${building.square}` })
   },
 })

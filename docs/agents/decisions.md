@@ -883,7 +883,7 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   what the engine accepts. A target that is not eligible is refused with nothing spent. With no wonder to obsolete and no
   building at all the button is not usable and says why; with one of the two it stays ready and warns which is missing. The
   undo by vote restores a wonder's owner and flag exactly (refused when it changed since) or puts the building back with
-  `placeBack` exactly (refused when the piece is on the board again or another building, wonder, city or city-state now stands on its square);
+  `placeBack` exactly (refused when the piece is on the board again, another building, wonder, city or city-state now stands on its square, or the supply place it freed has been used by another build, `restoreSupplyBlock`);
   the board Undo cannot take either alone (`isAssistedBoardChange`) nor walk back through the restoration (`undoFloor`).
 - **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
   no-cost assisted action in the open Movement phase (group "Movement abilities"). The player chooses which army
@@ -983,7 +983,7 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   `extraActions` (City Management): every city may take one more city action. The allowance is derived from the applied record
   (`atomicExtraActionFor`): a city that has acted once acts again without the question, noted in its line, and one that has acted
   twice is back to the question (and to an Ada Lovelace credit, which Atomic Theory covers first so none is wasted). The undo
-  is refused while any city has taken two actions this turn, whatever made the second action possible (a confirmed repeat,
+  is refused while any city has taken two actions in the turn the allowance was given in (counted from the record's own turn, not the current one), whatever made the second action possible (a confirmed repeat,
   Lovelace or Atomic Theory): the records cannot tell which, and a refusal is the safe side. A city that had already taken a
   second action (confirmed, or with a Lovelace credit) before Atomic Theory was used gets no extra action from it: the extra is
   the second action, so that city falls back to the confirm question for its third. `nuke` (Movement, `cityPieceId`): the target is any city that is not
@@ -999,7 +999,9 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   Person marker on a square of the city's outskirts, the caravan, fortification and Building Program markers on its centre, and
   the city; a figure standing on the centre square, resource tokens, huts and city-states stay. The line names everything
   destroyed with its square. Only the undo vote puts it back, each piece exactly as it stood (`placeBack`), refused if one is on
-  the board again or a city (any player's) now stands on a centre square of the destroyed one; the board Undo cannot take a removal alone and cannot walk back through the restoration (`undoFloor`). The web
+  the board again, a city (any player's) now stands on a centre square of the destroyed one, or the shared supply no longer holds
+  all the pieces (counted together, per pool, by `restoreSupplyBlock`: another player's build may have used a freed place of the
+  six Libraries and Universities, an army or a Great Person marker; undo that build first); the board Undo cannot take a removal alone and cannot walk back through the restoration (`undoFloor`). The web
   lists the same targets from the public board (`nukeTargetsOf`) and asks before a nuke. With no legal target the action is
   refused and nothing is spent.
 - **Bureaucracy** (once per turn, Research): the engine never limits when or how often a social policy is chosen, removed or

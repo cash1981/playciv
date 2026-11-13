@@ -13,7 +13,7 @@
 import { removePiece } from './actions/board.js'
 import { nukeTargetsFor } from './atomic-theory.js'
 import type { NukeTarget } from './atomic-theory.js'
-import { blocked, cityActionCountsThisTurn, openCityManagementTurn, placeBack, playerOf } from './assisted-core.js'
+import { blocked, restoreSupplyBlock, cityActionCountsThisTurn, openCityManagementTurn, placeBack, playerOf } from './assisted-core.js'
 import { techAbility } from './assisted-tech-abilities.js'
 import { cityCenterCells, cityFootprintsOf } from './blockade.js'
 import { joinList } from './assisted-resources.js'
@@ -98,12 +98,13 @@ export const atomicTheory = techAbility<'atomicTheory', Plan>({
     })
   },
 
-  undo(state, player, effect, _record, at) {
+  undo(state, player, effect, record, at) {
     if (effect.mode === 'extraActions') {
       // A city that has taken its extra action leaves the allowance in use: take that action back first
-      const counts = cityActionCountsThisTurn(state, player)
+      // The actions of the turn the allowance was given in, whatever turn it is now
+      const counts = cityActionCountsThisTurn(state, player, record.turnNumber)
       if ([...counts.values()].some((count) => count >= 2)) {
-        return err('A city has already taken a second action this turn. Undo that action first, then Atomic Theory.')
+        return err('A city has already taken a second action that turn. Undo that action first, then Atomic Theory.')
       }
       return ok({ state, said: ' and the extra city actions are no longer allowed' })
     }
@@ -121,6 +122,9 @@ export const atomicTheory = techAbility<'atomicTheory', Plan>({
       )
       if (occupied) return err('A city now stands where the destroyed city was, so the nuke cannot be taken back.')
     }
+    // The whole restoration against the shared supply, per pool, before anything is changed
+    const supply = restoreSupplyBlock(state, effect.removed.map((entry) => entry.piece))
+    if (supply !== undefined) return err(supply)
     // Back in the reverse of the order they were taken off, each exactly as it stood
     let current = state
     for (const entry of [...effect.removed].reverse()) current = placeBack(current, playerOf(current, player.playerId) ?? player, entry.piece, at)
