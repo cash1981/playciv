@@ -407,6 +407,16 @@ describe('Great Persons the game carries out', () => {
     expect(undone.log.at(-1)?.publicLog).toContain('was undone: the card is back in their hand, 17 (10) trade removed')
   })
 
+  it('reports only what the undo really takes off when part of the gain was spent since', () => {
+    const { state, itemId } = withCardInHand(withTrade(startOfTurn(), 10), 'Marco Polo')
+    const played = unwrap(play(state, 'req-1', itemId))
+    const spent = withTrade(played, 2) // 25 of the 27 went on something else
+    const undone = undoneBy(spent)
+    expect(player(undone).stats.trade).toBe(0)
+    expect(undone.log.at(-1)?.publicLog).toContain('the card is back in their hand, 2 (0) trade removed')
+    expect(undone.log.at(-1)?.publicLog).not.toContain('17')
+  })
+
   it('draws a free aircraft card for Orville Wright, privately, and puts it back on undo', () => {
     const { state, itemId } = withCardInHand(startOfTurn(), 'Orville Wright')
     const before = player(state).items.length

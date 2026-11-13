@@ -95,7 +95,7 @@ import type { Result } from './result.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog, itemNumberText, numberedItemName } from './log.js'
-import type { AssistedEffect, GameState, PendingReward, Playerhand } from './state.js'
+import type { AssistedEffect, GameState, PendingReward, Playerhand, PlayerStats } from './state.js'
 import { withPlayer } from './state.js'
 import type { PlayCardPayload } from './assisted-core.js'
 import type { TechGrant } from './state.js'
@@ -481,12 +481,16 @@ const hasFlight = (player: Playerhand): boolean =>
  * is only logged and discarded, and the player does the rest by hand. `Err` is a
  * sentence for the player, and then the card stays in the hand.
  */
-/** ", 17 (10) trade removed": what an undone card gave back or took off, with the new totals. */
-function gainUndoneText(gain: { readonly trade: number; readonly culture: number } | undefined, hand: Playerhand): string {
-  if (gain === undefined) return ''
-  const parts = (['trade', 'culture'] as const).flatMap((stat) =>
-    gain[stat] === 0 ? [] : [`${Math.abs(gain[stat])} (${hand.stats[stat]}) ${stat} ${gain[stat] > 0 ? 'removed' : 'returned'}`],
-  )
+/**
+ * ", 17 (10) trade removed": what an undone card took off or gave back, with the new totals. The amount
+ * is the real change of the counter, so what the player had already spent since is not claimed as removed.
+ */
+function gainUndoneText(before: PlayerStats | undefined, after: Playerhand): string {
+  if (before === undefined) return ''
+  const parts = (['trade', 'culture'] as const).flatMap((stat) => {
+    const change = after.stats[stat] - before[stat]
+    return change === 0 ? [] : [`${Math.abs(change)} (${after.stats[stat]}) ${stat} ${change < 0 ? 'removed' : 'returned'}`]
+  })
   return parts.length === 0 ? '' : `, ${parts.join(' and ')}`
 }
 
@@ -1498,6 +1502,8 @@ export const playCard: AssistedActionDefinition = {
       current = reversed.value.state
       hand = playerOf(current, player.playerId) ?? hand
     }
+    // The counters before the gain comes off, so the line can report what really changed
+    const statsBeforeGain = effect.gain === undefined ? undefined : hand.stats
     if (effect.gain !== undefined) {
       hand = {
         ...hand,
@@ -1668,7 +1674,7 @@ export const playCard: AssistedActionDefinition = {
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       })
-      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${gainUndoneText(effect.gain, hand)}${kurosawa.said}` })
+      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${gainUndoneText(statsBeforeGain, hand)}${kurosawa.said}` })
     }
     const back = freeTurnUse(
       withPlayerHand(current, {
@@ -1678,6 +1684,6 @@ export const playCard: AssistedActionDefinition = {
         ),
       }),
     )
-    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}${gainUndoneText(effect.gain, hand)}` })
+    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}${gainUndoneText(statsBeforeGain, hand)}` })
   },
 }

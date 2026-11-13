@@ -260,7 +260,7 @@ export function statGainAction(spec: StatGainSpec): AssistedActionDefinition {
       }
       return ok({
         state: withPlayerHand(state, { ...player, stats }),
-        text: `${player.username}'s ${effect.subject} was undone: ${describeGain(effect, stats)} removed`,
+        text: `${player.username}'s ${effect.subject} was undone: ${describeGain({ trade: player.stats.trade - stats.trade, culture: player.stats.culture - stats.culture }, stats)} removed`,
       })
     },
   }
