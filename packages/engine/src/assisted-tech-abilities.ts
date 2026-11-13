@@ -176,22 +176,31 @@ interface Paid {
   readonly said: string
 }
 
-function pay(state: GameState, player: Playerhand, payment: Payment, payload: Payload, at: string | undefined): Result<Paid, string> {
+/** Pays the ability's resources, or says why not: `unavailable` for names that do not fit, `needs-resource` for tokens and cards the player lacks. */
+function pay(state: GameState, player: Playerhand, payment: Payment, payload: Payload, at: string | undefined): Result<Paid, BlockedAvailability> {
   if (payment.kind === 'one') {
     const paid = spendResource(state, player.playerId, payment.resource, at)
     return paid.ok
       ? ok({ state: paid.value.state, spent: [paid.value.spent], said: paid.value.said })
-      : err(`You need ${/^[AEIOU]/.test(payment.resource) && payment.resource !== 'Uranium' ? 'an' : 'a'} ${payment.resource} token, or a culture card that can be played as one.`)
+      : err(
+          blocked(
+            'needs-resource',
+            `You need ${/^[AEIOU]/.test(payment.resource) && payment.resource !== 'Uranium' ? 'an' : 'a'} ${payment.resource} token, or a culture card that can be played as one.`,
+          ),
+        )
   }
   const names = namedResources(payload, payment)
-  if (!names.ok) return names
+  if (!names.ok) return err(blocked('unavailable', names.error))
   const paid =
     payment.kind === 'any'
       ? spendAnyResources(state, player.playerId, names.value, at)
       : spendDistinctResources(state, player.playerId, names.value, undefined, at)
   if (!paid.ok) {
     return err(
-      `You cannot pay ${payment.count} ${payment.kind === 'distinct' ? 'different ' : ''}resources: you hold too few resource tokens or culture cards that can be played as ${payment.kind === 'distinct' ? `a ${paid.error.missing}` : 'a resource'}.`,
+      blocked(
+        'needs-resource',
+        `You cannot pay ${payment.count} ${payment.kind === 'distinct' ? 'different ' : ''}resources: you hold too few resource tokens or culture cards that can be played as ${payment.kind === 'distinct' ? `a ${paid.error.missing}` : 'a resource'}.`,
+      ),
     )
   }
   return ok(paid.value)
@@ -242,7 +251,7 @@ function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Plan>): As
       const planned = spec.plan(state, player, payload)
       if (!planned.ok) return err(refuse('unavailable', planned.error))
       const paid = pay(state, player, spec.payment, payload, context.at)
-      if (!paid.ok) return err(refuse(spec.payment.kind === 'one' || /cannot pay/.test(paid.error) ? 'needs-resource' : 'unavailable', paid.error))
+      if (!paid.ok) return err(rejected(spec.kind, paid.error))
 
       const paying = playerOf(paid.value.state, player.playerId) ?? player
       const acted = spec.act(paid.value.state, paying, planned.value, paid.value.spent, context)
