@@ -87,9 +87,12 @@
   min-width: 0;
 }
 
+/* --pss-scale comes from the Display settings (set on .board-main); 1 without it. */
 .pss-icon {
-  width: 1.9rem;
-  height: 1.9rem;
+  width: calc(1.9rem * var(--pss-scale, 1));
+  height: calc(1.9rem * var(--pss-scale, 1));
+  /* Never wider than its grid cell, whatever the width and icon size settings. */
+  max-width: 100%;
   object-fit: contain;
 }
 
@@ -100,7 +103,7 @@
 
 .pss-value {
   max-width: 100%;
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--pss-scale, 1));
   font-weight: 600;
   line-height: 1.1;
   text-align: center;

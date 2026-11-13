@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### display-settings
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/display-settings`
-- **Brief:** `docs/agents/tasks/display-settings.md`
-- **Status:** claimed
-- **Claimed paths:** `packages/web/src/lib/displaySettings.ts`, `packages/web/src/views/DisplaySettings.*`, `packages/web/src/views/BoardView.*`, `packages/web/src/views/PlayerStatusSidebar.*`, `packages/web/src/views/GameView.tsx`, `packages/web/src/styles.css`
-- **Notes:** stacked on `feat/player-status-sidebar` (PR #343); retarget to `main` after it merges.
+_None._
 
 ## Format
 

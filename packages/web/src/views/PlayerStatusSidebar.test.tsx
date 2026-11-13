@@ -223,6 +223,19 @@ describe('PlayerStatusSidebar', () => {
     expect(rule).not.toContain('text-overflow')
   })
 
+  it('takes the icon size and the width from the Display settings variables, with the old sizes as fallback', () => {
+    const css = readFileSync('src/views/PlayerStatusSidebar.css', 'utf8').replaceAll('\r\n', '\n')
+    expect(/\.pss-icon \{[^}]*\}/.exec(css)?.[0]).toContain('calc(1.9rem * var(--pss-scale, 1))')
+    expect(/\.pss-value \{[^}]*\}/.exec(css)?.[0]).toContain('calc(0.85rem * var(--pss-scale, 1))')
+    const layout = readFileSync('src/styles.css', 'utf8').replaceAll('\r\n', '\n')
+    // Only the wide layout reads the width; the stacked one at 900px and below is `width: auto`.
+    const wide = /\.board-main > \.player-status-sidebar \{[^}]*\}/.exec(layout)?.[0] ?? ''
+    expect(wide).toContain('width: var(--pss-width, 16.5rem)')
+    const stacked = /@media \(max-width: 900px\) \{[\s\S]*?\n\}\n/.exec(layout.slice(layout.indexOf('.board-main {')))?.[0] ?? ''
+    expect(stacked).toContain('width: auto')
+    expect(stacked).not.toContain('--pss-width')
+  })
+
   it('is read-only: no inputs, buttons or api calls', () => {
     const methods = api as unknown as Record<string, (...args: unknown[]) => unknown>
     const calls = Object.keys(methods)

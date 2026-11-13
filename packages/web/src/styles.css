@@ -813,8 +813,9 @@ ul.list > li:last-child {
 }
 
 .board-main > .player-status-sidebar {
-  flex: 0 0 16.5rem;
-  width: 16.5rem;
+  /* --pss-width is the Display settings slider, set on .board-main. */
+  flex: 0 0 var(--pss-width, 16.5rem);
+  width: var(--pss-width, 16.5rem);
   max-height: 80vh;
   overflow-y: auto;
 }

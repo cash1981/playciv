@@ -24,7 +24,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 import {
   AREA_LABEL_HEIGHT,
@@ -63,6 +63,7 @@ import type { Board, BoardArea, BoardAsset, BoardPiece, MovementPlayer } from '@
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import { DisplaySettings, formatZoom, useDisplaySettings } from './DisplaySettings.js'
 import { BOARD_PANEL_ID } from './PhaseSummary.js'
 
 /** A map square the player may pick, as the engine lists it for a Build. */
@@ -369,7 +370,7 @@ export function BoardView({
   useEffect(() => {
     if (explicitMoveId !== null && moveModeId !== explicitMoveId) setExplicitMoveId(null)
   }, [explicitMoveId, moveModeId])
-  const [zoomChoice, setZoomChoice] = useState<number | 'auto'>('auto')
+  const { settings: displaySettings, setSettings: setDisplaySettings, reset: resetDisplaySettings } = useDisplaySettings()
   const [autoZoom, setAutoZoom] = useState<number>(ZOOM_STEPS[0])
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -543,7 +544,13 @@ export function BoardView({
   )
 
   const width = boardWidth(board)
-  const zoom = zoomChoice === 'auto' ? autoZoom : zoomChoice
+  const zoom = displaySettings.mapZoom === 'auto' ? autoZoom : displaySettings.mapZoom
+  // The status sidebar reads its icon size and width from these; the stylesheet decides
+  // where they apply (the width not at all once the sidebar is stacked under the map).
+  const sidebarStyle = {
+    '--pss-scale': displaySettings.iconScale,
+    '--pss-width': `${displaySettings.sidebarWidth}rem`,
+  } as CSSProperties
 
   // The board scrolls inside its own box, so entering pick mode brings the
   // candidate squares into that box. Only on entering, never on a refresh.
@@ -963,21 +970,16 @@ export function BoardView({
       <div className="row">
         <h2 id={`${BOARD_PANEL_ID}-heading`} style={{ margin: 0 }}>Civilization Boardgame</h2>
         <span style={{ flex: 1 }} />
-        <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <span className="muted">Zoom</span>
-          <select
-            value={zoomChoice}
-            onChange={(event) => setZoomChoice(event.target.value === 'auto' ? 'auto' : Number(event.target.value))}
-            style={{ width: 'auto' }}
-          >
-            <option value="auto">Auto ({Math.round(autoZoom * 100)} %)</option>
-            {ZOOM_STEPS.map((step) => (
-              <option key={step} value={step}>
-                {Math.round(step * 100)} %
-              </option>
-            ))}
-          </select>
-        </label>
+        <span className="muted ds-readout" data-testid="zoom-readout">
+          Zoom {formatZoom(zoom)}
+          {displaySettings.mapZoom === 'auto' ? ' (auto)' : ''}
+        </span>
+        <DisplaySettings
+          settings={displaySettings}
+          autoZoom={autoZoom}
+          onChange={setDisplaySettings}
+          onReset={resetDisplaySettings}
+        />
         <button
           className="small"
           disabled={busy || readOnly || board.history.at(-1)?.playerId !== youId || boardUndoBlocked(board)}
@@ -999,7 +1001,7 @@ export function BoardView({
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="board-layout">
-        <div className="board-main">
+        <div className="board-main" style={sidebarStyle}>
           <div className="board-scroll" ref={scrollRef}>
             <div
               ref={frameRef}

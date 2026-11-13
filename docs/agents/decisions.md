@@ -130,6 +130,14 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   leader marker. Combat is the engine-calculated bonus inside a starburst, Movement
   is the player's colour flag, and Aircraft is dimmed until unlocked. The Player
   status panel stays for editing and is expected to be retired later.
+- Display settings (#342): the Zoom dropdown in the Board header is replaced by a
+  gear that opens a Display settings panel with sliders for map zoom (25-150 %,
+  with an Auto switch), status icon size (70-150 %) and status panel width
+  (14-24 rem; no effect at 900px and below, where the panel is stacked). The
+  values are kept per browser in `localStorage` under `civ.display`, so they
+  persist across games and reloads (the old dropdown reset to Auto on each
+  mount). Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
+  manual choice is continuous. Nothing is stored on the server.
 - Board undo targets the caller's latest consecutive actions; a new board action
   clears redo. Undoing board edits does not undo game actions.
 - A moved piece keeps the pixel position where it is dropped, including in a

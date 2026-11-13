@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 import {
   BOARD_ASSETS,
@@ -46,6 +46,28 @@ const piece = (assetId: string, id: string): BoardPiece => ({
   placedBy: null,
 })
 
+// Display settings are kept in localStorage; start every test from the defaults.
+beforeEach(() => {
+  localStorage.clear()
+})
+afterEach(() => {
+  cleanup()
+})
+
+/** Sets the map zoom the way a player does: through the Display settings panel, which is closed again after. */
+function setZoom(value: number | 'auto'): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Display settings' }))
+  const auto = dialog.getByRole('switch', { name: 'Auto' }) as HTMLInputElement
+  if (value === 'auto') {
+    if (!auto.checked) fireEvent.click(auto)
+  } else {
+    if (auto.checked) fireEvent.click(auto)
+    fireEvent.change(dialog.getByLabelText('Map zoom'), { target: { value: String(value) } })
+  }
+  fireEvent.click(dialog.getByRole('button', { name: 'Close' }))
+}
+
 describe('BoardView zoom', () => {
   it('chooses the largest fitting step and caps automatic zoom at 100%', () => {
     expect(fittingBoardZoom(1000, 1200)).toBe(1)
@@ -73,14 +95,101 @@ describe('BoardView zoom', () => {
     expect(surface.style.width).toBe(`${boardWidth(board) * 0.5}px`)
     expect(parseFloat(frame.style.width)).toBe(parseFloat(surface.style.width) + 28)
 
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    setZoom(1)
     expect(surface.style.width).toBe(`${boardWidth(board)}px`)
     availableWidth = boardWidth(board) * 0.38
     fireEvent(window, new Event('resize'))
     expect(surface.style.width).toBe(`${boardWidth(board)}px`)
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: 'auto' } })
+    setZoom('auto')
     expect(surface.style.width).toBe(`${boardWidth(board) * 0.3}px`)
     cleanup()
+  })
+
+  it('replaces the Zoom dropdown with a readout and the Display settings gear', () => {
+    render(<BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />)
+    expect(screen.queryByLabelText('Zoom')).toBeNull()
+    expect(screen.getByTestId('zoom-readout').textContent).toMatch(/^Zoom \d+ % \(auto\)$/)
+    setZoom(0.65)
+    expect(screen.getByTestId('zoom-readout').textContent).toBe('Zoom 65 %')
+  })
+
+  it('shows the fitted zoom on the disabled slider while Auto is on, and keeps it when Auto is switched off', () => {
+    const board = createBoard()
+    const { container } = render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />,
+    )
+    const scroll = container.querySelector('.board-scroll')
+    if (!(scroll instanceof HTMLElement)) throw new Error('board missing')
+    Object.defineProperty(scroll, 'clientWidth', { configurable: true, get: () => boardWidth(board) * 0.55 })
+    fireEvent(window, new Event('resize'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
+    const slider = screen.getByLabelText('Map zoom') as HTMLInputElement
+    const auto = screen.getByRole('switch', { name: 'Auto' }) as HTMLInputElement
+    expect(auto.checked).toBe(true)
+    expect(slider.disabled).toBe(true)
+    expect(slider.value).toBe('0.5')
+
+    fireEvent.click(auto)
+    expect(slider.disabled).toBe(false)
+    expect(slider.value).toBe('0.5')
+    const surface = container.querySelector('.board-surface') as HTMLElement
+    expect(surface.style.width).toBe(`${boardWidth(board) * 0.5}px`)
+    // The slider is not limited to the steps auto picks from, and goes past 100 %.
+    fireEvent.change(slider, { target: { value: '1.35' } })
+    expect(surface.style.width).toBe(`${boardWidth(board) * 1.35}px`)
+  })
+
+  it('keeps the chosen zoom after the board is mounted again', () => {
+    const view = <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />
+    const first = render(view)
+    setZoom(0.4)
+    first.unmount()
+    const second = render(view)
+    expect(second.container.querySelector<HTMLElement>('.board-surface')?.style.width).toBe(`${boardWidth(createBoard()) * 0.4}px`)
+    expect(screen.getByTestId('zoom-readout').textContent).toBe('Zoom 40 %')
+  })
+
+  it('hands the icon size and the sidebar width to the status sidebar as CSS variables', () => {
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+        statusSidebar={<aside data-testid="side" />}
+      />,
+    )
+    const main = container.querySelector('.board-main') as HTMLElement
+    expect(main.contains(screen.getByTestId('side'))).toBe(true)
+    expect(main.style.getPropertyValue('--pss-scale')).toBe('1')
+    expect(main.style.getPropertyValue('--pss-width')).toBe('16.5rem')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
+    fireEvent.change(screen.getByLabelText('Status icon size'), { target: { value: '1.25' } })
+    fireEvent.change(screen.getByLabelText('Status panel width'), { target: { value: '20' } })
+    expect(main.style.getPropertyValue('--pss-scale')).toBe('1.25')
+    expect(main.style.getPropertyValue('--pss-width')).toBe('20rem')
+  })
+
+  it('works with browser storage blocked', () => {
+    const blocked = {
+      getItem: () => { throw new Error('blocked') },
+      setItem: () => { throw new Error('blocked') },
+    }
+    vi.stubGlobal('localStorage', blocked)
+    try {
+      const board = createBoard()
+      const { container } = render(
+        <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />,
+      )
+      setZoom(0.8)
+      expect(container.querySelector<HTMLElement>('.board-surface')?.style.width).toBe(`${boardWidth(board) * 0.8}px`)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('uses ResizeObserver when its container changes without a window resize', () => {
@@ -1535,13 +1644,13 @@ describe('BoardView arrow-key nudge (issue #193)', () => {
     selectByTouchTap(tile, 1)
     await waitFor(() => expect(tile.classList.contains('selected')).toBe(true))
 
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    setZoom(1)
     fireEvent.keyDown(document, { key: 'ArrowRight' })
     await waitFor(() => expect(movePiece).toHaveBeenCalledTimes(1))
     const stepAtFullZoom = (movePiece.mock.calls[0]?.[2] as number) - boardPiece.x
 
     movePiece.mockClear()
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '0.5' } })
+    setZoom(0.5)
     fireEvent.keyDown(document, { key: 'ArrowRight' })
     await waitFor(() => expect(movePiece).toHaveBeenCalledTimes(1))
     const stepAtHalfZoom = (movePiece.mock.calls[0]?.[2] as number) - boardPiece.x
@@ -2037,7 +2146,7 @@ describe('BoardView terrain warning (issue #255)', () => {
         run={async action => { await action() }}
       />,
     )
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    setZoom(1)
     const surface = utils.container.querySelector('.board-surface') as HTMLElement
     const element = (id: string) =>
       utils.container.querySelectorAll<HTMLElement>('.board-piece')[all.findIndex(candidate => candidate.id === id)] as HTMLElement
@@ -2418,7 +2527,7 @@ describe('BoardView square picking for a Build', () => {
     const { container } = render(
       <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking()} />,
     )
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    setZoom(1)
     const surface = container.querySelector('.board-surface')
     if (!(surface instanceof HTMLElement)) throw new Error('surface missing')
     expect(surface.classList.contains('picking')).toBe(true)
@@ -2436,7 +2545,7 @@ describe('BoardView square picking for a Build', () => {
     }
 
     // The same cells at another zoom step: every length is scaled, the origin included.
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '0.5' } })
+    setZoom(0.5)
     const zoom = 0.5
     const scaled = squares()
     expect(scaled).toHaveLength(cells.length)
@@ -2478,13 +2587,51 @@ describe('BoardView square picking for a Build', () => {
     render(
       <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onCancel })} />,
     )
-    const zoom = screen.getByLabelText('Zoom')
-    zoom.focus()
-    fireEvent.keyDown(zoom, { key: 'Escape' })
+    // A slider in the open Display settings panel owns Escape: it closes the panel, not the pick.
+    fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
+    const slider = screen.getByLabelText('Status icon size')
+    slider.focus()
+    fireEvent.keyDown(slider, { key: 'Escape' })
     expect(onCancel).not.toHaveBeenCalled()
-    ;(zoom as HTMLElement).blur()
+    expect(screen.queryByRole('dialog', { name: 'Display settings' })).toBeNull()
+
+    // So does a button in the panel, which is not a text field.
+    fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
+    const reset = screen.getByRole('button', { name: 'Reset to defaults' })
+    reset.focus()
+    fireEvent.keyDown(reset, { key: 'Escape' })
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'Display settings' })).toBeNull()
+
+    ;(document.activeElement as HTMLElement).blur()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onCancel).toHaveBeenCalledOnce()
+  })
+
+  it('does not cancel on Escape in a plain input outside the panel', () => {
+    const onCancel = vi.fn()
+    render(
+      <>
+        <input aria-label="Note" />
+        <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onCancel })} />
+      </>,
+    )
+    const note = screen.getByLabelText('Note')
+    note.focus()
+    fireEvent.keyDown(note, { key: 'Escape' })
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('Escape with focus on the body closes the open Display settings, not the pick', () => {
+    const onCancel = vi.fn()
+    render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onCancel })} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
+    ;(document.activeElement as HTMLElement).blur()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Display settings' })).toBeNull()
+    expect(onCancel).not.toHaveBeenCalled()
   })
 
   it('does not listen for Escape when it is not in pick mode', () => {
@@ -2705,7 +2852,7 @@ describe('BoardView Great Person on a wonder (base rules p. 18)', () => {
         run={async action => { await action() }}
       />,
     )
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    setZoom(1)
     const surface = utils.container.querySelector('.board-surface') as HTMLElement
     return { placePiece, movePiece, confirm, surface, container: utils.container, all }
   }
@@ -2808,7 +2955,7 @@ describe('BoardView Great Person on a wonder (base rules p. 18)', () => {
         run={async action => { await action() }}
       />,
     )
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    setZoom(1)
     fireEvent.click(screen.getByRole('button', { name: 'Great People' }))
     fireEvent.click(await screen.findByRole('button', { name: /^Artist/ }))
     // The raw centre is a few pixels left of the board, which the server clamps to column A
