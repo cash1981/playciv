@@ -402,7 +402,9 @@ describe('Great Persons the game carries out', () => {
     const played = unwrap(play(state, 'req-1', itemId))
     expect(player(played).stats.trade).toBe(27)
     expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo item number #357 (any time) and discarded it, gaining 17 (27) trade')
-    expect(player(undoneBy(played)).stats.trade).toBe(10)
+    const undone = undoneBy(played)
+    expect(player(undone).stats.trade).toBe(10)
+    expect(undone.log.at(-1)?.publicLog).toContain('was undone: the card is back in their hand, 17 (10) trade removed')
   })
 
   it('draws a free aircraft card for Orville Wright, privately, and puts it back on undo', () => {

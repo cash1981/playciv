@@ -1022,7 +1022,7 @@ describe('undoing a build with the vote', () => {
     const undone = undoByVote(done, 'req-1')
     expect(me(undone).stats.trade).toBe(12)
     expect(undone.log.at(-1)?.publicLog).toBe(
-      "System: cash1981's University on C2 was undone: the building was removed, 9 trade returned",
+      "System: cash1981's University on C2 was undone: the building was removed, 9 (12) trade returned",
     )
   })
 
@@ -1202,7 +1202,7 @@ describe('removing a built piece by hand', () => {
     // The line that reported the build stays, and a new one says what happened to it
     expect(taken.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain('built a University')
     expect(taken.log.at(-1)?.publicLog).toBe(
-      "System: cash1981's University on C2 was undone: the building was removed, 9 trade returned. It was removed before End turn.",
+      "System: cash1981's University on C2 was undone: the building was removed, 9 (12) trade returned. It was removed before End turn.",
     )
     expect(taken.log).toHaveLength(done.log.length + 1)
     // The board history has the removal, and the building can be built again

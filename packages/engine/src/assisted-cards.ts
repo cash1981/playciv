@@ -481,6 +481,15 @@ const hasFlight = (player: Playerhand): boolean =>
  * is only logged and discarded, and the player does the rest by hand. `Err` is a
  * sentence for the player, and then the card stays in the hand.
  */
+/** ", 17 (10) trade removed": what an undone card gave back or took off, with the new totals. */
+function gainUndoneText(gain: { readonly trade: number; readonly culture: number } | undefined, hand: Playerhand): string {
+  if (gain === undefined) return ''
+  const parts = (['trade', 'culture'] as const).flatMap((stat) =>
+    gain[stat] === 0 ? [] : [`${Math.abs(gain[stat])} (${hand.stats[stat]}) ${stat} ${gain[stat] > 0 ? 'removed' : 'returned'}`],
+  )
+  return parts.length === 0 ? '' : `, ${parts.join(' and ')}`
+}
+
 function automate(
   state: GameState,
   player: Playerhand,
@@ -1659,7 +1668,7 @@ export const playCard: AssistedActionDefinition = {
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       })
-      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${kurosawa.said}` })
+      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${gainUndoneText(effect.gain, hand)}${kurosawa.said}` })
     }
     const back = freeTurnUse(
       withPlayerHand(current, {
@@ -1669,6 +1678,6 @@ export const playCard: AssistedActionDefinition = {
         ),
       }),
     )
-    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}` })
+    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}${gainUndoneText(effect.gain, hand)}` })
   },
 }

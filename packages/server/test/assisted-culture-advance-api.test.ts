@@ -179,7 +179,7 @@ describe('advancing over HTTP', () => {
     expect(after.assistedActions).toEqual([
       expect.objectContaining({
         id: 'req-1', kind: 'cultureAdvance', status: 'applied',
-        text: expect.stringMatching(/^.+ advanced on the culture track to space 8 and drew 1 culture II card \(item number #\d+\)$/),
+        text: expect.stringMatching(/^.+ advanced on the culture track to space 8(?:, spending .+,)? and drew 1 culture II card \(item number #\d+\)$/),
       }),
     ])
   })
@@ -398,7 +398,7 @@ describe('what other clients receive', () => {
 
     // The public line says how many cards were drawn and their item numbers, and the undo target is that line
     const publicLog = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
-    expect(publicLog.body).toContain('advanced on the culture track to space 1 and drew 2 culture I cards (item numbers #')
+    expect(publicLog.body).toContain('advanced on the culture track to space 1, spending 3 (97) culture, and drew 2 culture I cards (item numbers #')
     expect(publicLog.body).toContain(logId)
 
     // The owner has the choice with the cards, and the private line naming them

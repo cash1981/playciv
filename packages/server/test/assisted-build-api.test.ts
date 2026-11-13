@@ -592,7 +592,7 @@ describe('removing the built piece over HTTP', () => {
     expect(after.assistedActions[0]?.status).toBe('undone')
     expect(after.log.some((entry) => entry.publicLog.includes('built a University'))).toBe(true)
     expect(after.log.at(-1)?.publicLog).toBe(
-      `System: ${table.starterName}'s University on C2 was undone: the building was removed, 9 trade returned. It was removed before End turn.`,
+      `System: ${table.starterName}'s University on C2 was undone: the building was removed, 9 (12) trade returned. It was removed before End turn.`,
     )
     // The projection shows the undone record to everybody
     expect((await view(table.gameId, table.other)).assistedActions[0]?.status).toBe('undone')

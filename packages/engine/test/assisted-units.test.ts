@@ -1015,7 +1015,7 @@ describe('undoing a unit', () => {
     expect(undone.items.map((item) => item.id).sort()).toEqual(before.items.map((item) => item.id).sort())
     expect(me(undone).stats.trade).toBe(9)
     expect(undone.assistedActions[0]?.status).toBe('undone')
-    expect(lastLine(undone)).toBe("System: cash1981's mounted unit was undone: the card was put back in the deck, 9 trade returned")
+    expect(lastLine(undone)).toBe("System: cash1981's mounted unit was undone: the card was put back in the deck, 9 (9) trade returned")
   })
 
   const idsOf = (items: readonly Item[]): readonly string[] => items.map((item) => item.id)

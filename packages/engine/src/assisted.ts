@@ -244,7 +244,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
       if (!returned.ok) return returned
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} culture removed and the ${effect.spent.resource} token returned`,
+        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and the ${effect.spent.resource} token returned`,
       })
     },
   }
@@ -424,7 +424,7 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
       }
       return ok({
         state: withPlayerHand(state, { ...player, stats }),
-        text: `${player.username}'s ${terms.techName} purchase was undone: ${terms.paidWith} returned and 1 coin removed`,
+        text: `${player.username}'s ${terms.techName} purchase was undone: ${effect.cost} (${stats[effect.resource]}) ${effect.resource} returned and 1 coin (${totalCoins(coinSourcesOf(state, { ...player, stats }))}) removed`,
       })
     },
   }
@@ -986,7 +986,7 @@ const build: AssistedActionDefinition = {
         : cityMarkerMayReturn(state.board, effect.caravan.piece)
           ? ' and the caravan was put back'
           : ' (the caravan stays off: the city has another marker now)')
-    const tradeText = effect.trade > 0 ? `, ${effect.trade} trade returned` : ''
+    const tradeText = effect.trade > 0 ? `, ${effect.trade} (${refunded.stats.trade}) trade returned` : ''
     const freeUnit = militaryTraditionUndoBlock(state, record)
     if (freeUnit !== undefined) return err(refused(freeUnit))
 
@@ -1417,7 +1417,7 @@ const devoteToTheArts: AssistedActionDefinition = {
       undone = freeTurnAction(undone, playerOf(undone, player.playerId) ?? player, effect.usedAction.turnNumber, effect.usedAction.key)
     }
     const kurosawa = takeBackKurosawa(undone, effect.kurosawa ?? [])
-    const removed = trade > 0 || effect.usedAction !== undefined ? `${trade} trade removed` : `${effect.culture} culture removed`
+    const removed = trade > 0 || effect.usedAction !== undefined ? `${trade} (${stats.trade}) trade removed` : `${effect.culture} (${stats.culture}) culture removed`
     return ok({
       state: kurosawa.state,
       text: `${player.username}'s devotion of ${effect.cityLabel} to the arts was undone: ${removed}${kurosawa.said}`,

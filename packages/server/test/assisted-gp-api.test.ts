@@ -197,7 +197,7 @@ describe('a Great Person space over HTTP', () => {
     expect(ownMarkers(state, table.starterId).map((piece) => piece.assetId)).toEqual(['great people/scientist'])
     expect(after.board.pieces.some((piece) => piece.assetId === 'great people/scientist')).toBe(true)
     expect(after.assistedActions[0]?.text).toMatch(
-      /^.+ advanced on the culture track to space 3 and took a scientist great person marker into reserve \(item number #\d+\)$/,
+      /^.+ advanced on the culture track to space 3, spending 3 \(\d+\) culture, and took a scientist great person marker into reserve \(item number #\d+\)$/,
     )
   })
 
@@ -251,7 +251,7 @@ describe('a Great Person space over HTTP', () => {
     expect(after.you?.stats.culture).toBe(97)
     expect(after.you?.items).toEqual([])
     expect(after.assistedActions[0]?.text).toMatch(
-      /^.+ advanced on the culture track to space 3 and gained no Great Person, because no marker was available$/,
+      /^.+ advanced on the culture track to space 3, spending 3 \(\d+\) culture, and gained no Great Person, because no marker was available$/,
     )
     const state = await stored(table)
     expect(ownMarkers(state, table.starterId)).toEqual([])

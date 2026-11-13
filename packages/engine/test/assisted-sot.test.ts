@@ -145,7 +145,7 @@ describe('Expansionism', () => {
     const undone = undoByVote(state, 'req-1')
     expect(me(undone).stats.trade).toBe(2)
     expect(status(undone, 'expansionism').status).toBe('ready')
-    expect(undone.log.at(-1)?.publicLog).toBe("System: cash1981's Expansionism was undone: 1 trade removed")
+    expect(undone.log.at(-1)?.publicLog).toBe("System: cash1981's Expansionism was undone: 1 (2) trade removed")
   })
 })
 

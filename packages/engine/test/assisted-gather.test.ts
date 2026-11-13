@@ -834,7 +834,7 @@ describe('taking a devotion back', () => {
     const done = unwrap(devote(state))
     const undone = undoByVote(done, 'devote-1')
     expect(me(undone).stats.culture).toBe(me(state).stats.culture)
-    expect(lastLine(undone)).toBe("System: cash1981's devotion of City B2 to the arts was undone: 1 culture removed")
+    expect(lastLine(undone)).toBe("System: cash1981's devotion of City B2 to the arts was undone: 1 (0) culture removed")
     expect(undone.assistedActions[0]?.status).toBe('undone')
   })
 

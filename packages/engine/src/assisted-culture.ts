@@ -80,10 +80,12 @@ function describeSpace(space: CultureSpace): string {
 }
 
 /** "5 culture and 3 trade", "3 culture", or "nothing" when a discount took it all. */
-function describeCost(cost: CultureAdvanceCost): string {
+function describeCost(cost: CultureAdvanceCost, totals?: { readonly culture: number; readonly trade: number }): string {
+  // In the log the new total follows the amount: "5 (7) culture"
+  const amount = (value: number, total: number | undefined): string => (total === undefined ? `${value}` : `${value} (${total})`)
   const parts = [
-    ...(cost.culture > 0 ? [`${cost.culture} culture`] : []),
-    ...(cost.trade > 0 ? [`${cost.trade} trade`] : []),
+    ...(cost.culture > 0 ? [`${amount(cost.culture, totals?.culture)} culture`] : []),
+    ...(cost.trade > 0 ? [`${amount(cost.trade, totals?.trade)} trade`] : []),
   ]
   return parts.length === 0 ? 'nothing' : parts.join(' and ')
 }
@@ -684,7 +686,11 @@ export function performAdvance(
       ...(carnegie ? { freeAdvances: paying.freeAdvances - 1 } : {}),
     })
   }
-  const prefix = `${player.username} advanced${options.free === true || carnegie ? ' for free' : ''}${carnegie ? ' with Andrew Carnegie' : ''} on the culture track to space ${to.step} and `
+  const prefix = `${player.username} advanced${options.free === true || carnegie ? ' for free' : ''}${carnegie ? ' with Andrew Carnegie' : ''} on the culture track to space ${to.step}` +
+    (cost.culture + cost.trade > 0
+      ? `, spending ${describeCost(cost, { culture: player.stats.culture - cost.culture, trade: player.stats.trade - cost.trade })},`
+      : '') +
+    ' and '
 
   let paid: GameState
   let publicText: string
@@ -885,7 +891,7 @@ export function reverseAdvanceEffect(
     state: movedBack,
     text:
       `${player.username}'s culture advance was undone: the leader marker is back on space ${effect.fromStep}, ` +
-      `${effect.freeAdvance === true ? 'the free advance' : describeCost(effect)} returned and the drawn cards were put back in the deck` +
+      `${effect.freeAdvance === true ? 'the free advance' : describeCost(effect, paidBack.stats)} returned and the drawn cards were put back in the deck` +
       removedMarkerText(greatPersonMarker),
   })
 }

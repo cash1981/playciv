@@ -118,7 +118,7 @@ describe('a passed vote reverses the action', () => {
     expect(undone.log.length).toBeGreaterThan(before)
     expect(undone.log.at(-1)).toMatchObject({
       username: 'System',
-      publicLog: "System: cash1981's Chivalry was undone: 5 culture removed and the Incense token returned",
+      publicLog: "System: cash1981's Chivalry was undone: 5 (0) culture removed and the Incense token returned",
     })
     expect(undone.log.at(-1)?.assistedActionId).toBeUndefined()
   })

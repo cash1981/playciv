@@ -260,7 +260,7 @@ export function statGainAction(spec: StatGainSpec): AssistedActionDefinition {
       }
       return ok({
         state: withPlayerHand(state, { ...player, stats }),
-        text: `${player.username}'s ${effect.subject} was undone: ${describeGain(effect)} removed`,
+        text: `${player.username}'s ${effect.subject} was undone: ${describeGain(effect, stats)} removed`,
       })
     },
   }
@@ -416,7 +416,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
       }
       return ok({
         state: withPlayerHand(state, back),
-        text: `${player.username}'s ${effect.subject} was undone: ${effect.trade} trade returned`,
+        text: `${player.username}'s ${effect.subject} was undone: ${effect.trade} (${back.stats.trade}) trade returned`,
       })
     },
   }
@@ -588,7 +588,7 @@ const patronage: AssistedActionDefinition = {
     }
     return ok({
       state: restored.value,
-      text: `${player.username}'s Patronage was undone: 1 culture returned and the drawn cards were put back in the deck`,
+      text: `${player.username}'s Patronage was undone: 1 (${paidBack.stats.culture}) culture returned and the drawn cards were put back in the deck`,
     })
   },
 }

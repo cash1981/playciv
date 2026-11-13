@@ -270,7 +270,8 @@ export const foundCity: AssistedActionDefinition = {
       text:
         `${player.username}'s city on ${effect.square.label} was undone: the scout is back` +
         (effect.cityState === null ? '' : ' and the city-state stands again') +
-        (effect.advance === null ? '' : ', and the free advance was taken back'),
+        (effect.advance === null ? '' : ', and the free advance was taken back') +
+        (effect.culture > 0 ? `, ${effect.culture} (${playerOf(working, player.playerId)?.stats.culture ?? 0}) culture removed` : ''),
     })
   },
 }

@@ -243,7 +243,7 @@ describe.each(CARDS)('%s (%s, %i culture)', (kind, techName, culture) => {
     expect(touched(undone)).toEqual(touched(state))
     expect(undone.assistedActions[0]?.status).toBe('undone')
     expect(undone.log.at(-1)?.publicLog).toBe(
-      `System: cash1981's ${techName} was undone: ${culture} culture removed and the Incense token returned`,
+      `System: cash1981's ${techName} was undone: ${culture} (0) culture removed and the Incense token returned`,
     )
     // The use is free again, so it can be done once more with a new request id
     expect(assistedAvailability(undone, CASH1981, kind).status).toBe('ready')
