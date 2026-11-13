@@ -114,12 +114,19 @@ function woundTech(kind: AssistedActionKind, tech: string): AssistedActionDefini
       }
       const without = (battle: Battle): Battle =>
         withWounds(battle, (battle.techWounds ?? []).filter((entry) => entry.actionId !== record.id))
-      // The battle on now, or the one End battle has set aside; a battle that is gone has nothing left to take back
-      let current: GameState = state
+      // The battle on now, or the one End battle has set aside. Once it is gone altogether nobody can say whether
+      // wounds were dealt, so the Iron is not refunded
+      let current: GameState
       if (state.battle !== null && state.battle.id === effect.battleId) {
         current = { ...state, battle: without(state.battle) }
       } else if (state.endedBattle !== null && state.endedBattle.battle.id === effect.battleId) {
         current = { ...state, endedBattle: { ...state.endedBattle, battle: without(state.endedBattle.battle) } }
+      } else {
+        return err({
+          kind: 'ASSISTED_UNDO_BLOCKED',
+          logId: record.logId,
+          reason: `${tech} cannot be undone: its battle is over, so wounds already dealt cannot be ruled out.`,
+        })
       }
       const returned = returnResource(current, playerOf(current, player.playerId) ?? player, effect.spent, at)
       if (!returned.ok) return returned

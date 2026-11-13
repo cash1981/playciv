@@ -8,7 +8,7 @@
  * the use; the player removes the building, or turns the city marker back to its unwalled side, by hand).
  */
 
-import { cityCenterCells, mapCellOf } from './blockade.js'
+import { cityCenterCells, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import type { Board, BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
@@ -30,7 +30,7 @@ export interface CombustionTarget extends Cell {
 
 /**
  * What an army of `owner` on `cell` can destroy with Combustion, or `undefined` when it has no army there or the
- * square holds no building and no walled city. A walled city is checked first: an army attacking it destroys the
+ * square holds no building and no walled city of another player. A walled city is checked first: an army attacking it destroys the
  * walls, and no building stands on a city's own square.
  */
 export function combustionTargetAt(board: Board, owner: FigureOwner, cell: Cell): CombustionTarget | undefined {
@@ -39,6 +39,8 @@ export function combustionTargetAt(board: Board, owner: FigureOwner, cell: Cell)
     (piece) =>
       piece.category === 'city' &&
       piece.assetId.includes('walled') &&
+      // An army cannot attack its own city, so the owner's walls are never a target (the colour is read as everywhere else)
+      !(owner.color !== null && pieceColorOf(piece) === owner.color.toLowerCase()) &&
       cityCenterCells(board, piece)?.some((centre) => sameCell(centre, cell)) === true,
   )
   if (walled !== undefined) return { ...cell, walls: true, subject: `the walls of ${walled.label} on ${squareLabel(cell)}` }

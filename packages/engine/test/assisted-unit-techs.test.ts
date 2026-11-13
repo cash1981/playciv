@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { initiateBattle, killArenaUnit, placeUnitInArena, techWound } from '../src/actions/arena.js'
+import { endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, techWound } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
@@ -219,7 +219,71 @@ describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
     for (const playerId of [KARANDRAS1, ITCHI]) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
     const refused = unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
     expect(refused.kind).toBe('ASSISTED_UNDO_BLOCKED')
-    expect(state.assistedActions.find((record) => record.id === 'req-1')?.status).toBe('applied')
+    // The refused vote is an error value, so the state it was asked on stands: still applied, Iron still paid, wound still dealt
+    expect(next.assistedActions.find((record) => record.id === 'req-1')?.status).toBe('applied')
+    expect(hasHut(next, 'Iron')).toBe(false)
+    expect(next.battle?.techWounds?.[0]?.dealt).toBe(1)
+  })
+
+  it('an undo is refused once the battle is over and gone, since wounds already dealt cannot be ruled out', () => {
+    const paid = used()
+    const ended = unwrap(endBattleAction(paid, { playerId: CASH1981 }))
+    // A new battle closes the window of the one set aside
+    const next = unwrap(initiateBattle(ended, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    expect(next.endedBattle).toBeNull()
+    const entry = next.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no log line')
+    let asked = unwrap(initiateUndo(next, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) asked = unwrap(vote(asked, { logId: entry.id, playerId, vote: true, at: AT }))
+    const refused = unwrapErr(vote(asked, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    expect(refused).toMatchObject({ kind: 'ASSISTED_UNDO_BLOCKED' })
+    expect(JSON.stringify(refused)).toContain('battle is over')
+    expect(hasHut(asked, 'Iron')).toBe(false)
+  })
+
+  it('an undo after End battle works on the battle set aside while no wound was dealt, and not after one', () => {
+    const ended = unwrap(endBattleAction(used(), { playerId: CASH1981 }))
+    expect(ended.battle).toBeNull()
+    expect(ended.endedBattle?.battle.techWounds).toHaveLength(1)
+    const undone = voted(ended, 'req-1')
+    expect(hasHut(undone, 'Iron')).toBe(true)
+    expect(undone.endedBattle?.battle.techWounds).toBeUndefined()
+
+    let dealt = used()
+    const target = enemyUnits(dealt)[0]
+    if (target === undefined) throw new Error('missing enemy unit')
+    dealt = unwrap(wound(dealt, target.id))
+    const endedAfter = unwrap(endBattleAction(dealt, { playerId: CASH1981 }))
+    const entry = endedAfter.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no log line')
+    let asked = unwrap(initiateUndo(endedAfter, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) asked = unwrap(vote(asked, { logId: entry.id, playerId, vote: true, at: AT }))
+    expect(unwrapErr(vote(asked, { logId: entry.id, playerId: CHUL, vote: true, at: AT })).kind).toBe('ASSISTED_UNDO_BLOCKED')
+  })
+
+  it('a confirmed repeat owes a second set of wounds: the first is dealt first, and the second can be undone alone', () => {
+    const first = used()
+    const state = unwrap(press(withHutInHand(first, 'Iron').state, kind, 'req-2', undefined, true))
+    const target = enemyUnits(state)[0]
+    if (target === undefined) throw new Error('missing enemy unit')
+    const hit = unwrap(wound(state, target.id))
+    const [one, two] = hit.battle?.techWounds ?? []
+    expect([one?.actionId, one?.dealt, two?.actionId, two?.dealt]).toEqual(['req-1', 1, 'req-2', 0])
+
+    // The second record holds no dealt wound, so it can go while the first one's wound stays
+    const undone = voted(hit, 'req-2')
+    expect(hasHut(undone, 'Iron')).toBe(true)
+    expect(undone.battle?.techWounds?.map((entry) => entry.actionId)).toEqual(['req-1'])
+    expect(undone.assistedActions.find((record) => record.id === 'req-1')?.status).toBe('applied')
+    // Another use stays held by the first record, so the key is not freed
+    expect(player(undone).playerTurns.at(-1)?.usedActions).toContain(`card:${tech}`)
+
+    // The first record's wound is dealt, so its undo is refused
+    const entry = hit.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no log line')
+    let asked = unwrap(initiateUndo(hit, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) asked = unwrap(vote(asked, { logId: entry.id, playerId, vote: true, at: AT }))
+    expect(unwrapErr(vote(asked, { logId: entry.id, playerId: CHUL, vote: true, at: AT })).kind).toBe('ASSISTED_UNDO_BLOCKED')
   })
 
   it('is listed in availableActions with its tech name and the Battle group, for the viewer only', () => {
@@ -231,6 +295,22 @@ describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
     const view = JSON.stringify(toPlayerView(paid, KARANDRAS1))
     expect(view).not.toContain('resources/iron')
     expect(view).toContain('techWounds')
+  })
+})
+
+describe('Mathematics against barbarians, and with no battle', () => {
+  it('the player who controls the barbarians is no combatant: no button, no wound', () => {
+    // KARANDRAS1 is to Cash's left, so controls the barbarians
+    let state = withHutInHand(withTech(firstCivGame(), 'Mathematics', KARANDRAS1), 'Iron', KARANDRAS1).state
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    expect(state.battle?.defender).toEqual({ kind: 'barbarians', playerId: KARANDRAS1 })
+    expect(assistedAvailability(state, KARANDRAS1, 'mathematics')).toMatchObject({ status: 'unavailable' })
+    expect(unwrapErr(press(state, 'mathematics', 'req-b', undefined, false, KARANDRAS1)).kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(unwrapErr(techWound(state, { playerId: KARANDRAS1, tech: 'Mathematics', arenaUnitId: 'any' })).kind).toBe('NOT_IN_THIS_BATTLE')
+  })
+
+  it('techWound with no battle on is refused', () => {
+    expect(unwrapErr(techWound(firstCivGame(), { playerId: CASH1981, tech: 'Mathematics', arenaUnitId: 'any' })).kind).toBe('NO_BATTLE_ACTIVE')
   })
 })
 
@@ -358,6 +438,17 @@ describe('Combustion (once per turn, in Movement)', () => {
     // A scout is not an army
     const scout = put(put(combustionTurn(), CASH1981, 'buildings/granary', 3, 3), CASH1981, 'figures/redscout', 3, 3)
     expect(combustionTargets(scout.board, player(scout))).toEqual([])
+  })
+
+  it('never targets the walls of the player own city, but still those of another player', () => {
+    const own = put(put(combustionTurn(), CASH1981, 'cities/redcitywalled2', 5, 4), CASH1981, 'figures/redarmy', 5, 4)
+    expect(combustionTargets(own.board, player(own))).toEqual([])
+    const refused = unwrapErr(press(own, 'combustion', 'req-1', { square: { column: 5, row: 4 } }))
+    expect(refused.kind).toBe('ASSISTED_ACTION_REJECTED')
+    expect(own.assistedActions).toHaveLength(0)
+    // Cash is Red; a Blue walled city on the same square is a target
+    expect(combustionTargets(onWalls().board, player(onWalls()))).toMatchObject([{ column: 5, row: 4, walls: true }])
+    expect(unwrap(press(onWalls(), 'combustion', 'req-2', { square: { column: 5, row: 4 } })).assistedActions).toHaveLength(1)
   })
 
   it('logs the destruction of a building, once per turn, and says the removal is by hand', () => {

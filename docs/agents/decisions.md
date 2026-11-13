@@ -821,8 +821,10 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   one click at a time with `techWound` (`POST /battle/arena/tech-wound`, body `tech` and `arenaUnitId`), modelled
   on Zhukov: -1 health, a unit at 0 is killed, own and killed units are refused, nothing beyond what was paid.
   "Up to": the player may stop; what is left is lost when the battle ends. Undo by vote returns the Iron and
-  removes the owed wounds, and is refused once a wound has been dealt (as for Zhukov; health is corrected by
-  hand). The Battle panel lists the button and the wound buttons; the tech dialog and phase tabs show the button.
+  removes the owed wounds from the battle on now or the one End battle has set aside, and is refused once a wound has
+  been dealt there (as for Zhukov; health is corrected by hand). It is also refused once the battle is gone
+  altogether (a new battle started), since wounds already dealt cannot be ruled out; the Iron is not refunded
+  then. A confirmed repeat owes a second set; the first set is dealt first, and each record is undone on its own. The Battle panel lists the button and the wound buttons; the tech dialog and phase tabs show the button.
 - **Gunpowder (Any 2, City Management):** pays two tokens the player names (`payload.resources`, exactly two
   names; the same resource twice needs two tokens), through `spendAnyResources` in `assisted-resources.ts`,
   reusable for Pottery (Any 2) and Philosophy (Any 3). The web tech dialog asks for the two resources before
@@ -832,10 +834,12 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   (the rulebooks are not readable in this environment); Incense, Iron, Silk, Wheat, Spy and Uranium are accepted.
 - **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
   no-cost assisted action in the open Movement phase (group "Movement abilities"): the player picks a square
-  where one of their armies stands on a building or on a walled city (`combustionTargetAt`); the log line names
+  where one of their armies stands on a building or on another player's walled city (`combustionTargetAt`; the
+  owner's own walls are never offered, the city colour read with `pieceColorOf` as elsewhere); the log line names
   the building or "the walls of ..." and says to remove it by hand. **Manual:** removing the building, turning
   the walled city marker back to its unwalled side, and judging that the army really ended its movement there or
-  attacked the city. Undo by vote only frees the use for the turn.
+  attacked the city. Undo by vote only frees the use for the turn. **Open rules question:** whether the player's
+  own buildings may be destroyed is not settled; they are currently accepted and need a rulebook check by the human.
 
 Source: `engine/src/assisted-tech-wounds.ts`, `assisted-gunpowder.ts`, `assisted-combustion.ts`, `combustion.ts`,
 `assisted-resources.ts`, `battle-cards.ts` (`TECH_WOUNDS`), `actions/arena.ts` (`techWound`),
