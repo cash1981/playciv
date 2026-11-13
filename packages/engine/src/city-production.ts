@@ -16,12 +16,12 @@
 import { CARAVAN_ASSET_ID, cityMarkerOf } from './disband.js'
 import { buildingDataOf } from './building-data.js'
 import { greatPersonProductionOf, greatPersonTradeOf } from './great-person-data.js'
-import { cityFootprintsOf, blockadedGreatPersonTypes, isOwnWonderBlockaded, mapCellOf } from './blockade.js'
+import { cityFootprintsOf, cityStateHolderColour, blockadedGreatPersonTypes, isOwnWonderBlockaded, mapCellOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import { columnLabel, isMapCell, mapTop, squareOf } from './board.js'
 import type { Board, BoardPiece } from './board.js'
 import { coinSourcesOf, totalCoins } from './coins.js'
-import { figuresOnMap, scoutDestinationsOf } from './sot.js'
+import { capitalOf, figuresOnMap, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand } from './state.js'
 import { disasterAt, terrainAt } from './terrain.js'
 import { squareIconsOfCell } from './tile-icons.js'
@@ -132,6 +132,18 @@ const DISASTER_TRADE: Readonly<Record<string, number>> = {
   'disasters/grassland': 0,
   'disasters/water': 1,
 }
+
+/**
+ * What each city-state prints (`gamedata-faf-waw.json`, "City-states"): production and trade icons. Culture,
+ * coin, resource and combat icons are not counted here. `cs5`'s random resource is not either.
+ */
+const CITY_STATE_ICONS: Readonly<Record<string, { readonly production: number; readonly trade: number }>> = {
+  'city-states/cs1': { production: 0, trade: 3 },
+  'city-states/cs3': { production: 1, trade: 0 },
+  'city-states/cs5': { production: 1, trade: 1 },
+}
+/** A city-state the player holds also gives this much trade (W&W p. 9). */
+const HELD_CITY_STATE_TRADE = 1
 
 const MAX_INFRASTRUCTURE = 3
 const DESPOTISM_BONUS = 1
@@ -467,6 +479,21 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       }
     }
 
+    // City-states the player holds are part of the capital's outskirts (W&W p. 9): their printed
+    // production and trade count, and each gives 1 trade more.
+    if (capitalOf(state, player)?.id === piece.id) {
+      for (const cityState of board.pieces) {
+        if (cityState.category !== 'citystate' || cityStateHolderColour(state, cityState) !== colour) continue
+        const cell = mapCellOf(board, cityState)
+        if (cell === null) continue
+        const square = squareLabel(cell)
+        const icons = CITY_STATE_ICONS[cityState.assetId]
+        const source = `${cityState.label} (held)`
+        if ((icons?.production ?? 0) > 0) detail.push({ square, source, amount: icons?.production ?? 0, blockaded: false })
+        addTrade(square, source, (icons?.trade ?? 0) + HELD_CITY_STATE_TRADE, false)
+      }
+    }
+
     const outskirtsTotal = detail.reduce((total, entry) => total + entry.amount, 0)
     const estimate = outskirtsTotal + modifierTotal
     const buildingProgram = buildingProgramCells.some((marker) => centers.some((centre) => sameCell(centre, marker)))
@@ -525,6 +552,16 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       tradeNotes.push(
         'A square a scout sends counts its trade for the city it is sent to, your capital when you did not choose a city.',
       )
+    }
+    if (capitalOf(state, player)?.id === piece.id) {
+      const held = board.pieces.some(
+        (other) => other.category === 'citystate' && cityStateHolderColour(state, other) === colour,
+      )
+      if (held) {
+        tradeNotes.push(
+          `A city-state you hold counts its printed trade and production and ${HELD_CITY_STATE_TRADE} trade more, for your capital.`,
+        )
+      }
     }
     const tradeOutskirts = tradeDetail.reduce((total, entry) => total + entry.amount, 0)
 

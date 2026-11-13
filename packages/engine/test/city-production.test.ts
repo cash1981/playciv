@@ -407,6 +407,40 @@ describe('trade', () => {
     expect(tradeSquaresOf(only(state))).toContainEqual(['A1', 'Harbor', 2])
   })
 
+  describe('a city-state the player holds', () => {
+    // The capital on B2 has 3 trade and 7 production around it. The city-state stands far away, on a square with no known tile.
+    const capital = (): GameState => put(withEngland(game()), CASH1981, 'cities/redcapital2', 1, 1)
+    const held = (assetId: string): GameState =>
+      put(put(capital(), CASH1981, assetId, 8, 8), CASH1981, 'figures/redarmy', 8, 8)
+
+    it('adds its printed trade and 1 trade to the capital', () => {
+      const city = only(held('city-states/cs1'))
+      expect(city.trade.outskirts).toBe(3 + 3 + 1)
+      expect(city.trade.detail.some((entry) => entry.source === 'City-state 1 (held)' && entry.amount === 4)).toBe(true)
+      expect(city.outskirts).toBe(only(capital()).outskirts)
+    })
+
+    it('adds its printed production too', () => {
+      const base = only(capital())
+      const city = only(held('city-states/cs5'))
+      expect(city.outskirts).toBe(base.outskirts + 1)
+      expect(city.trade.outskirts).toBe(base.trade.outskirts + 2)
+    })
+
+    it('adds only the 1 trade when the city-state prints none', () => {
+      const city = only(held('city-states/cs2'))
+      expect(city.trade.outskirts).toBe(3 + 1)
+    })
+
+    it('adds nothing for a city-state nobody holds, and only to the capital', () => {
+      expect(only(put(capital(), CASH1981, 'city-states/cs1', 8, 8)).trade.outskirts).toBe(3)
+      const withCity = put(held('city-states/cs1'), CASH1981, 'cities/redcity2', 8, 1)
+      const cities = citiesOf(withCity)
+      const plain = cities.find((candidate) => candidate.label.startsWith('City'))
+      expect(plain?.trade.detail.some((entry) => entry.source.includes('held'))).toBe(false)
+    })
+  })
+
   describe('a scout standing on a trade icon', () => {
     // A2 prints a trade icon and lies in the outskirts of a city on B2. A scout that was not sent goes to the capital.
     const scoutOnA2 = (state: GameState): GameState => put(state, CASH1981, 'figures/redscout', 0, 1)
