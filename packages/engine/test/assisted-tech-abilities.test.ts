@@ -9,17 +9,18 @@ import { describe, expect, it } from 'vitest'
 
 import { endBattleAction, initiateBattle, placeUnitInArena, undoEndBattle } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
-import { placePiece, setCityProductionOverride, undoLastBoardChange } from '../src/actions/board.js'
+import { placePiece, removePiece, setCityProductionOverride, setWonderOwner, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, availableActionsFor, performAssistedAction } from '../src/assisted.js'
 import { buildOptionsOf } from '../src/build-options.js'
 import { cityProductionsOf } from '../src/city-production.js'
-import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
+import { SQUARE_SIZE, findBoardAsset, mapTop, piecesAtStep, slotOrigin } from '../src/board.js'
 import { GREAT_PERSON_CARD_TYPES } from '../src/blockade.js'
 import { isUnit } from '../src/item.js'
-import { nextInt } from '../src/random.js'
+import { obsoletableWondersOf } from '../src/obsolete-wonders.js'
+import { nextId, nextInt } from '../src/random.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { toPlayerView } from '../src/state.js'
 import type { AssistedActionKind, GameState, Playerhand } from '../src/state.js'
@@ -703,14 +704,111 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
     expect(assistedAvailability(cmTurn('Monarchy'), CASH1981, 'monarchy').status).toBe('needs-resource')
   })
 
-  it('obsolete only pays the Silk and logs, since obsolescence is not tracked', () => {
-    const used = unwrap(press(ready(), 'monarchy', { mode: 'obsolete' }))
+  /** A wonder piece on the board, owned by `ownerId` (or by nobody). */
+  const withWonder = (state: GameState, assetId: string, ownerId: string | null): { readonly state: GameState; readonly pieceId: string } => {
+    const asset = findBoardAsset(assetId)
+    if (asset === undefined) throw new Error(`no asset ${assetId}`)
+    const placed = unwrap(placePiece(state, { playerId: CASH1981, assetId, x: 40, y: mapTop(state.board) + 40 + state.board.pieces.length * 3 }))
+    const piece = placed.board.pieces.at(-1)
+    if (piece === undefined) throw new Error('no wonder placed')
+    return { state: ownerId === null ? placed : unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: piece.id, ownerId })), pieceId: piece.id }
+  }
+  const wonderOf = (state: GameState, pieceId: string) => state.board.pieces.find((piece) => piece.id === pieceId)
+  /** Silk in hand, and the Pyramids (ancient) owned by Karandras, Big Ben (modern) by Cash and Stonehenge (ancient) by Cash. */
+  const scene = () => {
+    const pyramids = withWonder(ready(), 'wonders/pyramids', KARANDRAS1)
+    const bigBen = withWonder(pyramids.state, 'wonders/bigben', CASH1981)
+    const stonehenge = withWonder(bigBen.state, 'wonders/stonehenge', CASH1981)
+    return { state: stonehenge.state, pyramids: pyramids.pieceId, bigBen: bigBen.pieceId, stonehenge: stonehenge.pieceId }
+  }
+  const obsolete = (state: GameState, wonderPieceId: string, requestId = 'req-1', confirmed = false) =>
+    press(state, 'monarchy', { mode: 'obsolete', wonderPieceId }, requestId, confirmed)
+
+  it('obsolete disables the chosen ancient wonder: the owner is cleared, the piece stays, the Silk is paid and the line names the wonder and its former owner', () => {
+    const { state, pyramids } = scene()
+    const used = unwrap(obsolete(state, pyramids))
     expect(hasHut(used, 'Silk')).toBe(false)
-    expect(used.log.at(-1)?.publicLog).toBe('cash1981 used Monarchy: spent 1 Silk, obsoleting 1 ancient wonder (by hand: obsolescence is not tracked)')
-    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'monarchy', mode: 'obsolete' })
+    expect(wonderOf(used, pyramids)).toMatchObject({ ownerId: null, disabled: true })
+    expect(used.board.pieces.some((piece) => piece.id === pyramids)).toBe(true)
+    expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
+      'cash1981 used Monarchy: spent 1 Silk, obsoleting The Pyramids of Karandras1: the wonder is disabled',
+    )
+    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'monarchy', mode: 'obsolete', wonder: { pieceId: pyramids, ownerId: KARANDRAS1 } })
+    expect(usedKeys(used)).toContain('card:Monarchy')
+  })
+
+  it('may disable the player\'s own ancient wonder, but not a modern one, an unowned one or one already disabled', () => {
+    const { state, pyramids, bigBen, stonehenge } = scene()
+    expect(wonderOf(unwrap(obsolete(state, stonehenge)), stonehenge)).toMatchObject({ ownerId: null, disabled: true })
+    const market = withWonder(state, 'wonders/colossus', null)
+    for (const id of [bigBen, market.pieceId, 'nope']) expect(refused(obsolete(market.state, id))).toBe('ASSISTED_ACTION_REJECTED')
+    const once = unwrap(obsolete(state, pyramids))
+    expect(refused(obsolete(huts(once, 'Silk'), pyramids, 'req-2', true))).toBe('ASSISTED_ACTION_REJECTED')
+    // Nothing was spent by a refusal
+    expect(hasHut(market.state, 'Silk')).toBe(true)
+    expect(market.state.assistedActions).toHaveLength(0)
+    expect(refused(press(state, 'monarchy', { mode: 'obsolete' }))).toBe('ASSISTED_ACTION_REJECTED')
+  })
+
+  it('goes through the board history like the hand-made disable, and a replay shows it', () => {
+    const { state, pyramids } = scene()
+    const used = unwrap(obsolete(state, pyramids))
+    const entry = used.board.history.at(-1)
+    expect(entry).toMatchObject({ change: { kind: 'owner', pieceId: pyramids, from: KARANDRAS1, to: null, disabled: { from: false, to: true } } })
+    expect(entry?.description).toBe('cash1981 disabled The Pyramids')
+    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ wonder: { historyId: entry?.id } })
+    const hand = unwrap(setWonderOwner(state, { playerId: CASH1981, pieceId: pyramids, ownerId: null, disable: true }))
+    expect(hand.board.history.at(-1)?.change).toEqual(entry?.change)
+    const replayed = piecesAtStep(used.board.history, used.board.history.length).find((piece) => piece.id === pyramids)
+    expect(replayed).toMatchObject({ ownerId: null, disabled: true })
+    // Stepping back one change shows the wonder with its owner again
+    expect(piecesAtStep(used.board.history, used.board.history.length - 1).find((piece) => piece.id === pyramids)).toMatchObject({ ownerId: KARANDRAS1 })
+    // The line is counted into the history entry, so stepping through shows them together
+    expect(entry?.logLength).toBe(used.log.length)
+  })
+
+  it('the board Undo cannot take the disable back alone: only the vote can', () => {
+    const { state, pyramids } = scene()
+    const used = unwrap(obsolete(state, pyramids))
+    expect(undoLastBoardChange(used, CASH1981)).toMatchObject({ ok: false })
     const undone = voted(used, 'req-1')
+    expect(wonderOf(undone, pyramids)).toMatchObject({ ownerId: KARANDRAS1, disabled: false })
+    // After the vote the board Undo cannot walk back through the restoration either
+    expect(undoLastBoardChange(undone, CASH1981)).toMatchObject({ ok: false })
+  })
+
+  it('an undo by vote restores owner and flag, returns the Silk and frees the use', () => {
+    const { state, pyramids } = scene()
+    const undone = voted(unwrap(obsolete(state, pyramids)), 'req-1')
     expect(hasHut(undone, 'Silk')).toBe(true)
     expect(usedKeys(undone)).not.toContain('card:Monarchy')
+    expect(undone.log.at(-1)?.publicLog).toContain('The Pyramids is enabled again and back with Karandras1')
+    // It may be obsoleted again
+    expect(wonderOf(unwrap(obsolete(undone, pyramids, 'req-2')), pyramids)).toMatchObject({ ownerId: null, disabled: true })
+  })
+
+  it('refuses the undo, changing nothing, when the wonder owner or disabled mark changed since, or the wonder is gone', () => {
+    const { state, pyramids } = scene()
+    const used = unwrap(obsolete(state, pyramids))
+    const reassigned = unwrap(setWonderOwner(used, { playerId: CASH1981, pieceId: pyramids, ownerId: ITCHI }))
+    expect(JSON.stringify(unwrapErr(tryVote(reassigned, 'req-1')))).toContain('was changed since')
+    const enabledByHand = unwrap(setWonderOwner(used, { playerId: CASH1981, pieceId: pyramids, ownerId: KARANDRAS1 }))
+    expect(unwrapErr(tryVote(enabledByHand, 'req-1')).kind).toBe('ASSISTED_UNDO_BLOCKED')
+    const gone = unwrap(removePiece(used, { playerId: CASH1981, pieceId: pyramids }))
+    expect(JSON.stringify(unwrapErr(tryVote(gone, 'req-1')))).toContain('no longer on the board')
+    expect(hasHut(reassigned, 'Silk')).toBe(false)
+  })
+
+  it('the button stays ready for the kill mode when no wonder can be obsoleted, and says why obsolete is not possible', () => {
+    const none = ready()
+    expect(assistedAvailability(none, CASH1981, 'monarchy')).toMatchObject({ status: 'ready', warning: expect.stringContaining('No ancient wonder is owned by a player') })
+    expect(assistedAvailability(scene().state, CASH1981, 'monarchy')).not.toHaveProperty('warning')
+    const modernOnly = withWonder(ready(), 'wonders/bigben', CASH1981).state
+    expect(assistedAvailability(modernOnly, CASH1981, 'monarchy')).toMatchObject({ warning: expect.stringContaining('No ancient wonder') })
+    expect(obsoletableWondersOf(scene().state.board, scene().state.players).map((wonder) => [wonder.label, wonder.ownerUsername])).toEqual([
+      ['The Pyramids', 'Karandras1'],
+      ['Stonehenge', 'cash1981'],
+    ])
   })
 
   it('kill discards one unit card from the chosen opponent\'s hand and names it in full with its item number', () => {
@@ -745,9 +843,8 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
       const killed = units[indexFor(rng)]
       expect(used.discardedItems.some((item) => item.id === killed?.id)).toBe(true)
       expect(unitsOf(used).map((unit) => unit.id)).toEqual(units.filter((unit) => unit.id !== killed?.id).map((unit) => unit.id))
-      // The pick consumed a step of the seed: the same press in obsolete mode (one line, no pick) ends on another seed
-      const noPick = unwrap(press({ ...state, rng }, 'monarchy', { mode: 'obsolete' }))
-      expect(used.rng).not.toBe(noPick.rng)
+      // The pick consumed a step of the seed, and the one log line then took its id from what was left
+      expect(used.rng).toBe(nextId(nextInt(rng, units.length)[1])[1])
     }
     const a = unwrap(press({ ...state, rng: first }, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
     const b = unwrap(press({ ...state, rng: second }, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
@@ -785,15 +882,17 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
       expect(unitsOf(state)).toHaveLength(3)
       // The button says so but stays ready, since obsolete works
       expect(assistedAvailability(state, CASH1981, 'monarchy')).toMatchObject({ status: 'ready', warning: expect.stringContaining('A battle is on') })
-      expect(assistedAvailability(ready(), CASH1981, 'monarchy')).not.toHaveProperty('warning')
-      expect(unwrap(press(state, 'monarchy', { mode: 'obsolete' })).assistedActions).toHaveLength(1)
+      // Without a battle only the missing wonder is mentioned
+      expect((assistedAvailability(ready(), CASH1981, 'monarchy') as { warning?: string }).warning).not.toContain('A battle is on')
+      const owned = withWonder(state, 'wonders/pyramids', KARANDRAS1)
+      expect(unwrap(obsolete(owned.state, owned.pieceId)).assistedActions).toHaveLength(1)
     })
 
     it('allows the kill once the battle is over: a unit End battle sent back to the hand is an ordinary unit, and undoing End battle still works', () => {
       const ended = unwrap(endBattleAction(battle(), { playerId: CASH1981 }))
       expect(ended.battle).toBeNull()
       expect(ended.endedBattle).not.toBeNull()
-      expect(assistedAvailability(ended, CASH1981, 'monarchy')).not.toHaveProperty('warning')
+      expect((assistedAvailability(ended, CASH1981, 'monarchy') as { warning?: string }).warning ?? '').not.toContain('A battle is on')
       const fought = (ended.endedBattle?.battle.arena ?? []).map((unit) => unit.unit.id)
       expect(fought).toHaveLength(1)
       const units = unitsOf(ended)
@@ -856,10 +955,11 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
   })
 
   it('is once per turn, with a confirmed repeat', () => {
-    const first = unwrap(press(ready(), 'monarchy', { mode: 'obsolete' }))
+    const { state, pyramids, stonehenge } = scene()
+    const first = unwrap(obsolete(state, pyramids))
     const again = huts(first, 'Silk')
-    expect(refused(press(again, 'monarchy', { mode: 'obsolete' }, 'req-2'))).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrap(press(again, 'monarchy', { mode: 'obsolete' }, 'req-2', true)).log.at(-1)?.publicLog).toContain('confirmed by the player')
+    expect(refused(obsolete(again, stonehenge, 'req-2'))).toBe('ASSISTED_ACTION_REJECTED')
+    expect(unwrap(obsolete(again, stonehenge, 'req-2', true)).log.find((entry) => entry.assistedActionId === 'req-2')?.publicLog).toContain('confirmed by the player')
   })
 })
 

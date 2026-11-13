@@ -262,13 +262,16 @@ function parseAtomicTheory(args: Record<string, unknown>): AtomicTheoryPayload |
 }
 
 function parseMonarchy(args: Record<string, unknown>): MonarchyPayload | string {
-  const extra = extraKeys(args, ['mode', 'targetId'])
-  if (extra.length > 0) return `monarchy takes only mode and targetId, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['mode', 'targetId', 'wonderPieceId'])
+  if (extra.length > 0) return `monarchy takes only mode, targetId and wonderPieceId, not ${extra.join(', ')}`
   const mode = args['mode']
   if (mode !== 'obsolete' && mode !== 'kill') return 'mode must be obsolete or kill'
   if (mode === 'obsolete') {
-    return args['targetId'] === undefined ? { mode } : 'obsolete takes no targetId'
+    if (args['targetId'] !== undefined) return 'obsolete takes no targetId, only wonderPieceId'
+    if (!isId(args['wonderPieceId'])) return 'obsolete needs wonderPieceId: the ancient wonder to disable'
+    return { mode, wonderPieceId: args['wonderPieceId'] }
   }
+  if (args['wonderPieceId'] !== undefined) return 'kill takes no wonderPieceId, only targetId'
   if (!isId(args['targetId'])) return 'kill needs targetId: the player whose hand loses a unit'
   return { mode, targetId: args['targetId'] }
 }

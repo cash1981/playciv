@@ -25,6 +25,7 @@ import {
   isMapCell,
   itemName,
   nukeTargetsOf,
+  obsoletableWondersOf,
   occupancyOf,
   squareLabel,
   steamPowerDestinations,
@@ -196,7 +197,7 @@ type TechPick =
   | { readonly kind: 'city'; readonly cityPieceId: string }
   | { readonly kind: 'player'; readonly targetId: string; readonly note: string }
   | { readonly kind: 'coin'; readonly targetId: string; readonly source: string }
-  | { readonly kind: 'monarchy'; readonly mode: 'obsolete' | 'kill'; readonly targetId: string }
+  | { readonly kind: 'monarchy'; readonly mode: 'obsolete' | 'kill'; readonly targetId: string; readonly wonderPieceId: string }
   | { readonly kind: 'arenaUnit'; readonly arenaUnitId: string }
   | { readonly kind: 'atomic'; readonly mode: 'extraActions' | 'nuke'; readonly cityPieceId: string }
 
@@ -206,6 +207,13 @@ type Opponent = PlayerView['opponents'][number]
 function ownArenaUnits(view: PlayerView) {
   const me = view.you?.playerId
   return (view.battle?.arena ?? []).filter((unit) => unit.placedBy === me && !unit.killed)
+}
+
+/** The ancient wonders a player owns that Monarchy may obsolete, from the public board and the players' names. */
+function obsoletableWondersInView(view: PlayerView) {
+  const me = view.you
+  if (me === null) return []
+  return obsoletableWondersOf(view.board, [me, ...(view.opponents ?? [])].map((player) => ({ playerId: player.playerId, username: player.username })))
 }
 
 /** The cities of other players Atomic Theory may nuke, with what each would take with it: the public board and the players' colours. */
@@ -459,6 +467,10 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
     // No unit is killed while a battle is on (the game refuses it); the mode falls back to obsolete, which is not limited
     const battleOn = view.battle != null
     const kill = pick.mode === 'kill' && !battleOn
+    const wonders = obsoletableWondersInView(view)
+    // The selection follows the view: a wonder that is gone is replaced by the first one left, and with none nothing is chosen
+    const wonderId = stillThere(wonders.map((wonder) => wonder.pieceId), pick.wonderPieceId)
+    const wonder = wonders.find((candidate) => candidate.pieceId === wonderId)
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
         <label>
@@ -467,19 +479,31 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
         <label>
           <input type="radio" name={radioName} checked={kill} disabled={battleOn} onChange={() => setPick({ ...pick, mode: 'kill' })} /> Kill a random unit{battleOn ? ' (not while a battle is on)' : ''}
         </label>
+        {!kill && (
+          <>
+            <select aria-label="Wonder" value={wonderId} onChange={(event) => setPick({ ...pick, wonderPieceId: event.target.value })}>
+              {wonders.map((candidate) => (
+                <option key={candidate.pieceId} value={candidate.pieceId}>
+                  {candidate.label} ({candidate.ownerUsername})
+                </option>
+              ))}
+            </select>
+            {wonders.length === 0 && <span role="status" className="assisted-warning">No ancient wonder is owned by a player, so there is none to obsolete.</span>}
+          </>
+        )}
         {kill && playerSelect(targetId, (id) => setPick({ ...pick, targetId: id }), (opponent) => `${opponent.publicHand.units} units in hand`)}
         <span className="muted">
           {kill
             ? 'A random unit card is taken from that player\'s hand and discarded. The game refuses if they hold none.'
-            : 'Obsolescence is not tracked: the game only logs it, and you mark the wonder by hand.'}
+            : 'The wonder is marked disabled on the owner list: its owner is cleared and the piece stays, crossed out.'}
         </span>
         <button
           type="button"
           className="small"
-          disabled={!canSubmit || (kill && target === undefined)}
-          onClick={() => send(kill ? { mode: 'kill', targetId } : { mode: 'obsolete' })}
+          disabled={!canSubmit || (kill ? target === undefined : wonder === undefined)}
+          onClick={() => send(kill ? { mode: 'kill', targetId } : { mode: 'obsolete', wonderPieceId: wonderId })}
         >
-          {kill ? `Kill a unit of ${target?.username ?? 'a player'}` : 'Obsolete a wonder'}
+          {kill ? `Kill a unit of ${target?.username ?? 'a player'}` : `Obsolete ${wonder?.label ?? 'a wonder'}`}
         </button>
         {cancel}
       </span>
@@ -811,7 +835,7 @@ export function AssistedActionButton({
       }
       case 'monarchy': {
         const target = opponents.find((opponent) => opponent.publicHand.units > 0)
-        setPick({ kind: 'monarchy', mode: 'obsolete', targetId: (target ?? opponents[0])?.playerId ?? '' })
+        setPick({ kind: 'monarchy', mode: 'obsolete', targetId: (target ?? opponents[0])?.playerId ?? '', wonderPieceId: obsoletableWondersInView(view)[0]?.pieceId ?? '' })
         return
       }
     }

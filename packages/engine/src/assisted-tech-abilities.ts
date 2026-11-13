@@ -26,6 +26,9 @@ import {
 import type { ArenaUnit, Battle } from './battle.js'
 import { playerSideOf } from './battle-cards.js'
 import { discardedName } from './gustavus.js'
+import { obsoletableWondersOf } from './obsolete-wonders.js'
+import type { ObsoletableWonder } from './obsolete-wonders.js'
+import { setWonderOwner } from './actions/board.js'
 import {
   ANY_RESOURCES,
   anyResourceName,
@@ -676,10 +679,11 @@ function cancelAbility(spec: CancelSpec): AssistedActionDefinition {
 // ---------------------------------------------------------------------------
 
 type MonarchyPlan =
-  | { readonly mode: 'obsolete' }
+  | { readonly mode: 'obsolete'; readonly wonder: ObsoletableWonder }
   | { readonly mode: 'kill'; readonly target: Playerhand; readonly units: readonly UnitItem[] }
 
-const BATTLE_ON = 'A battle is on, so no unit can be killed until it is over. Obsolete is still possible.'
+const BATTLE_ON = 'A battle is on, so no unit can be killed until it is over.'
+const NO_WONDER = 'No ancient wonder is owned by a player, so there is none to obsolete.'
 
 /**
  * The unit cards in a hand that a kill may take: every one of them. No battle is on (a kill is refused then), so none is in a
@@ -696,12 +700,25 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
   buttonText: 'Use Monarchy (Silk: obsolete a wonder, or kill a random unit)',
   payment: { kind: 'one', resource: 'Silk' },
 
-  // Obsolete works at any time; only the kill waits for the end of a battle
-  warn: (state) => (state.battle === null ? undefined : BATTLE_ON),
+  // The button stays ready for the mode that works: the warning says why the other does not. Obsolete needs an ancient wonder
+  // a player owns; the kill waits for the end of a battle
+  warn(state) {
+    const cautions = [
+      ...(obsoletableWondersOf(state.board, state.players).length === 0 ? [NO_WONDER] : []),
+      ...(state.battle === null ? [] : [BATTLE_ON]),
+    ]
+    return cautions.length === 0 ? undefined : cautions.join(' ')
+  },
 
   plan(state, player, payload) {
     const mode = payload['mode']
-    if (mode === 'obsolete') return ok({ mode })
+    if (mode === 'obsolete') {
+      const id = payload['wonderPieceId']
+      const wonder = typeof id === 'string' ? obsoletableWondersOf(state.board, state.players).find((candidate) => candidate.pieceId === id) : undefined
+      return wonder === undefined
+        ? err('Choose an ancient wonder that a player owns and that is not disabled yet. Nothing was spent.')
+        : ok({ mode, wonder })
+    }
     if (mode !== 'kill') return err('Choose obsolete or kill.')
     if (state.battle !== null) return err('A battle is on: kill a unit when it is over (obsolete is still possible). Nothing was spent.')
     const target = otherPlayer(state, player, payload)
@@ -711,12 +728,17 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
     return ok({ mode, target: target.value, units })
   },
 
-  act(state, _player, plan, spent) {
+  act(state, player, plan, spent, context) {
     if (plan.mode === 'obsolete') {
+      // The same board change as the hand-made disable, so the board history and its replay show it
+      const disabled = setWonderOwner(state, { playerId: player.playerId, pieceId: plan.wonder.pieceId, ownerId: null, disable: true, ...(context.at === undefined ? {} : { at: context.at }) })
+      const entry = disabled.ok ? disabled.value.board.history.at(-1) : undefined
+      if (!disabled.ok || entry === undefined) return err(`${plan.wonder.label} could not be disabled.`)
       return ok({
-        state,
-        said: ', obsoleting 1 ancient wonder (by hand: obsolescence is not tracked)',
-        effect: { kind: 'monarchy', spent, mode: 'obsolete' },
+        state: disabled.value,
+        said: `, obsoleting ${plan.wonder.label} of ${plan.wonder.ownerUsername}: the wonder is disabled`,
+        historyIds: [entry.id],
+        effect: { kind: 'monarchy', spent, mode: 'obsolete', wonder: { ...plan.wonder, historyId: entry.id } },
       })
     }
     // The random unit comes from the game's seed, so a replay of the same state kills the same card
@@ -738,10 +760,21 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
     })
   },
 
-  undo(state, _player, effect) {
-    if (effect.mode === 'obsolete' || effect.killed === undefined || effect.targetId === undefined) {
-      return ok({ state, said: '; the obsolete wonder is not changed by the game' })
+  undo(state, player, effect, _record, at) {
+    if (effect.mode === 'obsolete') {
+      const wonder = effect.wonder
+      if (wonder === undefined) return ok({ state, said: '; no wonder was recorded, so nothing is changed' })
+      const piece = state.board.pieces.find((candidate) => candidate.id === wonder.pieceId)
+      if (piece === undefined) return err(`${wonder.label} is no longer on the board, so it cannot be enabled again.`)
+      if (piece.disabled !== true || (piece.ownerId ?? null) !== null) {
+        return err(`${wonder.label} was changed since (its owner or its disabled mark is not as Monarchy left it), so it cannot be restored. Correct the owner list by hand.`)
+      }
+      if (playerOf(state, wonder.ownerId) === undefined) return err(`${wonder.ownerUsername} is no longer in the game, so ${wonder.label} cannot be given back.`)
+      const restored = setWonderOwner(state, { playerId: player.playerId, pieceId: wonder.pieceId, ownerId: wonder.ownerId, ...(at === null ? {} : { at }) })
+      if (!restored.ok) return err(`${wonder.label} could not be restored.`)
+      return ok({ state: restored.value, said: ` and ${wonder.label} is enabled again and back with ${wonder.ownerUsername}` })
     }
+    if (effect.killed === undefined || effect.targetId === undefined) return ok({ state, said: '; nothing was killed' })
     const victim = playerOf(state, effect.targetId)
     if (victim === undefined) return err('The other player is no longer in the game.')
     const killed = effect.killed

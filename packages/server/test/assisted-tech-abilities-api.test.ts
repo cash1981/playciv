@@ -301,11 +301,11 @@ describe('the Spy abilities through args', () => {
     expect(text).not.toMatch(/[\u0000-\u001f]/)
   })
 
-  it('Monarchy: obsolete takes no target, kill takes one and is refused when the opponent has no unit card', async () => {
+  it('Monarchy: obsolete takes a wonder, kill takes a target and is refused when the opponent has no unit card', async () => {
     const t = await table('mon', 'Monarchy', ['resources/silk', 'resources/silk'])
     await doneThrough(t, 'TRADE')
     const before = await view(t.gameId, t.starter)
-    for (const args of [{}, { mode: 'raze' }, { mode: 'kill' }, { mode: 'obsolete', targetId: t.otherId }, { mode: 'kill', targetId: t.otherId, extra: 1 }]) {
+    for (const args of [{}, { mode: 'raze' }, { mode: 'kill' }, { mode: 'obsolete' }, { mode: 'obsolete', targetId: t.otherId }, { mode: 'obsolete', wonderPieceId: 7 }, { mode: 'obsolete', wonderPieceId: 'a b' }, { mode: 'kill', targetId: t.otherId, wonderPieceId: 'w1' }, { mode: 'kill', targetId: t.otherId, extra: 1 }]) {
       expect((await post(t.starter, actions(t.gameId), { action: 'monarchy', requestId: 'req-bad', rev: before.rev, args })).status).toBe(400)
     }
     const none = await post(t.starter, actions(t.gameId), { action: 'monarchy', requestId: 'req-1', rev: before.rev, args: { mode: 'kill', targetId: t.otherId } })
@@ -321,6 +321,46 @@ describe('the Spy abilities through args', () => {
     const paid = await post(t.starter, actions(t.gameId), { action: 'monarchy', requestId: 'req-2', rev: fresh.rev, args: { mode: 'kill', targetId: t.otherId } })
     expect(paid.status).toBe(200)
     expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/used Monarchy: spent 1 Silk, killing \w+ \d\.\d item number #\d+ from .*'s hand/)
+  })
+})
+
+describe('Monarchy obsolete through the routes', () => {
+  it('disables an owned ancient wonder, shows it on the public board, refuses a modern one and an unowned one with nothing spent', async () => {
+    const t = await table('obs', 'Monarchy', ['resources/silk'])
+    await doneThrough(t, 'TRADE')
+    const placed: string[] = []
+    for (const [index, assetId] of ['wonders/pyramids', 'wonders/bigben', 'wonders/stonehenge'].entries()) {
+      const response = await post(t.starter, `/api/games/${t.gameId}/board/pieces`, { assetId, x: 40, y: 700 + index * 90 })
+      expect(response.status).toBe(200)
+      placed.push(((await response.json()) as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find((piece) => piece.assetId === assetId)?.id ?? '')
+    }
+    const [pyramids, bigBen, stonehenge] = placed
+    if (pyramids === undefined || bigBen === undefined || stonehenge === undefined) throw new Error('wonders not placed')
+    // The Pyramids and Big Ben belong to the other player; Stonehenge stays in the market
+    const stored = await repo.findGame(t.gameId)
+    if (stored === undefined) throw new Error('game missing')
+    await repo.saveGame({
+      ...stored,
+      board: { ...stored.board, pieces: stored.board.pieces.map((piece) => ([pyramids, bigBen].includes(piece.id) ? { ...piece, ownerId: t.otherId } : piece)) },
+    })
+    const before = await view(t.gameId, t.starter)
+    for (const wonderPieceId of [bigBen, stonehenge, 'no-such-piece']) {
+      const refused = await post(t.starter, actions(t.gameId), { action: 'monarchy', requestId: 'req-n', rev: before.rev, args: { mode: 'obsolete', wonderPieceId } })
+      expect(refused.status).toBe(400)
+      expect(await refused.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    }
+    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+    expect((await repo.findGame(t.gameId))?.board.pieces.some((piece) => piece.assetId === 'resources/silk')).toBe(true)
+
+    const paid = await post(t.starter, actions(t.gameId), { action: 'monarchy', requestId: 'req-1', rev: before.rev, args: { mode: 'obsolete', wonderPieceId: pyramids } })
+    expect(paid.status).toBe(200)
+    const after = await paid.json<View & { board: { pieces: { id: string; ownerId?: string | null; disabled?: boolean }[] } }>()
+    expect(after.assistedActions[0]?.text).toMatch(/used Monarchy: spent 1 Silk, obsoleting The Pyramids of .*: the wonder is disabled/)
+    expect(after.board.pieces.find((piece) => piece.id === pyramids)).toMatchObject({ ownerId: null, disabled: true })
+    // The other player sees the same public board, and no effect
+    const theirs = await view(t.gameId, t.other)
+    expect(JSON.stringify(theirs)).not.toContain('"effect"')
+    expect((theirs as unknown as { board: { pieces: { id: string; disabled?: boolean }[] } }).board.pieces.find((piece) => piece.id === pyramids)?.disabled).toBe(true)
   })
 })
 

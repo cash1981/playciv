@@ -300,10 +300,11 @@ export interface MysticismPayload {
   readonly source: string
 }
 
-/** What Monarchy carries: `obsolete` is only logged; `kill` names the opponent whose hand loses a unit card. */
+/** What Monarchy carries: `obsolete` the ancient wonder to disable (`wonderPieceId`); `kill` the other player whose hand loses a unit card (`targetId`). */
 export interface MonarchyPayload {
   readonly mode: 'obsolete' | 'kill'
   readonly targetId?: string
+  readonly wonderPieceId?: string
 }
 
 /** What Metalworking carries: the arena unit (`ArenaUnit.id`) of the player's own that gets +3 attack. */

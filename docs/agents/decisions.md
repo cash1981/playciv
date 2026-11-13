@@ -945,10 +945,19 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   cancelled ability are lost): the Spy is paid, the other player and free text for what is cancelled are logged. The game
   has no pending action, so it never blocks the cancelled thing: the other player undoes it with the vote or corrects it by
   hand, and the line says so.
-- **Monarchy** (Silk, City Management): `obsolete` is only logged (obsolescence is not tracked). `kill` takes one random
+- **Monarchy** (Silk, City Management): `obsolete` takes a `wonderPieceId` and marks that wonder disabled on the owner list (human,
+  2026-11-13), through the same board change and history entry as the hand-made disable (`setWonderOwner` with `disable: true`,
+  #306): the owner is cleared, the piece stays and is drawn crossed out, its culture token is unaffected. Eligible: an ANCIENT
+  wonder (`wonder-data.ts`) on the board that a player owns (any player's, the user's own included) and that is not already
+  disabled (`obsoletableWondersOf`, from the public board, so the web lists what the engine accepts). The public line names the
+  wonder and its former owner. The undo by vote restores owner and flag exactly (`setWonderOwner` back to the former owner) and
+  is refused with a reason when the wonder is gone, its owner or disabled mark changed since, or the former owner left; the
+  board Undo cannot take the disable back alone (`isAssistedBoardChange`) nor walk back through the restoration (`undoFloor`).
+  With no eligible wonder the mode is refused with nothing spent, and the button, which stays ready for the kill, warns that
+  there is no wonder to obsolete. `kill` takes one random
   unit card from the chosen other player's hand with the game's seed and discards it. The kill cannot be used while a battle
   is on at all (human, 2026-11-13): it is refused with a reason and nothing is paid, in the action and, as a warning, on the
-  button (which stays ready because `obsolete` is not limited; the web disables the kill mode). A battle set aside by End
+  button (which stays ready because `obsolete` is not limited by a battle; the web disables the kill mode). A battle set aside by End
   battle is over, so a kill is allowed then, and the pick is every unit card in the hand: a unit End battle sent back to the
   hand is an ordinary standing unit, and undoing End battle already skips a card that has left the hand (tested). Units drawn for
   a battle and not placed (the battlehand) are in the hand and can be picked; an undo puts such a card back in the battlehand too. A discard is open information, so the line names the unit in full with its item

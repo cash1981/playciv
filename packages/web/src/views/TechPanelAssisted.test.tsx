@@ -378,12 +378,12 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
   const abilityView = (
     techName: string,
     kind: string,
-    options: { status?: string; items?: readonly object[]; opponents?: readonly object[]; cities?: readonly object[] } = {},
+    options: { status?: string; items?: readonly object[]; opponents?: readonly object[]; cities?: readonly object[]; pieces?: readonly object[] } = {},
   ): PlayerView => {
     const base = viewOf([tech(techName, 2)])
     return {
       ...base,
-      board: { ...createBoard(), pieces: [] },
+      board: { ...createBoard(), pieces: options.pieces ?? [] },
       boardAreas: [],
       opponents: options.opponents ?? RIVALS,
       you: {
@@ -646,11 +646,50 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
   })
 
   describe('Monarchy', () => {
-    it('obsolete sends the mode alone', async () => {
-      const send = await open('Monarchy', 'monarchy')
+    const wonder = (id: string, assetId: string, label: string, ownerId: string | null, disabled = false) => ({
+      id, assetId, category: 'wonder', label, ownerId, ...(disabled ? { disabled: true } : {}), x: 10, y: 10, width: 80, height: 80, rotation: 0,
+    })
+    const WONDERS = [
+      wonder('w1', 'wonders/pyramids', 'The Pyramids', 'p2'),
+      wonder('w2', 'wonders/stonehenge', 'Stonehenge', 'me'),
+      wonder('w3', 'wonders/bigben', 'Big Ben', 'p2'),
+      wonder('w4', 'wonders/colossus', 'The Colossus', null),
+      wonder('w5', 'wonders/oracle', 'The Oracle', 'p2', true),
+    ]
+
+    it('obsolete lists the ancient wonders a player owns, not modern, unowned or disabled ones, and sends the chosen piece', async () => {
+      const send = await open('Monarchy', 'monarchy', { pieces: WONDERS })
       expect(screen.queryByLabelText('Player')).toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Obsolete a wonder' }))
-      expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete' })
+      expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['The Pyramids (Karandras1)', 'Stonehenge (cash1981)'])
+      fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
+      expect(send).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Obsolete Stonehenge' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete', wonderPieceId: 'w2' })
+    })
+
+    it('with no wonder to obsolete nothing is chosen, the reason is shown and the button waits; the kill mode still works', async () => {
+      const send = await open('Monarchy', 'monarchy', { pieces: [WONDERS[2]!, WONDERS[3]!] })
+      expect(screen.getByRole('group').textContent).toContain('No ancient wonder is owned by a player')
+      const obsolete = screen.getByRole('button', { name: /^Obsolete / }) as HTMLButtonElement
+      expect(obsolete.disabled).toBe(true)
+      fireEvent.click(obsolete)
+      expect(send).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByLabelText(/Kill a random unit/))
+      expect((screen.getByRole('button', { name: /^Kill a unit of/ }) as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it('the wonder that was picked is gone: the wonder shown is the wonder sent', async () => {
+      const first = abilityView('Monarchy', 'monarchy', { pieces: WONDERS })
+      const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(first)
+      vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+      const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={first} reloadCount={0} />)
+      fireEvent.click(await screen.findByText('Monarchy'))
+      fireEvent.click(screen.getByRole('button', { name: /^Use Monarchy/ }))
+      fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
+      rerender(<TechPanel gameId="game-1" busy={false} run={run} view={abilityView('Monarchy', 'monarchy', { pieces: [WONDERS[0]!] })} reloadCount={0} />)
+      expect((screen.getByLabelText('Wonder') as HTMLSelectElement).value).toBe('w1')
+      fireEvent.click(screen.getByRole('button', { name: 'Obsolete The Pyramids' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete', wonderPieceId: 'w1' })
     })
 
     it('kill picks an opponent, shows how many units each holds in the open count, and sends the target', async () => {
@@ -664,7 +703,7 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
     })
 
     it('cannot kill while a battle is on: the mode is disabled and falls back to obsolete', async () => {
-      const view = { ...abilityView('Monarchy', 'monarchy'), battle: { arena: [] } } as unknown as PlayerView
+      const view = { ...abilityView('Monarchy', 'monarchy', { pieces: WONDERS }), battle: { arena: [] } } as unknown as PlayerView
       const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
       vi.spyOn(api, 'availableTechs').mockResolvedValue([])
       render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
@@ -673,8 +712,8 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       const kill = screen.getByLabelText(/Kill a random unit/) as HTMLInputElement
       expect(kill.disabled).toBe(true)
       expect(screen.getByRole('group').textContent).toContain('not while a battle is on')
-      fireEvent.click(screen.getByRole('button', { name: 'Obsolete a wonder' }))
-      expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete' })
+      fireEvent.click(screen.getByRole('button', { name: 'Obsolete The Pyramids' }))
+      expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete', wonderPieceId: 'w1' })
     })
 
     it('does not send anything by choosing a mode', async () => {

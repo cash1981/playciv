@@ -1072,10 +1072,15 @@ export type TechAbilityEffect =
       readonly spent: readonly SpentResource[]
     }
   | {
-      /** Monarchy: `obsolete` only logs; `kill` discarded one unit card from the target's hand, as it stood, so an undo can return it. */
+      /**
+       * Monarchy: `obsolete` disabled one ancient wonder (`wonder`: the former owner and the board history entry of the
+       * change, so an undo can restore it and the board Undo leaves it to the vote); `kill` discarded one unit card from the
+       * target's hand, as it stood, so an undo can return it.
+       */
       readonly kind: 'monarchy'
       readonly spent: readonly SpentResource[]
       readonly mode: 'obsolete' | 'kill'
+      readonly wonder?: { readonly pieceId: string; readonly label: string; readonly ownerId: string; readonly ownerUsername: string; readonly historyId: string }
       readonly targetId?: string
       readonly killed?: UnitItem
       /** The card was one of the units drawn for a battle (in the battlehand), so an undo puts it back there too. */
