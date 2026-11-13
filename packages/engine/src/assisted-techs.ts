@@ -47,6 +47,8 @@ export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = ne
  */
 export type TechPicker =
   | { readonly kind: 'resources'; readonly count: number }
+  /** Gunpowder: two resources, then a wonder to obsolete or a building to destroy. */
+  | { readonly kind: 'gunpowder' }
   | { readonly kind: 'city' }
   | { readonly kind: 'player'; readonly noteLabel?: string }
   | { readonly kind: 'coin' }
@@ -57,7 +59,7 @@ export type TechPicker =
   | { readonly kind: 'atomic' }
 
 export const ASSISTED_TECH_PICKERS: ReadonlyMap<AssistedActionKind, TechPicker> = new Map<AssistedActionKind, TechPicker>([
-  ['gunpowder', { kind: 'resources', count: 2 }],
+  ['gunpowder', { kind: 'gunpowder' }],
   ['pottery', { kind: 'resources', count: 2 }],
   ['philosophy', { kind: 'resources', count: 3 }],
   ['animalHusbandry', { kind: 'city' }],

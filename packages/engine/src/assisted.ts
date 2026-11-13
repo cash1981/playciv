@@ -1992,7 +1992,8 @@ export function reverseAssistedAction(
       (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
     effect.kind === 'gianniniBuild' ||
     (effect.kind === 'atomicTheory' && effect.mode === 'nuke') ||
-    (effect.kind === 'monarchy' && effect.wonder !== undefined)
+    (effect.kind === 'monarchy' && effect.wonder !== undefined) ||
+    (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined))
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }

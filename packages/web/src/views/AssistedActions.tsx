@@ -26,6 +26,7 @@ import {
   itemName,
   nukeTargetsOf,
   obsoletableWondersOf,
+  destroyableBuildingsOf,
   occupancyOf,
   squareLabel,
   steamPowerDestinations,
@@ -194,6 +195,13 @@ function cardLinkOf(
 /** What a tech picker has chosen so far, one shape per kind of picker (`ASSISTED_TECH_PICKERS`). */
 type TechPick =
   | { readonly kind: 'resources'; readonly resources: readonly string[] }
+  | {
+      readonly kind: 'gunpowder'
+      readonly resources: readonly string[]
+      readonly mode: 'obsolete' | 'destroy'
+      readonly wonderPieceId: string
+      readonly buildingPieceId: string
+    }
   | { readonly kind: 'city'; readonly cityPieceId: string }
   | { readonly kind: 'player'; readonly targetId: string; readonly note: string }
   | { readonly kind: 'coin'; readonly targetId: string; readonly source: string }
@@ -209,11 +217,18 @@ function ownArenaUnits(view: PlayerView) {
   return (view.battle?.arena ?? []).filter((unit) => unit.placedBy === me && !unit.killed)
 }
 
-/** The ancient wonders a player owns that Monarchy may obsolete, from the public board and the players' names. */
-function obsoletableWondersInView(view: PlayerView) {
+/** The wonders a player owns that Monarchy (ancient) or Gunpowder (ancient and medieval) may obsolete, from the public board and the players' names. */
+function obsoletableWondersInView(view: PlayerView, eras: readonly ('Ancient' | 'Medieval')[] = ['Ancient']) {
   const me = view.you
   if (me === null) return []
-  return obsoletableWondersOf(view.board, [me, ...(view.opponents ?? [])].map((player) => ({ playerId: player.playerId, username: player.username })))
+  return obsoletableWondersOf(view.board, [me, ...(view.opponents ?? [])].map((player) => ({ playerId: player.playerId, username: player.username })), eras)
+}
+
+/** The buildings on the map Gunpowder may destroy, with the player whose outskirts hold each. */
+function destroyableBuildingsInView(view: PlayerView) {
+  const me = view.you
+  if (me === null) return []
+  return destroyableBuildingsOf({ board: view.board, players: [] }, [me, ...(view.opponents ?? [])].map((player) => ({ username: player.username, color: player.color })))
 }
 
 /** The cities of other players Atomic Theory may nuke, with what each would take with it: the public board and the players' colours. */
@@ -292,6 +307,81 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
         ))}
         <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
         <button type="button" className="small" disabled={!canSubmit} onClick={() => send({ resources })}>
+          Pay {listOf(resources)}
+        </button>
+        {cancel}
+      </span>
+    )
+  }
+
+  if (pick.kind === 'gunpowder') {
+    const { resources } = pick
+    const wonders = obsoletableWondersInView(view, ['Ancient', 'Medieval'])
+    const buildings = destroyableBuildingsInView(view)
+    const obsolete = pick.mode === 'obsolete'
+    // The selections follow the view, as the other pickers do: what is gone is replaced by the first left, and with none nothing is chosen
+    const wonderId = stillThere(wonders.map((wonder) => wonder.pieceId), pick.wonderPieceId)
+    const buildingId = stillThere(buildings.map((building) => building.pieceId), pick.buildingPieceId)
+    const wonder = wonders.find((candidate) => candidate.pieceId === wonderId)
+    const building = buildings.find((candidate) => candidate.pieceId === buildingId)
+    const ready = obsolete ? wonder !== undefined : building !== undefined
+    return (
+      <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${label}`}>
+        {resources.map((resource, index) => (
+          <select
+            key={index}
+            aria-label={`Resource ${index + 1}`}
+            value={resource}
+            onChange={(event) => setPick({ ...pick, resources: resources.map((current, at) => (at === index ? event.target.value : current)) })}
+          >
+            {ANY_RESOURCES.map((kind) => (
+              <option key={kind} value={kind}>
+                {kind}
+              </option>
+            ))}
+          </select>
+        ))}
+        <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
+        <label>
+          <input type="radio" name={radioName} checked={obsolete} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient or medieval wonder
+        </label>
+        <label>
+          <input type="radio" name={radioName} checked={!obsolete} onChange={() => setPick({ ...pick, mode: 'destroy' })} /> Destroy a building
+        </label>
+        {obsolete ? (
+          <>
+            <select aria-label="Wonder" value={wonderId} onChange={(event) => setPick({ ...pick, wonderPieceId: event.target.value })}>
+              {wonders.map((candidate) => (
+                <option key={candidate.pieceId} value={candidate.pieceId}>
+                  {candidate.label} ({candidate.ownerUsername})
+                </option>
+              ))}
+            </select>
+            {wonders.length === 0 && <span role="status" className="assisted-warning">No ancient or medieval wonder is owned by a player, so there is none to obsolete.</span>}
+          </>
+        ) : (
+          <>
+            <select aria-label="Building" value={buildingId} onChange={(event) => setPick({ ...pick, buildingPieceId: event.target.value })}>
+              {buildings.map((candidate) => (
+                <option key={candidate.pieceId} value={candidate.pieceId}>
+                  {candidate.label} on {candidate.square} ({candidate.ownerUsername === null ? 'no outskirts' : `${candidate.ownerUsername}'s outskirts`})
+                </option>
+              ))}
+            </select>
+            {buildings.length === 0 && <span role="status" className="assisted-warning">No building stands on the map, so there is none to destroy.</span>}
+          </>
+        )}
+        <span className="muted">
+          {obsolete
+            ? 'The wonder is marked disabled on the owner list: its owner is cleared and the piece stays, crossed out.'
+            : 'The building is removed from the board. Only the undo vote puts it back.'}
+        </span>
+        <button
+          type="button"
+          className="small"
+          disabled={!canSubmit || !ready}
+          onClick={() => send({ resources, ...(obsolete ? { mode: 'obsolete', wonderPieceId: wonderId } : { mode: 'destroy', buildingPieceId: buildingId }) })}
+        >
           Pay {listOf(resources)}
         </button>
         {cancel}
@@ -791,6 +881,17 @@ export function AssistedActionButton({
       case 'resources':
         setPick({ kind: 'resources', resources: defaultResourcePick(view, picker.count) })
         return
+      case 'gunpowder': {
+        const wonder = obsoletableWondersInView(view, ['Ancient', 'Medieval'])[0]
+        setPick({
+          kind: 'gunpowder',
+          resources: defaultResourcePick(view, 2),
+          mode: wonder === undefined ? 'destroy' : 'obsolete',
+          wonderPieceId: wonder?.pieceId ?? '',
+          buildingPieceId: destroyableBuildingsInView(view)[0]?.pieceId ?? '',
+        })
+        return
+      }
       case 'city': {
         const city = view.you?.cities?.[0]
         if (city === undefined) {

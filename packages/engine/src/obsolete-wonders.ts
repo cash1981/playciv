@@ -4,12 +4,13 @@
  * the piece stays and is drawn crossed out.
  *
  * Which wonders may be chosen, from the public board alone (like `atomic-theory.ts`), so the browser lists what the engine
- * accepts: an ANCIENT wonder (`wonder-data.ts`) that a player owns and that is not already disabled. Any player's, the user's
+ * accepts: a wonder of an allowed era (`wonder-data.ts`: ancient for Monarchy, ancient or medieval for Gunpowder) that a player owns and that is not already disabled. Any player's, the user's
  * own included. A wonder still in the market has no owner and is not a candidate.
  */
 
 import type { Board } from './board.js'
 import { wonderDataOf } from './wonder-data.js'
+import type { WonderEra } from './wonder-data.js'
 
 export interface ObsoletableWonder {
   readonly pieceId: string
@@ -25,10 +26,14 @@ export interface WonderOwner {
   readonly username: string
 }
 
-/** The ancient wonders owned by one of `owners` that are not disabled, in board order. */
-export function obsoletableWondersOf(board: Pick<Board, 'pieces'>, owners: readonly WonderOwner[]): readonly ObsoletableWonder[] {
+/** The wonders of the given eras (Monarchy: ancient; Gunpowder: ancient and medieval) owned by one of `owners` that are not disabled, in board order. */
+export function obsoletableWondersOf(
+  board: Pick<Board, 'pieces'>,
+  owners: readonly WonderOwner[],
+  eras: readonly WonderEra[] = ['Ancient'],
+): readonly ObsoletableWonder[] {
   return board.pieces.flatMap((piece): readonly ObsoletableWonder[] => {
-    if (piece.category !== 'wonder' || piece.disabled === true || wonderDataOf(piece.assetId)?.era !== 'Ancient') return []
+    if (piece.category !== 'wonder' || piece.disabled === true || !eras.some((era) => era === wonderDataOf(piece.assetId)?.era)) return []
     const owner = owners.find((candidate) => candidate.playerId === piece.ownerId)
     return owner === undefined ? [] : [{ pieceId: piece.id, label: piece.label, ownerId: owner.playerId, ownerUsername: owner.username }]
   })

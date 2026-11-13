@@ -871,9 +871,20 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   names exactly the cards played, except while Marie Curie is armed and the player holds both the armed
   substitute token and a real Uranium token (see limitations.md). The log says each card is played "as" the
   resource it was assigned in that order, which is currently always Iron, not one that was named. The web tech dialog asks for the two resources before paying, starting on tokens the
-  player holds. Undo returns exactly the tokens and cards spent. The effect (obsolete an ancient or medieval
-  wonder, or destroy a building of the player's choice) stays manual: obsolescence is not tracked in the engine
-  and the choice is the player's; the log line says so.
+  player holds. Undo returns exactly the tokens and cards spent. The effect is automated (human, 2026-11-13), in
+  `assisted-gunpowder.ts`: the payload carries the two resources and a `mode`. `obsolete` (`wonderPieceId`) marks an ANCIENT or
+  MEDIEVAL wonder that a player owns and that is not disabled as disabled, through the same board change and history entry as
+  the hand-made disable and as Monarchy does (`disableWonder`: the owner is cleared, the piece stays and is drawn crossed out,
+  the culture token is unaffected); modern wonders are not eligible. `destroy` (`buildingPieceId`) really removes a building
+  from the board through `removePiece`, so the board history records it: any building on a map square, whoever's, the player's
+  own included, never a wonder or a city (their own categories); the line names the building, its square and whose outskirts it
+  stood in (`destroyableBuildingsOf`, the owner being the one city whose footprint holds the square, as the coin rules read
+  it). Both lists come from the public board (`obsoletableWondersOf` with the eras, `destroyableBuildingsOf`), so the web lists
+  what the engine accepts. A target that is not eligible is refused with nothing spent. With no wonder to obsolete and no
+  building at all the button is not usable and says why; with one of the two it stays ready and warns which is missing. The
+  undo by vote restores a wonder's owner and flag exactly (refused when it changed since) or puts the building back with
+  `placeBack` exactly (refused when the piece is on the board again or another building or wonder now stands on its square);
+  the board Undo cannot take either alone (`isAssistedBoardChange`) nor walk back through the restoration (`undoFloor`).
 - **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
   no-cost assisted action in the open Movement phase (group "Movement abilities"). The player chooses which army
   acts: the payload is the army's piece id (`pieceId`), the square, and the building or walls, follow from it

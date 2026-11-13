@@ -209,7 +209,29 @@ function parseResources(action: string, count: number) {
   }
 }
 
-const parseGunpowder = (args: Record<string, unknown>): GunpowderPayload | string => parseResources('gunpowder', 2)(args)
+/** Gunpowder: exactly two resources, and `obsolete` with a `wonderPieceId` or `destroy` with a `buildingPieceId`, nothing else. */
+function parseGunpowder(args: Record<string, unknown>): GunpowderPayload | string {
+  const extra = extraKeys(args, ['resources', 'mode', 'wonderPieceId', 'buildingPieceId'])
+  if (extra.length > 0) return `gunpowder takes only resources, mode, wonderPieceId and buildingPieceId, not ${extra.join(', ')}`
+  const resources = args['resources']
+  if (
+    !Array.isArray(resources) ||
+    resources.length !== 2 ||
+    !resources.every((name) => typeof name === 'string' && name.length > 0 && name.length <= 20)
+  ) {
+    return 'resources must be a list of exactly 2 resource names'
+  }
+  const mode = args['mode']
+  if (mode !== 'obsolete' && mode !== 'destroy') return 'mode must be obsolete or destroy'
+  if (mode === 'obsolete') {
+    if (args['buildingPieceId'] !== undefined) return 'obsolete takes no buildingPieceId, only wonderPieceId'
+    if (!isId(args['wonderPieceId'])) return 'obsolete needs wonderPieceId: the ancient or medieval wonder to disable'
+    return { resources: resources as readonly string[], mode, wonderPieceId: args['wonderPieceId'] }
+  }
+  if (args['wonderPieceId'] !== undefined) return 'destroy takes no wonderPieceId, only buildingPieceId'
+  if (!isId(args['buildingPieceId'])) return 'destroy needs buildingPieceId: the building to remove'
+  return { resources: resources as readonly string[], mode, buildingPieceId: args['buildingPieceId'] }
+}
 
 function parseProductionBoost(action: string) {
   return (args: Record<string, unknown>): ProductionBoostPayload | string => {

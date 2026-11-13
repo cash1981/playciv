@@ -5,6 +5,8 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { placePiece } from '../src/actions/board.js'
+import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -25,8 +27,25 @@ const withTech = (state: GameState, techName: string): GameState =>
 const upTo = (state: GameState, phase: 'TRADE' | 'CM'): GameState =>
   unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: phase }))
 
-const press = (state: GameState, action: AssistedActionKind, payload?: Record<string, unknown>, requestId = 'req-1') =>
-  performAssistedAction(state, { playerId: CASH1981, action, requestId, at: AT, ...(payload === undefined ? {} : { payload: payload as never }) })
+
+/**
+ * Gunpowder now does something: it obsoletes a wonder or destroys a building (issue #327). These tests are about how it is paid,
+ * so the turn has one building on the map to destroy and a payload that names only the resources destroys it.
+ */
+const withLibrary = (state: GameState): GameState => {
+  const asset = findBoardAsset('buildings/library')
+  if (asset === undefined) throw new Error('no library asset')
+  return unwrap(placePiece(state, { playerId: CASH1981, assetId: 'buildings/library', x: 4 * SQUARE_SIZE + 10, y: mapTop(state.board) + 4 * SQUARE_SIZE + 10 }))
+}
+const withTarget = (state: GameState, action: string, payload?: Record<string, unknown>): Record<string, unknown> | undefined =>
+  action === 'gunpowder' && payload !== undefined && !('mode' in payload)
+    ? { ...payload, mode: 'destroy', buildingPieceId: state.board.pieces.find((piece) => piece.category === 'building')?.id }
+    : payload
+
+const press = (state: GameState, action: AssistedActionKind, payload?: Record<string, unknown>, requestId = 'req-1') => {
+  const sent = withTarget(state, action, payload)
+  return performAssistedAction(state, { playerId: CASH1981, action, requestId, at: AT, ...(sent === undefined ? {} : { payload: sent as never }) })
+}
 
 const voted = (state: GameState, requestId: string): GameState => {
   const entry = state.log.find((candidate) => candidate.assistedActionId === requestId)
@@ -49,7 +68,7 @@ const AFAR = 'A Gift from Afar'
 const card = (state: GameState, name: string): GameState => withCardInHand(state, name).state
 
 const movementTurn = (tech: string): GameState => upTo(withTech(firstCivGame(), tech), 'CM')
-const cmTurn = (tech: string): GameState => upTo(withTech(firstCivGame(), tech), 'TRADE')
+const cmTurn = (tech: string): GameState => upTo(withTech(tech === 'Gunpowder' ? withLibrary(firstCivGame()) : firstCivGame(), tech), 'TRADE')
 
 describe('a culture card pays a resource when there is no token', () => {
   it('Communism pays its Spy with A Generous Gift, names the card in the public line and discards it', () => {
@@ -204,7 +223,7 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
     const paid = unwrap(gunpowder(state, ['Iron', 'Wheat']))
     expect(handHut(paid, 'Iron')).toBe(false)
     expect(inDiscard(paid, GENEROUS)).toBe(true)
-    expect(paid.log.at(-1)?.publicLog).toMatch(/used Gunpowder: spent Iron and played A Generous Gift item number #\d+ as Iron\. /)
+    expect(paid.log.at(-1)?.publicLog).toMatch(/used Gunpowder: spent Iron and played A Generous Gift item number #\d+ as Iron, destroying /)
   })
 
   it('two cards', () => {
@@ -219,12 +238,12 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
   it('names are a preference: other tokens pay before any card is played', () => {
     // Silk hut, Wheat hut and a Generous Gift; Iron and Wheat named
     const state = card(withHutInHand(withHutInHand(cmTurn('Gunpowder'), 'Silk').state, 'Wheat').state, GENEROUS)
-    expect(assistedAvailability(state, CASH1981, 'gunpowder')).not.toHaveProperty('warning')
+    expect((assistedAvailability(state, CASH1981, 'gunpowder') as { warning?: string }).warning ?? '').not.toContain('Not enough resource tokens')
     const paid = unwrap(gunpowder(state, ['Iron', 'Wheat']))
     expect(handHut(paid, 'Silk')).toBe(false)
     expect(handHut(paid, 'Wheat')).toBe(false)
     expect(inHand(paid, GENEROUS)).toBe(true)
-    expect(paid.log.at(-1)?.publicLog).toContain('used Gunpowder: spent Silk and Wheat. ')
+    expect(paid.log.at(-1)?.publicLog).toContain('used Gunpowder: spent Silk and Wheat, destroying ')
     const undone = voted(paid, 'req-1')
     expect(handHut(undone, 'Silk')).toBe(true)
     expect(handHut(undone, 'Wheat')).toBe(true)
@@ -271,7 +290,7 @@ describe('Gunpowder pays each of its two resources token first, else a card, nev
 
   it('tokens are used before any card is, across both resources', () => {
     const state = card(withHutInHand(withHutInHand(cmTurn('Gunpowder'), 'Silk').state, 'Wheat').state, GENEROUS)
-    expect(assistedAvailability(state, CASH1981, 'gunpowder')).not.toHaveProperty('warning')
+    expect((assistedAvailability(state, CASH1981, 'gunpowder') as { warning?: string }).warning ?? '').not.toContain('Not enough resource tokens')
     const paid = unwrap(gunpowder(state, ['Silk', 'Wheat']))
     expect(inHand(paid, GENEROUS)).toBe(true)
   })

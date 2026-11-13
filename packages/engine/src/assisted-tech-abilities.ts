@@ -320,6 +320,54 @@ export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Pla
 }
 
 // ---------------------------------------------------------------------------
+// Obsoleting a wonder: Monarchy and Gunpowder
+// ---------------------------------------------------------------------------
+
+/** What an obsolete leaves for the undo: the wonder, its former owner and the board history entry of the change. */
+export interface DisabledWonder {
+  readonly pieceId: string
+  readonly label: string
+  readonly ownerId: string
+  readonly ownerUsername: string
+  readonly historyId: string
+}
+
+/**
+ * Marks a wonder disabled through the same board change and history entry as the hand-made disable (`setWonderOwner` with
+ * `disable: true`, issue #306): the owner is cleared, the piece stays and is drawn crossed out, its culture token is unaffected.
+ */
+export function disableWonder(
+  state: GameState,
+  player: Playerhand,
+  wonder: ObsoletableWonder,
+  at: string | undefined,
+): Result<{ readonly state: GameState; readonly disabled: DisabledWonder }, string> {
+  const done = setWonderOwner(state, { playerId: player.playerId, pieceId: wonder.pieceId, ownerId: null, disable: true, ...(at === undefined ? {} : { at }) })
+  const entry = done.ok ? done.value.board.history.at(-1) : undefined
+  if (!done.ok || entry === undefined) return err(`${wonder.label} could not be disabled.`)
+  return ok({ state: done.value, disabled: { ...wonder, historyId: entry.id } })
+}
+
+/** Takes the disable back: owner and flag as they were, or the reason it cannot be (the wonder or its owner changed since). */
+export function enableWonder(
+  state: GameState,
+  player: Playerhand,
+  wonder: DisabledWonder,
+  at: string | null,
+): Result<{ readonly state: GameState; readonly said: string }, string> {
+  const piece = state.board.pieces.find((candidate) => candidate.id === wonder.pieceId)
+  if (piece === undefined) return err(`${wonder.label} is no longer on the board, so it cannot be enabled again.`)
+  if (piece.disabled !== true || (piece.ownerId ?? null) !== null) {
+    return err(`${wonder.label} was changed since (its owner or its disabled mark is not as it was left), so it cannot be restored. Correct the owner list by hand.`)
+  }
+  if (playerOf(state, wonder.ownerId) === undefined) return err(`${wonder.ownerUsername} is no longer in the game, so ${wonder.label} cannot be given back.`)
+  const restored = setWonderOwner(state, { playerId: player.playerId, pieceId: wonder.pieceId, ownerId: wonder.ownerId, ...(at === null ? {} : { at }) })
+  return restored.ok
+    ? ok({ state: restored.value, said: `${wonder.label} is enabled again and back with ${wonder.ownerUsername}` })
+    : err(`${wonder.label} could not be restored.`)
+}
+
+// ---------------------------------------------------------------------------
 // Production boosts: Animal Husbandry, Construction, Banking, Plastics
 // ---------------------------------------------------------------------------
 
@@ -730,15 +778,13 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
 
   act(state, player, plan, spent, context) {
     if (plan.mode === 'obsolete') {
-      // The same board change as the hand-made disable, so the board history and its replay show it
-      const disabled = setWonderOwner(state, { playerId: player.playerId, pieceId: plan.wonder.pieceId, ownerId: null, disable: true, ...(context.at === undefined ? {} : { at: context.at }) })
-      const entry = disabled.ok ? disabled.value.board.history.at(-1) : undefined
-      if (!disabled.ok || entry === undefined) return err(`${plan.wonder.label} could not be disabled.`)
+      const disabled = disableWonder(state, player, plan.wonder, context.at)
+      if (!disabled.ok) return err(disabled.error)
       return ok({
-        state: disabled.value,
+        state: disabled.value.state,
         said: `, obsoleting ${plan.wonder.label} of ${plan.wonder.ownerUsername}: the wonder is disabled`,
-        historyIds: [entry.id],
-        effect: { kind: 'monarchy', spent, mode: 'obsolete', wonder: { ...plan.wonder, historyId: entry.id } },
+        historyIds: [disabled.value.disabled.historyId],
+        effect: { kind: 'monarchy', spent, mode: 'obsolete', wonder: disabled.value.disabled },
       })
     }
     // The random unit comes from the game's seed, so a replay of the same state kills the same card
@@ -762,17 +808,9 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
 
   undo(state, player, effect, _record, at) {
     if (effect.mode === 'obsolete') {
-      const wonder = effect.wonder
-      if (wonder === undefined) return ok({ state, said: '; no wonder was recorded, so nothing is changed' })
-      const piece = state.board.pieces.find((candidate) => candidate.id === wonder.pieceId)
-      if (piece === undefined) return err(`${wonder.label} is no longer on the board, so it cannot be enabled again.`)
-      if (piece.disabled !== true || (piece.ownerId ?? null) !== null) {
-        return err(`${wonder.label} was changed since (its owner or its disabled mark is not as Monarchy left it), so it cannot be restored. Correct the owner list by hand.`)
-      }
-      if (playerOf(state, wonder.ownerId) === undefined) return err(`${wonder.ownerUsername} is no longer in the game, so ${wonder.label} cannot be given back.`)
-      const restored = setWonderOwner(state, { playerId: player.playerId, pieceId: wonder.pieceId, ownerId: wonder.ownerId, ...(at === null ? {} : { at }) })
-      if (!restored.ok) return err(`${wonder.label} could not be restored.`)
-      return ok({ state: restored.value, said: ` and ${wonder.label} is enabled again and back with ${wonder.ownerUsername}` })
+      if (effect.wonder === undefined) return ok({ state, said: '; no wonder was recorded, so nothing is changed' })
+      const enabled = enableWonder(state, player, effect.wonder, at)
+      return enabled.ok ? ok({ state: enabled.value.state, said: ` and ${enabled.value.said}` }) : err(enabled.error)
     }
     if (effect.killed === undefined || effect.targetId === undefined) return ok({ state, said: '; nothing was killed' })
     const victim = playerOf(state, effect.targetId)

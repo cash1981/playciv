@@ -805,11 +805,6 @@ export type AssistedEffect =
       readonly battleId: string
       readonly spent: SpentResource
     }
-  | {
-      /** Gunpowder: the two tokens paid, in the order the player named them. */
-      readonly kind: 'gunpowder'
-      readonly spent: readonly SpentResource[]
-    }
   | TechAbilityEffect
   | {
       /** Combustion: the army that acted, the square it stands on and what is to be destroyed there, for the log and the undo line. */
@@ -1040,6 +1035,18 @@ export type TechAbilityEffect =
       readonly spent: readonly SpentResource[]
       readonly targetId: string
       readonly note: string
+    }
+  | {
+      /**
+       * Gunpowder: the two tokens paid, then `obsolete` (an ancient or medieval wonder disabled: `wonder`, as Monarchy keeps it) or
+       * `destroy` (a building removed from the board, exactly as it stood with the history entry that removed it, so an undo puts
+       * it back).
+       */
+      readonly kind: 'gunpowder'
+      readonly spent: readonly SpentResource[]
+      readonly mode: 'obsolete' | 'destroy'
+      readonly wonder?: { readonly pieceId: string; readonly label: string; readonly ownerId: string; readonly ownerUsername: string; readonly historyId: string }
+      readonly building?: { readonly piece: BoardPiece; readonly label: string; readonly square: string; readonly historyId: string }
     }
   | {
       /** Metalworking: +3 attack on one of the player's own arena units, with the attack before and after so an undo can tell whether it was edited since. */

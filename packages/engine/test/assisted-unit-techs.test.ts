@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest'
 
 import { endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, techWound } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
-import { undoLastBoardChange } from '../src/actions/board.js'
+import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { SQUARE_SIZE, mapTop } from '../src/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -42,6 +43,20 @@ const voted = (state: GameState, requestId: string): GameState => {
   return next
 }
 
+
+/**
+ * Gunpowder now does something: it obsoletes a wonder or destroys a building (issue #327). These tests are about how it is paid,
+ * so its turn has one building on the map to destroy and a payload that names only the resources destroys it.
+ */
+const withLibrary = (state: GameState): GameState =>
+  unwrap(placePiece(state, { playerId: CASH1981, assetId: 'buildings/library', x: 4 * SQUARE_SIZE + 10, y: mapTop(state.board) + 4 * SQUARE_SIZE + 10 }))
+const withLibrary2 = (state: GameState): GameState =>
+  unwrap(placePiece(state, { playerId: CASH1981, assetId: 'buildings/library', x: 7 * SQUARE_SIZE + 10, y: mapTop(state.board) + 7 * SQUARE_SIZE + 10 }))
+const withTarget = (state: GameState, action: string, payload?: Record<string, unknown>): Record<string, unknown> | undefined =>
+  action === 'gunpowder' && payload !== undefined && !('mode' in payload)
+    ? { ...payload, mode: 'destroy', buildingPieceId: state.board.pieces.find((piece) => piece.category === 'building')?.id }
+    : payload
+
 const press = (
   state: GameState,
   action: AssistedActionKind,
@@ -55,7 +70,7 @@ const press = (
     action,
     requestId,
     at: AT,
-    ...(payload === undefined ? {} : { payload: payload as never }),
+    ...(withTarget(state, action, payload) === undefined ? {} : { payload: withTarget(state, action, payload) as never }),
     ...(confirmedRepeat ? { confirmedRepeat } : {}),
   })
 
@@ -334,7 +349,7 @@ describe('Mathematics against barbarians, and with no battle', () => {
 // ---------------------------------------------------------------------------
 
 function gunpowderTurn(): GameState {
-  const state = withTech(firstCivGame(), 'Gunpowder')
+  const state = withTech(withLibrary(firstCivGame()), 'Gunpowder')
   return unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'TRADE' }))
 }
 
@@ -354,13 +369,13 @@ describe('Gunpowder (Any 2, City Management)', () => {
     expect(assistedAvailability(sot, CASH1981, 'gunpowder').status).toBe('wrong-phase')
   })
 
-  it('pays the two tokens the player named, logs it and says the effect is made by hand', () => {
+  it('pays the two tokens the player named and logs the destroyed building', () => {
     const state = rich()
     const paid = unwrap(press(state, 'gunpowder', 'req-1', { resources: ['Iron', 'Wheat'] }))
     expect(hasHut(paid, 'Iron')).toBe(false)
     expect(hasHut(paid, 'Wheat')).toBe(false)
     expect(paid.log.at(-1)?.publicLog).toContain('used Gunpowder: spent Iron and Wheat')
-    expect(paid.log.at(-1)?.publicLog).toContain('by hand')
+    expect(paid.log.at(-1)?.publicLog).toMatch(/^cash1981 used Gunpowder: spent Iron and Wheat, destroying Library on E5 \(in no player's outskirts\)$/)
     expect(assistedAvailability(paid, CASH1981, 'gunpowder').status).toBe('used')
     expect(paid.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'gunpowder' })
   })
@@ -393,7 +408,8 @@ describe('Gunpowder (Any 2, City Management)', () => {
   })
 
   it('is once per turn, with a confirmed repeat', () => {
-    const state = withHutInHand(withHutInHand(rich(), 'Silk').state, 'Incense').state
+    // A second building, since the first is destroyed by the first use
+    const state = withLibrary2(withHutInHand(withHutInHand(rich(), 'Silk').state, 'Incense').state)
     const first = unwrap(press(state, 'gunpowder', 'req-1', { resources: ['Iron', 'Wheat'] }))
     expect(unwrapErr(press(first, 'gunpowder', 'req-2', { resources: ['Silk', 'Incense'] })).kind).toBe('ASSISTED_ACTION_REJECTED')
     const second = unwrap(press(first, 'gunpowder', 'req-2', { resources: ['Silk', 'Incense'] }, true))
@@ -417,7 +433,8 @@ describe('Gunpowder (Any 2, City Management)', () => {
     const pieces = withPieceInArea(withPieceInArea(gunpowderTurn(), 'resources/iron').state, 'resources/wheat').state
     const before = [...pieces.board.pieces].map((candidate) => candidate.id).sort()
     const piecesPaid = unwrap(press(pieces, 'gunpowder', 'req-p', { resources: ['Iron', 'Wheat'] }))
-    expect(piecesPaid.board.pieces).toHaveLength(pieces.board.pieces.length - 2)
+    // Two tokens and the building the action destroys
+    expect(piecesPaid.board.pieces).toHaveLength(pieces.board.pieces.length - 3)
     expect(undoLastBoardChange(piecesPaid, CASH1981)).toMatchObject({ ok: false })
     const piecesBack = voted(piecesPaid, 'req-p')
     expect([...piecesBack.board.pieces].map((candidate) => candidate.id).sort()).toEqual(before)

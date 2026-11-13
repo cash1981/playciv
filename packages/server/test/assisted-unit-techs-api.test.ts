@@ -4,6 +4,7 @@
  * strict `args`. The rules are in `packages/engine/test/assisted-unit-techs.test.ts`.
  */
 
+import { SQUARE_SIZE, mapTop } from '@civ/engine'
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -145,39 +146,92 @@ describe('Mathematics through the routes', () => {
   })
 })
 
+/** A Library on a map square, which is what Gunpowder may destroy; the id of the piece. */
+async function placeLibrary(t: { gameId: string; starter: string }): Promise<string> {
+  const board = (await view(t.gameId, t.starter) as unknown as { board: Parameters<typeof mapTop>[0] }).board
+  const placed = await post(t.starter, `/api/games/${t.gameId}/board/pieces`, {
+    assetId: 'buildings/library',
+    x: 4 * SQUARE_SIZE + 10,
+    y: mapTop(board) + 4 * SQUARE_SIZE + 10,
+  })
+  expect(placed.status).toBe(200)
+  const id = ((await placed.json()) as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find((piece) => piece.assetId === 'buildings/library')?.id
+  if (id === undefined) throw new Error('library not placed')
+  return id
+}
+
 describe('Gunpowder and Combustion args', () => {
-  it('pays two named resources through args and refuses a malformed list', async () => {
+  it('pays two named resources and destroys the chosen building through args, and refuses a malformed payload', async () => {
     const t = await table('gun', 'Gunpowder', ['resources/iron', 'resources/wheat'])
+    const library = await placeLibrary(t)
     expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'TRADE' })).status).toBe(200)
     const before = await view(t.gameId, t.starter)
     expect(entryOf(before, 'gunpowder')).toMatchObject({ status: 'ready' })
 
-    for (const args of [{ resources: ['Iron'] }, { resources: 'Iron' }, { resources: ['Iron', 'Wheat'], extra: 1 }, {}]) {
+    const destroy = { mode: 'destroy', buildingPieceId: library }
+    for (const args of [
+      { resources: ['Iron'], ...destroy },
+      { resources: 'Iron', ...destroy },
+      { resources: ['Iron', 'Wheat'], ...destroy, extra: 1 },
+      {},
+      { resources: ['Iron', 'Wheat'] },
+      { resources: ['Iron', 'Wheat'], mode: 'raze' },
+      { resources: ['Iron', 'Wheat'], mode: 'destroy' },
+      { resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: 7 },
+      { resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: library, wonderPieceId: 'w1' },
+      { resources: ['Iron', 'Wheat'], mode: 'obsolete' },
+      { resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w1', buildingPieceId: library },
+    ]) {
       const bad = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-bad', rev: before.rev, args })
       expect(bad.status).toBe(400)
     }
-    const paid = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Silk'] } })
+    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+    const paid = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Silk'], ...destroy } })
     expect(paid.status).toBe(200)
     const after = await paid.json<View>()
     expect(after.assistedActions[0]).toMatchObject({ kind: 'gunpowder', status: 'applied' })
     // The names are a preference: no Silk is held, so the other token (Wheat) pays for it
-    expect(after.assistedActions[0]?.text).toContain('spent Iron and Wheat')
+    expect(after.assistedActions[0]?.text).toMatch(/spent Iron and Wheat, destroying Library on E5 \(in no player's outskirts\)/)
     expect(entryOf(after, 'gunpowder')?.status).toBe('used')
     const state = await repo.findGame(t.gameId)
-    expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron' || piece.assetId === 'resources/wheat')).toBe(false)
+    expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron' || piece.assetId === 'resources/wheat' || piece.id === library)).toBe(false)
+  })
+
+  it('refuses a target that is not eligible with nothing spent, and the button is not usable with nothing to do', async () => {
+    const t = await table('gunt', 'Gunpowder', ['resources/iron', 'resources/wheat'])
+    expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'TRADE' })).status).toBe(200)
+    const nothing = await view(t.gameId, t.starter)
+    expect(entryOf(nothing, 'gunpowder')).toMatchObject({ status: 'unavailable' })
+    const library = await placeLibrary(t)
+    const before = await view(t.gameId, t.starter)
+    expect(entryOf(before, 'gunpowder')).toMatchObject({ status: 'ready' })
+    for (const args of [
+      { resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: 'no-such-piece' },
+      { resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: library },
+    ]) {
+      const refused = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args })
+      expect(refused.status).toBe(400)
+      expect(await refused.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    }
+    const state = await repo.findGame(t.gameId)
+    expect(state?.assistedActions).toHaveLength(0)
+    expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(true)
+    expect(state?.board.pieces.some((piece) => piece.id === library)).toBe(true)
   })
 
   it('refuses Gunpowder with a lone token and no card: 400, nothing paid, nothing persisted', async () => {
     const t = await table('lone', 'Gunpowder', ['resources/iron'])
+    const library = await placeLibrary(t)
     expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'TRADE' })).status).toBe(200)
     const before = await view(t.gameId, t.starter)
     expect(entryOf(before, 'gunpowder')).toMatchObject({ status: 'needs-resource' })
-    const refused = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Wheat'] } })
+    const refused = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: library } })
     expect(refused.status).toBe(400)
     expect(await refused.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
     const state = await repo.findGame(t.gameId)
     expect(state?.assistedActions).toHaveLength(0)
     expect(state?.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(true)
+    expect(state?.board.pieces.some((piece) => piece.id === library)).toBe(true)
   })
 
   it('takes the id of an army for Combustion and nothing else', async () => {

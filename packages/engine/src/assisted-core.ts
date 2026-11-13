@@ -273,9 +273,15 @@ export interface CombustionPayload {
   readonly pieceId: string
 }
 
-/** What `gunpowder` carries: the two resource tokens to pay, by name, in the player's own choice. */
+/**
+ * What `gunpowder` carries: the two resource tokens to pay, by name, in the player's own choice, and what it does: `obsolete`
+ * the ancient or medieval wonder `wonderPieceId`, or `destroy` the building `buildingPieceId`.
+ */
 export interface GunpowderPayload {
   readonly resources: readonly string[]
+  readonly mode: 'obsolete' | 'destroy'
+  readonly wonderPieceId?: string
+  readonly buildingPieceId?: string
 }
 
 /** What Pottery and Philosophy carry, as Gunpowder does: the resource tokens to pay, by name (2 and 3). Education carries nothing. */

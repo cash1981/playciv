@@ -168,11 +168,13 @@ describe('the assisted action button in the tech dialog', () => {
 
 describe('the unit techs in the tech dialog (issue #327)', () => {
   const hut = (name: string) => ({ kind: 'hut', name, used: false, id: `hut-${name}` })
+  // Gunpowder now obsoletes a wonder or destroys a building, so its picker needs one on the board: a Library on a map square
+  const LIBRARY = { id: 'lib1', assetId: 'buildings/library', category: 'building', label: 'Library', x: 4 * createBoard().squareSize + 10, y: mapTop(createBoard()) + 4 * createBoard().squareSize + 10, width: 50, height: 50, rotation: 0 }
   const unitView = (techName: string, kind: string, status: string, reason: string, buttonText?: string, items: readonly object[] = []): PlayerView => {
     const base = viewOf([tech(techName, 3)])
     return {
       ...base,
-      board: { ...createBoard(), pieces: [] },
+      board: { ...createBoard(), pieces: techName === 'Gunpowder' ? [LIBRARY] : [] },
       boardAreas: [],
       you: {
         ...base.you!,
@@ -196,7 +198,7 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
 
     expect(send).toHaveBeenCalledTimes(1)
     const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
-    expect([gameId, kind, rev, args]).toEqual(['game-1', 'gunpowder', 7, { resources: ['Silk', 'Incense'] }])
+    expect([gameId, kind, rev, args]).toEqual(['game-1', 'gunpowder', 7, { resources: ['Silk', 'Incense'], mode: 'destroy', buildingPieceId: 'lib1' }])
   })
 
   it('starts the Gunpowder picker on the resources the player holds as tokens, so the default does not need a card', async () => {
@@ -864,5 +866,111 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     fireEvent.click(screen.getByRole('button', { name: 'Use Bureaucracy' }))
     expect(perform).toHaveBeenCalledTimes(1)
     expect(perform.mock.calls[0]?.slice(0, 2)).toEqual(['game-1', 'bureaucracy'])
+  })
+})
+
+describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => {
+  const board = createBoard()
+  const at = (column: number, row: number) => ({ x: column * board.squareSize + 10, y: mapTop(board) + row * board.squareSize + 10, width: 60, height: 60, rotation: 0 })
+  const building = (id: string, assetId: string, label: string, column: number, row: number) => ({ id, assetId, category: 'building', label, ...at(column, row) })
+  const wonder = (id: string, assetId: string, label: string, ownerId: string | null, disabled = false) => ({
+    id, assetId, category: 'wonder', label, ownerId, ...(disabled ? { disabled: true } : {}), ...at(14, 2),
+  })
+  const BLUE = {
+    playerId: 'p2', username: 'Karandras1', color: 'Blue', civilization: null, revealedTechs: [], numberOfTechsChosen: 0, pyramidPlacements: [],
+    publicHand: { units: 0, cultureCards: 0, huts: 0, villages: 0, greatPersons: 0 }, stats: { coinSources: {} },
+  }
+  const PIECES = [
+    { id: 'c1', assetId: 'cities/bluecity2', category: 'city', label: 'Blue city', ...at(9, 9) },
+    building('b1', 'buildings/library', 'Library', 10, 9),
+    building('b2', 'buildings/market', 'Market', 4, 4),
+    wonder('w1', 'wonders/pyramids', 'The Pyramids', 'p2'),
+    wonder('w2', 'wonders/machupichu', 'Machu Pichu', 'me'),
+    wonder('w3', 'wonders/bigben', 'Big Ben', 'p2'),
+    wonder('w4', 'wonders/colossus', 'The Colossus', null),
+    wonder('w5', 'wonders/oracle', 'The Oracle', 'p2', true),
+  ]
+  const viewWith = (pieces: readonly object[], status = 'ready'): PlayerView => {
+    const base = viewOf([tech('Gunpowder', 3)])
+    return {
+      ...base,
+      board: { ...board, pieces },
+      boardAreas: [],
+      opponents: [BLUE],
+      you: { ...base.you!, color: 'Red', items: [], availableActions: [action('gunpowder', 'Gunpowder', status, 'Ready to use.')] },
+    } as unknown as PlayerView
+  }
+  const open = async (view: PlayerView) => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const utils = render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Gunpowder'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Gunpowder/ }))
+    return { send, ...utils }
+  }
+
+  it('opens on obsolete when a wonder can be chosen, lists ancient and medieval wonders a player owns, and sends the piece with the two resources', async () => {
+    const { send } = await open(viewWith(PIECES))
+    expect((screen.getByLabelText(/Obsolete an ancient or medieval wonder/) as HTMLInputElement).checked).toBe(true)
+    // Not the modern Big Ben, the unowned Colossus or the disabled Oracle
+    expect(screen.getAllByRole('option').filter((option) => option.closest('select')?.getAttribute('aria-label') === 'Wonder').map((option) => option.textContent)).toEqual([
+      'The Pyramids (Karandras1)',
+      'Machu Pichu (cash1981)',
+    ])
+    fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['gunpowder', expect.any(String), 7, { resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w2' }])
+  })
+
+  it('the destroy mode lists every building on a map square with its square and whose outskirts, and sends the piece', async () => {
+    const { send } = await open(viewWith(PIECES))
+    fireEvent.click(screen.getByLabelText(/Destroy a building/))
+    expect(screen.getAllByRole('option').filter((option) => option.closest('select')?.getAttribute('aria-label') === 'Building').map((option) => option.textContent)).toEqual([
+      "Library on K10 (Karandras1's outskirts)",
+      'Market on E5 (no outskirts)',
+    ])
+    fireEvent.change(screen.getByLabelText('Building'), { target: { value: 'b2' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: 'b2' })
+  })
+
+  it('with nothing chosen in the mode the button waits and the reason is shown, and the other mode still works', async () => {
+    const { send } = await open(viewWith(PIECES.filter((entry) => (entry as { category: string }).category !== 'wonder')))
+    // No wonder: it opens on destroy
+    expect((screen.getByLabelText(/Destroy a building/) as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(screen.getByLabelText(/Obsolete an ancient or medieval wonder/))
+    expect(screen.getByRole('group').textContent).toContain('No ancient or medieval wonder is owned by a player')
+    const pay = screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement
+    expect(pay.disabled).toBe(true)
+    fireEvent.click(pay)
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByLabelText(/Destroy a building/))
+    expect((screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('the wonder or building that was picked is gone: the one shown is the one sent', async () => {
+    const { send, rerender } = await open(viewWith(PIECES))
+    fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { id: string }).id !== 'w2'))} reloadCount={0} />)
+    expect((screen.getByLabelText('Wonder') as HTMLSelectElement).value).toBe('w1')
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w1' })
+  })
+
+  it('asks about a repeat use when the player pays, keeps the picker if declined, and a busy page cannot send', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const used = viewWith(PIECES, 'used')
+    const { send, rerender } = await open(used)
+    expect(confirm).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    expect(send).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Wonder')).toBeTruthy()
+    rerender(<TechPanel gameId="game-1" busy={true} run={run} view={used} reloadCount={0} />)
+    expect((screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement).disabled).toBe(true)
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={used} reloadCount={0} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[5]).toBe(true)
   })
 })

@@ -1097,6 +1097,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     }
     // Monarchy's obsolete disabled a wonder: only the vote on its line enables it again
     if (effect.kind === 'monarchy' && effect.wonder?.historyId === entry.id) return true
+    // Gunpowder disabled a wonder or removed a building: only the vote puts it back
+    if (effect.kind === 'gunpowder' && (effect.wonder?.historyId === entry.id || effect.building?.historyId === entry.id)) return true
     // A nuke removed the city and what stood around it: only the vote on its line puts them back
     if (effect.kind === 'atomicTheory' && effect.mode === 'nuke' && effect.removed.some((removal) => removal.historyId === entry.id)) return true
     // Philosophy put the Great Person marker in the player's area, as a culture advance does
