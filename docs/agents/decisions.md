@@ -151,7 +151,10 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   (14-24 rem; no effect at 900px and below, where the panel is stacked). The
   values are kept per browser in `localStorage` under `civ.display`, so they
   persist across games and reloads (the old dropdown reset to Auto on each
-  mount). Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
+  mount). The sidebar's stat groups lay out as many columns as fit (CSS `auto-fit`
+  from a minimum cell width that scales with the icon size), so panel width and
+  icon size decide the columns instead of a fixed count; a group has four stats, so
+  four is the most. Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
   manual choice is continuous. Nothing is stored on the server. A "Show labels"
   switch, on by default, puts the name of every status value above its icon in
   the sidebar instead of relying on tooltips; a stored explicit off is kept, and

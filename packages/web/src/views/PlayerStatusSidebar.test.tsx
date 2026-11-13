@@ -383,11 +383,12 @@ describe('PlayerStatusSidebar', () => {
     expect(label).toContain('text-align: center')
     expect(label).toContain('overflow-wrap: anywhere')
     expect(label).toContain('hyphens: auto')
-    // With labels on a narrow block has two columns and a wide one four.
-    expect(rule("[data-pss-labels='on'] .pss-grid")).toContain('repeat(2, minmax(0, 1fr))')
-    const css = readFileSync('src/views/PlayerStatusSidebar.css', 'utf8').replaceAll('\r\n', '\n')
-    expect(css).toMatch(/@container \(min-width: 21rem\) \{\s*\[data-pss-labels='on'\] \.pss-grid \{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/)
-    expect(rule('.pss-block')).toContain('container-type: inline-size')
+    // The columns are not fixed: as many as fit, from a minimum cell width that follows the icon
+    // size (the labels wrap over two lines inside it).
+    const grid = rule('.pss-grid')
+    expect(grid).toContain('repeat(auto-fit, minmax(min(var(--pss-cell-min), 100%), 1fr))')
+    expect(grid).toContain('--pss-cell-min: calc(var(--pss-box) + 1.4rem)')
+    expect(grid).not.toMatch(/repeat\(\d, /)
     // The editor still spans the whole grid, whatever the number of columns.
     expect(rule('.pss-editor')).toContain('grid-column: 1 / -1')
   })
