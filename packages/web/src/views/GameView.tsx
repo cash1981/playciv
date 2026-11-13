@@ -31,6 +31,7 @@ import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary, handItemId } from './PhaseSummary.js'
 import { PhaseActionsPanel } from './PhaseTabs.js'
+import { PlayerStatusSidebar } from './PlayerStatusSidebar.js'
 import { MapPickerContext } from './mapPick.js'
 import type { MapPicker, MapPickRequest } from './mapPick.js'
 import { PlayCardControl } from './PlayableCards.js'
@@ -680,6 +681,7 @@ export function GameView({
         movementLocks={displayedView.communismLocks}
         movementForbidden={movementForbidden}
         {...(pickSquares === undefined ? {} : { pickSquares })}
+        statusSidebar={<PlayerStatusSidebar view={displayedView} />}
         run={run}
       />
 

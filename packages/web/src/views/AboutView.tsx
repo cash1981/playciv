@@ -62,6 +62,14 @@ export function AboutView(): React.JSX.Element {
         </p>
       </section>
 
+      <section className="panel" aria-labelledby="about-credits-heading">
+        <h2 id="about-credits-heading">Icon credits</h2>
+        <ul>
+          <li>Stacking icon: Layer icon by riajulislam, from Magnific (Freepik)</li>
+          <li>Combat hand size icon: Swords icon from Magnific (Freepik)</li>
+        </ul>
+      </section>
+
       <section className="panel" aria-labelledby="about-contact-heading">
         <h2 id="about-contact-heading">Contact</h2>
         <p>

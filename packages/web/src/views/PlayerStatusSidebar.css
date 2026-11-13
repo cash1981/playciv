@@ -1,0 +1,120 @@
+/* The player status sidebar beside the map (issue #342). Narrow by design: four
+   stats per row, so a block is about as wide as the sidebar. */
+
+.player-status-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.pss-block {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--player-color, var(--line));
+  border-radius: var(--radius);
+  padding: 0.5rem 0.55rem;
+  min-width: 0;
+}
+
+.pss-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.pss-civ {
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  object-fit: contain;
+}
+
+.pss-swatch {
+  flex: 0 0 auto;
+  background: var(--player-color, transparent);
+}
+
+.pss-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pss-header .tag {
+  flex: 0 0 auto;
+}
+
+.pss-government {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.3rem 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pss-seal {
+  width: 1.3rem;
+  height: 1.3rem;
+  flex: 0 0 auto;
+}
+
+.pss-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.pss-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.pss-icon {
+  width: 1.9rem;
+  height: 1.9rem;
+  object-fit: contain;
+}
+
+.pss-icon.pss-locked {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.pss-value {
+  max-width: 100%;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pss-locked-stat .pss-value,
+.pss-empty .pss-value {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+@media (max-width: 900px) {
+  /* Stacked under the map: blocks sit side by side as far as the width allows. */
+  .player-status-sidebar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+}

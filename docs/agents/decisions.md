@@ -122,6 +122,14 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   three-player saves with pieces and five-player saves keep their old rectangle
   so pieces do not move; see [legacy layout limitations](limitations.md#game-behavior).
 - Culture track: 21 positions with freely placed markers.
+- Player status sidebar (#342): a read-only view beside the map (under it at
+  900px and below) shows every Player status value per player with an icon whose
+  `alt`/`title` names it. It reads only fields the Player status panel already
+  shows (`username`, `color`, civilization name, `government`, `stats`) and adds
+  nothing to `PlayerView`; a hidden civilization shows a colour swatch, not a
+  leader marker. Combat is the engine-calculated bonus inside a starburst, Movement
+  is the player's colour flag, and Aircraft is dimmed until unlocked. The Player
+  status panel stays for editing and is expected to be retired later.
 - Board undo targets the caller's latest consecutive actions; a new board action
   clears redo. Undoing board edits does not undo game actions.
 - A moved piece keeps the pixel position where it is dropped, including in a

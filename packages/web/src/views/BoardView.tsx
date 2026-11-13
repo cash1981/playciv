@@ -24,6 +24,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import {
   AREA_LABEL_HEIGHT,
@@ -122,6 +123,8 @@ interface Props {
   readonly movementLocks?: readonly { readonly column: number; readonly row: number }[]
   /** Squares the viewer's figures may not end a move on: the outskirts of another player's Brandenburg Gate. */
   readonly movementForbidden?: readonly { readonly column: number; readonly row: number }[]
+  /** The player status sidebar, drawn to the right of the map (below it on a narrow screen). */
+  readonly statusSidebar?: ReactNode
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -353,6 +356,7 @@ export function BoardView({
   movementTurn = null,
   movementLocks = [],
   movementForbidden = [],
+  statusSidebar,
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -995,301 +999,206 @@ export function BoardView({
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="board-layout">
-        <div className="board-scroll" ref={scrollRef}>
-          <div
-            ref={frameRef}
-            className={`board-frame${readOnly && showReadOnlyOutline ? ' replaying' : ''}`}
-            style={{ width: width * zoom + 28, height: height * zoom + 28 }}
-          >
-            <ColumnLabels board={board} zoom={zoom} edge="top" offset={mapStart * zoom} />
-            <ColumnLabels board={board} zoom={zoom} edge="bottom" offset={mapBottom * zoom} />
-            <RowLabels board={board} zoom={zoom} edge="left" offset={mapStart * zoom} />
-            <RowLabels board={board} zoom={zoom} edge="right" offset={mapStart * zoom} />
-
+        <div className="board-main">
+          <div className="board-scroll" ref={scrollRef}>
             <div
-              ref={surfaceRef}
-              className={`board-surface${picking ? ' picking' : ''}`}
-              style={{ width: width * zoom, height: height * zoom }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={onDrop}
-              onPointerDown={onSurfacePointerDown}
-              onPointerMove={onSurfacePointerMove}
-              onPointerUp={onSurfacePointerUp}
-              onPointerCancel={onSurfacePointerCancel}
+              ref={frameRef}
+              className={`board-frame${readOnly && showReadOnlyOutline ? ' replaying' : ''}`}
+              style={{ width: width * zoom + 28, height: height * zoom + 28 }}
             >
-              {/* The culture track runs across the top, above the map */}
-              <div
-                className="board-track"
-                style={{
-                  width: width * zoom,
-                  height: trackHeight * zoom,
-                  backgroundImage: `url(/board/${CULTURE_TRACK.path})`,
-                }}
-                title="Culture track"
-              >
-                {Array.from({ length: CULTURE_TRACK_CELLS }, (_, index) => {
-                  const step = index + 1
-                  return (
-                    <span
-                      key={step}
-                      className="board-track-cell"
-                      style={{
-                        left: cultureCellCenter(board, step).x * zoom,
-                        height: trackHeight * zoom,
-                      }}
-                      title={`Culture ${step}`}
-                    />
-                  )
-                })}
-              </div>
+              <ColumnLabels board={board} zoom={zoom} edge="top" offset={mapStart * zoom} />
+              <ColumnLabels board={board} zoom={zoom} edge="bottom" offset={mapBottom * zoom} />
+              <RowLabels board={board} zoom={zoom} edge="left" offset={mapStart * zoom} />
+              <RowLabels board={board} zoom={zoom} edge="right" offset={mapStart * zoom} />
 
-              {/* The grid covers the map only, not the track or the areas.
-                  A rectangle keeps one mat with an outline; a stepped board
-                  gets one mat per slot, because there is no rectangle to
-                  outline any more. */}
-              {board.slotStep === TILE_SQUARES ? (
+              <div
+                ref={surfaceRef}
+                className={`board-surface${picking ? ' picking' : ''}`}
+                style={{ width: width * zoom, height: height * zoom }}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={onDrop}
+                onPointerDown={onSurfacePointerDown}
+                onPointerMove={onSurfacePointerMove}
+                onPointerUp={onSurfacePointerUp}
+                onPointerCancel={onSurfacePointerCancel}
+              >
+                {/* The culture track runs across the top, above the map */}
                 <div
-                  className="board-map"
+                  className="board-track"
                   style={{
                     width: width * zoom,
-                    top: mapStart * zoom,
-                    height: mapHeight(board) * zoom,
-                    backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
+                    height: trackHeight * zoom,
+                    backgroundImage: `url(/board/${CULTURE_TRACK.path})`,
                   }}
-                />
-              ) : (
-                board.slots.map((slot) => {
+                  title="Culture track"
+                >
+                  {Array.from({ length: CULTURE_TRACK_CELLS }, (_, index) => {
+                    const step = index + 1
+                    return (
+                      <span
+                        key={step}
+                        className="board-track-cell"
+                        style={{
+                          left: cultureCellCenter(board, step).x * zoom,
+                          height: trackHeight * zoom,
+                        }}
+                        title={`Culture ${step}`}
+                      />
+                    )
+                  })}
+                </div>
+
+                {/* The grid covers the map only, not the track or the areas.
+                    A rectangle keeps one mat with an outline; a stepped board
+                    gets one mat per slot, because there is no rectangle to
+                    outline any more. */}
+                {board.slotStep === TILE_SQUARES ? (
+                  <div
+                    className="board-map"
+                    style={{
+                      width: width * zoom,
+                      top: mapStart * zoom,
+                      height: mapHeight(board) * zoom,
+                      backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
+                    }}
+                  />
+                ) : (
+                  board.slots.map((slot) => {
+                    const [x, y] = slotOrigin(board, slot)
+                    const size = TILE_SQUARES * board.squareSize * zoom
+                    return (
+                      <div
+                        key={`mat-${slot.x}-${slot.y}`}
+                        className="board-map-slot"
+                        style={{
+                          left: x * zoom,
+                          top: y * zoom,
+                          width: size,
+                          height: size,
+                          backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
+                        }}
+                      />
+                    )
+                  })
+                )}
+
+                {fogSlots.map((slot) => {
                   const [x, y] = slotOrigin(board, slot)
                   const size = TILE_SQUARES * board.squareSize * zoom
                   return (
-                    <div
-                      key={`mat-${slot.x}-${slot.y}`}
-                      className="board-map-slot"
-                      style={{
-                        left: x * zoom,
-                        top: y * zoom,
-                        width: size,
-                        height: size,
-                        backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
-                      }}
+                    <img
+                      key={`fog-${slot.x}-${slot.y}`}
+                      className="board-fog-tile"
+                      src="/board/tiles/tileback.png"
+                      alt=""
+                      aria-hidden="true"
+                      draggable={false}
+                      style={{ left: x * zoom, top: y * zoom, width: size, height: size }}
                     />
                   )
-                })
-              )}
+                })}
 
-              {fogSlots.map((slot) => {
-                const [x, y] = slotOrigin(board, slot)
-                const size = TILE_SQUARES * board.squareSize * zoom
-                return (
-                  <img
-                    key={`fog-${slot.x}-${slot.y}`}
-                    className="board-fog-tile"
-                    src="/board/tiles/tileback.png"
-                    alt=""
-                    aria-hidden="true"
-                    draggable={false}
-                    style={{ left: x * zoom, top: y * zoom, width: size, height: size }}
-                  />
-                )
-              })}
-
-              {areas.map((area) => {
-                const isWonders = area.playerId === WONDERS_AREA_ID
-                return (
-                  <div
-                    key={area.playerId}
-                    className={`board-area${isWonders ? ' board-area-wonders' : ''}`}
-                    style={{
-                      left: area.x * zoom,
-                      top: area.y * zoom,
-                      width: area.width * zoom,
-                      height: area.height * zoom,
-                      borderColor: isWonders
-                        ? 'var(--wonder-accent)'
-                        : (area.color?.toLowerCase() ?? 'var(--line)'),
-                    }}
-                  >
-                    <span
-                      className="board-area-name"
+                {areas.map((area) => {
+                  const isWonders = area.playerId === WONDERS_AREA_ID
+                  return (
+                    <div
+                      key={area.playerId}
+                      className={`board-area${isWonders ? ' board-area-wonders' : ''}`}
                       style={{
-                        height: AREA_LABEL_HEIGHT * zoom,
-                        background: isWonders
+                        left: area.x * zoom,
+                        top: area.y * zoom,
+                        width: area.width * zoom,
+                        height: area.height * zoom,
+                        borderColor: isWonders
                           ? 'var(--wonder-accent)'
-                          : (area.color?.toLowerCase() ?? 'var(--panel-2)'),
-                        fontSize: Math.max(8, 13 * zoom),
+                          : (area.color?.toLowerCase() ?? 'var(--line)'),
                       }}
                     >
-                      {area.username}
-                    </span>
-                  </div>
-                )
-              })}
-
-              {pieces.map((piece) => {
-                const dragging = dragRef.current?.id === piece.id && dragPosition !== null
-                const x = dragging ? (dragPosition as { x: number }).x : piece.x
-                const y = dragging ? (dragPosition as { y: number }).y : piece.y
-
-                const blockaded = blockadedPieceIds.includes(piece.id)
-                const disabledWonder = piece.disabled === true
-                const crossed = blockaded || disabledWonder
-
-                return (
-                  <Fragment key={piece.id}>
-                    <img
-                      data-piece-id={piece.id}
-                      className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${crossed ? ' board-piece-blockaded' : ''}${piece.id === selectedId ? ' selected' : ''}`}
-                      src={assetUrl(piece.path)}
-                      alt={blockaded ? `${piece.label}, blockaded` : disabledWonder ? `${piece.label}, disabled` : piece.label}
-                      title={`${piece.label} · ${locationOf(board, areas, piece)}${blockaded ? ' · Blockaded by an enemy figure' : disabledWonder ? ' · Disabled' : ''}`}
-                      draggable={false}
-                      style={{
-                        left: x * zoom,
-                        top: y * zoom,
-                        width: piece.width * zoom,
-                        height: piece.height * zoom,
-                        ...(piece.rotation !== 0
-                          ? { transform: `rotate(${piece.rotation}deg)` }
-                          : {}),
-                        ...(readOnly ? { cursor: 'default' } : {}),
-                      }}
-                      onPointerDown={(event) => {
-                        if (pendingAsset === null && !picking && !surfaceOwnsTap(piece, event.pointerType)) {
-                          event.stopPropagation()
-                        }
-                        onPiecePointerDown(event, piece)
-                      }}
-                      onPointerMove={onPiecePointerMove}
-                      onPointerUp={onPiecePointerUp}
-                      onPointerCancel={onPiecePointerCancel}
-                      onLostPointerCapture={onPiecePointerCancel}
-                    />
-                    {crossed && (
-                      // The strike-through is a picture of the same fact the alt text and title state.
                       <span
-                        aria-hidden="true"
-                        className="board-piece-strike"
+                        className="board-area-name"
+                        style={{
+                          height: AREA_LABEL_HEIGHT * zoom,
+                          background: isWonders
+                            ? 'var(--wonder-accent)'
+                            : (area.color?.toLowerCase() ?? 'var(--panel-2)'),
+                          fontSize: Math.max(8, 13 * zoom),
+                        }}
+                      >
+                        {area.username}
+                      </span>
+                    </div>
+                  )
+                })}
+
+                {pieces.map((piece) => {
+                  const dragging = dragRef.current?.id === piece.id && dragPosition !== null
+                  const x = dragging ? (dragPosition as { x: number }).x : piece.x
+                  const y = dragging ? (dragPosition as { y: number }).y : piece.y
+
+                  const blockaded = blockadedPieceIds.includes(piece.id)
+                  const disabledWonder = piece.disabled === true
+                  const crossed = blockaded || disabledWonder
+
+                  return (
+                    <Fragment key={piece.id}>
+                      <img
+                        data-piece-id={piece.id}
+                        className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${crossed ? ' board-piece-blockaded' : ''}${piece.id === selectedId ? ' selected' : ''}`}
+                        src={assetUrl(piece.path)}
+                        alt={blockaded ? `${piece.label}, blockaded` : disabledWonder ? `${piece.label}, disabled` : piece.label}
+                        title={`${piece.label} · ${locationOf(board, areas, piece)}${blockaded ? ' · Blockaded by an enemy figure' : disabledWonder ? ' · Disabled' : ''}`}
+                        draggable={false}
                         style={{
                           left: x * zoom,
                           top: y * zoom,
                           width: piece.width * zoom,
                           height: piece.height * zoom,
+                          ...(piece.rotation !== 0
+                            ? { transform: `rotate(${piece.rotation}deg)` }
+                            : {}),
+                          ...(readOnly ? { cursor: 'default' } : {}),
                         }}
+                        onPointerDown={(event) => {
+                          if (pendingAsset === null && !picking && !surfaceOwnsTap(piece, event.pointerType)) {
+                            event.stopPropagation()
+                          }
+                          onPiecePointerDown(event, piece)
+                        }}
+                        onPointerMove={onPiecePointerMove}
+                        onPointerUp={onPiecePointerUp}
+                        onPointerCancel={onPiecePointerCancel}
+                        onLostPointerCapture={onPiecePointerCancel}
                       />
-                    )}
-                  </Fragment>
-                )
-              })}
+                      {crossed && (
+                        // The strike-through is a picture of the same fact the alt text and title state.
+                        <span
+                          aria-hidden="true"
+                          className="board-piece-strike"
+                          style={{
+                            left: x * zoom,
+                            top: y * zoom,
+                            width: piece.width * zoom,
+                            height: piece.height * zoom,
+                          }}
+                        />
+                      )}
+                    </Fragment>
+                  )
+                })}
 
-              {moveSquares.map((cell) => (
-                <button
-                  key={`move-${cell.column}-${cell.row}`}
-                  type="button"
-                  className={`board-move-cell${cell.contact === true ? ' board-contact-cell' : ''}`}
-                  data-move-column={cell.column}
-                  data-move-row={cell.row}
-                  aria-label={`Move ${selected?.label ?? 'figure'} to ${cell.label}, ${cell.distance} ${
-                    cell.distance === 1 ? 'square' : 'squares'
-                  }${cell.contact === true ? ', onto another player’s figures' : ''}`}
-                  title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}${
-                    cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''
-                  }`}
-                  disabled={busy || readOnly}
-                  style={{
-                    left: cell.column * board.squareSize * zoom,
-                    top: (mapStart + cell.row * board.squareSize) * zoom,
-                    width: board.squareSize * zoom,
-                    height: board.squareSize * zoom,
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (selected === null) return
-                    if (
-                      cell.contact === true &&
-                      !window.confirm(
-                        `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
-                      )
-                    ) {
-                      return
-                    }
-                    // Fame and Fortune p. 7: arriving on a centre of an own city, the figure may be disbanded there
-                    const offer = cell.contact === true ? undefined : disbandOfferAt(board, viewerColor, selected, cell)
-                    const disband =
-                      offer !== undefined &&
-                      window.confirm(
-                        offer.existing === undefined
-                          ? `Disband ${selected.label} in ${offer.cityLabel} for a ${offer.marker} marker? ` +
-                              (offer.marker === 'caravan'
-                                ? 'The caravan adds 2 production to the next Build there. '
-                                : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
-                              'OK disbands it; Cancel just moves it there.'
-                          : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
-                              'Disband it anyway? OK disbands it; Cancel just moves it there.',
-                      )
-                    setMoveModeId(null)
-                    void run(() =>
-                      api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
-                    )
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <span aria-hidden="true">{cell.label}</span>
-                </button>
-              ))}
-
-              {(selectedMovement?.explore ?? []).map((cell) => (
-                <button
-                  key={`explore-${cell.column}-${cell.row}`}
-                  type="button"
-                  className="board-move-cell board-explore-cell"
-                  data-explore-column={cell.column}
-                  data-explore-row={cell.row}
-                  aria-label={`Explore ${cell.label} with ${selected?.label ?? 'figure'} for 1 movement`}
-                  title={`Explore ${cell.label} · 1 movement`}
-                  disabled={busy || readOnly}
-                  style={{
-                    left: cell.column * board.squareSize * zoom,
-                    top: (mapStart + cell.row * board.squareSize) * zoom,
-                    width: board.squareSize * zoom,
-                    height: board.squareSize * zoom,
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (selected === null) return
-                    if (
-                      !window.confirm(
-                        `Spend 1 movement to explore ${cell.label}? The next map tile is drawn and placed there.`,
-                      )
-                    ) {
-                      return
-                    }
-                    void run(() => api.exploreSquare(gameId, selected.id, cell.column, cell.row))
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <span aria-hidden="true">Explore</span>
-                </button>
-              ))}
-
-              {pickSquares?.cells.map((cell) => {
-                const chosen = pickSquares.selected?.column === cell.column && pickSquares.selected.row === cell.row
-                return (
+                {moveSquares.map((cell) => (
                   <button
-                    key={`pick-${cell.column}-${cell.row}`}
+                    key={`move-${cell.column}-${cell.row}`}
                     type="button"
-                    className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : cell.replaces === undefined ? ' noted' : ' replacing'}`}
-                    // A square note is the enemy figure on a square an army is placed on, or what the item replaces; the bar spells it out once the square is picked.
-                    aria-label={
-                      pickSquares.describeCell?.(cell) ??
-                      `Place ${pickSquares.itemLabel} on ${cell.label}${
-                        cell.note === undefined
-                          ? ''
-                          : cell.replaces === undefined
-                            ? ', enemy figure there, resolve by hand'
-                            : `, replaces ${cell.replaces.label}`
-                      }`
-                    }
-                    aria-pressed={chosen}
+                    className={`board-move-cell${cell.contact === true ? ' board-contact-cell' : ''}`}
+                    data-move-column={cell.column}
+                    data-move-row={cell.row}
+                    aria-label={`Move ${selected?.label ?? 'figure'} to ${cell.label}, ${cell.distance} ${
+                      cell.distance === 1 ? 'square' : 'squares'
+                    }${cell.contact === true ? ', onto another player’s figures' : ''}`}
+                    title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}${
+                      cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''
+                    }`}
                     disabled={busy || readOnly}
                     style={{
                       left: cell.column * board.squareSize * zoom,
@@ -1297,25 +1206,123 @@ export function BoardView({
                       width: board.squareSize * zoom,
                       height: board.squareSize * zoom,
                     }}
-                    onClick={() => pickSquares.onPick(cell)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (selected === null) return
+                      if (
+                        cell.contact === true &&
+                        !window.confirm(
+                          `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
+                        )
+                      ) {
+                        return
+                      }
+                      // Fame and Fortune p. 7: arriving on a centre of an own city, the figure may be disbanded there
+                      const offer = cell.contact === true ? undefined : disbandOfferAt(board, viewerColor, selected, cell)
+                      const disband =
+                        offer !== undefined &&
+                        window.confirm(
+                          offer.existing === undefined
+                            ? `Disband ${selected.label} in ${offer.cityLabel} for a ${offer.marker} marker? ` +
+                                (offer.marker === 'caravan'
+                                  ? 'The caravan adds 2 production to the next Build there. '
+                                  : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
+                                'OK disbands it; Cancel just moves it there.'
+                            : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
+                                'Disband it anyway? OK disbands it; Cancel just moves it there.',
+                        )
+                      setMoveModeId(null)
+                      void run(() =>
+                        api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
+                      )
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
                   >
                     <span aria-hidden="true">{cell.label}</span>
-                    {cell.note !== undefined && (
-                      <span className="board-pick-flag" aria-hidden="true">
-                        {cell.replaces === undefined ? 'Enemy' : 'Replace'}
-                      </span>
-                    )}
                   </button>
-                )
-              })}
+                ))}
+
+                {(selectedMovement?.explore ?? []).map((cell) => (
+                  <button
+                    key={`explore-${cell.column}-${cell.row}`}
+                    type="button"
+                    className="board-move-cell board-explore-cell"
+                    data-explore-column={cell.column}
+                    data-explore-row={cell.row}
+                    aria-label={`Explore ${cell.label} with ${selected?.label ?? 'figure'} for 1 movement`}
+                    title={`Explore ${cell.label} · 1 movement`}
+                    disabled={busy || readOnly}
+                    style={{
+                      left: cell.column * board.squareSize * zoom,
+                      top: (mapStart + cell.row * board.squareSize) * zoom,
+                      width: board.squareSize * zoom,
+                      height: board.squareSize * zoom,
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (selected === null) return
+                      if (
+                        !window.confirm(
+                          `Spend 1 movement to explore ${cell.label}? The next map tile is drawn and placed there.`,
+                        )
+                      ) {
+                        return
+                      }
+                      void run(() => api.exploreSquare(gameId, selected.id, cell.column, cell.row))
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <span aria-hidden="true">Explore</span>
+                  </button>
+                ))}
+
+                {pickSquares?.cells.map((cell) => {
+                  const chosen = pickSquares.selected?.column === cell.column && pickSquares.selected.row === cell.row
+                  return (
+                    <button
+                      key={`pick-${cell.column}-${cell.row}`}
+                      type="button"
+                      className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : cell.replaces === undefined ? ' noted' : ' replacing'}`}
+                      // A square note is the enemy figure on a square an army is placed on, or what the item replaces; the bar spells it out once the square is picked.
+                      aria-label={
+                        pickSquares.describeCell?.(cell) ??
+                        `Place ${pickSquares.itemLabel} on ${cell.label}${
+                          cell.note === undefined
+                            ? ''
+                            : cell.replaces === undefined
+                              ? ', enemy figure there, resolve by hand'
+                              : `, replaces ${cell.replaces.label}`
+                        }`
+                      }
+                      aria-pressed={chosen}
+                      disabled={busy || readOnly}
+                      style={{
+                        left: cell.column * board.squareSize * zoom,
+                        top: (mapStart + cell.row * board.squareSize) * zoom,
+                        width: board.squareSize * zoom,
+                        height: board.squareSize * zoom,
+                      }}
+                      onClick={() => pickSquares.onPick(cell)}
+                    >
+                      <span aria-hidden="true">{cell.label}</span>
+                      {cell.note !== undefined && (
+                        <span className="board-pick-flag" aria-hidden="true">
+                          {cell.replaces === undefined ? 'Enemy' : 'Replace'}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              <span className="board-band-label" style={{ top: 1 }}>
+                Culture track
+              </span>
+              <span className="board-band-label" style={{ top: bandTop * zoom + 14 - 13 }}>
+                Player areas
+              </span>
             </div>
-            <span className="board-band-label" style={{ top: 1 }}>
-              Culture track
-            </span>
-            <span className="board-band-label" style={{ top: bandTop * zoom + 14 - 13 }}>
-              Player areas
-            </span>
           </div>
+          {statusSidebar}
         </div>
 
         <aside className="board-palette">

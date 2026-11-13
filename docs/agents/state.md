@@ -30,6 +30,8 @@ deployment reports do not establish present health.
   Program, Upgrades, Devote to the Arts and Harvest). End turn ends the viewer's
   open phase. Used policies and wonders are disabled; a repeat of a Great Person
   or culture card asks first.
+- Player status sidebar (#342): a read-only per-player overview with icons sits
+  beside the map; the editable Player status panel remains.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
   Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein, Carnegie, Jim Henson, Jacques Cousteau, Jerry Garcia, Ada Lovelace, Akira
   Kurosawa, Charles Darwin, A. P. Giannini, Frida Kahlo, Zheng He, Leonidas, Joan of Arc, Florence Nightingale, Sun Tzu, Georgy Zhukov and Gustavus Adolphus apply through the engine.

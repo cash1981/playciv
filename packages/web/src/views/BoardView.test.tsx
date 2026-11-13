@@ -2831,3 +2831,31 @@ describe('BoardView Great Person on a wonder (base rules p. 18)', () => {
     expect(mocks.confirm).not.toHaveBeenCalled()
   })
 })
+
+describe('BoardView status sidebar slot', () => {
+  it('renders the status sidebar next to the map, inside the same row', () => {
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+        statusSidebar={<aside data-testid="sidebar-slot">players</aside>}
+      />,
+    )
+    const slot = screen.getByTestId('sidebar-slot')
+    const row = container.querySelector('.board-main')
+    expect(row).not.toBeNull()
+    expect(slot.parentElement).toBe(row)
+    expect(row?.querySelector(':scope > .board-scroll')).not.toBeNull()
+  })
+
+  it('renders no sidebar slot when none is given', () => {
+    const { container } = render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />,
+    )
+    expect(container.querySelector('.board-main')?.children).toHaveLength(1)
+  })
+})

@@ -55,6 +55,10 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Bearer tokens cannot be revoked individually; disabled accounts are checked
   per request.
 - Some card images exceed 1 MB.
+- Player status sidebar (#342): there is no settings page yet for map and icon
+  size sliders. The author and licence of the EftA, PE, MIC and Infra icons in
+  `packages/web/public/status-icons/` are unknown, so only Stacking and Combat
+  hand size are credited on the About page.
 - Asset regeneration needs untracked source material. Check that local Military
   Science artwork is the intended replacement before running the generator.
 
