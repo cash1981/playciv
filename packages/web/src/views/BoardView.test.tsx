@@ -23,6 +23,7 @@ import type { BoardAsset, BoardPiece, MovementPlayer, PlayerView } from '@civ/en
 
 import type { GameRevisionView } from '../lib/api.js'
 import { api } from '../lib/api.js'
+import { DISPLAY_SETTINGS_KEY } from '../lib/displaySettings.js'
 
 import { BoardPalette, BoardView, fittingBoardZoom, groupBuildings } from './BoardView.js'
 import {
@@ -172,6 +173,46 @@ describe('BoardView zoom', () => {
     fireEvent.change(screen.getByLabelText('Status panel width'), { target: { value: '20' } })
     expect(main.style.getPropertyValue('--pss-scale')).toBe('1.25')
     expect(main.style.getPropertyValue('--pss-width')).toBe('20rem')
+  })
+
+  it('tells the status sidebar whether to show its labels through data-pss-labels on .board-main', () => {
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+        statusSidebar={<aside data-testid="side" />}
+      />,
+    )
+    const main = container.querySelector('.board-main') as HTMLElement
+    expect(main.getAttribute('data-pss-labels')).toBe('on')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Display settings' }))
+    fireEvent.click(dialog.getByRole('switch', { name: 'Show labels' }))
+    expect(main.getAttribute('data-pss-labels')).toBe('off')
+
+    fireEvent.click(dialog.getByRole('button', { name: 'Reset to defaults' }))
+    expect(main.getAttribute('data-pss-labels')).toBe('on')
+  })
+
+  it('starts with the labels off when this browser saved them off', () => {
+    localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"showLabels":false}')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+        statusSidebar={<aside data-testid="side" />}
+      />,
+    )
+    expect((container.querySelector('.board-main') as HTMLElement).getAttribute('data-pss-labels')).toBe('off')
   })
 
   it('works with browser storage blocked', () => {

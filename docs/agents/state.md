@@ -34,7 +34,8 @@ deployment reports do not establish present health.
   map and edits the same fields as the Player status panel (government select
   included); Coins are still edited in the panel.
 - Display settings (#342): a gear in the Board header opens sliders for map zoom,
-  status icon size and status panel width, saved per browser.
+  status icon size and status panel width plus a Show labels switch (on by
+  default), saved per browser. The sidebar can be minimised under the map.
 - Tech resource abilities (#327, in progress): Currency, Chivalry, Metal Casting, Communism, Steam Power,
   Mathematics, Ballistics, Gunpowder and Combustion have assisted buttons; the rest of the checklist is open.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,

@@ -20,7 +20,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('display settings ranges and defaults', () => {
   it('has the documented defaults and ranges', () => {
-    expect(DEFAULT_DISPLAY_SETTINGS).toEqual({ mapZoom: 'auto', iconScale: 1, sidebarWidth: 16.5 })
+    expect(DEFAULT_DISPLAY_SETTINGS).toEqual({ mapZoom: 'auto', iconScale: 1, sidebarWidth: 16.5, showLabels: true })
     expect(MAP_ZOOM_RANGE).toEqual({ min: 0.25, max: 1.5, step: 0.05 })
     expect(ICON_SCALE_RANGE).toEqual({ min: 0.7, max: 1.5, step: 0.05 })
     expect(SIDEBAR_WIDTH_RANGE).toEqual({ min: 14, max: 24, step: 0.5 })
@@ -39,7 +39,7 @@ describe('display settings ranges and defaults', () => {
 
 describe('parseDisplaySettings', () => {
   it('round-trips what serialiseDisplaySettings writes', () => {
-    const settings = { mapZoom: 0.65, iconScale: 1.2, sidebarWidth: 20 } as const
+    const settings = { mapZoom: 0.65, iconScale: 1.2, sidebarWidth: 20, showLabels: false } as const
     expect(parseDisplaySettings(serialiseDisplaySettings(settings))).toEqual(settings)
     expect(parseDisplaySettings(serialiseDisplaySettings(DEFAULT_DISPLAY_SETTINGS))).toEqual(DEFAULT_DISPLAY_SETTINGS)
   })
@@ -55,16 +55,34 @@ describe('parseDisplaySettings', () => {
       mapZoom: 1.5,
       iconScale: 0.7,
       sidebarWidth: 24,
+      showLabels: true,
     })
   })
 
   it('replaces only the fields that are garbage', () => {
     expect(
-      parseDisplaySettings('{"mapZoom":"huge","iconScale":"1.2","sidebarWidth":18}'),
-    ).toEqual({ mapZoom: 'auto', iconScale: 1, sidebarWidth: 18 })
-    expect(parseDisplaySettings('{"mapZoom":null,"iconScale":null,"sidebarWidth":false}')).toEqual(DEFAULT_DISPLAY_SETTINGS)
+      parseDisplaySettings('{"mapZoom":"huge","iconScale":"1.2","sidebarWidth":18,"showLabels":false}'),
+    ).toEqual({ mapZoom: 'auto', iconScale: 1, sidebarWidth: 18, showLabels: false })
+    expect(parseDisplaySettings('{"mapZoom":null,"iconScale":null,"sidebarWidth":false,"showLabels":null}')).toEqual(DEFAULT_DISPLAY_SETTINGS)
+    // Only a real boolean counts: the strings and numbers that look like one are garbage, and
+    // garbage gives the default (on), even where it looks like an off.
+    for (const garbage of ['"true"', '"false"', '1', '0', '"on"', '"off"', '[]', '{}']) {
+      expect(parseDisplaySettings(`{"showLabels":${garbage},"iconScale":1.1}`)).toEqual({ ...DEFAULT_DISPLAY_SETTINGS, iconScale: 1.1 })
+    }
+    // And a bad showLabels does not take the other fields with it.
+    expect(parseDisplaySettings('{"showLabels":"yes","sidebarWidth":20}')).toEqual({ ...DEFAULT_DISPLAY_SETTINGS, sidebarWidth: 20 })
     // 1e999 is Infinity once parsed.
     expect(parseDisplaySettings('{"mapZoom":1e999,"iconScale":1.1}')).toEqual({ ...DEFAULT_DISPLAY_SETTINGS, iconScale: 1.1 })
+  })
+
+  it('keeps an explicit showLabels false, and turns the labels on when it is missing (settings saved before it existed)', () => {
+    expect(parseDisplaySettings('{"showLabels":true}')).toEqual({ ...DEFAULT_DISPLAY_SETTINGS, showLabels: true })
+    expect(parseDisplaySettings('{"showLabels":false,"iconScale":1.3}')).toEqual({
+      ...DEFAULT_DISPLAY_SETTINGS,
+      iconScale: 1.3,
+      showLabels: false,
+    })
+    expect(parseDisplaySettings('{"mapZoom":0.5,"iconScale":1.4,"sidebarWidth":22}').showLabels).toBe(true)
   })
 
   it('accepts auto and ignores unknown fields', () => {
@@ -78,9 +96,11 @@ describe('parseDisplaySettings', () => {
 describe('loadDisplaySettings and saveDisplaySettings', () => {
   it('start from the defaults when nothing is stored, and read back what was saved', () => {
     expect(loadDisplaySettings()).toEqual(DEFAULT_DISPLAY_SETTINGS)
-    saveDisplaySettings({ mapZoom: 0.5, iconScale: 0.9, sidebarWidth: 15 })
-    expect(localStorage.getItem(DISPLAY_SETTINGS_KEY)).toBe('{"mapZoom":0.5,"iconScale":0.9,"sidebarWidth":15}')
-    expect(loadDisplaySettings()).toEqual({ mapZoom: 0.5, iconScale: 0.9, sidebarWidth: 15 })
+    saveDisplaySettings({ mapZoom: 0.5, iconScale: 0.9, sidebarWidth: 15, showLabels: false })
+    expect(localStorage.getItem(DISPLAY_SETTINGS_KEY)).toBe(
+      '{"mapZoom":0.5,"iconScale":0.9,"sidebarWidth":15,"showLabels":false}',
+    )
+    expect(loadDisplaySettings()).toEqual({ mapZoom: 0.5, iconScale: 0.9, sidebarWidth: 15, showLabels: false })
   })
 
   it('ignore corrupt stored data', () => {

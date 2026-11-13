@@ -1,6 +1,7 @@
 /**
  * The Display settings panel of the board (issue #342): sliders for the map zoom
- * (with an Auto switch), the status icon size and the status panel width.
+ * (with an Auto switch), the status icon size, the status panel width and a switch
+ * that names every status value above its icon.
  *
  * A gear button in the Board header opens it. It is a dialog (a bottom sheet on a
  * phone) that closes with Escape, its Close button or a tap outside it, and hands
@@ -279,6 +280,21 @@ export function DisplaySettings({ settings, autoZoom, onChange, onReset }: Props
               display={formatScale(settings.iconScale)}
               onChange={(iconScale) => onChange({ ...settings, iconScale })}
             />
+            <div className="ds-switch-row">
+              <label className="ds-switch">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={settings.showLabels}
+                  aria-describedby={`${idPrefix}-labels-note`}
+                  onChange={(event) => onChange({ ...settings, showLabels: event.target.checked })}
+                />
+                <span>Show labels</span>
+              </label>
+              <span id={`${idPrefix}-labels-note`} className="ds-note">
+                Name every status value above its icon instead of waiting for a tooltip
+              </span>
+            </div>
             <SliderRow
               id={`${idPrefix}-width`}
               label="Status panel width"

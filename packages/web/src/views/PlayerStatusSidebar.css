@@ -2,6 +2,20 @@
    stats per row, so a block is about as wide as the sidebar. */
 
 .player-status-sidebar {
+  min-width: 0;
+}
+
+/* The heading with the collapse toggle exists only where the sidebar is stacked under
+   the map (see the 900px rules below). */
+.pss-panel-heading {
+  display: none;
+  margin: 0;
+}
+
+/* The blocks. `display` here beats the UA rule of the `hidden` attribute, so beside the
+   map the content is shown whatever the stored collapsed state says; the 900px rules
+   below bring `hidden` back for the stacked layout. */
+.pss-content {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -15,6 +29,8 @@
   border-radius: var(--radius);
   padding: 0.5rem 0.55rem;
   min-width: 0;
+  /* Lets the grids ask how wide the block is (see the labels rules below). */
+  container-type: inline-size;
 }
 
 .pss-header {
@@ -70,30 +86,100 @@
 }
 
 .pss-grid {
+  /* --pss-scale comes from the Display settings (set on .board-main); 1 without it. */
+  --pss-box: calc(1.9rem * var(--pss-scale, 1));
   list-style: none;
   margin: 0;
-  padding: 0.3rem 0;
+  padding: 0.3rem 0 0.05rem;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.25rem;
+  /* Every stat spans three rows, top to bottom: label slot, icon box, value. The
+     rows are shared by the cells of a grid row, so the icons and the values line up
+     across it, and a label slot is as tall as the tallest label of its row (nothing
+     when the labels are off).
+     The tap target is the cell's button, which is a subgrid and so as tall as the
+     three rows, whatever its own min-height says. The 44px therefore live in the
+     value row. A subgrid's padding and border are added to the tracks at its edges
+     and the margin under a cell is part of the tracks it spans, so the button is as
+     tall as the three rows minus that 0.25rem, and the label row already holds the
+     top padding and border (0.15rem and 1px). The floor of the value row is
+     therefore 44px minus the icon box and that top padding and border, plus the
+     0.25rem margin. It is a floor only, so a label slot, or a larger icon, makes
+     the cell taller still.
+     The three-row pattern repeats down the grid. The editor spans one row and falls
+     on the first row of a repeat (the label row, `auto`) only because it is the last
+     child of its grid, so it must stay the last child. */
+  grid-auto-rows:
+    auto
+    var(--pss-box)
+    minmax(max(0px, calc(44px - var(--pss-box) - 0.15rem - 1px + 0.25rem)), auto);
+  column-gap: 0.25rem;
+  row-gap: 0;
   border-top: 1px solid var(--line-soft);
 }
 
 .pss-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
   min-width: 0;
+  /* The gap between the rows of cells. */
+  margin-bottom: 0.25rem;
 }
 
-/* --pss-scale comes from the Display settings (set on .board-main); 1 without it. */
-.pss-icon {
-  width: calc(1.9rem * var(--pss-scale, 1));
-  height: calc(1.9rem * var(--pss-scale, 1));
+.pss-stat-body {
+  display: grid;
+  grid-row: 1 / span 3;
+  grid-template-rows: subgrid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  /* The same padding and border as the button has, so the calculated (read-only)
+     cells line up with the editable ones next to them. */
+  padding: 0.15rem 0;
+  border: 1px solid transparent;
+}
+
+.pss-label {
+  display: none;
+  grid-row: 1;
+  align-self: end;
+  margin-bottom: 0.1rem;
+  font-size: 0.68rem;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--muted);
+  /* Long words such as "Military-Industrial" wrap instead of leaving the cell. */
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+
+[data-pss-labels='on'] .pss-label {
+  display: block;
+}
+
+/* The box is the same square in every cell. */
+.pss-icon-box {
+  display: flex;
+  grid-row: 2;
+  align-items: center;
+  justify-content: center;
+  width: var(--pss-box);
+  height: var(--pss-box);
   /* Never wider than its grid cell, whatever the width and icon size settings. */
   max-width: 100%;
+}
+
+/* The icons are 35x29 to 256x256 and two are inline SVGs: each is fitted into the
+   box, centred, instead of being drawn at its own size. */
+.pss-icon {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  object-position: center;
 }
 
 .pss-icon.pss-locked {
@@ -102,7 +188,10 @@
 }
 
 .pss-value {
+  grid-row: 3;
+  align-self: start;
   max-width: 100%;
+  margin-top: 0.1rem;
   font-size: calc(0.85rem * var(--pss-scale, 1));
   font-weight: 600;
   line-height: 1.1;
@@ -113,6 +202,19 @@
   white-space: normal;
 }
 
+/* With the labels on a cell needs more width: two columns, or four where the block
+   is wide enough. 21rem, not the 24rem panel maximum minus its padding (about 22.6rem),
+   because a classic scrollbar of about 1rem still has to fit beside the map. */
+[data-pss-labels='on'] .pss-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@container (min-width: 21rem) {
+  [data-pss-labels='on'] .pss-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .pss-locked-stat .pss-value,
 .pss-empty .pss-value {
   color: var(--muted);
@@ -120,42 +222,57 @@
 }
 
 @media (max-width: 900px) {
-  /* Stacked under the map: blocks sit side by side as far as the width allows. */
-  .player-status-sidebar {
+  .pss-panel-heading {
+    display: block;
+  }
+
+  .pss-panel-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0;
+    padding: 0 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .pss-panel-indicator {
+    color: var(--muted);
+    font-size: 1.25rem;
+  }
+
+  /* Stacked under the map: blocks sit side by side as far as the width allows, and
+     the content is hidden while the panel is collapsed, leaving only the heading. */
+  .pss-content {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    margin-top: 0.6rem;
+  }
+
+  .pss-content[hidden] {
+    display: none;
   }
 }
 
 /* --- Editing (issue: editable sidebar) ------------------------------------- */
 
-/* The stat cell is the tap target: a full-width button of at least 44px. */
-.pss-stat {
-  /* Lets the button take the whole cell. */
-  align-items: stretch;
-}
-
-.pss-stat > .pss-icon,
-.pss-stat > .pss-value {
-  align-self: center;
-}
-
+/* The stat cell is the tap target: a full-width button, 44px tall by the value row
+   floor in .pss-grid. The min-height only matters where subgrid is unsupported. */
 .pss-stat-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.1rem;
   width: 100%;
-  min-width: 0;
   min-height: 44px;
-  margin: 0;
-  padding: 0.15rem 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
   background: transparent;
   color: inherit;
   font: inherit;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -186,6 +303,7 @@
 .pss-editor {
   grid-column: 1 / -1;
   min-width: 0;
+  margin-bottom: 0.25rem;
 }
 
 .pss-editor-box {
