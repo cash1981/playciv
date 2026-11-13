@@ -74,7 +74,7 @@ vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Reveale
 vi.mock('./SocialPolicyPanel.js', () => ({ SocialPolicyPanel: ({ readOnly }: { readOnly?: boolean }) => (
   <section data-readonly={String(readOnly)}><h2>Social policy</h2></section>
 ) }))
-vi.mock('./StatusPanel.js', () => ({ StatusPanel: () => <section><h2>Player status</h2></section> }))
+vi.mock('./CoinsPanel.js', () => ({ CoinsPanel: () => <section><h2>Coins</h2></section> }))
 vi.mock('./TechPanel.js', () => ({ TechPanel: ({ standalone }: { standalone?: boolean }) => (
     <section aria-label="Techs">{standalone === true && <h2>Techs</h2>}</section>
   ) }))
@@ -507,7 +507,7 @@ describe('primary game panel order', () => {
       "Other players' hands",
       'Battle',
       'Social policy',
-      'Player status',
+      'Coins',
       'Wonders',
       'Log',
       'Revealed',
@@ -557,7 +557,7 @@ describe('primary game panel order', () => {
       "Other players' hands",
       'Battle',
       'Social policy',
-      'Player status',
+      'Coins',
       'Wonders',
       'Log',
       'Revealed',

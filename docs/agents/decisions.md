@@ -122,6 +122,50 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   three-player saves with pieces and five-player saves keep their old rectangle
   so pieces do not move; see [legacy layout limitations](limitations.md#game-behavior).
 - Culture track: 21 positions with freely placed markers.
+- Player status sidebar (#342): a view beside the map (under it at 900px and
+  below) shows every status value per player with an icon whose `alt`/`title`
+  names it. It reads only fields the old Player status panel showed (`username`,
+  `color`, civilization name, `government`, `stats`) and adds nothing to
+  `PlayerView`; a hidden civilization shows a colour swatch, not a
+  leader marker. Combat is the engine-calculated bonus inside a starburst, Movement
+  is the player's colour flag, and Aircraft is dimmed until unlocked.
+  It edits the same fields the old Player status table edited, with shared
+  validation (`parseStatInput`): tap a value to edit it, Aircraft is a switch,
+  Government is a select with a `?` that opens the government card reference.
+  The Coins total, Culture hand size and Combat stay read-only. The per-source Coins counters are
+  not in the sidebar: they are edited in the Coins panel.
+  Spectators, replay and locked games get no edit controls (the government is
+  text, `?` still works); controls are disabled while a save is running. An
+  untouched editor never saves, so a value another member changed during a
+  refresh is not overwritten. Under the map (900px and below) the sidebar can be
+  minimised with a "Player overview" heading and toggle, remembered under
+  `civ.panel.player-status` (default open); beside the map it is always fully
+  shown whatever is stored. The old Player status panel (its table and the Status
+  tab) is removed; the **Coins** panel (`CoinsPanel`, collapsed state under
+  `civ.panel.coins`) is what is left of it, until the counters move over too. The
+  Social policy panel's `?` still opens the government card reference, now through
+  the sidebar.
+- Display settings (#342): the Zoom dropdown in the Board header is replaced by a
+  gear that opens a Display settings panel with sliders for map zoom (25-150 %,
+  with an Auto switch), status icon size (70-150 %) and status panel width
+  (14-24 rem; no effect at 900px and below, where the panel is stacked). The
+  values are kept per browser in `localStorage` under `civ.display`, so they
+  persist across games and reloads (the old dropdown reset to Auto on each
+  mount). The sidebar's stat groups lay out as many columns as fit (CSS `auto-fit`
+  from a minimum cell width that scales with the icon size), so panel width and
+  icon size decide the columns instead of a fixed count; a group has four stats, so
+  four is the most. An "Icons per row" setting (1-4, Auto by default) fixes the
+  number instead (`sidebarColumns`, handed to the sidebar as `--pss-columns`).
+  Movement sits in the Economy group after Culture, and Culture hand size among the
+  modifiers after Stacking. Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
+  manual choice is continuous. Nothing is stored on the server. A "Show labels"
+  switch, on by default, puts the name of every status value above its icon in
+  the sidebar instead of relying on tooltips; a stored explicit off is kept, and
+  settings saved before the switch existed get labels on. Every cell is label,
+  fixed icon box and value, so icons line up across a row. The visible labels of
+  the four investments are the abbreviations (EftA, Infra, MIC, PE); tooltips,
+  alt text and accessible names use the full names (Endowment for the Arts,
+  Infrastructure, Military-Industrial Complex, Public Education).
 - Board undo targets the caller's latest consecutive actions; a new board action
   clears redo. Undoing board edits does not undo game actions.
 - A moved piece keeps the pixel position where it is dropped, including in a
@@ -173,7 +217,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 - Panama's coins belong to the physical wonder and count for its active,
   unblockaded owner.
 - Bank/Great Person/Adam Smith effects derive from board ownership and revealed
-  cards; `placedBy` is not city ownership. The Coins tab lists Adam Smith only
+  cards; `placedBy` is not city ownership. The Coins panel lists Adam Smith only
   while his card is revealed and usable.
 - Metropolis outskirts are the ten squares around two centres, excluding both.
 - A Great Person with no tracked matching token is not assumed blockaded

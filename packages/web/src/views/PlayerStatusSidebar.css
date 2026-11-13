@@ -1,0 +1,379 @@
+/* The player status sidebar beside the map (issue #342). Narrow by design: four
+   stats per row, so a block is about as wide as the sidebar. */
+
+.player-status-sidebar {
+  min-width: 0;
+}
+
+/* The heading with the collapse toggle exists only where the sidebar is stacked under
+   the map (see the 900px rules below). */
+.pss-panel-heading {
+  display: none;
+  margin: 0;
+}
+
+/* The blocks. `display` here beats the UA rule of the `hidden` attribute, so beside the
+   map the content is shown whatever the stored collapsed state says; the 900px rules
+   below bring `hidden` back for the stacked layout. */
+.pss-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.pss-block {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--player-color, var(--line));
+  border-radius: var(--radius);
+  padding: 0.5rem 0.55rem;
+  min-width: 0;
+}
+
+.pss-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.pss-civ {
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  object-fit: contain;
+}
+
+.pss-swatch {
+  flex: 0 0 auto;
+  background: var(--player-color, transparent);
+}
+
+.pss-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  /* A long username or civilization scrolls sideways instead of being cut off. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  padding-bottom: 0.15rem;
+}
+
+.pss-header .tag {
+  flex: 0 0 auto;
+}
+
+.pss-government {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.3rem 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pss-seal {
+  width: 1.3rem;
+  height: 1.3rem;
+  flex: 0 0 auto;
+}
+
+.pss-grid {
+  /* --pss-scale comes from the Display settings (set on .board-main); 1 without it. */
+  --pss-box: calc(1.9rem * var(--pss-scale, 1));
+  /* The narrowest a cell may get. The columns are not fixed: as many as fit the block
+     (auto-fit), so a wider panel or a smaller icon size gives more per row and a narrower
+     panel or a larger icon fewer. A cell is its icon box plus room for the value and, with
+     the labels on, for a label that wraps over two lines ("Culture hand size"). */
+  --pss-cell-min: calc(var(--pss-box) + 1.4rem);
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0 0.05rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--pss-cell-min), 100%), 1fr));
+  /* Every stat spans three rows, top to bottom: label slot, icon box, value. The
+     rows are shared by the cells of a grid row, so the icons and the values line up
+     across it, and a label slot is as tall as the tallest label of its row (nothing
+     when the labels are off).
+     The tap target is the cell's button, which is a subgrid and so as tall as the
+     three rows, whatever its own min-height says. The 44px therefore live in the
+     value row. A subgrid's padding and border are added to the tracks at its edges
+     and the margin under a cell is part of the tracks it spans, so the button is as
+     tall as the three rows minus that 0.25rem, and the label row already holds the
+     top padding and border (0.15rem and 1px). The floor of the value row is
+     therefore 44px minus the icon box and that top padding and border, plus the
+     0.25rem margin. It is a floor only, so a label slot, or a larger icon, makes
+     the cell taller still.
+     The three-row pattern repeats down the grid. The editor spans one row and falls
+     on the first row of a repeat (the label row, `auto`) only because it is the last
+     child of its grid, so it must stay the last child. */
+  grid-auto-rows:
+    auto
+    var(--pss-box)
+    minmax(max(0px, calc(44px - var(--pss-box) - 0.15rem - 1px + 0.25rem)), auto);
+  column-gap: 0.25rem;
+  row-gap: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.pss-stat {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  min-width: 0;
+  /* The gap between the rows of cells. */
+  margin-bottom: 0.25rem;
+}
+
+.pss-stat-body {
+  display: grid;
+  grid-row: 1 / span 3;
+  grid-template-rows: subgrid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  /* The same padding and border as the button has, so the calculated (read-only)
+     cells line up with the editable ones next to them. */
+  padding: 0.15rem 0;
+  border: 1px solid transparent;
+}
+
+.pss-label {
+  display: none;
+  grid-row: 1;
+  align-self: end;
+  margin-bottom: 0.1rem;
+  font-size: 0.68rem;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--muted);
+  /* Long words such as "Military-Industrial" wrap instead of leaving the cell. */
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+
+[data-pss-labels='on'] .pss-label {
+  display: block;
+}
+
+/* The Display settings' icons per row, when it is not Auto (BoardView sets the attribute
+   and `--pss-columns` on .board-main). */
+[data-pss-columns='fixed'] .pss-grid {
+  grid-template-columns: repeat(var(--pss-columns, 4), minmax(0, 1fr));
+}
+
+/* The box is the same square in every cell. */
+.pss-icon-box {
+  display: flex;
+  grid-row: 2;
+  align-items: center;
+  justify-content: center;
+  width: var(--pss-box);
+  height: var(--pss-box);
+  /* Never wider than its grid cell, whatever the width and icon size settings. */
+  max-width: 100%;
+}
+
+/* The icons are 35x29 to 256x256 and two are inline SVGs: each is fitted into the
+   box, centred, instead of being drawn at its own size. */
+.pss-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.pss-icon.pss-locked {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.pss-value {
+  grid-row: 3;
+  align-self: start;
+  max-width: 100%;
+  margin-top: 0.1rem;
+  font-size: calc(0.85rem * var(--pss-scale, 1));
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: center;
+  /* Movement expressions and Combat hand size are free text: wrap them rather
+     than cut them off, so the whole value stays readable. */
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.pss-locked-stat .pss-value,
+.pss-empty .pss-value {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+@media (max-width: 900px) {
+  .pss-panel-heading {
+    display: block;
+  }
+
+  .pss-panel-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0;
+    padding: 0 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .pss-panel-indicator {
+    color: var(--muted);
+    font-size: 1.25rem;
+  }
+
+  /* Stacked under the map: blocks sit side by side as far as the width allows, and
+     the content is hidden while the panel is collapsed, leaving only the heading. */
+  .pss-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    margin-top: 0.6rem;
+  }
+
+  .pss-content[hidden] {
+    display: none;
+  }
+}
+
+/* --- Editing (issue: editable sidebar) ------------------------------------- */
+
+/* The stat cell is the tap target: a full-width button, 44px tall by the value row
+   floor in .pss-grid. The min-height only matters where subgrid is unsupported. */
+.pss-stat-button {
+  width: 100%;
+  min-height: 44px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.pss-stat-button:hover:not([aria-disabled='true']) {
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+
+.pss-stat-button[aria-expanded='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.pss-stat-button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* aria-disabled is not :disabled, so the global dimming and hover highlight of
+   disabled buttons do not apply; this keeps a busy stat looking and behaving inert. */
+.pss-stat-button[aria-disabled='true']:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* The editor takes a whole grid row of its own under the cells, so the four
+   columns above keep their shape. */
+.pss-editor {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-bottom: 0.25rem;
+}
+
+.pss-editor-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.pss-editor-input {
+  flex: 1 1 2.5rem;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  box-sizing: border-box;
+  text-align: center;
+  /* 16px keeps iOS from zooming the page when the field takes focus. */
+  font-size: 1rem;
+}
+
+.pss-step,
+.pss-done {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 0.5rem;
+  cursor: pointer;
+}
+
+.pss-step {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.pss-step:disabled {
+  cursor: default;
+}
+
+.pss-editor-hint {
+  flex: 1 0 100%;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* The government dropdown and its "?" share the line with the seal. */
+.pss-government .government-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2rem;
+  font-size: 0.85rem;
+}
+
+.pss-government-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pss-help {
+  flex: 0 0 auto;
+}
+
+@media (pointer: coarse) {
+  /* Fingers need the 44px target on the government controls as well. */
+  .pss-government .government-select {
+    min-height: 44px;
+  }
+
+  .pss-help {
+    width: 44px;
+    height: 44px;
+  }
+}
