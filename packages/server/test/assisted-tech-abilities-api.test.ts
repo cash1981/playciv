@@ -135,7 +135,11 @@ describe('resources through args: Pottery, Philosophy and Education', () => {
     expect(mine.assistedActions[0]?.text).toMatch(/took a .* great person marker into reserve \(item number #\d+\)/)
     expect(mine.assistedActions[0]?.text).not.toContain(card.name)
 
-    const theirs = JSON.stringify(await view(t.gameId, t.other))
+    // Not the whole view: `you.availableActions` lists every great person as a not-owned row for everybody, so the
+    // name can be there whatever was drawn. Every field that could carry the held card is scanned instead
+    const other = await view(t.gameId, t.other) as View & { log: unknown; opponents: unknown; battle: unknown; lastBattle: unknown; drawTokens: unknown }
+    const { availableActions: _buttons, playableCards: _playable, ...theirYou } = other.you as NonNullable<View['you']> & { playableCards?: unknown }
+    const theirs = JSON.stringify({ you: theirYou, log: other.log, opponents: other.opponents, assistedActions: other.assistedActions, battle: other.battle, drawTokens: other.drawTokens })
     expect(theirs).not.toContain(card.name)
     expect(theirs).not.toContain(card.id)
     expect(theirs).not.toContain('"effect"')

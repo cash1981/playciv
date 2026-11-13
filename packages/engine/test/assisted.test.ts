@@ -103,7 +103,7 @@ describe('the registry', () => {
           ? 'SOT'
           : action.action === 'mathematics' || action.action === 'ballistics'
             ? 'ANY'
-            : action.action === 'civilService' || action.action === 'massMedia'
+            : action.action === 'writing' || action.action === 'civilService' || action.action === 'massMedia'
               ? 'ANY'
               : action.action === 'horsebackRiding'
                 ? 'TRADE'

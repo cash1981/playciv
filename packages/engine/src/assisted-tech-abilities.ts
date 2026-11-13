@@ -600,7 +600,7 @@ const mysticism = techAbility<'mysticism', { readonly target: Playerhand; readon
 interface CancelSpec {
   readonly kind: AssistedActionKind
   readonly techName: string
-  readonly phase: 'CM' | 'ANY'
+  readonly phase: 'ANY'
   /** What it cancels, for the line: "a city action". */
   readonly what: string
   /** A rule that goes with it ("the resources spent on it are lost"), or `''`. */
@@ -608,7 +608,7 @@ interface CancelSpec {
 }
 
 const CANCELS: readonly CancelSpec[] = [
-  { kind: 'writing', techName: 'Writing', phase: 'CM', what: 'a city action', rule: '' },
+  { kind: 'writing', techName: 'Writing', phase: 'ANY', what: 'a city action', rule: '' },
   { kind: 'civilService', techName: 'Civil Service', phase: 'ANY', what: 'a culture event', rule: '' },
   { kind: 'massMedia', techName: 'Mass Media', phase: 'ANY', what: 'a resource ability', rule: ', and the resources spent on it are lost' },
 ]

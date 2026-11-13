@@ -926,10 +926,11 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
 - **Mysticism** (Spy): the opponent loses one coin token on the counter the player names. The counters that hold tokens are
   the ones a coin can be invested from (`INVESTABLE_COIN_SOURCES`; printed coins and wonder coins are not tokens), read from
   the public status board. Refused when the opponent holds no coin there. The undo gives the coin back.
-- **Cancels** (Writing: Spy, City Management; Civil Service and Mass Media: Spy, Any Time; Mass Media says the resources of the
+- **Cancels** (Writing, Civil Service, Mass Media: Spy, any open phase; Writing is City Management on its card but players
+  act at different paces and nothing is blocked anyway (human, 2026-11-13); Mass Media says the resources of the
   cancelled ability are lost): the Spy is paid, the other player and free text for what is cancelled are logged. The game
   has no pending action, so it never blocks the cancelled thing: the other player undoes it with the vote or corrects it by
-  hand, and the line says so. Writing needs the canceller's own City Management to be open.
+  hand, and the line says so.
 - **Monarchy** (Silk, City Management): `obsolete` is only logged (obsolescence is not tracked). `kill` takes one random
   unit card from the chosen opponent's hand with the game's seed and discards it. A unit already placed in an arena is not
   a standing force and cannot be picked. A discard is open information, so the line names the unit in full with its item
