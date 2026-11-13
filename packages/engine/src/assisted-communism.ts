@@ -7,7 +7,7 @@
 import { isMapCell } from './board.js'
 import { squareLabel } from './build-options.js'
 import { COMMUNISM_USAGE_KEY } from './communism.js'
-import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendActionResource } from './assisted-resources.js'
 import {
   REPEAT_NOTE,
   blocked,
@@ -39,6 +39,7 @@ export const communism: AssistedActionDefinition = {
   usageKey: COMMUNISM_USAGE_KEY,
   phase: 'MOVEMENT',
   group: 'Resource abilities',
+  cost: ['Spy'],
 
   availability(state, playerId) {
     const player = playerOf(state, playerId)
@@ -70,7 +71,7 @@ export const communism: AssistedActionDefinition = {
     if (openPhaseOf(state, player.playerId) !== 'MOVEMENT') {
       return err(rejected('communism', blocked('wrong-phase', PHASE_REASON)))
     }
-    const spend = spendResource(state, player.playerId, 'Spy', context.at)
+    const spend = spendActionResource(state, player.playerId, 'Spy', context)
     if (!spend.ok) {
       return err(rejected('communism', blocked('needs-resource', 'You need a Spy token.')))
     }
@@ -96,7 +97,7 @@ export const communism: AssistedActionDefinition = {
   reverse(state, player, record, at) {
     const effect = record.effect
     if (effect.kind !== 'communism') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-    const returned = returnResource(state, player, effect.spent, at)
+    const returned = returnResource(state, player, effect.spent, at, record.logId)
     if (!returned.ok) return returned
     return ok({
       state: returned.value,

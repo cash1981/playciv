@@ -49,7 +49,7 @@ import {
   restoreDrawnCards,
   reverseAdvanceEffect,
 } from './assisted-culture.js'
-import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendActionResource } from './assisted-resources.js'
 import { startOfTurnGate, statGainAction } from './assisted-sot.js'
 import type { StatGainSpec } from './assisted-sot.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
@@ -447,6 +447,7 @@ const NOTES: readonly NoteSpec[] = [
 function noteAction(spec: NoteSpec): AssistedActionDefinition {
   return {
     ...shared(spec),
+    ...(spec.resource === undefined ? {} : { cost: [spec.resource] }),
 
     availability: availabilityOf(
       spec,
@@ -461,12 +462,12 @@ function noteAction(spec: NoteSpec): AssistedActionDefinition {
       let spent: SpentResource | null = null
       let logText = spec.logText
       if (spec.resource !== undefined) {
-        const paid = spendResource(state, player.playerId, spec.resource, context.at)
+        const paid = spendActionResource(state, player.playerId, spec.resource, context)
         if (!paid.ok) return err(rejected(kindOf(spec.id), blocked('needs-resource', `You need a ${spec.resource} token to use ${spec.label}.`)))
         working = paid.value.state
         spent = paid.value.spent
-        // "spent a Wheat to change ..." names the payment; a culture card played as the resource is named instead
-        if (spent.kind === 'card') logText = logText.replace(/^spent an? [A-Za-z]+/, paid.value.said)
+        // Keep plain board-token wording, but name the actual held item or played culture card.
+        if (spent.kind !== 'piece') logText = logText.replace(/^spent an? [A-Za-z]+/, paid.value.said)
       }
       const used = markUsed(working, player, opened.turn, spec)
       const logged = announce(used, player, context, `${player.username} used ${spec.label}: ${logText}`)
@@ -482,7 +483,7 @@ function noteAction(spec: NoteSpec): AssistedActionDefinition {
       if (effect.kind !== 'sotNote') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
       let working = state
       if (effect.spent !== null) {
-        const returned = returnResource(state, player, effect.spent, at)
+        const returned = returnResource(state, player, effect.spent, at, record.logId)
         if (!returned.ok) return returned
         working = returned.value
       }

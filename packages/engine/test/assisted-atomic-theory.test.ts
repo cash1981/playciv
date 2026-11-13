@@ -19,7 +19,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { toPlayerView } from '../src/state.js'
 import type { AssistedActionKind, GameState } from '../src/state.js'
 
-import { player, withHutInHand } from './assisted-fixture.js'
+import { player, resourcePattern, resourceText, withHutInHand } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-13T12:00:00.000Z'
@@ -102,7 +102,7 @@ describe('Atomic Theory: an extra action with each city (Uranium, City Managemen
 
     const used = unwrap(press(state, 'atomicTheory', { mode: 'extraActions' }))
     expect(hasHut(used, 'Uranium')).toBe(false)
-    expect(used.log.at(-1)?.publicLog).toBe('cash1981 used Atomic Theory: spent 1 Uranium, so each of their cities may take one more city action this turn')
+    expect(used.log.at(-1)?.publicLog).toBe(`cash1981 used Atomic Theory: spent 1 ${resourceText(state, 'Uranium')}, so each of their cities may take one more city action this turn`)
     expect(usedKeys(used)).toContain('card:Atomic Theory')
 
     const one = unwrap(devote(used, capital, 'req-a'))
@@ -229,7 +229,7 @@ describe('Atomic Theory: nuke a non-capital city (Uranium, Movement)', () => {
     expect(used.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(true)
     expect(idsAt(used, 'figures/bluearmy')).toHaveLength(1)
     const line = used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog ?? ''
-    expect(line).toMatch(/^cash1981 used Atomic Theory: spent 1 Uranium, nuking City J10 of Karandras1: the city is destroyed along with /)
+    expect(line).toMatch(new RegExp(`^cash1981 used Atomic Theory: spent 1 ${resourcePattern(state, 'Uranium')}, nuking City J10 of Karandras1: the city is destroyed along with `))
     for (const name of ['Library (K10)', 'Big Ben', 'Blue army (I10)', 'Scientist (J9)']) expect(line).toContain(name)
     expect(usedKeys(used)).toContain('card:Atomic Theory')
     // The board's own Undo does not take one of the removals alone

@@ -1,10 +1,10 @@
 /**
  * Paying a resource for an assisted action, and putting it back on an undo.
  *
- * A resource is paid with a token first (a hut in the hand, then a piece in the player's area) and, when the
- * player has none, with a culture card in the hand that can be played as that resource (A Gift from Afar,
+ * Automatic payments use a token first (a hut/village in the hand, then a piece in the player's area) and, when the
+ * player has none, a culture card in the hand that can be played as that resource (A Gift from Afar,
  * A Generous Gift, A Princely Gift: `card-timing.ts`), which is discarded as `playCard` discards it (human,
- * 2026-11-13). Every resource ability pays through here, so each benefits.
+ * 2026-11-13). Explicit payments may choose a card even with tokens held. Every resource ability pays through here.
  *
  * Its own file so the Start of Turn abilities that cost a resource (Ecology) and the
  * cards of `assisted.ts` share one body. Imports only what the registry already
@@ -12,9 +12,10 @@
  */
 
 import { removePiece } from './actions/board.js'
-import { READY, blocked, placeBack, playerOf, waitingCardIds, withPlayerHand } from './assisted-core.js'
-import type { AssistedAvailability } from './assisted-core.js'
+import { READY, blocked, placeBack, playerOf, restoreSupplyBlock, waitingCardIds, withPlayerHand } from './assisted-core.js'
+import type { ApplyContext, AssistedAvailability } from './assisted-core.js'
 import { areaAt, playerAreas } from './board.js'
+import type { BoardPiece } from './board.js'
 import { cardPlayRuleOf } from './card-timing.js'
 import type { EngineError } from './errors.js'
 import { itemName } from './item.js'
@@ -25,6 +26,18 @@ import { err, ok } from './result.js'
 import type { GameState, Playerhand, SpentResource } from './state.js'
 
 const normalize = (name: string): string => name.trim().toLowerCase()
+
+export interface ResourcePaymentChoice {
+  readonly resource: string
+  readonly kind: 'hut' | 'village' | 'piece' | 'card'
+  readonly id: string
+}
+
+export interface ResourcePaymentOption {
+  readonly choice: ResourcePaymentChoice
+  readonly label: string
+  readonly usesCurie?: boolean
+}
 
 /** "Iron", "Iron and Wheat", "Iron, Wheat and Silk": a list as the public lines say it. */
 export const joinList = (names: readonly string[]): string =>
@@ -46,30 +59,51 @@ const AFAR_NOTE = 'another player of your choice also gets a coin token: give it
 const noteOf = (name: string): string => (name === AFAR ? AFAR_NOTE : '')
 
 /**
- * The culture card in the player's hand that would be played as `resource`, or `undefined`: a culture card that
+ * The culture cards in the player's hand that can be played as `resource`: cards that
  * is not used, is not still a candidate of a pending reward (those are not the player's yet) and whose play rule
- * lists the resource. The card with the fewest allowed resources is played first, so A Princely Gift, the only
+ * list the resource. The card with the fewest allowed resources is played first, so A Princely Gift, the only
  * Uranium card, is kept for last; ties go to the first in hand order.
  */
-function findResourceCard(player: Playerhand, resource: string): Item | undefined {
+function resourceCards(player: Playerhand, resource: string): readonly Item[] {
   const wanted = normalize(resource)
   const waiting = waitingCardIds(player)
   const allowed = (item: Item): readonly string[] => cardPlayRuleOf(itemName(item)).resources
   const candidates = player.items.filter(
     (item) =>
       item.kind.startsWith('culture') &&
+      item.ownerId === player.playerId &&
       !item.used &&
       !waiting.has(item.id) &&
       allowed(item).some((name) => normalize(name) === wanted),
   )
-  return candidates.reduce<Item | undefined>(
-    (best, item) => (best === undefined || allowed(item).length < allowed(best).length ? item : best),
-    undefined,
+  return candidates.sort((a, b) => allowed(a).length - allowed(b).length)
+}
+
+/** All physical payments of this kind, in the legacy token-first preference order. */
+function physicalPayments(state: GameState, playerId: string, resource: string, tokensOnly: boolean): readonly SpentResource[] {
+  const player = playerOf(state, playerId)
+  if (player === undefined) return []
+  const wanted = normalize(resource)
+  const waiting = waitingCardIds(player)
+  const held: SpentResource[] = player.items.flatMap((item) =>
+    (item.kind === 'hut' || item.kind === 'village') && item.ownerId === playerId && !item.used && !waiting.has(item.id) && normalize(item.name) === wanted
+      ? [{ kind: item.kind, resource, itemId: item.id }]
+      : [],
   )
+  const areas = playerAreas(state.board, state.players)
+  const pieces: SpentResource[] = state.board.pieces.flatMap((piece) =>
+    piece.category === 'resource' &&
+    piece.assetId === `resources/${wanted}` &&
+    areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2)?.playerId === playerId
+      ? [{ kind: 'piece', resource, piece }]
+      : [],
+  )
+  const cards: SpentResource[] = tokensOnly ? [] : resourceCards(player, resource).map((card) => ({ kind: 'card', resource, itemId: card.id }))
+  return [...held, ...pieces, ...cards]
 }
 
 /**
- * The payment a resource would be made with, without paying it: a token (a hut in the player's hand comes
+ * The payment a resource would be made with, without paying it: a token (a hut/village in the player's hand comes
  * first, then a `resources/<name>` piece whose centre lies in the player's own area; a piece outside every area
  * is nobody's and is never taken), else, unless `tokensOnly`, a culture card that can be played as the resource.
  * Marie Curie: a Uranium spend may use the resource she armed instead.
@@ -85,35 +119,39 @@ export function findResourcePayment(
 
   const curieSubstitute = resource === 'Uranium' ? player.curieSubstitute ?? undefined : undefined
   const paid = curieSubstitute ?? resource
-  const wanted = normalize(paid)
-  const hut = player.items.find(
-    (item) => item.kind === 'hut' && !item.used && normalize(item.name) === wanted,
-  )
-  if (hut !== undefined) {
-    return {
-      kind: 'hut',
-      resource: paid,
-      itemId: hut.id,
-      ...(curieSubstitute === undefined ? {} : { curieSubstitute }),
-    }
-  }
+  const payment = physicalPayments(state, playerId, paid, tokensOnly)[0]
+  return payment === undefined ? undefined : { ...payment, ...(curieSubstitute === undefined ? {} : { curieSubstitute }) }
+}
 
-  const areas = playerAreas(state.board, state.players)
-  const piece = state.board.pieces.find(
-    (candidate) =>
-      candidate.category === 'resource' &&
-      candidate.assetId === `resources/${wanted}` &&
-      areaAt(areas, candidate.x + candidate.width / 2, candidate.y + candidate.height / 2)
-        ?.playerId === playerId,
-  )
-  if (piece !== undefined) {
-    return { kind: 'piece', resource: paid, piece, ...(curieSubstitute === undefined ? {} : { curieSubstitute }) }
-  }
-  if (tokensOnly) return undefined
-  const card = findResourceCard(player, paid)
-  return card === undefined
-    ? undefined
-    : { kind: 'card', resource: paid, itemId: card.id, ...(curieSubstitute === undefined ? {} : { curieSubstitute }) }
+const paymentId = (payment: SpentResource): string => payment.kind === 'piece' ? payment.piece.id : payment.itemId
+
+/** Explicit choices retain normal Uranium options as well as the armed, one-shot substitutes. */
+function selectablePayments(state: GameState, playerId: string, resource: string): readonly SpentResource[] {
+  const normal = physicalPayments(state, playerId, resource, false)
+  const substitute = resource === 'Uranium' ? playerOf(state, playerId)?.curieSubstitute : undefined
+  if (substitute === undefined || substitute === null) return normal
+  // A card that can pay Uranium directly needs no substitution. Its wire choice is the same either way.
+  return [...normal, ...physicalPayments(state, playerId, substitute, false)
+    .filter((payment) => !normal.some((other) => other.kind === payment.kind && paymentId(other) === paymentId(payment)))
+    .map((payment) => ({ ...payment, curieSubstitute: substitute }))]
+}
+
+/** Private, viewer-only choices, derived from exactly the rules used to consume explicit payments. */
+export function resourcePaymentOptions(state: GameState, playerId: string, cost: readonly (string | null)[]): readonly ResourcePaymentOption[] {
+  const resources = cost.includes(null) ? ANY_RESOURCES : [...new Set(cost.filter((resource): resource is string => resource !== null))]
+  const player = playerOf(state, playerId)
+  if (player === undefined) return []
+  return resources.flatMap((resource) => selectablePayments(state, playerId, resource).map((payment) => {
+    const item = payment.kind === 'piece' ? undefined : player.items.find((candidate) => candidate.id === payment.itemId)
+    const label = payment.kind === 'card'
+      ? `${item === undefined ? 'Culture card' : itemName(item)} (as ${resource})`
+      : `${payment.resource} (${payment.kind === 'hut' ? 'hand' : payment.kind === 'village' ? 'village in hand' : 'player area'})${payment.curieSubstitute === undefined ? '' : ` (as ${resource})`}`
+    return {
+      choice: { resource, kind: payment.kind, id: paymentId(payment) },
+      label,
+      ...(payment.curieSubstitute === undefined ? {} : { usesCurie: true }),
+    }
+  }))
 }
 
 /** The token (never a card) a resource would be paid with. */
@@ -122,16 +160,31 @@ export function findResourceToken(state: GameState, playerId: string, resource: 
 }
 
 /**
- * How a payment is named in the public line of the action: "spent 1 Iron", or "played <card> item number #N as
+ * How a payment is named in the public line: "spent 1 Iron" for a board resource,
+ * "spent 1 Wheat (hut) item number #N" for a held token, or "played <card> item number #N as
  * <resource>", the card named with its item number as `playCard` names a played card (a played card is open
  * information). A Gift from Afar adds that its coin token goes to another player by hand.
  */
 export function paymentText(state: GameState, player: Playerhand, spent: SpentResource): string {
-  if (spent.kind !== 'card') return `spent 1 ${spent.resource}`
+  if (spent.kind !== 'card') return `spent 1 ${tokenText(state, player, spent)}`
   const item = player.items.find((candidate) => candidate.id === spent.itemId) ?? state.discardedItems.find((candidate) => candidate.id === spent.itemId)
   if (item === undefined) return `played a card as ${spent.resource}`
   const note = noteOf(itemName(item))
   return `played ${itemName(item)} ${itemNumberText(state.logSecret, player.username, item)} as ${spent.resource}${note === '' ? '' : ` (${note})`}`
+}
+
+/** Held resources become public only when paid; board resources keep their plain resource wording. */
+function tokenText(state: GameState, player: Playerhand, spent: Exclude<SpentResource, { readonly kind: 'card' }>): string {
+  if (spent.kind === 'piece') return spent.resource
+  const item = player.items.find((candidate) => candidate.id === spent.itemId) ?? state.discardedItems.find((candidate) => candidate.id === spent.itemId)
+  return `${spent.resource} (${spent.kind})${item === undefined ? '' : ` ${itemNumberText(state.logSecret, player.username, item)}`}`
+}
+
+/** Shared by explicit, Any and each payments; repeated held items keep their separate numbers. */
+function paymentsText(state: GameState, player: Playerhand, spent: readonly SpentResource[]): string {
+  const tokens = spent.flatMap((payment) => payment.kind === 'card' ? [] : [tokenText(state, player, payment)])
+  const cards = spent.flatMap((payment) => payment.kind === 'card' ? [paymentText(state, player, payment)] : [])
+  return [...(tokens.length === 0 ? [] : [`spent ${joinList(tokens)}`]), ...cards].join(' and ')
 }
 
 /** What an undo says came back: "the Spy token" or "the card played as Spy". */
@@ -146,12 +199,12 @@ const readyWith = (warning: string): AssistedAvailability => ({ status: 'ready',
  * warning is the viewer's own: availability is computed for the viewer only.
  */
 export function resourceAvailability(state: GameState, playerId: string, resource: string): AssistedAvailability {
-  const payment = findResourcePayment(state, playerId, resource)
+  const payment = findResourcePayment(state, playerId, resource) ?? selectablePayments(state, playerId, resource)[0]
   if (payment === undefined) {
     const article = /^[AEIOU]/.test(resource) && resource !== 'Uranium' ? 'an' : 'a'
     return blocked(
       'needs-resource',
-      `You need ${article} ${resource} token: a ${resource} hut in your hand or a ${resource} piece in your player area` +
+      `You need ${article} ${resource} token: a ${resource} hut or village in your hand or a ${resource} piece in your player area` +
         (cardCanPay(resource) ? ', or a culture card that can be played as that resource.' : '.'),
     )
   }
@@ -176,7 +229,8 @@ export interface SpendOutcome {
 }
 
 /**
- * Pays one resource. A hut goes to `discardedItems` (hidden, as `discardItem` leaves it); a piece is removed from
+ * Pays one resource. A hut/village goes to `discardedItems` (hidden, as `discardItem` leaves it), removing at most
+ * one same-kind, collected icon in the player's area. A piece is removed from
  * the board through the board history, which is "back to stock" because supply is counted from the pieces on the
  * board; a culture card is discarded like a played card (`playCard`). `NO_RESOURCE` when the player has none.
  */
@@ -186,23 +240,45 @@ export function spendResource(
   resource: string,
   at?: string,
   tokensOnly = false,
+  choice?: ResourcePaymentChoice,
 ): Result<SpendOutcome, 'NO_RESOURCE'> {
   const player = playerOf(state, playerId)
-  const token = findResourcePayment(state, playerId, resource, tokensOnly)
+  const token = choice === undefined
+    ? findResourcePayment(state, playerId, resource, tokensOnly)
+    : choice.resource !== resource ? undefined : selectablePayments(state, playerId, resource).find((payment) =>
+      payment.kind === choice.kind && paymentId(payment) === choice.id && (!tokensOnly || payment.kind !== 'card'),
+    )
   if (player === undefined || token === undefined) return err('NO_RESOURCE')
 
-  if (token.kind === 'hut' || token.kind === 'card') {
+  if (token.kind !== 'piece') {
     const held = player.items.find((item) => item.id === token.itemId)
     if (held === undefined) return err('NO_RESOURCE')
+    let working = state
+    let spent = token
+    if (token.kind !== 'card') {
+      const areas = playerAreas(state.board, state.players)
+      const tokenPiece = state.board.pieces.find((piece) =>
+        piece.category === 'resource' &&
+        piece.assetId === `resources/${held.kind}` &&
+        areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2)?.playerId === playerId &&
+        !(state.underTokens ?? []).some((bound) => bound.pieceId === piece.id),
+      )
+      if (tokenPiece !== undefined) {
+        const removed = removePiece(state, { playerId, pieceId: tokenPiece.id, ...(at === undefined ? {} : { at }) })
+        if (!removed.ok) return err('NO_RESOURCE')
+        working = removed.value
+        spent = { ...token, tokenPiece }
+      }
+    }
     const next: GameState = {
-      ...withPlayerHand(state, {
+      ...withPlayerHand(working, {
         ...player,
         items: player.items.filter((item) => item.id !== held.id),
         ...(token.curieSubstitute === undefined ? {} : { curieSubstitute: null }),
       }),
-      discardedItems: [...state.discardedItems, { ...held, hidden: true }],
+      discardedItems: [...working.discardedItems, { ...held, hidden: true }],
     }
-    return ok({ state: next, spent: token, said: paymentText(next, player, token) })
+    return ok({ state: next, spent, said: paymentText(next, player, spent) })
   }
 
   const removed = removePiece(state, {
@@ -222,29 +298,57 @@ export function spendResource(
   })
 }
 
-/** Puts a spent payment back: the hut or card into the hand, or the piece onto the board where it was. */
+/** The single-resource actions all read choices here rather than accidentally ignoring their payload. */
+export function spendActionResource(state: GameState, playerId: string, resource: string, context: ApplyContext): Result<SpendOutcome, 'NO_RESOURCE'> {
+  const payments = context.payload?.payments
+  if (payments !== undefined && !parseResourcePayments(payments, [resource]).ok) return err('NO_RESOURCE')
+  return spendResource(state, playerId, resource, context.at, false, payments?.[0])
+}
+
+/** Puts back the exact held item and any collected icon, or the board resource. Callers pass the owning action's logId for refusals. */
 export function returnResource(
   state: GameState,
   player: Playerhand,
   spent: SpentResource,
   at: string | null,
+  logId = '',
 ): Result<GameState, EngineError> {
+  const blocked = resourceRestoreBlock(state, [spent])
+  if (blocked !== undefined) return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId, reason: blocked })
   const restoredPlayer =
     spent.curieSubstitute === undefined ? player : { ...player, curieSubstitute: spent.curieSubstitute }
-  if (spent.kind === 'hut' || spent.kind === 'card') {
+  if (spent.kind !== 'piece') {
     const inDiscard = state.discardedItems.find((item) => item.id === spent.itemId)
     const inDeck = state.items.find((item) => item.id === spent.itemId)
     const item = inDiscard ?? inDeck
     if (item === undefined) {
-      return err({ kind: 'ITEM_NOT_FOUND', ...(spent.kind === 'hut' ? { sheetName: 'HUTS' as const } : {}) })
+      return err({ kind: 'ITEM_NOT_FOUND', ...(spent.kind === 'card' ? {} : { sheetName: spent.kind === 'hut' ? 'HUTS' as const : 'VILLAGES' as const }) })
     }
-    return ok({
+    const restored = {
       ...withPlayerHand(state, { ...restoredPlayer, items: [...player.items, { ...item, hidden: true }] }),
       discardedItems: state.discardedItems.filter((candidate) => candidate.id !== item.id),
       items: state.items.filter((candidate) => candidate.id !== item.id),
-    })
+    }
+    return ok(spent.kind === 'card' || spent.tokenPiece === undefined ? restored : placeBack(restored, restoredPlayer, spent.tokenPiece, at))
   }
   return ok(placeBack(withPlayerHand(state, restoredPlayer), restoredPlayer, spent.piece, at))
+}
+
+const restoredPiece = (spent: SpentResource): BoardPiece | undefined =>
+  spent.kind === 'piece' ? spent.piece : spent.kind === 'card' ? undefined : spent.tokenPiece
+
+/** Check the entire refund before placeBack, which otherwise silently accepts an occupied ID. */
+function resourceRestoreBlock(state: GameState, spent: readonly SpentResource[]): string | undefined {
+  const pieces = spent.flatMap((payment) => {
+    const piece = restoredPiece(payment)
+    return piece === undefined ? [] : [piece]
+  })
+  const ids = new Set(state.board.pieces.map((piece) => piece.id))
+  for (const piece of pieces) {
+    if (ids.has(piece.id)) return `The ${piece.label} piece is already on the board, so this payment cannot be returned. Undo its placement first.`
+    ids.add(piece.id)
+  }
+  return restoreSupplyBlock(state, pieces)
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +364,60 @@ export const ANY_RESOURCES: readonly string[] = ['Incense', 'Iron', 'Silk', 'Whe
 /** The canonical name of a resource a payload named (case and spacing are forgiven), or `undefined`. */
 export const anyResourceName = (name: unknown): string | undefined =>
   typeof name === 'string' ? ANY_RESOURCES.find((resource) => normalize(resource) === normalize(name)) : undefined
+
+/** Shared engine/API shape and slot validation. Eligibility is checked against fresh state when spending. */
+export function parseResourcePayments(raw: unknown, cost: readonly (string | null)[] | undefined): Result<readonly ResourcePaymentChoice[], string> {
+  if (cost === undefined) return err('This action does not take resource payments.')
+  if (!Array.isArray(raw) || raw.length !== cost.length) return err(`payments must contain exactly ${cost.length} choices.`)
+  const choices: ResourcePaymentChoice[] = []
+  const ids = new Set<string>()
+  const entries: readonly unknown[] = raw
+  for (const [index, value] of entries.entries()) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return err('Each payment must be a resource, kind and id.')
+    const resource = 'resource' in value ? value.resource : undefined
+    const kind = 'kind' in value ? value.kind : undefined
+    const id = 'id' in value ? value.id : undefined
+    if (
+      Object.keys(value).length !== 3 ||
+      Object.keys(value).some((key) => !['resource', 'kind', 'id'].includes(key)) ||
+      typeof resource !== 'string' || !ANY_RESOURCES.includes(resource) ||
+      (kind !== 'hut' && kind !== 'village' && kind !== 'piece' && kind !== 'card') ||
+      typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,64}$/.test(id)
+    ) return err('Each payment needs a known resource, kind (hut, village, piece or card) and a valid id.')
+    const required = cost[index]
+    if (required !== null && resource !== required) return err(`Payment ${index + 1} must pay ${required ?? 'a resource'}.`)
+    if (ids.has(id)) return err('The same physical token or card cannot pay twice.')
+    ids.add(id)
+    choices.push({ resource, kind, id })
+  }
+  return ok(choices)
+}
+
+/** Sequential immutable scratch payments: no fallback, no reused card, and no partial result on failure. */
+export function spendChosenResources(
+  state: GameState,
+  playerId: string,
+  cost: readonly (string | null)[],
+  payments: readonly ResourcePaymentChoice[],
+  at?: string,
+): Result<SpendAnyOutcome, string> {
+  const checked = parseResourcePayments(payments, cost)
+  if (!checked.ok) return checked
+  let current = state
+  const spent: SpentResource[] = []
+  for (const choice of checked.value) {
+    const paid = spendResource(current, playerId, choice.resource, at, false, choice)
+    if (!paid.ok) return err('That resource payment is no longer available.')
+    current = paid.value.state
+    spent.push(paid.value.spent)
+  }
+  const holder = playerOf(state, playerId)
+  return ok({
+    state: current,
+    spent,
+    said: holder === undefined ? '' : paymentsText(current, holder, spent),
+  })
+}
 
 /**
  * Whether the player can pay `count` resources of any kind together, for the availability of an action: each is
@@ -281,9 +439,25 @@ export function anyResourcesAvailability(state: GameState, playerId: string, cou
     }
   }
   if (spent.length < count) {
+    // Legacy automatic Uranium always looks for the armed substitute, even when only real Uranium remains.
+    // The explicit picker can still pay with that Uranium. Keep the automatic algorithm and its warnings
+    // unchanged whenever it succeeds, but do not hide otherwise-payable explicit choices.
+    const seen = new Set<string>()
+    const choices: ResourcePaymentChoice[] = []
+    const options = resourcePaymentOptions(state, playerId, [null])
+      .filter((option) => option.usesCurie !== true)
+      .sort((a, b) => Number(a.choice.kind === 'card') - Number(b.choice.kind === 'card'))
+    for (const option of options) {
+      if (seen.has(option.choice.id)) continue
+      seen.add(option.choice.id)
+      choices.push(option.choice)
+      if (choices.length === count) break
+    }
+    const explicit = spendChosenResources(state, playerId, Array.from({ length: count }, () => null), choices)
+    if (explicit.ok) return paidAvailability(state, playerId, explicit.value.spent)
     return blocked(
       'needs-resource',
-      `You need ${count} resources of your choice: resource huts in your hand or resource pieces in your player area, or culture cards that can be played as a resource.`,
+      `You need ${count} resources of your choice: resource huts or villages in your hand or resource pieces in your player area, or culture cards that can be played as a resource.`,
     )
   }
   return paidAvailability(state, playerId, spent)
@@ -311,7 +485,7 @@ export interface SpendAnyOutcome {
 
 /**
  * Pays one resource for each name in `resources`; the names are a preference, not a requirement. Each name is paid
- * by its own token first; then each one left over by any other unspent token the player holds (a hut or a piece,
+ * by its own token first; then each one left over by any other unspent token the player holds (a hut, village or piece,
  * of the six kinds); and only what tokens cannot cover is paid with culture cards (the fewest-allowed card first,
  * whatever was named), never one card twice. A card is never burned while any token could pay. `missing` is the first name left unpaid, and nothing is spent then.
  */
@@ -320,7 +494,12 @@ export function spendAnyResources(
   playerId: string,
   resources: readonly string[],
   at?: string,
+  payments?: readonly ResourcePaymentChoice[],
 ): Result<SpendAnyOutcome, { readonly missing: string }> {
+  if (payments !== undefined) {
+    const paid = spendChosenResources(state, playerId, resources.map(() => null), payments, at)
+    return paid.ok ? paid : err({ missing: resources[0] ?? '' })
+  }
   let current = state
   const slots: (SpentResource | undefined)[] = resources.map(() => undefined)
   const pay = (index: number, resource: string, tokensOnly: boolean): boolean => {
@@ -347,11 +526,7 @@ export function spendAnyResources(
   if (missingAt !== -1) return err({ missing: resources[missingAt] ?? '' })
   const spent = slots.filter((slot): slot is SpentResource => slot !== undefined)
   const holder = playerOf(state, playerId)
-  const tokens = spent.filter((payment) => payment.kind !== 'card').map((payment) => payment.resource)
-  const cards = spent.flatMap((payment) =>
-    payment.kind === 'card' && holder !== undefined ? [paymentText(current, holder, payment)] : [],
-  )
-  const said = [...(tokens.length === 0 ? [] : [`spent ${joinList(tokens)}`]), ...cards].join(' and ')
+  const said = holder === undefined ? '' : paymentsText(current, holder, spent)
   return ok({ state: current, spent, said })
 }
 
@@ -360,8 +535,8 @@ export function spendAnyResources(
 // ---------------------------------------------------------------------------
 
 /**
- * Pays one resource of each of the `kinds`, no choice left to the player: a token of the kind first (a hut, then a piece
- * in the player's area), else a culture card that can be played as that kind (`findResourceCard`: the fewest-allowed card
+ * Automatically pays one resource of each of the `kinds`: a token of the kind first (a hut/village, then a piece
+ * in the player's area), else a culture card that can be played as that kind (`resourceCards`: the fewest-allowed card
  * first, each card at most once, so several cards may be used when the player holds several). A token of another kind never
  * stands in. `missing` lists every kind neither can pay, and nothing is spent then.
  */
@@ -370,7 +545,12 @@ export function spendEachResource(
   playerId: string,
   kinds: readonly string[],
   at?: string,
+  payments?: readonly ResourcePaymentChoice[],
 ): Result<SpendAnyOutcome, { readonly missing: readonly string[] }> {
+  if (payments !== undefined) {
+    const paid = spendChosenResources(state, playerId, kinds, payments, at)
+    return paid.ok ? paid : err({ missing: kinds })
+  }
   let current = state
   const slots: (SpentResource | undefined)[] = kinds.map(() => undefined)
   for (const tokensOnly of [true, false]) {
@@ -386,11 +566,7 @@ export function spendEachResource(
   if (missing.length > 0) return err({ missing })
   const spent = slots.filter((slot): slot is SpentResource => slot !== undefined)
   const holder = playerOf(state, playerId)
-  const tokens = spent.filter((payment) => payment.kind !== 'card').map((payment) => payment.resource)
-  const cards = spent.flatMap((payment) =>
-    payment.kind === 'card' && holder !== undefined ? [paymentText(current, holder, payment)] : [],
-  )
-  const said = [...(tokens.length === 0 ? [] : [`spent ${joinList(tokens)}`]), ...cards].join(' and ')
+  const said = holder === undefined ? '' : paymentsText(current, holder, spent)
   return ok({ state: current, spent, said })
 }
 
@@ -398,7 +574,7 @@ export function spendEachResource(
 export function missingEachText(missing: readonly string[]): string {
   const noCard = missing.filter((kind) => !cardCanPay(kind))
   return (
-    `You lack ${joinList(missing)}: each needs a resource token (a hut in your hand or a piece in your player area) or a culture card that can be played as it.` +
+    `You lack ${joinList(missing)}: each needs a resource token (a hut or village in your hand or a piece in your player area) or a culture card that can be played as it.` +
     (noCard.length === 0 ? '' : ` No culture card can be played as ${joinList(noCard)}, so ${noCard.length === 1 ? 'a token is' : 'tokens are'} always needed.`)
   )
 }
@@ -418,11 +594,14 @@ export function returnResources(
   player: Playerhand,
   spent: readonly SpentResource[],
   at: string | null,
+  logId = '',
 ): Result<GameState, EngineError> {
+  const blocked = resourceRestoreBlock(state, spent)
+  if (blocked !== undefined) return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId, reason: blocked })
   let current = state
   let holder = player
   for (const token of [...spent].reverse()) {
-    const returned = returnResource(current, holder, token, at)
+    const returned = returnResource(current, holder, token, at, logId)
     if (!returned.ok) return returned
     current = returned.value
     holder = playerOf(current, player.playerId) ?? holder

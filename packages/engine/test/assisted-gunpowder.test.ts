@@ -18,7 +18,7 @@ import { obsoletableWondersOf } from '../src/obsolete-wonders.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
-import { player, withHutInHand } from './assisted-fixture.js'
+import { player, resourcePattern, resourceText, withHutInHand } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-13T12:00:00.000Z'
@@ -125,7 +125,7 @@ describe('Gunpowder: obsolete an ancient or medieval wonder', () => {
       const used = unwrap(obsolete(state, id))
       expect(pieceOf(used, id)).toMatchObject({ ownerId: null, disabled: true })
       expect(hasHut(used, 'Iron') || hasHut(used, 'Wheat')).toBe(false)
-      expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toMatch(/^cash1981 used Gunpowder: spent Iron and Wheat, obsoleting .* of Karandras1: the wonder is disabled$/)
+      expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toMatch(new RegExp(`^cash1981 used Gunpowder: spent ${resourcePattern(state, 'Iron')} and ${resourcePattern(state, 'Wheat')}, obsoleting .* of Karandras1: the wonder is disabled$`))
       const entry = used.board.history.at(-1)
       const hand = unwrap(setWonderOwner(state, { playerId: CASH1981, pieceId: id, ownerId: null, disable: true }))
       expect(entry?.change).toEqual(hand.board.history.at(-1)?.change)
@@ -202,7 +202,7 @@ describe('Gunpowder: destroy a building', () => {
     expect(pieceOf(used, id)).toBeUndefined()
     expect(used.board.pieces).toHaveLength(state.board.pieces.length - 1)
     expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
-      "cash1981 used Gunpowder: spent Iron and Wheat, destroying Library on K10 (in Karandras1's outskirts)",
+      `cash1981 used Gunpowder: spent ${resourceText(state, 'Iron')} and ${resourceText(state, 'Wheat')}, destroying Library on K10 (in Karandras1's outskirts)`,
     )
     const entry = used.board.history.at(-1)
     expect(entry?.change).toMatchObject({ kind: 'remove', piece: { id } })

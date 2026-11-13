@@ -25,7 +25,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { toPlayerView } from '../src/state.js'
 import type { AssistedActionKind, GameState, Playerhand } from '../src/state.js'
 
-import { player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { player, resourcePattern, resourceText, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-13T12:00:00.000Z'
@@ -166,7 +166,7 @@ describe.each(BOOSTS)('%s (%s: Wheat, one city produces %i more this turn)', (ki
     expect(productionOf(state).estimate).toBe(5)
     const used = unwrap(press(state, kind, { cityPieceId: cityId(state) }))
     expect(hasHut(used, 'Wheat')).toBe(false)
-    expect(used.log.at(-1)?.publicLog).toMatch(new RegExp(`used ${tech}: spent 1 Wheat, so .* produces ${amount} extra production this turn`))
+    expect(used.log.at(-1)?.publicLog).toMatch(new RegExp(`used ${tech}: spent 1 ${resourcePattern(state, 'Wheat')}, so .* produces ${amount} extra production this turn`))
     expect(productionOf(used)).toMatchObject({ boost: amount, estimate: 5 + amount, effective: 5 + amount })
     expect(productionOf(used).modifiers).toContainEqual({ label: tech, amount, applied: true, note: 'This turn only.' })
     expect(buildOptionsOf(used, player(used))[0]?.production).toBe(5 + amount)
@@ -249,7 +249,7 @@ describe('Pottery (Any 2, City Management: one coin on the tech, max 4)', () => 
     expect(hasHut(used, 'Iron')).toBe(false)
     expect(hasHut(used, 'Wheat')).toBe(false)
     expect(player(used).stats.coinSources.pottery).toBe(1)
-    expect(used.log.at(-1)?.publicLog).toMatch(/used Pottery: spent Iron and Wheat and added 1 coin \(\d+\) to Pottery/)
+    expect(used.log.at(-1)?.publicLog).toMatch(new RegExp(`used Pottery: spent ${resourcePattern(used, 'Iron')} and ${resourcePattern(used, 'Wheat')} and added 1 coin \\(\\d+\\) to Pottery`))
     expect(assistedAvailability(used, CASH1981, 'pottery').status).toBe('used')
     expect(toPlayerView(used, KARANDRAS1).opponents.find((opponent) => opponent.playerId === CASH1981)?.stats.coinSources.pottery).toBe(1)
   })
@@ -275,7 +275,7 @@ describe('Pottery (Any 2, City Management: one coin on the tech, max 4)', () => 
     const state = withCardInHand(huts(cmTurn('Pottery'), 'Iron'), 'A Generous Gift').state
     expect(assistedAvailability(state, CASH1981, 'pottery')).toMatchObject({ status: 'ready', warning: expect.stringContaining('A Generous Gift') })
     const used = unwrap(press(state, 'pottery', { resources: ['Iron', 'Wheat'] }))
-    expect(used.log.at(-1)?.publicLog).toMatch(/spent Iron and played A Generous Gift item number #\d+ as /)
+    expect(used.log.at(-1)?.publicLog).toMatch(new RegExp(`spent ${resourcePattern(state, 'Iron')} and played A Generous Gift item number #\\d+ as `))
     const again = huts(used, 'Silk', 'Wheat')
     expect(refused(press(again, 'pottery', { resources: ['Silk', 'Wheat'] }, 'req-2'))).toBe('ASSISTED_ACTION_REJECTED')
     expect(player(unwrap(press(again, 'pottery', { resources: ['Silk', 'Wheat'] }, 'req-2', true))).stats.coinSources.pottery).toBe(2)
@@ -320,7 +320,7 @@ describe('Philosophy (Any 3, City Management: a random great person)', () => {
     expect(used.board.pieces.length).toBe(state.board.pieces.length + 1)
 
     const publicLine = used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog ?? ''
-    expect(publicLine).toMatch(/used Philosophy: spent Iron, Wheat and Silk, and took a .* great person marker into reserve \(item number #\d+\)/)
+    expect(publicLine).toMatch(new RegExp(`used Philosophy: spent ${resourcePattern(state, 'Iron')}, ${resourcePattern(state, 'Wheat')} and ${resourcePattern(state, 'Silk')}, and took a .* great person marker into reserve \\(item number #\\d+\\)`))
     expect(publicLine).not.toContain(top.name)
 
     // The owner reads the name in their own log; no other view holds the name, the card or its id
@@ -397,7 +397,7 @@ describe('Education (Incense, Iron, Silk and Wheat, City Management: a free tech
     const used = unwrap(press(ready(), 'education', { resources: ['Spy', 'Spy', 'Spy', 'Spy'] }))
     expect(FOUR.map((name) => hasHut(used, name))).toEqual([false, false, false, false])
     expect(player(used).techGrants).toEqual([{ id: 'req-1', source: 'Education', level: null, turnNumber: 1, phase: 'CM' }])
-    expect(used.log.at(-1)?.publicLog).toMatch(/used Education: spent Incense, Iron, Silk and Wheat, and may learn a new tech of their choice for free/)
+    expect(used.log.at(-1)?.publicLog).toMatch(new RegExp(`used Education: spent ${resourcePattern(used, 'Incense')}, ${resourcePattern(used, 'Iron')}, ${resourcePattern(used, 'Silk')} and ${resourcePattern(used, 'Wheat')}, and may learn a new tech of their choice for free`))
     expect(toPlayerView(used, CASH1981).you?.startOfTurn?.techGrants).toEqual([{ id: 'req-1', source: 'Education', level: null, phase: 'CM' }])
 
     // Choosing and revealing a tech now spends it
@@ -453,7 +453,7 @@ describe('Education (Incense, Iron, Silk and Wheat, City Management: a free tech
     expect(availability).toMatchObject({ warning: expect.stringContaining('give it by hand') })
     const used = unwrap(press(state, 'education'))
     const line = used.log.at(-1)?.publicLog ?? ''
-    expect(line).toMatch(/spent Incense and Wheat and played A Gift from Afar item number #\d+ as Iron \(another player of your choice also gets a coin token: give it by hand\) and played A Generous Gift item number #\d+ as Silk/)
+    expect(line).toMatch(new RegExp(`spent ${resourcePattern(state, 'Incense')} and ${resourcePattern(state, 'Wheat')} and played A Gift from Afar item number #\\d+ as Iron \\(another player of your choice also gets a coin token: give it by hand\\) and played A Generous Gift item number #\\d+ as Silk`))
     expect(line).toContain('give it by hand')
     expect(inHand(used, 'A Gift from Afar') || inHand(used, 'A Generous Gift')).toBe(false)
     expect(used.discardedItems.filter((item) => 'name' in item && (item.name === 'A Gift from Afar' || item.name === 'A Generous Gift'))).toHaveLength(2)
@@ -517,7 +517,7 @@ describe('Horseback Riding (Silk, Trade: 9 trade, another player 6)', () => {
     expect(tradeOf(used)).toBe(12)
     expect(tradeOf(used, KARANDRAS1)).toBe(6)
     expect(tradeOf(used, ITCHI)).toBe(0)
-    expect(used.log.at(-1)?.publicLog).toBe('cash1981 used Horseback Riding: spent 1 Silk, gaining 9 (12) trade, and Karandras1 gained 6 (6) trade')
+    expect(used.log.at(-1)?.publicLog).toBe(`cash1981 used Horseback Riding: spent 1 ${resourceText(used, 'Silk')}, gaining 9 (12) trade, and Karandras1 gained 6 (6) trade`)
     expect(assistedAvailability(used, CASH1981, 'horsebackRiding').status).toBe('used')
   })
 
@@ -581,7 +581,7 @@ describe('Mysticism (Spy, City Management: an opponent discards a coin token of 
     expect(hasHut(used, 'Spy')).toBe(false)
     expect(counter(used, 'codeOfLaws')).toBe(0)
     expect(counter(used, 'sheet')).toBe(2)
-    expect(used.log.at(-1)?.publicLog).toMatch(/^cash1981 used Mysticism: spent 1 Spy, so Karandras1 discards a coin from Code of Laws \(I\) \(\d+ left\)$/)
+    expect(used.log.at(-1)?.publicLog).toMatch(new RegExp(`^cash1981 used Mysticism: spent 1 ${resourcePattern(used, 'Spy')}, so Karandras1 discards a coin from Code of Laws \\(I\\) \\(\\d+ left\\)$`))
   })
 
   it('refuses an opponent with no coin on the counter, a counter that holds no tokens, yourself and bad payloads, and keeps the Spy', () => {
@@ -644,7 +644,7 @@ describe.each([
     const used = unwrap(press(ready(), kind, { targetId: KARANDRAS1, note: 'Build in Capital' }))
     expect(hasHut(used, 'Spy')).toBe(false)
     const line = used.log.at(-1)?.publicLog ?? ''
-    expect(line).toContain(`used ${tech}: spent 1 Spy, cancelling ${what} of Karandras1 (Build in Capital)`)
+    expect(line).toContain(`used ${tech}: spent 1 ${resourceText(used, 'Spy')}, cancelling ${what} of Karandras1 (Build in Capital)`)
     expect(line).toContain('settle it by hand')
     if (kind === 'massMedia') expect(line).toContain('the resources spent on it are lost')
     expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'cancelAbility', tech, targetId: KARANDRAS1, note: 'Build in Capital' })
@@ -741,7 +741,7 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
     expect(wonderOf(used, pyramids)).toMatchObject({ ownerId: null, disabled: true })
     expect(used.board.pieces.some((piece) => piece.id === pyramids)).toBe(true)
     expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
-      'cash1981 used Monarchy: spent 1 Silk, obsoleting The Pyramids of Karandras1: the wonder is disabled',
+      `cash1981 used Monarchy: spent 1 ${resourceText(used, 'Silk')}, obsoleting The Pyramids of Karandras1: the wonder is disabled`,
     )
     expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'monarchy', mode: 'obsolete', wonder: { pieceId: pyramids, ownerId: KARANDRAS1 } })
     expect(usedKeys(used)).toContain('card:Monarchy')
@@ -832,7 +832,7 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
     expect(used.discardedItems.some((item) => item.id === killed.id)).toBe(true)
     expect(unitsOf(used, ITCHI)).toHaveLength(0)
     const line = used.log.at(-1)?.publicLog ?? ''
-    expect(line).toMatch(new RegExp(`^cash1981 used Monarchy: spent 1 Silk, killing \\w+ ${killed.attack}\\.${killed.health} item number #${killed.itemNumber} from Karandras1's hand$`))
+    expect(line).toMatch(new RegExp(`^cash1981 used Monarchy: spent 1 ${resourcePattern(used, 'Silk')}, killing \\w+ ${killed.attack}\\.${killed.health} item number #${killed.itemNumber} from Karandras1's hand$`))
     // The same state kills the same card: the pick comes from the game's seed
     const again = unwrap(press(state, 'monarchy', { mode: 'kill', targetId: KARANDRAS1 }))
     expect(unitsOf(again).map((unit) => unit.id)).toEqual(after.map((unit) => unit.id))

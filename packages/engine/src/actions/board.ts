@@ -1128,7 +1128,9 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (
       change.kind === 'remove' &&
-      spentTokens.some((token) => token.kind === 'piece' && token.piece.id === change.piece.id)
+      spentTokens.some((token) =>
+        (token.kind === 'piece' ? token.piece.id : token.kind === 'card' ? undefined : token.tokenPiece?.id) === change.piece.id,
+      )
     )
   })
 }

@@ -9,7 +9,7 @@
  * is gone altogether, since wounds already dealt cannot then be ruled out.
  */
 
-import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendActionResource } from './assisted-resources.js'
 import {
   REPEAT_NOTE,
   blocked,
@@ -52,6 +52,7 @@ function woundTech(kind: AssistedActionKind, tech: string): AssistedActionDefini
     usageKey,
     phase: 'ANY',
     group: 'Battle',
+    cost: ['Iron'],
     buttonText: `Use ${tech} (Iron)`,
 
     availability(state, playerId) {
@@ -73,7 +74,7 @@ function woundTech(kind: AssistedActionKind, tech: string): AssistedActionDefini
       if (playerSideOf(battle, player.playerId) === null) {
         return err(rejected(kind, blocked('unavailable', 'You are not fighting in this battle.')))
       }
-      const spend = spendResource(state, player.playerId, 'Iron', context.at)
+      const spend = spendActionResource(state, player.playerId, 'Iron', context)
       if (!spend.ok) return err(rejected(kind, blocked('needs-resource', 'You need an Iron token.')))
       const after = playerOf(spend.value.state, player.playerId) ?? player
       const marked = useTurnAction(spend.value.state, after, turnOf(spend.value.state, after), usageKey, after.stats)
@@ -125,7 +126,7 @@ function woundTech(kind: AssistedActionKind, tech: string): AssistedActionDefini
           reason: `${tech} cannot be undone: its battle is over, so wounds already dealt cannot be ruled out.`,
         })
       }
-      const returned = returnResource(current, playerOf(current, player.playerId) ?? player, effect.spent, at)
+      const returned = returnResource(current, playerOf(current, player.playerId) ?? player, effect.spent, at, record.logId)
       if (!returned.ok) return returned
       return ok({
         state: returned.value,

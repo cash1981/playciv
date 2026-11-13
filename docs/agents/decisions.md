@@ -501,7 +501,7 @@ the engine; the browser decides no rule.
   wonders are strict once (human): `repeatable: false`, button disabled,
   `confirmedRepeat` cannot lift it. Government changes and investments are strict
   once too (`strictOnce`), disabled by their own panel.
-- **Resources** (human): pay with an unspent hut item of that name first, else a
+- **Resources** (human): automatic payments use an unspent hut or village item of that name first, else a
   `resources/<name>` piece whose centre lies in the player's own area, which goes
   back to stock. Applies to every resource kind; a piece outside every area is
   never taken. **A culture card counts as a resource** (human, 2026-11-13): with no
@@ -522,6 +522,36 @@ the engine; the browser decides no rule.
   choice also gets a coin token: give it by hand" (A Generous and A Princely Gift add
   nothing). The Marie Curie substitute applies as for a token; undo puts the card
   back in the hand and out of the discard pile.
+- **Explicit resource payments** (human correction, 2026-11-13): every assisted
+  resource-cost action shares one payment selector. The engine supplies only
+  unspent resource huts and villages in the viewer's hand, resource pieces centred in their own
+  player area, and usable resource culture cards in their hand (never pending
+  reward candidates). Fixed costs restrict each slot to its required resource;
+  Any N costs allow any held payable resource. Individual tokens and cards are
+  identified explicitly, so two copies of a resource can pay twice, but no
+  physical payment or one-shot Marie Curie substitution can be counted twice.
+  The player may explicitly play a Gift even while holding a token; this
+  supersedes the token-first rule only for explicit choices. The server and pure
+  engine validate the complete payment and consume exactly those choices, with
+  no fallback to another token or card. A stale selection disables submission
+  until the player chooses again. Older callers without `payments` keep the
+  automatic token-first behavior. Choices are private to the viewer's
+  `availableActions`, not public action records or opponent/spectator views.
+- **Hand-resource origins and icons** (human correction, 2026-11-13): spending
+  a resource hut or village in the hand also removes one corresponding
+  `resources/hut` or `resources/village` icon centred in that player's own area.
+  The hand item's actual kind decides which icon, not the resource name (Iron
+  may come from either). Icons have no stored link to individual held items;
+  one same-kind own-area icon is removed per spent item. Never take a map,
+  foreign-area, different-kind or still-bound uncollected token. A missing icon
+  does not prevent spending a held resource or cause a different icon to be
+  removed. The exact removed icon is recorded with the payment and restored on
+  undo, with duplicate and supply checks; Board Undo cannot return it alone.
+  Older payment records without an icon stay compatible. Every hand payment is
+  named publicly with its origin and item number, for example
+  `Wheat (hut) item number #210` or `Uranium (village) item number #N`.
+  Repeated resources retain their distinct numbers. This applies to automatic,
+  explicit, fixed, Any N and one-of-each payments; unrelated held items stay private.
 - **Undo** is the existing vote, extended to assisted log lines
   (`assistedActionId`). A reversal writes a "System:" line and refuses, vote left
   open, when a marker or token moved or a card left the hand. Board Undo refuses
@@ -866,12 +896,14 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   (Any 3). The accepted names are Incense, Iron, Silk, Wheat, Spy and Uranium (human, 2026-11-13). The names are a
   preference: each is paid by its own token; one the player does not hold is paid by any other unspent token (hut
   or piece, of the six kinds); only the shortfall that tokens cannot cover is paid with culture cards as above,
-  never the same card twice, so a card is never burned while any token could pay. The names do not choose the
+  never the same card twice, so an automatic payment never burns a card while any token could pay. The names do not choose the
   card: the fewest-allowed card goes first over the six resources, the rule the availability uses, so its warning
   names exactly the cards played, except while Marie Curie is armed and the player holds both the armed
   substitute token and a real Uranium token (see limitations.md). The log says each card is played "as" the
   resource it was assigned in that order, which is currently always Iron, not one that was named. The web tech dialog asks for the two resources before paying, starting on tokens the
-  player holds. Undo returns exactly the tokens and cards spent. The effect is automated (human, 2026-11-13), in
+  player holds. The shared explicit-payment selector now names exact tokens or
+  cards instead; `resources` remains for compatibility and `payments` is
+  authoritative when supplied. Undo returns exactly the tokens and cards spent. The effect is automated (human, 2026-11-13), in
   `assisted-gunpowder.ts`: the payload carries the two resources and a `mode`. `obsolete` (`wonderPieceId`) marks an ANCIENT or
   MEDIEVAL wonder that a player owns and that is not disabled as disabled, through the same board change and history entry as
   the hand-made disable and as Monarchy does (`disableWonder`: the owner is cleared, the piece stays and is drawn crossed out,
@@ -916,7 +948,7 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
 
 - **One shape** (`assisted-tech-abilities.ts`, `techAbility`): tech revealed, phase open, `card:<tech>` once per turn with the
   confirmed repeat, payload checked BEFORE anything is paid (a refusal spends nothing), every payment through the shared
-  layer (token first, culture cards only for the shortfall, the Gift from Afar note), then the ability's own part. An undo
+  layer (exact explicit choices, otherwise token first and culture cards only for the shortfall; the Gift from Afar note), then the ability's own part. An undo
   takes that part back or refuses with a reason, then returns exactly what was paid. The web asks through one picker per
   kind (`ASSISTED_TECH_PICKERS` in `assisted-techs.ts`, a leaf table the web reads); the server parsers are strict and the
   engine decides legality.
@@ -935,9 +967,10 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   number, the name only the player's own log. The undo puts the card back in the deck, shuffled twice as every undo of a
   draw does, and takes the marker; it is refused once the card has left the hand. (The brief said "at its place": the shared
   convention was kept, because the owner has seen the card and a known top card would be a leak.)
-- **Education** (Incense, Iron, Silk and Wheat, one of each; human, 2026-11-13): exactly these four, so nothing is chosen: no
-  picker and no names in the payload (the route takes no args), and the button pays directly with the usual repeat
-  confirmation. Each kind is paid by its own token first, else by a culture card that can be played as it (Gift from Afar,
+- **Education** (Incense, Iron, Silk and Wheat, one of each; human, 2026-11-13): exactly these four kinds,
+  with the shared selector choosing which held token or card pays each. The route
+  accepts explicit `payments`; an older call without args still pays automatically
+  with the usual repeat confirmation. Each automatic payment uses its own token first, else a culture card that can be played as it (Gift from Afar,
   Generous Gift, Princely Gift: Iron, Wheat, Spy, Silk), several cards when the player holds several and each card once; a
   token of another kind never stands in. No card can be played as Incense, so an Incense token is always needed, which the
   availability reason says. The warning names every card that would be played (the Gift from Afar note included), and the

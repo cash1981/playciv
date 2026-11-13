@@ -5,6 +5,7 @@
  */
 
 import { SQUARE_SIZE, mapTop } from '@civ/engine'
+import type { ResourcePaymentOption } from '@civ/engine'
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -30,7 +31,10 @@ interface View {
     readonly color: string | null
     readonly stats: { readonly trade: number; readonly coinSources: Record<string, number> }
     readonly items: readonly { readonly id: string; readonly kind: string; readonly name?: string }[]
-    readonly availableActions?: readonly { action: string; status: string; reason: string }[]
+    readonly availableActions?: readonly {
+      action: string; status: string; reason: string
+      readonly payment?: { readonly cost: readonly (string | null)[]; readonly options: readonly ResourcePaymentOption[] }
+    }[]
   } | null
   readonly opponents: readonly { readonly playerId: string; readonly stats: { readonly trade: number; readonly coinSources: Record<string, number> } }[]
   readonly boardAreas: readonly { playerId: string; x: number; y: number }[]
@@ -81,7 +85,7 @@ async function table(tag: string, tech: string, pieces: readonly string[]) {
 }
 
 /** Moves a hut of this name from the deck into a player's hand (there are no Spy or Uranium pieces to drop on the board). */
-async function giveHut(gameId: string, playerId: string, name: string): Promise<void> {
+async function giveHut(gameId: string, playerId: string, name: string): Promise<number> {
   const state = await repo.findGame(gameId)
   const hut = state?.items.find((item) => item.kind === 'hut' && item.name === name)
   if (state === undefined || hut === undefined) throw new Error(`no ${name} hut in the deck`)
@@ -92,6 +96,21 @@ async function giveHut(gameId: string, playerId: string, name: string): Promise<
       player.playerId === playerId ? { ...player, items: [...player.items, { ...hut, hidden: true, ownerId: playerId }] } : player,
     ),
   })
+  return hut.itemNumber
+}
+
+async function giveGift(gameId: string, playerId: string): Promise<string> {
+  const state = await repo.findGame(gameId)
+  const card = state?.items.find((item) => item.kind.startsWith('culture') && 'name' in item && item.name === 'A Generous Gift')
+  if (state === undefined || card === undefined) throw new Error('no A Generous Gift in the deck')
+  await repo.saveGame({
+    ...state,
+    items: state.items.filter((item) => item.id !== card.id),
+    players: state.players.map((player) => player.playerId === playerId
+      ? { ...player, items: [...player.items, { ...card, ownerId: playerId, hidden: true }] }
+      : player),
+  })
+  return card.id
 }
 
 const actions = (gameId: string) => `/api/games/${gameId}/actions`
@@ -100,6 +119,42 @@ const doneThrough = async (t: { gameId: string; starter: string }, phase: 'SOT' 
   expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase })).status).toBe(200)
 
 describe('resources through args: Pottery, Philosophy and Education', () => {
+  it.each([false, true])('native village Iron and Uranium pay through the shared API and remove village icons (explicit=%s)', async (explicit) => {
+    const t = await table(`village-${explicit}`, 'Pottery', ['resources/village', 'resources/village', 'resources/hut'])
+    const state = await repo.findGame(t.gameId)
+    if (state === undefined) throw new Error('missing game')
+    const resources = ['Iron', 'Uranium'].map((name) => {
+      const item = state.items.find((candidate) => candidate.kind === 'village' && candidate.name === name)
+      if (item === undefined) throw new Error(`missing ${name} village`)
+      return item
+    })
+    await repo.saveGame({
+      ...state,
+      items: state.items.filter((item) => !resources.some((held) => held.id === item.id)),
+      players: state.players.map((holder) => holder.playerId === t.starterId
+        ? { ...holder, items: [...holder.items, ...resources.map((item) => ({ ...item, ownerId: t.starterId, hidden: true }))] }
+        : holder),
+    })
+    await doneThrough(t, 'TRADE')
+    const before = await view(t.gameId, t.starter)
+    const paid = await post(t.starter, actions(t.gameId), {
+      action: 'pottery', requestId: 'native-villages', rev: before.rev,
+      args: {
+        resources: ['Iron', 'Uranium'],
+        ...(explicit ? { payments: resources.map((item, index) => ({ resource: index === 0 ? 'Iron' : 'Uranium', kind: 'village', id: item.id })) } : {}),
+      },
+    })
+    expect(paid.status).toBe(200)
+    const after = await paid.json<View>()
+    const [iron, uranium] = resources
+    if (iron === undefined || uranium === undefined) throw new Error('missing village resources')
+    expect(after.assistedActions[0]?.text).toContain(`used Pottery: spent Iron (village) item number #${iron.itemNumber} and Uranium (village) item number #${uranium.itemNumber} and added 1 coin`)
+    const stored = await repo.findGame(t.gameId)
+    expect(stored?.board.pieces.filter((piece) => piece.assetId === 'resources/village')).toEqual([])
+    expect(stored?.board.pieces.filter((piece) => piece.assetId === 'resources/hut')).toHaveLength(1)
+    expect(stored?.discardedItems.map((item) => item.id)).toEqual(expect.arrayContaining(resources.map((item) => item.id)))
+  })
+
   it('Pottery pays two named resources, adds the coin and shows it in the public counters', async () => {
     const t = await table('pot', 'Pottery', ['resources/iron', 'resources/wheat'])
     await doneThrough(t, 'TRADE')
@@ -152,8 +207,8 @@ describe('resources through args: Pottery, Philosophy and Education', () => {
     await doneThrough(t, 'TRADE')
     const before = await view(t.gameId, t.starter)
     expect(entryOf(before, 'education')).toMatchObject({ status: 'ready' })
-    // The route reads no names: any args are refused, nothing is paid
-    for (const args of [{ resources: ['Iron', 'Wheat', 'Silk', 'Incense'] }, {}, { extra: 1 }]) {
+    // The route reads no names: only optional explicit payments are accepted.
+    for (const args of [{ resources: ['Iron', 'Wheat', 'Silk', 'Incense'] }, { extra: 1 }]) {
       const bad = await post(t.starter, actions(t.gameId), { action: 'education', requestId: 'req-bad', rev: before.rev, args })
       expect(bad.status).toBe(400)
     }
@@ -165,6 +220,173 @@ describe('resources through args: Pottery, Philosophy and Education', () => {
     const state = await repo.findGame(t.gameId)
     expect(state?.players.find((p) => p.playerId === t.starterId)?.techGrants).toMatchObject([{ source: 'Education', phase: 'CM' }])
     expect(state?.board.pieces.some((piece) => piece.assetId.startsWith('resources/'))).toBe(false)
+  })
+
+  describe('explicit resource payments through strict args', () => {
+    it('a fixed-only ability accepts args.payments and spends the exact gift while keeping its Wheat token', async () => {
+      const t = await table('explicit-fixed', 'Ecology', ['resources/wheat'])
+      const giftId = await giveGift(t.gameId, t.starterId)
+      const before = await view(t.gameId, t.starter)
+      const payment = entryOf(before, 'sot:ecology')?.payment
+      expect(payment).toMatchObject({
+        cost: ['Wheat'],
+        options: expect.arrayContaining([{ choice: { resource: 'Wheat', kind: 'card', id: giftId }, label: 'A Generous Gift (as Wheat)' }]),
+      })
+      expect(JSON.stringify(await view(t.gameId, t.other))).not.toContain(giftId)
+      const paid = await post(t.starter, actions(t.gameId), {
+        action: 'sot:ecology', requestId: 'explicit-fixed', rev: before.rev,
+        args: { payments: [{ resource: 'Wheat', kind: 'card', id: giftId }] },
+      })
+      expect(paid.status).toBe(200)
+      const after = await repo.findGame(t.gameId)
+      expect(after?.discardedItems.some((item) => item.id === giftId)).toBe(true)
+      expect(after?.board.pieces.some((piece) => piece.assetId === 'resources/wheat')).toBe(true)
+      expect(after?.assistedActions[0]?.effect).toMatchObject({ spent: { kind: 'card', resource: 'Wheat', itemId: giftId } })
+      expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/played A Generous Gift item number #\d+ as Wheat/)
+      const theirs = await view(t.gameId, t.other)
+      expect(JSON.stringify(theirs.assistedActions)).not.toContain(giftId)
+      expect(JSON.stringify(theirs.assistedActions)).not.toContain('"payments"')
+    })
+
+    it('centrally rejects malformed, excessive, duplicate, unsupported and wrong-slot payments without persisting changes', async () => {
+      const t = await table('explicit-bad', 'Pottery', ['resources/iron', 'resources/wheat'])
+      await doneThrough(t, 'TRADE')
+      const before = await view(t.gameId, t.starter)
+      const options = entryOf(before, 'pottery')?.payment?.options ?? []
+      const iron = options.find((option) => option.choice.resource === 'Iron')?.choice
+      const wheat = options.find((option) => option.choice.resource === 'Wheat')?.choice
+      if (iron === undefined || wheat === undefined) throw new Error('no piece choices')
+      const stored = await repo.findGame(t.gameId)
+      for (const payments of [
+        null, 'Iron', {}, [], [iron], [iron, wheat, wheat], [iron, iron],
+        [iron, { ...wheat, kind: 'token' }],
+        [iron, { ...wheat, resource: 'Banana' }],
+        [iron, { ...wheat, resource: 7 }],
+        [iron, { ...wheat, id: 'bad id!' }],
+        [iron, { ...wheat, id: 'a'.repeat(65) }],
+        [iron, { ...wheat, extra: true }],
+        [iron, null],
+        [iron, { resource: 'Wheat', kind: 'piece' }],
+      ]) {
+        const bad = await post(t.starter, actions(t.gameId), {
+          action: 'pottery', requestId: 'malformed', rev: before.rev,
+          args: { resources: ['Iron', 'Wheat'], payments },
+        })
+        expect(bad.status, JSON.stringify(payments)).toBe(400)
+        expect(await bad.json()).toMatchObject({ error: 'BAD_REQUEST' })
+        expect(await repo.findGame(t.gameId)).toEqual(stored)
+      }
+      for (const action of ['bureaucracy', 'cultureAdvance', 'playCard']) {
+        const bad = await post(t.starter, actions(t.gameId), {
+          action, requestId: 'unsupported', rev: before.rev, args: { payments: [] },
+        })
+        expect(bad.status).toBe(400)
+      }
+      const wrongSlot = await post(t.starter, actions(t.gameId), {
+        action: 'currency', requestId: 'wrong-slot', rev: before.rev, args: { payments: [iron] },
+      })
+      expect(wrongSlot.status).toBe(400)
+      expect(await wrongSlot.json()).toMatchObject({ error: 'BAD_REQUEST' })
+      // The action-specific parser remains strict after centrally extracting valid payments.
+      for (const args of [
+        { resources: ['Iron'], payments: [iron, wheat] },
+        { resources: ['Iron', 'Wheat'], payments: [iron, wheat], extra: 1 },
+      ]) {
+        expect((await post(t.starter, actions(t.gameId), { action: 'pottery', requestId: 'specific', rev: before.rev, args })).status).toBe(400)
+      }
+      expect(await repo.findGame(t.gameId)).toEqual(stored)
+    })
+
+    it('Any payments reject foreign, stale, used and pending choices atomically, then honor a chosen card over held tokens', async () => {
+      const t = await table('explicit-any', 'Pottery', ['resources/iron', 'resources/wheat'])
+      const giftId = await giveGift(t.gameId, t.starterId)
+      const foreignId = await giveGift(t.gameId, t.otherId)
+      await doneThrough(t, 'TRADE')
+      const before = await view(t.gameId, t.starter)
+      const options = entryOf(before, 'pottery')?.payment?.options ?? []
+      const iron = options.find((option) => option.choice.kind === 'piece' && option.choice.resource === 'Iron')?.choice
+      const wheat = options.find((option) => option.choice.kind === 'piece' && option.choice.resource === 'Wheat')?.choice
+      if (iron === undefined || wheat === undefined) throw new Error('no piece choices')
+      const stored = await repo.findGame(t.gameId)
+      if (stored === undefined) throw new Error('no stored game')
+      const gift = { resource: 'Silk', kind: 'card', id: giftId }
+      const attempt = (payments: readonly unknown[]) => post(t.starter, actions(t.gameId), {
+        action: 'pottery', requestId: 'explicit-any', rev: before.rev,
+        args: { resources: ['Iron', 'Wheat'], payments },
+      })
+      for (const unavailable of [{ ...gift, id: foreignId }, { ...wheat, id: 'stale-piece' }, { ...gift, resource: 'Incense' }]) {
+        const bad = await attempt([iron, unavailable])
+        expect(bad.status).toBe(400)
+        expect(await bad.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+        expect(await repo.findGame(t.gameId)).toEqual(stored)
+      }
+      for (const mode of ['used', 'pending', 'wrong-owner'] as const) {
+        const changed = {
+          ...stored,
+          players: stored.players.map((player) => player.playerId !== t.starterId ? player : {
+            ...player,
+            items: player.items.map((item) => item.id !== giftId ? item : {
+              ...item, used: mode === 'used', ownerId: mode === 'wrong-owner' ? t.otherId : t.starterId,
+            }),
+            pendingRewards: mode === 'pending'
+              ? [{ id: 'pending', kind: 'event' as const, level: 2 as const, step: 8, candidateIds: [giftId], keep: 1 as const }]
+              : [],
+          }),
+        }
+        await repo.saveGame(changed)
+        expect(entryOf(await view(t.gameId, t.starter), 'pottery')?.payment?.options.some((option) => option.choice.id === giftId)).toBe(false)
+        const bad = await attempt([iron, gift])
+        expect(bad.status).toBe(400)
+        expect(await repo.findGame(t.gameId)).toEqual(changed)
+      }
+      await repo.saveGame(stored)
+      const paid = await attempt([iron, gift])
+      expect(paid.status).toBe(200)
+      const after = await repo.findGame(t.gameId)
+      expect(after?.discardedItems.some((item) => item.id === giftId)).toBe(true)
+      expect(after?.board.pieces.some((piece) => piece.id === wheat.id)).toBe(true)
+      expect(after?.assistedActions[0]?.effect).toMatchObject({
+        spent: [{ kind: 'piece', resource: 'Iron', piece: { id: iron.id } }, { kind: 'card', resource: 'Silk', itemId: giftId }],
+      })
+    })
+
+    it('Education supports explicit each-resource payments', async () => {
+      const t = await table('explicit-each', 'Education', ['resources/incense', 'resources/iron', 'resources/silk', 'resources/wheat'])
+      const giftId = await giveGift(t.gameId, t.starterId)
+      await doneThrough(t, 'TRADE')
+      const before = await view(t.gameId, t.starter)
+      const payment = entryOf(before, 'education')?.payment
+      if (payment === undefined) throw new Error('no Education choices')
+      const payments = payment.cost.map((resource) => {
+        const option = payment.options.find((option) => option.choice.resource === resource &&
+          (resource === 'Iron' ? option.choice.id === giftId : option.choice.kind === 'piece'))
+        if (option === undefined) throw new Error(`no ${resource} payment`)
+        return option.choice
+      })
+      const bad = await post(t.starter, actions(t.gameId), {
+        action: 'education', requestId: 'duplicate-card', rev: before.rev,
+        args: { payments: payments.map((payment) => payment.resource === 'Wheat' ? { ...payment, kind: 'card', id: giftId } : payment) },
+      })
+      expect(bad.status).toBe(400)
+      expect(await bad.json()).toMatchObject({ error: 'BAD_REQUEST' })
+      const paid = await post(t.starter, actions(t.gameId), {
+        action: 'education', requestId: 'explicit-each', rev: before.rev, args: { payments },
+      })
+      expect(paid.status).toBe(200)
+      expect((await repo.findGame(t.gameId))?.board.pieces.some((piece) => piece.assetId === 'resources/iron')).toBe(true)
+      expect((await repo.findGame(t.gameId))?.discardedItems.some((item) => item.id === giftId)).toBe(true)
+
+    })
+
+    it('an empty args object still performs automatic payment', async () => {
+      const legacy = await table('empty-each', 'Education', ['resources/incense', 'resources/iron', 'resources/silk', 'resources/wheat'])
+      await doneThrough(legacy, 'TRADE')
+      const empty = await post(legacy.starter, actions(legacy.gameId), {
+        action: 'education', requestId: 'empty-args', rev: (await view(legacy.gameId, legacy.starter)).rev, args: {},
+      })
+      expect(empty.status).toBe(200)
+      expect((await repo.findGame(legacy.gameId))?.board.pieces.some((piece) => piece.category === 'resource')).toBe(false)
+    })
   })
 
   it('Education without an Incense token is refused whatever else is held, and pays nothing', async () => {
@@ -279,7 +501,7 @@ describe('the Spy abilities through args', () => {
 
   it('Writing, Civil Service and Mass Media take a player and an optional short note', async () => {
     const t = await table('wr', 'Civil Service', [])
-    await giveHut(t.gameId, t.starterId, 'Spy')
+    const spyNumber = await giveHut(t.gameId, t.starterId, 'Spy')
     const before = await view(t.gameId, t.starter)
     expect(entryOf(before, 'civilService')).toMatchObject({ status: 'ready' })
     for (const args of [{}, { targetId: 7 }, { targetId: t.otherId, note: 7 }, { targetId: t.otherId, note: 'x'.repeat(81) }, { targetId: t.otherId, extra: 1 }]) {
@@ -287,7 +509,7 @@ describe('the Spy abilities through args', () => {
     }
     const paid = await post(t.starter, actions(t.gameId), { action: 'civilService', requestId: 'req-1', rev: before.rev, args: { targetId: t.otherId, note: 'Sinbad' } })
     expect(paid.status).toBe(200)
-    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/used Civil Service: spent 1 Spy, cancelling a culture event of .* \(Sinbad\)/)
+    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(new RegExp(`used Civil Service: spent 1 Spy \\(hut\\) item number #${spyNumber}, cancelling a culture event of .* \\(Sinbad\\)`))
   })
 
   it('a note with line breaks and control characters is flattened to one line in the public log', async () => {
@@ -382,7 +604,7 @@ describe('batch 2 through the routes: Metalworking, Atomic Theory and Bureaucrac
 
   it('Atomic Theory takes a strict mode and, for a nuke, a city; a nuke in City Management is the engine\'s refusal', async () => {
     const t = await table('atom', 'Atomic Theory', [])
-    await giveHut(t.gameId, t.starterId, 'Uranium')
+    const uraniumNumber = await giveHut(t.gameId, t.starterId, 'Uranium')
     const city = await post(t.starter, `/api/games/${t.gameId}/board/pieces`, {
       assetId: `cities/${t.color.toLowerCase()}city2`,
       x: 6 * SQUARE_SIZE,
@@ -402,7 +624,7 @@ describe('batch 2 through the routes: Metalworking, Atomic Theory and Bureaucrac
 
     const paid = await post(t.starter, actions(t.gameId), { action: 'atomicTheory', requestId: 'req-1', rev: before.rev, args: { mode: 'extraActions' } })
     expect(paid.status).toBe(200)
-    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(/^ta-[ab]-atom used Atomic Theory: spent 1 Uranium, so each of their cities may take one more city action this turn$/)
+    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(new RegExp(`^ta-[ab]-atom used Atomic Theory: spent 1 Uranium \\(hut\\) item number #${uraniumNumber}, so each of their cities may take one more city action this turn$`))
   })
 
   it('Metalworking adds 3 to one of the player\'s own arena units and refuses an enemy unit', async () => {

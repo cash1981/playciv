@@ -8,7 +8,7 @@
  * `upgradeBuildings`) keep their own top-level fields in `play.ts`.
  */
 
-import { BUILDABLE_BUILDING_IDS, isGovernment } from '@civ/engine'
+import { BUILDABLE_BUILDING_IDS, isGovernment, parseResourcePayments, resourceCostOf } from '@civ/engine'
 import type {
   ArenaUnitPayload,
   AtomicTheoryPayload,
@@ -417,7 +417,7 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
 ])
 
 /** Whether `action` takes `args`. */
-export const takesArgs = (action: string): boolean => PARSERS.has(action)
+export const takesArgs = (action: string): boolean => PARSERS.has(action) || resourceCostOf(action) !== undefined
 
 /**
  * The payload of `action` from the body's `args`, or a sentence saying what is
@@ -425,7 +425,15 @@ export const takesArgs = (action: string): boolean => PARSERS.has(action)
  */
 export function parseActionArgs(action: string, raw: unknown): AssistedPayload | string {
   const parser = PARSERS.get(action)
-  if (parser === undefined) return `${action} takes no args`
+  const cost = resourceCostOf(action)
+  if (parser === undefined && cost === undefined) return `${action} takes no args`
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return 'args must be an object'
-  return parser(asRecord(raw))
+  const { payments, ...args } = asRecord(raw)
+  const checked = payments === undefined ? undefined : parseResourcePayments(payments, cost)
+  if (checked !== undefined && !checked.ok) return checked.error
+  const parsed = parser === undefined
+    ? Object.keys(args).length === 0 ? {} : 'args does not belong to this action'
+    : parser(args)
+  if (typeof parsed === 'string') return parsed
+  return checked === undefined ? parsed : { ...parsed, payments: checked.value }
 }

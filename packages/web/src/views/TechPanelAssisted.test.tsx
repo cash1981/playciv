@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBoard, mapTop } from '@civ/engine'
@@ -33,11 +33,28 @@ const tech = (name: string, level: 1 | 2 | 3 | 4 | 5 = 1): TechItem => ({
   type: null,
 })
 
+const tokenChoice = (resource: string) => ({ kind: 'hut' as const, id: `hut-${resource}`, resource })
+const namedPayment = (...resources: readonly string[]) => ({ resources, payments: resources.map(tokenChoice) })
+const paymentOf = (resources: readonly string[], count: number) => ({
+  cost: Array.from({ length: count }, () => null),
+  options: resources.map((resource) => ({ choice: tokenChoice(resource), label: resource })),
+})
+const chooseResource = (index: number, label: string) => {
+  const select = screen.getByLabelText(`Resource ${index}`)
+  const option = within(select).getByRole('option', { name: label }) as HTMLOptionElement
+  fireEvent.change(select, { target: { value: option.value } })
+}
+const resourceLabels = () => screen.getAllByLabelText(/^Resource \d$/)
+  .map((select) => (select as HTMLSelectElement).selectedOptions[0]?.textContent)
+
 const action = (kind: string, label: string, status: string, reason: string) => ({
   action: kind,
   label,
   status,
   reason,
+  ...(['gunpowder', 'pottery', 'philosophy'].includes(kind)
+    ? { payment: paymentOf(['Iron', 'Wheat', 'Silk', 'Incense'], kind === 'philosophy' ? 3 : 2) }
+    : {}),
 })
 
 function viewOf(techsChosen: readonly TechItem[], opponents: readonly unknown[] = []): PlayerView {
@@ -179,7 +196,13 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
       you: {
         ...base.you!,
         items,
-        availableActions: [{ ...action(kind, techName, status, reason), ...(buttonText === undefined ? {} : { buttonText }) }],
+        availableActions: [{
+          ...action(kind, techName, status, reason),
+          ...(techName === 'Gunpowder' && items.length > 0
+            ? { payment: paymentOf(items.flatMap((item) => 'name' in item && typeof item.name === 'string' ? [item.name] : []), 2) }
+            : {}),
+          ...(buttonText === undefined ? {} : { buttonText }),
+        }],
       },
     } as unknown as PlayerView
   }
@@ -192,21 +215,20 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     // Nothing is paid by opening the dialog or pressing the button: the picker comes first
     fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder (any 2 resources)' }))
     expect(send).not.toHaveBeenCalled()
-    fireEvent.change(screen.getByLabelText('Resource 1'), { target: { value: 'Silk' } })
-    fireEvent.change(screen.getByLabelText('Resource 2'), { target: { value: 'Incense' } })
+    chooseResource(1, 'Silk')
+    chooseResource(2, 'Incense')
     fireEvent.click(screen.getByRole('button', { name: /^Destroy Library on E5 \(pay Silk and Incense\)$/ }))
 
     expect(send).toHaveBeenCalledTimes(1)
     const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
-    expect([gameId, kind, rev, args]).toEqual(['game-1', 'gunpowder', 7, { resources: ['Silk', 'Incense'], mode: 'destroy', buildingPieceId: 'lib1' }])
+    expect([gameId, kind, rev, args]).toEqual(['game-1', 'gunpowder', 7, { ...namedPayment('Silk', 'Incense'), mode: 'destroy', buildingPieceId: 'lib1' }])
   })
 
   it('starts the Gunpowder picker on the resources the player holds as tokens, so the default does not need a card', async () => {
     renderPanel(unitView('Gunpowder', 'gunpowder', 'ready', 'Ready to use.', undefined, [hut('Silk'), hut('Incense')]))
     fireEvent.click(await screen.findByText('Gunpowder'))
     fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder' }))
-    expect((screen.getByLabelText('Resource 1') as HTMLSelectElement).value).toBe('Silk')
-    expect((screen.getByLabelText('Resource 2') as HTMLSelectElement).value).toBe('Incense')
+    expect(resourceLabels()).toEqual(['Silk', 'Incense'])
   })
 
   it('can cancel the Gunpowder picker without paying', async () => {
@@ -428,7 +450,12 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
         ...base.you!,
         items: options.items ?? [],
         cities: options.cities ?? CITIES,
-        availableActions: [action(kind, techName, options.status ?? 'ready', 'Ready to use.')],
+        availableActions: [{
+          ...action(kind, techName, options.status ?? 'ready', 'Ready to use.'),
+          ...(['pottery', 'philosophy'].includes(kind) && options.items !== undefined
+            ? { payment: paymentOf(options.items.flatMap((item) => 'name' in item && typeof item.name === 'string' ? [item.name] : []), kind === 'philosophy' ? 3 : 2) }
+            : {}),
+        }],
       },
     } as unknown as PlayerView
   }
@@ -447,21 +474,23 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
     it('Pottery asks for two resources and Philosophy for three, and sends them as args', async () => {
       const pottery = await open('Pottery', 'pottery')
       expect(screen.getAllByLabelText(/^Resource \d$/)).toHaveLength(2)
-      fireEvent.change(screen.getByLabelText('Resource 2'), { target: { value: 'Silk' } })
+      chooseResource(2, 'Silk')
       expect(pottery).not.toHaveBeenCalled()
       fireEvent.click(screen.getByRole('button', { name: 'Pay Iron and Silk' }))
-      expect(pottery.mock.calls.at(-1)?.slice(1, 5)).toEqual(['pottery', expect.any(String), 7, { resources: ['Iron', 'Silk'] }])
+      expect(pottery.mock.calls.at(-1)?.slice(1, 5)).toEqual(['pottery', expect.any(String), 7, namedPayment('Iron', 'Silk')])
       cleanup()
 
       const philosophy = await open('Philosophy', 'philosophy')
       expect(screen.getAllByLabelText(/^Resource \d$/)).toHaveLength(3)
       fireEvent.click(screen.getByRole('button', { name: 'Pay Iron, Wheat and Silk' }))
-      expect(philosophy.mock.calls.at(-1)?.[4]).toEqual({ resources: ['Iron', 'Wheat', 'Silk'] })
+      expect(philosophy.mock.calls.at(-1)?.[4]).toEqual(namedPayment('Iron', 'Wheat', 'Silk'))
     })
 
-    it('starts a resource picker on the tokens the player holds, and fills what is missing with kinds not picked yet', async () => {
+    it('does not invent a third payment when the player holds only two tokens', async () => {
       await open('Philosophy', 'philosophy', { items: [hut('Spy'), hut('Silk')] })
-      expect(screen.getAllByLabelText(/^Resource \d$/).map((select) => (select as HTMLSelectElement).value)).toEqual(['Spy', 'Silk', 'Iron'])
+      expect(resourceLabels()).toEqual(['No available payment', 'No available payment', 'No available payment'])
+      expect((screen.getByRole('button', { name: /^Pay/ }) as HTMLButtonElement).disabled).toBe(true)
+      expect(screen.queryByRole('option', { name: 'Iron' })).toBeNull()
     })
 
     it('Education has no picker: it pays Incense, Iron, Silk and Wheat directly, naming every card that would be played', async () => {
@@ -956,7 +985,7 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
     expect(send).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
-    expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['gunpowder', expect.any(String), 7, { resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w2' }])
+    expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['gunpowder', expect.any(String), 7, { ...namedPayment('Iron', 'Wheat'), mode: 'obsolete', wonderPieceId: 'w2' }])
   })
 
   it('the destroy mode lists every building on a map square with its square and whose outskirts, and sends the piece', async () => {
@@ -968,7 +997,7 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     ])
     fireEvent.change(screen.getByLabelText('Building'), { target: { value: 'b2' } })
     fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
-    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: 'b2' })
+    expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'destroy', buildingPieceId: 'b2' })
   })
 
   it('with nothing chosen in the mode the button waits and the reason is shown, and the other mode still works', async () => {
@@ -976,7 +1005,7 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     // No wonder: it opens on destroy
     expect((screen.getByLabelText(/Destroy a building/) as HTMLInputElement).checked).toBe(true)
     fireEvent.click(screen.getByLabelText(/Obsolete an ancient or medieval wonder/))
-    expect(screen.getByRole('group').textContent).toContain('No ancient or medieval wonder is owned by a player')
+    expect(screen.getByRole('group', { name: 'Gunpowder: resources, mode and target' }).textContent).toContain('No ancient or medieval wonder is owned by a player')
     const pay = screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement
     expect(pay.disabled).toBe(true)
     fireEvent.click(pay)
@@ -991,7 +1020,7 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { id: string }).id !== 'w2'))} reloadCount={0} />)
     expect((screen.getByLabelText('Wonder') as HTMLSelectElement).value).toBe('w1')
     fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
-    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w1' })
+    expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'obsolete', wonderPieceId: 'w1' })
   })
 
   it('the button names the target it sends: after a refresh removes the picked building the new target is named and sent', async () => {
@@ -1002,14 +1031,14 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { id: string }).id !== 'b2'))} reloadCount={0} />)
     expect((screen.getByLabelText('Building') as HTMLSelectElement).value).toBe('b1')
     fireEvent.click(screen.getByRole('button', { name: 'Destroy Library on K10 (pay Iron and Wheat)' }))
-    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'destroy', buildingPieceId: 'b1' })
+    expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'destroy', buildingPieceId: 'b1' })
   })
 
   it('names the wonder it will obsolete, and the group says what it holds', async () => {
     const { send } = await open(viewWith(PIECES))
     expect(screen.getByRole('group', { name: 'Gunpowder: resources, mode and target' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Obsolete The Pyramids (pay Iron and Wheat)' }))
-    expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Iron', 'Wheat'], mode: 'obsolete', wonderPieceId: 'w1' })
+    expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'obsolete', wonderPieceId: 'w1' })
   })
 
   it('asks about a repeat use when the player pays, keeps the picker if declined, and a busy page cannot send', async () => {

@@ -45,6 +45,7 @@ import type { Undo } from './undo.js'
 import type { ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
+import type { ResourcePaymentOption } from './assisted-resources.js'
 import { livePendingRewards } from './assisted-culture.js'
 import { playableCardsOf } from './assisted-cards.js'
 import { startOfTurnViewOf } from './assisted-sot.js'
@@ -490,11 +491,18 @@ export type AssistedStatus =
 
 /**
  * The resource an action paid, exactly, so an undo puts back the same
- * one: a hut from the hand (moved to `discardedItems`), the board piece that
- * was removed, with its position, or the culture card played as the resource.
+ * one: a hut/village from the hand (moved to `discardedItems`) with its collected
+ * icon if present, the board resource with its position, or the culture card played as the resource.
  */
 export type SpentResource =
-  | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
+  | {
+      readonly kind: 'hut' | 'village'
+      readonly resource: string
+      readonly itemId: string
+      /** The collected icon removed with the held item; absent in older saves or when no matching icon remained. */
+      readonly tokenPiece?: BoardPiece
+      readonly curieSubstitute?: string
+    }
   | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string }
   // A culture card played as the resource (A Gift from Afar, A Generous Gift, A Princely Gift), discarded like a played card
   | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
@@ -1158,6 +1166,11 @@ export interface AssistedActionRecord {
 
 /** One entry of `PlayerView.you.availableActions`: the viewer's own button state. */
 export interface AvailableAction {
+  /** Private payment options for the viewer's own hand and player area only. */
+  readonly payment?: {
+    readonly cost: readonly (string | null)[]
+    readonly options: readonly ResourcePaymentOption[]
+  }
   readonly action: AssistedActionKind
   readonly label: string
   /** The phase tab the button belongs to; `'ANY'` for an action that works in every phase. */

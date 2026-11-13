@@ -49,7 +49,7 @@ import {
 import { DARWIN_NAME, darwinTradeOf, greatPersonActionIdOf, payKurosawa, takeBackKurosawa, useDarwin } from './assisted-arts.js'
 import { playCard } from './assisted-cards.js'
 import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
-import { findResourceToken, resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
+import { findResourceToken, parseResourcePayments, resourceAvailability, resourcePaymentOptions, returnedText, returnResource, spendActionResource, spendResource } from './assisted-resources.js'
 import { CITY_ACTIONS } from './assisted-city.js'
 import { ABILITY_ACTIONS } from './assisted-abilities.js'
 import { SOT_ACTIONS } from './assisted-sot.js'
@@ -178,6 +178,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
     usageKey,
     phase: 'CM',
     group: 'Resource abilities',
+    cost: [card.resource],
 
     availability(state, playerId) {
       const player = playerOf(state, playerId)
@@ -194,7 +195,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
 
     apply(state, player, context) {
       const turn = openCityManagementTurn(state, player)
-      const spend = spendResource(state, player.playerId, card.resource, context.at)
+      const spend = spendActionResource(state, player.playerId, card.resource, context)
       if (turn === undefined || !spend.ok) {
         return err(
           rejected(
@@ -233,6 +234,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         { ...player, stats },
         effect.spent,
         at,
+        record.logId,
       )
       if (!returned.ok) return returned
       return ok({
@@ -1739,6 +1741,10 @@ export function isAssistedActionKind(value: unknown): value is AssistedActionKin
 const definitionOf = (kind: AssistedActionKind): AssistedActionDefinition | undefined =>
   ASSISTED_ACTIONS.find((definition) => definition.kind === kind)
 
+/** Public action metadata only: no player state or private payment options. */
+export const resourceCostOf = (action: string): readonly (string | null)[] | undefined =>
+  ASSISTED_ACTIONS.find((definition) => definition.kind === action)?.cost
+
 /** How a record is named in the public list and in an undo request. */
 const labelOfRecord = (record: AssistedActionRecord): string => {
   const definition = definitionOf(record.kind)
@@ -1776,6 +1782,9 @@ export function availableActionsFor(state: GameState, playerId: string): readonl
     group: definition.group,
     ...(definition.buttonText === undefined ? {} : { buttonText: definition.buttonText }),
     ...(definition.techName === null ? {} : { techName: definition.techName }),
+    ...(definition.cost === undefined ? {} : {
+      payment: { cost: definition.cost, options: resourcePaymentOptions(state, playerId, definition.cost) },
+    }),
     repeatable: definition.strictOnce !== true,
     ...definition.availability(state, playerId),
   }))
@@ -1847,6 +1856,11 @@ export function performAssistedAction(
   if (existing !== undefined) {
     if (existing.playerId === input.playerId && existing.kind === input.action) return ok(state)
     return err(rejected(input.action, blocked('unavailable', 'This request id was already used.')))
+  }
+
+  if (input.payload?.payments !== undefined) {
+    const checked = parseResourcePayments(input.payload.payments, definition.cost)
+    if (!checked.ok) return err(rejected(input.action, blocked('unavailable', checked.error)))
   }
 
   const availability = definition.availability(state, input.playerId)

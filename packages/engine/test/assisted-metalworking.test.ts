@@ -15,7 +15,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
-import { player, withHutInHand } from './assisted-fixture.js'
+import { player, resourcePattern, resourceText, withHutInHand } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-13T12:00:00.000Z'
@@ -99,7 +99,7 @@ describe('Metalworking (Iron, Battle: +3 attack on one of your own arena units)'
     // Placed units are not announced until their player ends their turn: the public line does not name the card
     const hidden = unwrap(press(state, { arenaUnitId: first.id }))
     const hiddenLine = hidden.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog ?? ''
-    expect(hiddenLine).toBe('cash1981 used Metalworking: spent 1 Iron, adding 3 to the attack of a unit it placed (1 → 4)')
+    expect(hiddenLine).toBe(`cash1981 used Metalworking: spent 1 ${resourceText(state, 'Iron')}, adding 3 to the attack of a unit it placed (1 → 4)`)
     expect(hidden.log.some((entry) => entry.playerId === CASH1981 && entry.privateLog.includes('Metalworking: ') && entry.privateLog.includes('item number'))).toBe(true)
     // The card named in the owner's private line never reaches the other player's log
     // The private line follows the public one and carries the time of the press
@@ -114,7 +114,7 @@ describe('Metalworking (Iron, Battle: +3 attack on one of your own arena units)'
     }
     const named = unwrap(press(announced, { arenaUnitId: first.id }))
     expect(named.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toMatch(
-      /^cash1981 used Metalworking: spent 1 Iron, adding 3 to the attack of .* item number #\d+ \(1 → 4\)$/,
+      new RegExp(`^cash1981 used Metalworking: spent 1 ${resourcePattern(state, 'Iron')}, adding 3 to the attack of .* item number #\\d+ \\(1 → 4\\)$`),
     )
   })
 

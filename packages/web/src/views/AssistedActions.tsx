@@ -16,7 +16,6 @@ import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import {
-  ANY_RESOURCES,
   ASSISTED_TECH_PICKERS,
   INVESTABLE_COIN_SOURCES,
   brandenburgForbiddenCells,
@@ -33,7 +32,7 @@ import {
   steamPowerFiguresAt,
   steamPowerSources,
 } from '@civ/engine'
-import type { AssistedActionKind, CombustionTarget, PendingRewardView, TechPicker, TurnPhase } from '@civ/engine'
+import type { AssistedActionKind, CombustionTarget, PendingRewardView, ResourcePaymentChoice, TechPicker, TurnPhase } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
@@ -42,6 +41,7 @@ import { endTurnState } from './EndTurn.js'
 import { HelpHint } from './HelpHint.js'
 import { useMapPicker } from './mapPick.js'
 import { ItemCard } from './ItemCard.js'
+import { paymentStillAvailable, ResourcePaymentPicker, resourcePaymentSelection } from './ResourcePaymentPicker.js'
 import { goToHandItem, goToPanel } from './PhaseSummary.js'
 import type { Run } from './GameView.js'
 import './AssistedActions.css'
@@ -194,10 +194,10 @@ function cardLinkOf(
 
 /** What a tech picker has chosen so far, one shape per kind of picker (`ASSISTED_TECH_PICKERS`). */
 type TechPick =
-  | { readonly kind: 'resources'; readonly resources: readonly string[] }
+  | { readonly kind: 'payment' }
+  | { readonly kind: 'resources' }
   | {
       readonly kind: 'gunpowder'
-      readonly resources: readonly string[]
       readonly mode: 'obsolete' | 'destroy'
       readonly wonderPieceId: string
       readonly buildingPieceId: string
@@ -254,6 +254,8 @@ interface PickerFormProps {
   readonly label: string
   readonly canSubmit: boolean
   readonly picker: TechPicker | undefined
+  readonly paymentLabels: readonly string[]
+  readonly paymentResources: readonly string[]
   readonly send: (args: Record<string, unknown>) => void
 }
 
@@ -262,7 +264,7 @@ interface PickerFormProps {
  * for a cancel, what is cancelled as free text), which coin counter, or Monarchy's mode. It decides no rule: it sends
  * what was picked and the engine accepts or refuses it. Nothing is sent by opening it; only the submit button sends.
  */
-function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }: PickerFormProps): React.JSX.Element {
+function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, paymentLabels, paymentResources, send }: PickerFormProps): React.JSX.Element {
   const opponents = view.opponents ?? []
   // The view is fetched again while the picker is open: what was picked may be gone (a city, a unit, a counter, a player).
   // The selection is worked out here, so the option the list shows is the one that is sent and the one the button names
@@ -285,29 +287,11 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
     </select>
   )
 
-  if (pick.kind === 'resources' && picker?.kind === 'resources') {
-    const { resources } = pick
+  if (pick.kind === 'payment' || (pick.kind === 'resources' && picker?.kind === 'resources')) {
     return (
       <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${label}`}>
-        {resources.map((resource, index) => (
-          <select
-            key={index}
-            aria-label={`Resource ${index + 1}`}
-            value={resource}
-            onChange={(event) =>
-              setPick({ kind: 'resources', resources: resources.map((current, at) => (at === index ? event.target.value : current)) })
-            }
-          >
-            {ANY_RESOURCES.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind}
-              </option>
-            ))}
-          </select>
-        ))}
-        <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
-        <button type="button" className="small" disabled={!canSubmit} onClick={() => send({ resources })}>
-          Pay {listOf(resources)}
+        <button type="button" className="small" disabled={!canSubmit} onClick={() => send(pick.kind === 'resources' ? { resources: paymentResources } : {})}>
+          Pay {listOf(paymentLabels)}
         </button>
         {cancel}
       </span>
@@ -315,7 +299,6 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
   }
 
   if (pick.kind === 'gunpowder') {
-    const { resources } = pick
     const wonders = obsoletableWondersInView(view, ['Ancient', 'Medieval'])
     const buildings = destroyableBuildingsInView(view)
     const obsolete = pick.mode === 'obsolete'
@@ -327,21 +310,6 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
     const ready = obsolete ? wonder !== undefined : building !== undefined
     return (
       <span className="assisted-any-pick" role="group" aria-label={`${label}: resources, mode and target`}>
-        {resources.map((resource, index) => (
-          <select
-            key={index}
-            aria-label={`Resource ${index + 1}`}
-            value={resource}
-            onChange={(event) => setPick({ ...pick, resources: resources.map((current, at) => (at === index ? event.target.value : current)) })}
-          >
-            {ANY_RESOURCES.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind}
-              </option>
-            ))}
-          </select>
-        ))}
-        <span className="muted">Tokens you hold pay for any you lack; culture cards only if tokens run out.</span>
         <label>
           <input type="radio" name={radioName} checked={obsolete} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient or medieval wonder
         </label>
@@ -380,9 +348,9 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
           type="button"
           className="small"
           disabled={!canSubmit || !ready}
-          onClick={() => send({ resources, ...(obsolete ? { mode: 'obsolete', wonderPieceId: wonderId } : { mode: 'destroy', buildingPieceId: buildingId }) })}
+          onClick={() => send({ resources: paymentResources, ...(obsolete ? { mode: 'obsolete', wonderPieceId: wonderId } : { mode: 'destroy', buildingPieceId: buildingId }) })}
         >
-          {obsolete ? `Obsolete ${wonder?.label ?? 'a wonder'}` : `Destroy ${building === undefined ? 'a building' : `${building.label} on ${building.square}`}`} (pay {listOf(resources)})
+          {obsolete ? `Obsolete ${wonder?.label ?? 'a wonder'}` : `Destroy ${building === undefined ? 'a building' : `${building.label} on ${building.square}`}`} (pay {listOf(paymentLabels)})
         </button>
         {cancel}
       </span>
@@ -401,7 +369,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
             </option>
           ))}
         </select>
-        <span className="muted">The Wheat is paid from a token first, then a culture card. The bonus lasts this turn.</span>
+        <span className="muted">The production bonus lasts this turn.</span>
         <button type="button" className="small" disabled={!canSubmit || cityId === ''} onClick={() => send({ cityPieceId: cityId })}>
           Boost {cities.find((city) => city.pieceId === cityId)?.label ?? 'this city'}
         </button>
@@ -490,7 +458,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, send }:
             </option>
           ))}
         </select>
-        <span className="muted">Adds 3 to the attack shown on the unit. The Iron is paid from a token first.</span>
+        <span className="muted">Adds 3 to the attack shown on the unit.</span>
         <button type="button" className="small" disabled={!canSubmit || chosen === undefined} onClick={() => send({ arenaUnitId: unitId })}>
           Add 3 attack to {chosen === undefined ? 'a unit' : itemName(chosen.unit)}
         </button>
@@ -630,42 +598,6 @@ interface ButtonProps {
 const listOf = (names: readonly string[]): string =>
   names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
 
-/** The kinds a fallback pick is filled from, in the order the card texts list the resources. */
-const FALLBACK_KINDS: readonly string[] = ['Iron', 'Wheat', 'Silk', 'Incense', 'Spy', 'Uranium']
-
-/**
- * The resources a picker starts on: the tokens the player holds (a hut in the hand or a resource piece in their own
- * area), so the default pays with tokens, in the order held. The engine pays any other
- * token before it would play a culture card, so this is only a convenience; what is missing is filled from the kinds
- * not picked yet (Iron, Wheat, ...).
- */
-function defaultResourcePick(view: PlayerView, count: number): readonly string[] {
-  const viewer = view.you
-  const name = (raw: string): string | undefined => ANY_RESOURCES.find((resource) => resource.toLowerCase() === raw.toLowerCase())
-  const held: string[] = []
-  if (viewer !== null) {
-    const huts = viewer.items.flatMap((item) => (item.kind === 'hut' && !item.used ? [name(item.name)] : []))
-    const own = view.boardAreas.find((area) => area.playerId === viewer.playerId)
-    const pieces =
-      own === undefined
-        ? []
-        : view.board.pieces.flatMap((piece) => {
-            const x = piece.x + piece.width / 2
-            const y = piece.y + piece.height / 2
-            const inside = x >= own.x && x < own.x + own.width && y >= own.y && y < own.y + own.height
-            return piece.category === 'resource' && inside ? [name(piece.assetId.replace('resources/', ''))] : []
-          })
-    for (const resource of [...huts, ...pieces]) {
-      if (resource !== undefined && held.length < count) held.push(resource)
-    }
-  }
-  const picked = [...held]
-  while (picked.length < count) {
-    picked.push(FALLBACK_KINDS.find((kind) => !picked.includes(kind)) ?? 'Iron')
-  }
-  return picked
-}
-
 /**
  * What the player is asked before a card that was used this turn is used again.
  * Some Great Persons and culture cards allow it and are not built, so the player
@@ -702,6 +634,7 @@ export function AssistedActionButton({
   const [hint, setHint] = useState<string | null>(null)
   // The tech abilities that ask something first (`ASSISTED_TECH_PICKERS`): what the player has picked so far, or `null` while the picker is closed
   const [pick, setPick] = useState<TechPick | null>(null)
+  const [paymentPick, setPaymentPick] = useState<readonly ResourcePaymentChoice[]>([])
   // Combustion: whether the army picker is open. The armies it offers are worked out from the current view on every render, so the
   // square and building a button names are what the engine will work out for that army when it is pressed
   const [armyPickOpen, setArmyPickOpen] = useState(false)
@@ -729,8 +662,19 @@ export function AssistedActionButton({
   const warning = ready ? state.warning : skip?.warning
   const rev = view.rev
   const playerId = view.you.playerId
+  const payment = state.payment
+  const selectedPayments =
+    payment === undefined || !paymentStillAvailable(payment, paymentPick)
+      ? []
+      : resourcePaymentSelection(payment, paymentPick)
+  const payments = selectedPayments.map((option) => option.choice)
+  const withPayments = (args: Record<string, unknown>): Record<string, unknown> =>
+    payment === undefined ? args : { ...args, payments }
+  const payable = payment === undefined
+    ? pick?.kind !== 'resources' && pick?.kind !== 'gunpowder'
+    : selectedPayments.length === payment.cost.length
 
-  const pressCommunism = async (): Promise<void> => {
+  const pressCommunism = async (chosenPayments?: readonly ResourcePaymentChoice[]): Promise<void> => {
     if (mapPicker === null) return
     if (used && !window.confirm(usedAgainQuestion(state.label))) return
     onBeforePress?.()
@@ -754,14 +698,14 @@ export function AssistedActionButton({
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, 'communism', requestId, rev, { square }, used),
+      (requestId) => api.actionWithArgs(gameId, 'communism', requestId, rev, { square, ...(chosenPayments === undefined ? {} : { payments: chosenPayments }) }, used),
       view,
     ).then((done) => {
       if (done) onDone?.()
     })
   }
 
-  const pressSteamPower = async (): Promise<void> => {
+  const pressSteamPower = async (chosenPayments?: readonly ResourcePaymentChoice[]): Promise<void> => {
     if (mapPicker === null || view.you === null) return
     const viewer = view.you
     if (used && !window.confirm(usedAgainQuestion(state.label))) return
@@ -820,7 +764,7 @@ export function AssistedActionButton({
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, 'steamPower', requestId, rev, { from: source, to: target }, used),
+      (requestId) => api.actionWithArgs(gameId, 'steamPower', requestId, rev, { from: source, to: target, ...(chosenPayments === undefined ? {} : { payments: chosenPayments }) }, used),
       view,
     ).then((done) => {
       if (done) onDone?.()
@@ -829,7 +773,7 @@ export function AssistedActionButton({
 
   // The two pickers submit later than the button that opened them, so they carry the button's own guard
   // (busy, read-only, still pressable), and a repeat use is confirmed when they submit, against the state then
-  const canSubmit = !busy && !readOnly && pressable
+  const canSubmit = !busy && !readOnly && pressable && payable
 
   const pressCombustion = (): void => {
     if (view.you === null) return
@@ -851,7 +795,7 @@ export function AssistedActionButton({
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, 'combustion', requestId, rev, { pieceId: target.pieceId }, used),
+      (requestId) => api.actionWithArgs(gameId, 'combustion', requestId, rev, withPayments({ pieceId: target.pieceId }), used),
       view,
     ).then((done) => {
       if (done) onDone?.()
@@ -862,14 +806,21 @@ export function AssistedActionButton({
   // opened, and declining keeps the picker open
   const sendPick = (args: Record<string, unknown>): void => {
     if (!canSubmit) return
-    const key = `${gameId}:${playerId}:${action}:${JSON.stringify(args)}`
+    if (action === 'communism' || action === 'steamPower') {
+      setPick(null)
+      if (action === 'communism') void pressCommunism(payments)
+      else void pressSteamPower(payments)
+      return
+    }
+    const paidArgs = withPayments(args)
+    const key = `${gameId}:${playerId}:${action}:${JSON.stringify(paidArgs)}`
     if (inFlight.has(key)) return
     if (used && !window.confirm(usedAgainQuestion(state.label))) return
     setPick(null)
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, action, requestId, rev, args, used),
+      (requestId) => api.actionWithArgs(gameId, action, requestId, rev, paidArgs, used),
       view,
     ).then((done) => {
       if (done) onDone?.()
@@ -881,13 +832,12 @@ export function AssistedActionButton({
     setHint(null)
     switch (picker.kind) {
       case 'resources':
-        setPick({ kind: 'resources', resources: defaultResourcePick(view, picker.count) })
+        setPick({ kind: 'resources' })
         return
       case 'gunpowder': {
         const wonder = obsoletableWondersInView(view, ['Ancient', 'Medieval'])[0]
         setPick({
           kind: 'gunpowder',
-          resources: defaultResourcePick(view, 2),
           mode: wonder === undefined ? 'destroy' : 'obsolete',
           wonderPieceId: wonder?.pieceId ?? '',
           buildingPieceId: destroyableBuildingsInView(view)[0]?.pieceId ?? '',
@@ -945,6 +895,7 @@ export function AssistedActionButton({
   }
 
   const press = (): void => {
+    setPaymentPick(payment === undefined ? [] : resourcePaymentSelection(payment).map((option) => option.choice))
     const picker = ASSISTED_TECH_PICKERS.get(action)
     if (picker !== undefined) {
       openPicker(picker)
@@ -955,11 +906,17 @@ export function AssistedActionButton({
       return
     }
     if (action === 'communism') {
-      void pressCommunism()
+      if (payment !== undefined) setPick({ kind: 'payment' })
+      else void pressCommunism()
       return
     }
     if (action === 'steamPower') {
-      void pressSteamPower()
+      if (payment !== undefined) setPick({ kind: 'payment' })
+      else void pressSteamPower()
+      return
+    }
+    if (payment !== undefined) {
+      setPick({ kind: 'payment' })
       return
     }
     let chosen = action
@@ -1007,6 +964,7 @@ export function AssistedActionButton({
       )}
       {warning !== undefined && (
         <span role="status" className="assisted-warning">
+          {payment !== undefined && 'Automatic payment: '}
           {warning}
         </span>
       )}
@@ -1014,6 +972,9 @@ export function AssistedActionButton({
         <span role="status" className="assisted-warning">
           {hint}
         </span>
+      )}
+      {(pick !== null || armyPickOpen) && payment !== undefined && (
+        <ResourcePaymentPicker payment={payment} selected={selectedPayments} onChange={setPaymentPick} />
       )}
       {armyPickOpen && (
         <span className="assisted-any-pick" role="group" aria-label="Army that uses Combustion">
@@ -1036,6 +997,8 @@ export function AssistedActionButton({
           label={state.label}
           canSubmit={canSubmit}
           picker={ASSISTED_TECH_PICKERS.get(action)}
+          paymentLabels={selectedPayments.map((option) => option.label)}
+          paymentResources={payments.map((choice) => choice.resource)}
           send={sendPick}
         />
       )}

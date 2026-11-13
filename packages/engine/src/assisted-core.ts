@@ -17,6 +17,7 @@ import type { EngineError } from './errors.js'
 import type { Government } from './government.js'
 import { nextId } from './random.js'
 import type { Result } from './result.js'
+import type { ResourcePaymentChoice } from './assisted-resources.js'
 import type { SheetName } from './sheet-name.js'
 import type {
   AssistedActionKind,
@@ -347,7 +348,7 @@ export interface AssignScoutPayload {
   readonly cityPieceId: string | null
 }
 
-export type AssistedPayload =
+export type AssistedPayload = (
   | ChooseRewardPayload
   | BuildPayload
   | StartBuildingProgramPayload
@@ -372,6 +373,8 @@ export type AssistedPayload =
   | FeudalismHarvestPayload
   | FoundCityPayload
   | AssignScoutPayload
+  | { readonly payments?: readonly ResourcePaymentChoice[] }
+) & { readonly payments?: readonly ResourcePaymentChoice[] }
 
 export interface ApplyContext {
   readonly requestId: string
@@ -414,6 +417,8 @@ export type AssistedActionDefinition = {
   readonly phase: TurnPhase | 'ANY'
   /** The heading the action is listed under in its tab. */
   readonly group: string
+  /** One payable slot per entry; `null` accepts any resource. Absent for non-resource actions. */
+  readonly cost?: readonly (string | null)[]
   /** What the button says when "Use <label>" is not it ("Draw two level II events"). */
   readonly buttonText?: string
   /**

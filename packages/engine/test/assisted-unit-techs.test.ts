@@ -22,7 +22,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
-import { player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { player, resourcePattern, resourceText, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { coverMap } from './cover-map.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 import { put, sotTurn } from './sot-fixture.js'
@@ -141,7 +141,7 @@ describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
     const state = used()
     expect(hasHut(state, 'Iron')).toBe(false)
     expect(techWoundsOwed(state.battle!, CASH1981, tech)).toBe(wounds)
-    expect(state.log.at(-1)?.publicLog).toContain(`used ${tech}: spent 1 Iron to deal up to ${wounds} wounds`)
+    expect(state.log.at(-1)?.publicLog).toContain(`used ${tech}: spent 1 ${resourceText(state, 'Iron')} to deal up to ${wounds} wounds`)
     expect(player(state).playerTurns.at(-1)?.usedActions).toContain(`card:${tech}`)
     expect(assistedAvailability(state, CASH1981, kind).status).toBe('used')
   })
@@ -392,8 +392,8 @@ describe('Gunpowder (Any 2, City Management)', () => {
     const paid = unwrap(press(state, 'gunpowder', 'req-1', { resources: ['Iron', 'Wheat'] }))
     expect(hasHut(paid, 'Iron')).toBe(false)
     expect(hasHut(paid, 'Wheat')).toBe(false)
-    expect(paid.log.at(-1)?.publicLog).toContain('used Gunpowder: spent Iron and Wheat')
-    expect(paid.log.at(-1)?.publicLog).toMatch(/^cash1981 used Gunpowder: spent Iron and Wheat, destroying Library on E5 \(in no single player's outskirts\)$/)
+    expect(paid.log.at(-1)?.publicLog).toContain(`used Gunpowder: spent ${resourceText(paid, 'Iron')} and ${resourceText(paid, 'Wheat')}`)
+    expect(paid.log.at(-1)?.publicLog).toMatch(new RegExp(`^cash1981 used Gunpowder: spent ${resourcePattern(paid, 'Iron')} and ${resourcePattern(paid, 'Wheat')}, destroying Library on E5 \\(in no single player's outskirts\\)$`))
     expect(assistedAvailability(paid, CASH1981, 'gunpowder').status).toBe('used')
     expect(paid.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'gunpowder' })
   })

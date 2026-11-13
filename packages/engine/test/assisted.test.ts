@@ -25,7 +25,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 
-import { chivalryTurn, player, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { chivalryTurn, player, resourceText, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 /** Nothing from a record's effect, and no hut identity, is allowed in a view. */
@@ -484,7 +484,7 @@ describe('the projection', () => {
           turnNumber: 1,
           phase: 'CM',
           status: 'applied',
-          text: 'cash1981 used Chivalry: spent 1 Incense and gained 5 (5) culture',
+          text: `cash1981 used Chivalry: spent 1 ${resourceText(state, 'Incense')} and gained 5 (5) culture`,
           logId,
         },
       ])

@@ -43,6 +43,7 @@ import {
   spendEachResource,
   spendResource,
 } from './assisted-resources.js'
+import type { ResourcePaymentChoice } from './assisted-resources.js'
 import {
   PHASE_REASON,
   READY,
@@ -180,8 +181,8 @@ function namedResources(payload: Payload, count: number): Result<readonly string
   const named = payload['resources']
   const asked = `Name exactly ${count} resources to pay: ${ANY_RESOURCES.join(', ')}.`
   if (!Array.isArray(named) || named.length !== count) return err(asked)
-  const names = (named as readonly unknown[]).map(anyResourceName)
-  return names.some((name) => name === undefined) ? err(asked) : ok(names as readonly string[])
+  const names = named.map(anyResourceName).filter((name): name is string => name !== undefined)
+  return names.length !== count ? err(asked) : ok(names)
 }
 
 interface Paid {
@@ -191,10 +192,10 @@ interface Paid {
 }
 
 /** Pays the ability's resources, or says why not: `unavailable` for names that do not fit, `needs-resource` for tokens and cards the player lacks. */
-function pay(state: GameState, player: Playerhand, payment: Payment, payload: Payload, at: string | undefined): Result<Paid, BlockedAvailability> {
+function pay(state: GameState, player: Playerhand, payment: Payment, payload: Payload, at: string | undefined, payments: readonly ResourcePaymentChoice[] | undefined): Result<Paid, BlockedAvailability> {
   if (payment.kind === 'none') return ok({ state, spent: [], said: '' })
   if (payment.kind === 'one') {
-    const paid = spendResource(state, player.playerId, payment.resource, at)
+    const paid = spendResource(state, player.playerId, payment.resource, at, false, payments?.[0])
     return paid.ok
       ? ok({ state: paid.value.state, spent: [paid.value.spent], said: paid.value.said })
       : err(
@@ -205,12 +206,12 @@ function pay(state: GameState, player: Playerhand, payment: Payment, payload: Pa
         )
   }
   if (payment.kind === 'each') {
-    const each = spendEachResource(state, player.playerId, payment.kinds, at)
+    const each = spendEachResource(state, player.playerId, payment.kinds, at, payments)
     return each.ok ? ok(each.value) : err(blocked('needs-resource', missingEachText(each.error.missing)))
   }
   const names = namedResources(payload, payment.count)
   if (!names.ok) return err(blocked('unavailable', names.error))
-  const paid = spendAnyResources(state, player.playerId, names.value, at)
+  const paid = spendAnyResources(state, player.playerId, names.value, at, payments)
   if (!paid.ok) {
     return err(
       blocked('needs-resource', `You cannot pay ${payment.count} resources: you hold too few resource tokens or culture cards that can be played as a resource.`),
@@ -236,6 +237,11 @@ export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Pla
     usageKey,
     phase: spec.phase,
     group: spec.group ?? GROUP,
+    ...(spec.payment.kind === 'none' ? {} : {
+      cost: spec.payment.kind === 'one' ? [spec.payment.resource]
+        : spec.payment.kind === 'each' ? spec.payment.kinds
+          : Array.from({ length: spec.payment.count }, () => null),
+    }),
     ...(spec.buttonText === undefined ? {} : { buttonText: spec.buttonText }),
 
     availability(state, playerId) {
@@ -261,12 +267,12 @@ export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Pla
       if (stopped !== undefined) return err(rejected(spec.kind, stopped))
       const refuse = (status: BlockedAvailability['status'], reason: string): EngineError =>
         rejected(spec.kind, blocked(status, reason))
-      const payload: Payload = (context.payload ?? {}) as unknown as Payload
+      const payload: Payload = { ...context.payload }
 
       // Everything is checked before anything is paid, so a refusal spends nothing
       const planned = spec.plan(state, player, payload)
       if (!planned.ok) return err(refuse('unavailable', planned.error))
-      const paid = pay(state, player, spec.payment, payload, context.at)
+      const paid = pay(state, player, spec.payment, payload, context.at, context.payload?.payments)
       if (!paid.ok) return err(rejected(spec.kind, paid.error))
 
       const paying = playerOf(paid.value.state, player.playerId) ?? player
@@ -306,7 +312,7 @@ export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Pla
       const undone = spec.undo(state, player, typed, record, at)
       if (!undone.ok) return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: undone.error })
       const holder = playerOf(undone.value.state, player.playerId) ?? player
-      const returned = returnResources(undone.value.state, holder, typed.spent, at)
+      const returned = returnResources(undone.value.state, holder, typed.spent, at, record.logId)
       if (!returned.ok) return returned
       return ok({
         state: returned.value,

@@ -6,7 +6,7 @@
  */
 
 import { moveFigureWithMovementUnchecked } from './actions/board.js'
-import { resourceAvailability, returnedText, returnResource, spendResource } from './assisted-resources.js'
+import { resourceAvailability, returnedText, returnResource, spendActionResource } from './assisted-resources.js'
 import {
   REPEAT_NOTE,
   blocked,
@@ -59,6 +59,7 @@ export const steamPower: AssistedActionDefinition = {
   usageKey: STEAM_POWER_USAGE_KEY,
   phase: 'CM',
   group: 'Resource abilities',
+  cost: ['Silk'],
   buttonText: 'Use Steam Power (Silk)',
 
   availability(state, playerId) {
@@ -103,7 +104,7 @@ export const steamPower: AssistedActionDefinition = {
       return err(rejected('steamPower', blocked('unavailable', `${squareLabel(to)} is not a water square these figures may be moved to.`)))
     }
 
-    const spend = spendResource(state, player.playerId, 'Silk', context.at)
+    const spend = spendActionResource(state, player.playerId, 'Silk', context)
     if (!spend.ok) return err(rejected('steamPower', blocked('needs-resource', 'You need a Silk token.')))
 
     const sameSquare = sameCell(from, to)
@@ -203,7 +204,7 @@ export const steamPower: AssistedActionDefinition = {
       if (next === undefined) return refuse(`${STEAM_POWER_NAME} cannot be undone: a figure could not be moved back.`)
       current = next
     }
-    const returned = returnResource(current, playerOf(current, player.playerId) ?? player, effect.spent, at)
+    const returned = returnResource(current, playerOf(current, player.playerId) ?? player, effect.spent, at, record.logId)
     if (!returned.ok) return returned
     return ok({
       state: returned.value,
