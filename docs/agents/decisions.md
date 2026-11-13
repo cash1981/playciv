@@ -849,8 +849,9 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   or piece, of the six kinds); only the shortfall that tokens cannot cover is paid with culture cards as above,
   never the same card twice, so a card is never burned while any token could pay. The names do not choose the
   card: the fewest-allowed card goes first over the six resources, the rule the availability uses, so its warning
-  names exactly the cards played (the log says each is played "as" the resource it was assigned in that order,
-  not necessarily one that was named). The web tech dialog asks for the two resources before paying, starting on tokens the
+  names exactly the cards played, except while Marie Curie is armed and the player holds both the armed
+  substitute token and a real Uranium token (see limitations.md). The log says each card is played "as" the
+  resource it was assigned in that order, which is currently always Iron, not one that was named. The web tech dialog asks for the two resources before paying, starting on tokens the
   player holds. Undo returns exactly the tokens and cards spent. The effect (obsolete an ancient or medieval
   wonder, or destroy a building of the player's choice) stays manual: obsolescence is not tracked in the engine
   and the choice is the player's; the log line says so.
