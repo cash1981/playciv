@@ -71,7 +71,7 @@ describe('DisplaySettings', () => {
     fireEvent.change(dialog.getByLabelText('Map zoom'), { target: { value: '0.8' } })
     fireEvent.change(dialog.getByLabelText('Status icon size'), { target: { value: '1.2' } })
     fireEvent.change(dialog.getByLabelText('Status panel width'), { target: { value: '19.5' } })
-    const expected = { mapZoom: 0.8, iconScale: 1.2, sidebarWidth: 19.5, showLabels: true }
+    const expected = { mapZoom: 0.8, iconScale: 1.2, sidebarWidth: 19.5, sidebarColumns: 'auto', showLabels: true }
     expect(shown()).toEqual(expected)
     expect(stored()).toEqual(expected)
   })
@@ -79,7 +79,7 @@ describe('DisplaySettings', () => {
   it('reads what an earlier visit saved', () => {
     localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"mapZoom":0.5,"iconScale":1.4,"sidebarWidth":22,"showLabels":false}')
     render(<Harness />)
-    expect(shown()).toEqual({ mapZoom: 0.5, iconScale: 1.4, sidebarWidth: 22, showLabels: false })
+    expect(shown()).toEqual({ mapZoom: 0.5, iconScale: 1.4, sidebarWidth: 22, sidebarColumns: 'auto', showLabels: false })
     const dialog = within(openPanel())
     expect((dialog.getByLabelText('Status icon size') as HTMLInputElement).value).toBe('1.4')
     // An explicit off is respected, not replaced by the default.
@@ -112,11 +112,45 @@ describe('DisplaySettings', () => {
     const dialog = within(openPanel())
     expect((dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement).checked).toBe(false)
     fireEvent.click(dialog.getByRole('button', { name: 'Reset to defaults' }))
-    const defaults = { mapZoom: 'auto', iconScale: 1, sidebarWidth: 16.5, showLabels: true }
+    const defaults = { mapZoom: 'auto', iconScale: 1, sidebarWidth: 16.5, sidebarColumns: 'auto', showLabels: true }
     expect(shown()).toEqual(defaults)
     expect(stored()).toEqual(defaults)
     expect((dialog.getByRole('switch', { name: 'Auto' }) as HTMLInputElement).checked).toBe(true)
     expect((dialog.getByRole('switch', { name: 'Show labels' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('Icons per row is a 1-4 slider that Auto disables; turning Auto off starts from what is shown, and it saves', () => {
+    render(<Harness />)
+    const dialog = within(openPanel())
+    const columns = dialog.getByLabelText('Icons per row') as HTMLInputElement
+    const auto = dialog.getByRole('switch', { name: 'Auto columns' }) as HTMLInputElement
+    expect([columns.min, columns.max, columns.step]).toEqual(['1', '4', '1'])
+    expect(auto.checked).toBe(true)
+    expect(columns.disabled).toBe(true)
+    expect(columns.getAttribute('aria-valuetext')).toBe('Auto')
+    expect(auto.getAttribute('aria-describedby')).toBe(
+      dialog.getByText('As many per row as the width and icon size allow').id,
+    )
+
+    // No sidebar is mounted here, so it starts from the most there can be.
+    fireEvent.click(auto)
+    expect(columns.disabled).toBe(false)
+    expect(shown()).toMatchObject({ sidebarColumns: 4 })
+    fireEvent.change(columns, { target: { value: '2' } })
+    expect(columns.getAttribute('aria-valuetext')).toBe('2')
+    expect(shown()).toMatchObject({ sidebarColumns: 2 })
+    expect(stored()).toMatchObject({ sidebarColumns: 2 })
+
+    fireEvent.click(auto)
+    expect(shown()).toMatchObject({ sidebarColumns: 'auto' })
+    expect(stored()).toMatchObject({ sidebarColumns: 'auto' })
+  })
+
+  it('Reset to defaults gives icons per row back to Auto', () => {
+    localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"sidebarColumns":3}')
+    render(<Harness />)
+    fireEvent.click(within(openPanel()).getByRole('button', { name: 'Reset to defaults' }))
+    expect(shown()).toMatchObject({ sidebarColumns: 'auto' })
   })
 
   it('Show labels is a switch that is on by default, has a help sentence, toggles and saves', () => {

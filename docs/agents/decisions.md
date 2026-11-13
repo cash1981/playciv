@@ -154,7 +154,10 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   mount). The sidebar's stat groups lay out as many columns as fit (CSS `auto-fit`
   from a minimum cell width that scales with the icon size), so panel width and
   icon size decide the columns instead of a fixed count; a group has four stats, so
-  four is the most. Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
+  four is the most. An "Icons per row" setting (1-4, Auto by default) fixes the
+  number instead (`sidebarColumns`, handed to the sidebar as `--pss-columns`).
+  Movement sits in the Economy group after Culture, and Culture hand size among the
+  modifiers after Stacking. Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
   manual choice is continuous. Nothing is stored on the server. A "Show labels"
   switch, on by default, puts the name of every status value above its icon in
   the sidebar instead of relying on tooltips; a stored explicit off is kept, and

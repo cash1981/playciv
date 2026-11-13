@@ -34,7 +34,7 @@ deployment reports do not establish present health.
   map and edits every status value (government select included). It replaced the
   old Player status table; the Coins panel is what is left of that panel.
 - Display settings (#342): a gear in the Board header opens sliders for map zoom,
-  status icon size and status panel width plus a Show labels switch (on by
+  status icon size, status panel width and icons per row plus a Show labels switch (on by
   default), saved per browser. The sidebar can be minimised under the map.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
   Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein, Carnegie, Jim Henson, Jacques Cousteau, Jerry Garcia, Ada Lovelace, Akira

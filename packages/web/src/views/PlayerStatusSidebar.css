@@ -164,6 +164,12 @@
   display: block;
 }
 
+/* The Display settings' icons per row, when it is not Auto (BoardView sets the attribute
+   and `--pss-columns` on .board-main). */
+[data-pss-columns='fixed'] .pss-grid {
+  grid-template-columns: repeat(var(--pss-columns, 4), minmax(0, 1fr));
+}
+
 /* The box is the same square in every cell. */
 .pss-icon-box {
   display: flex;

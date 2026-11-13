@@ -389,6 +389,8 @@ describe('PlayerStatusSidebar', () => {
     expect(grid).toContain('repeat(auto-fit, minmax(min(var(--pss-cell-min), 100%), 1fr))')
     expect(grid).toContain('--pss-cell-min: calc(var(--pss-box) + 1.4rem)')
     expect(grid).not.toMatch(/repeat\(\d, /)
+    // A chosen number of icons per row replaces the fitting.
+    expect(rule("[data-pss-columns='fixed'] .pss-grid")).toContain('repeat(var(--pss-columns, 4), minmax(0, 1fr))')
     // The editor still spans the whole grid, whatever the number of columns.
     expect(rule('.pss-editor')).toContain('grid-column: 1 / -1')
   })
@@ -648,6 +650,24 @@ describe('PlayerStatusSidebar editing', () => {
     expect(save).not.toHaveBeenCalled()
     expect(screen.queryByRole('group', { name: 'Edit Alice Trade' })).toBeNull()
     expect(document.activeElement).toBe(stat('Edit Alice Trade, currently 7'))
+  })
+
+  it('puts Movement in the Economy group after Culture and Culture hand size among the modifiers', () => {
+    render(<PlayerStatusSidebar {...READ_ONLY} view={makeView()} />)
+    const names = (group: string): (string | null | undefined)[] =>
+      [...within(block('Alice')).getByRole('list', { name: group }).querySelectorAll('.pss-icon, svg[aria-label]')].map((icon) =>
+        icon.getAttribute('alt') ?? icon.getAttribute('aria-label'),
+      )
+    expect(names('Economy')).toEqual(['Coins', 'Trade', 'Culture', 'Movement'])
+    expect(names('Modifiers')).toEqual(['Stacking', 'Culture hand size', 'Combat', 'Combat hand size'])
+  })
+
+  it('opens the Movement editor under the Economy group, and the Combat hand size editor under the Modifiers', () => {
+    renderEditable()
+    open('Edit Alice Movement, currently 3+1')
+    const alice = within(block('Alice'))
+    expect(alice.getByRole('list', { name: 'Economy' }).querySelector('.pss-editor')).not.toBeNull()
+    expect(alice.getByRole('list', { name: 'Modifiers' }).querySelector('.pss-editor')).toBeNull()
   })
 
   it('opens the editor under its grid row and keeps the four-column grid intact', () => {

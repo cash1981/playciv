@@ -640,10 +640,10 @@ function PlayerBlock({
         <Stat name="Culture" value={stats.culture} control={edit('culture')}>
           <FileIcon file="culture.png" label="Culture" />
         </Stat>
-        <Stat name="Culture hand size" value={stats.cultureHandSize}>
-          <FileIcon file="culture-hand-size.svg" label="Culture hand size" />
+        <Stat name="Movement" value={stats.mvmt} control={edit('mvmt')}>
+          <MovementIcon color={block.color} />
         </Stat>
-        {editorIn(['trade', 'culture'])}
+        {editorIn(['trade', 'culture', 'mvmt'])}
       </ul>
       <ul className="pss-grid" aria-label="Units">
         <Stat name="Infantry" value={stats.infantry} control={edit('infantry')}>
@@ -685,8 +685,8 @@ function PlayerBlock({
         <Stat name="Stacking" value={stats.stacking} control={edit('stacking')}>
           <FileIcon file="stacking.png" label="Stacking" />
         </Stat>
-        <Stat name="Movement" value={stats.mvmt} control={edit('mvmt')}>
-          <MovementIcon color={block.color} />
+        <Stat name="Culture hand size" value={stats.cultureHandSize}>
+          <FileIcon file="culture-hand-size.svg" label="Culture hand size" />
         </Stat>
         <Stat name="Combat" value={formatCombat(stats.combat)}>
           <CombatIcon value={stats.combat} />
@@ -699,7 +699,7 @@ function PlayerBlock({
         >
           <FileIcon file="combat-hand-size.png" label="Combat hand size" />
         </Stat>
-        {editorIn(['stacking', 'mvmt', 'combatHandSize'])}
+        {editorIn(['stacking', 'combatHandSize'])}
       </ul>
       <ul className="pss-grid" aria-label="Investments">
         <Stat name={EDIT_LABELS.efta} label={INVESTMENT_LABELS.efta} value={stats.efta} control={edit('efta')}>

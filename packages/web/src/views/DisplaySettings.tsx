@@ -1,7 +1,7 @@
 /**
  * The Display settings panel of the board (issue #342): sliders for the map zoom
- * (with an Auto switch), the status icon size, the status panel width and a switch
- * that names every status value above its icon.
+ * (with an Auto switch), the status icon size, the status panel width, the icons per
+ * row (with an Auto switch) and a switch that names every status value above its icon.
  *
  * A gear button in the Board header opens it. It is a dialog (a bottom sheet on a
  * phone) that closes with Escape, its Close button or a tap outside it, and hands
@@ -16,6 +16,7 @@ import {
   DEFAULT_DISPLAY_SETTINGS,
   ICON_SCALE_RANGE,
   MAP_ZOOM_RANGE,
+  SIDEBAR_COLUMNS_RANGE,
   SIDEBAR_WIDTH_RANGE,
   clampToRange,
   loadDisplaySettings,
@@ -103,6 +104,17 @@ function SliderRow({
       )}
     </div>
   )
+}
+
+/**
+ * How many icons per row the first status group shows right now, so that turning Auto
+ * off keeps what is on screen instead of jumping. Falls back to the most there can be.
+ */
+function shownSidebarColumns(): number {
+  const cells = document.querySelectorAll('.pss-grid')[0]?.querySelectorAll('.pss-stat')
+  if (cells === undefined || cells.length === 0) return SIDEBAR_COLUMNS_RANGE.max
+  const lefts = new Set([...cells].map((cell) => Math.round(cell.getBoundingClientRect().left)))
+  return clampToRange(lefts.size, SIDEBAR_COLUMNS_RANGE)
 }
 
 function GearIcon(): React.JSX.Element {
@@ -195,6 +207,7 @@ export function DisplaySettings({ settings, autoZoom, onChange, onReset }: Props
   }
 
   const auto = settings.mapZoom === 'auto'
+  const columnsAuto = settings.sidebarColumns === 'auto'
   const zoomValue = clampToRange(settings.mapZoom === 'auto' ? autoZoom : settings.mapZoom, MAP_ZOOM_RANGE)
 
   return (
@@ -305,6 +318,36 @@ export function DisplaySettings({ settings, autoZoom, onChange, onReset }: Props
               {...(stacked ? { note: 'On narrow screens the status panel fills the width, so this has no effect.' } : {})}
               onChange={(sidebarWidth) => onChange({ ...settings, sidebarWidth })}
             />
+
+            <SliderRow
+              id={`${idPrefix}-columns`}
+              label="Icons per row"
+              range={SIDEBAR_COLUMNS_RANGE}
+              value={columnsAuto ? SIDEBAR_COLUMNS_RANGE.max : settings.sidebarColumns}
+              display={columnsAuto ? 'Auto' : String(settings.sidebarColumns)}
+              disabled={columnsAuto}
+              onChange={(sidebarColumns) => onChange({ ...settings, sidebarColumns })}
+            />
+            <div className="ds-switch-row">
+              <label className="ds-switch">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={columnsAuto}
+                  aria-describedby={`${idPrefix}-columns-note`}
+                  onChange={(event) =>
+                    onChange({
+                      ...settings,
+                      sidebarColumns: event.target.checked ? 'auto' : shownSidebarColumns(),
+                    })
+                  }
+                />
+                <span>Auto columns</span>
+              </label>
+              <span id={`${idPrefix}-columns-note`} className="ds-note">
+                As many per row as the width and icon size allow
+              </span>
+            </div>
 
             <div className="ds-actions">
               <button type="button" onClick={onReset}>
