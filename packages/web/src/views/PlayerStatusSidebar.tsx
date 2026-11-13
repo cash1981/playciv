@@ -4,17 +4,18 @@
  *
  * One compact block per player (the viewer first, then every opponent): the civ
  * marker, `username - civilization`, the government with its seal, then every
- * value of the Player status table as an icon with its number. It shows only what
- * the projections already give every member (public stats, the revealed
- * civilization and the government).
+ * status value (Trade, Culture, units, modifiers, investments) as an icon with its
+ * number. It shows only what the projections already give every member (public
+ * stats, the revealed civilization and the government). It replaced the old Player
+ * status table.
  *
- * It edits the same fields the Player status panel does, with the same rules:
- * shared bookkeeping that ANY member may change for ANY player, saved through
+ * It edits those fields under the rules the table had: shared bookkeeping that ANY
+ * member may change for ANY player, saved through
  * `api.setPlayerStat` / `api.setPlayerGovernment`, disabled while busy and absent
  * for a viewer who cannot edit (spectator, replay, locked game). A stat is a tap
  * target that opens a compact editor for that one value. Coins total, Culture
  * hand size and Combat are calculated and stay read-only; the Coins counters are
- * edited in the Player status panel.
+ * edited in the Coins panel.
  *
  * Stacked under the map (900px and below) it can be collapsed to its heading, and
  * the choice is remembered like the other panels'. Beside the map it is always
@@ -36,7 +37,7 @@ import type { Government, InvestmentCardInfo, PlayerStatKey } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
-import { GovernmentReferenceDialog } from './GovernmentReferenceDialog.js'
+import { GovernmentReferenceDialog, OPEN_GOVERNMENT_REFERENCE } from './GovernmentReferenceDialog.js'
 import type { Run } from './GameView.js'
 import './PlayerStatusSidebar.css'
 import { parseStatInput } from './statInput.js'
@@ -287,8 +288,8 @@ function Stat({
 /**
  * The editor for one stat, shown under its grid row: a stepper for numbers, a
  * text field for Movement and Combat hand size. Enter, Done or leaving the editor
- * saves; Escape cancels; an invalid or out-of-range entry is dropped like the
- * Player status table's cell drops it, so nothing is sent.
+ * saves; Escape cancels; an invalid or out-of-range entry is dropped, as the old
+ * table's cell dropped it, so nothing is sent.
  */
 function StatEditor({
   name,
@@ -726,6 +727,16 @@ export function PlayerStatusSidebar({ gameId, view, busy, readOnly, run }: Props
   const blocks = blocksOf(view)
   const [showReference, setShowReference] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
+  // The Social policy panel's `?` asks for the same dialog. There is no button of ours to
+  // return focus to then, so `opener` is cleared and focus goes where the dialog's default says.
+  useEffect(() => {
+    const open = (): void => {
+      opener.current = null
+      setShowReference(true)
+    }
+    window.addEventListener(OPEN_GOVERNMENT_REFERENCE, open)
+    return () => window.removeEventListener(OPEN_GOVERNMENT_REFERENCE, open)
+  }, [])
   // Only meaningful where the sidebar is stacked under the map (900px and below): the heading
   // with the toggle is hidden by the stylesheet beside the map, where the content is always shown.
   const [open, setOpen] = usePanelOpen(PANEL_ID, true)

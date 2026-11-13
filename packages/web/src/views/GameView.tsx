@@ -25,6 +25,7 @@ import { BuildBar } from './BuildPicker.js'
 import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
+import { CoinsPanel } from './CoinsPanel.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
@@ -37,7 +38,6 @@ import type { MapPicker, MapPickRequest } from './mapPick.js'
 import { PlayCardControl } from './PlayableCards.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
-import { StatusPanel } from './StatusPanel.js'
 import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { focusPlayer } from './turnFocus.js'
@@ -745,7 +745,7 @@ export function GameView({
           historical={historical}
           readOnly={displayedView.you === null || replaying || locked}
         />
-        <StatusPanel
+        <CoinsPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}

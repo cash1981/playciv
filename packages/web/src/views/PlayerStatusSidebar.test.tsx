@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 import { useState } from 'react'
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, MAX_COMBAT_HAND_SIZE_LENGTH } from '@civ/engine'
@@ -14,6 +14,7 @@ import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { AboutView } from './AboutView.js'
 import type { Run } from './GameView.js'
+import { openGovernmentReference } from './GovernmentReferenceDialog.js'
 import { PlayerStatusSidebar, flagColor, formatCombat } from './PlayerStatusSidebar.js'
 
 /**
@@ -114,7 +115,7 @@ describe('PlayerStatusSidebar', () => {
   it.each([
     ['a viewer who cannot edit', READ_ONLY],
     ['an editor', EDITABLE],
-  ])('shows every status value of the Player status table with an accessible icon name for %s', (_who, props) => {
+  ])('shows every status value (Trade, Culture, units, modifiers, investments) with an accessible icon name for %s', (_who, props) => {
     render(<PlayerStatusSidebar {...props} view={makeView()} />)
     const alice = within(block('Alice'))
 
@@ -725,6 +726,28 @@ describe('PlayerStatusSidebar editing', () => {
     expect(document.querySelectorAll('.reference-card')).toHaveLength(GOVERNMENT_CARDS.length)
   })
 
+  it('opens the reference when the Social policy panel asks for it, whether or not the sidebar is collapsed', () => {
+    localStorage.setItem('civ.panel.player-status', 'false')
+    try {
+      render(<PlayerStatusSidebar {...READ_ONLY} view={view} />)
+      expect(document.querySelector('.pss-content')?.hasAttribute('hidden')).toBe(true)
+      expect(screen.queryByRole('dialog')).toBeNull()
+      const opener = document.createElement('button')
+      document.body.append(opener)
+      opener.focus()
+
+      act(() => openGovernmentReference())
+
+      expect(screen.getByRole('dialog', { name: 'Government card reference' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.activeElement).toBe(opener)
+      opener.remove()
+    } finally {
+      localStorage.removeItem('civ.panel.player-status')
+    }
+  })
+
   it('offers nothing to edit when readOnly: no stat buttons, switches, selects or api calls', () => {
     const stats = setStat()
     const government = vi.spyOn(api, 'setPlayerGovernment').mockResolvedValue(view)
@@ -1010,7 +1033,7 @@ describe('PlayerStatusSidebar collapsing', () => {
     expect(content(container).hidden).toBe(false)
     expect(button.getAttribute('aria-controls')).toBe(content(container).id)
     expect(container.querySelector(`#${content(container).id}`)).toBe(content(container))
-    // The name does not flip with the state, and is not the one of the Player status panel's heading.
+    // The name does not flip with the state, and is not the heading of another panel.
     expect(screen.getByRole('heading', { name: 'Player overview', level: 2 })).toBeTruthy()
     fireEvent.click(button)
     expect(screen.getByRole('heading', { name: 'Player overview', level: 2 })).toBeTruthy()

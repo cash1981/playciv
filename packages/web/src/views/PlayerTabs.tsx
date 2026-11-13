@@ -1,6 +1,5 @@
 /**
- * One coloured tab per player, shared by the Techs and Social policy panels —
- * and, without a colour, by the two sections of the Player status panel.
+ * One coloured tab per player, shared by the Techs and Social policy panels.
  *
  * The label is the username and the accent is the player's board colour. The
  * keyboard handling is the shared `handleTabKeyDown`. The panels pass their own

@@ -1,8 +1,7 @@
 /**
- * The validation of one typed stat value, shared by every editor of the status
- * bookkeeping (the Player status table's `StatCell` and the sidebar's editor) so
- * the two cannot drift. Pure: it reads the text and says what to save, nothing
- * else. An invalid entry is a value, not an exception; the caller reverts it.
+ * The validation of one typed stat value for the status sidebar's editor. Pure: it
+ * reads the text and says what to save, nothing else. An invalid entry is a value,
+ * not an exception; the caller reverts it.
  */
 
 import { isCombatHandSizeValue, isMovementValue } from '@civ/engine'

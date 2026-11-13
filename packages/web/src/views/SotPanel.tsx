@@ -17,7 +17,7 @@ import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { HelpHint } from './HelpHint.js'
 import { goToPanel } from './PhaseSummary.js'
-import { openGovernmentReference } from './StatusPanel.js'
+import { openGovernmentReference } from './GovernmentReferenceDialog.js'
 import './SotPanel.css'
 
 type StartOfTurn = NonNullable<NonNullable<PlayerView['you']>['startOfTurn']>
