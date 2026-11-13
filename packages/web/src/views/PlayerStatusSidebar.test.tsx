@@ -216,6 +216,13 @@ describe('PlayerStatusSidebar', () => {
     expect(rule).not.toContain('nowrap')
   })
 
+  it('scrolls a long name and civilization sideways instead of truncating the title', () => {
+    const css = readFileSync('src/views/PlayerStatusSidebar.css', 'utf8').replaceAll('\r\n', '\n')
+    const rule = /\.pss-title \{[^}]*\}/.exec(css)?.[0] ?? ''
+    expect(rule).toContain('overflow-x: auto')
+    expect(rule).not.toContain('text-overflow')
+  })
+
   it('is read-only: no inputs, buttons or api calls', () => {
     const methods = api as unknown as Record<string, (...args: unknown[]) => unknown>
     const calls = Object.keys(methods)

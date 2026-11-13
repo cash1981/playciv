@@ -42,9 +42,12 @@
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A long username or civilization scrolls sideways instead of being cut off. */
+  overflow-x: auto;
+  overflow-y: hidden;
   white-space: nowrap;
+  scrollbar-width: thin;
+  padding-bottom: 0.15rem;
 }
 
 .pss-header .tag {
