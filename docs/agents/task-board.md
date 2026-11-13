@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### monarchy-obsolete
+
+- **Owner:** orchestrator (Sonnet 5.5)
+- **Branch:** `feat/unit-tech-abilities` (worktree `../civ-unit-tech-abilities`, PR 346)
+- **Brief:** `docs/agents/tasks/monarchy-obsolete.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/assisted-tech-abilities.ts`, `assisted-core.ts`, `state.ts`, `packages/server/src/routes/assisted-args.ts`, `packages/web/src/views/AssistedActions.tsx`
+- **Notes:** claims `state.ts` (`PlayerView` shape) shared resource
 
 ## Format
 
