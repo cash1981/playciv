@@ -167,12 +167,16 @@ describe('the assisted action button in the tech dialog', () => {
 })
 
 describe('the unit techs in the tech dialog (issue #327)', () => {
-  const unitView = (techName: string, kind: string, status: string, reason: string, buttonText?: string): PlayerView => {
+  const hut = (name: string) => ({ kind: 'hut', name, used: false, id: `hut-${name}` })
+  const unitView = (techName: string, kind: string, status: string, reason: string, buttonText?: string, items: readonly object[] = []): PlayerView => {
     const base = viewOf([tech(techName, 3)])
     return {
       ...base,
+      board: { ...createBoard(), pieces: [] },
+      boardAreas: [],
       you: {
         ...base.you!,
+        items,
         availableActions: [{ ...action(kind, techName, status, reason), ...(buttonText === undefined ? {} : { buttonText }) }],
       },
     } as unknown as PlayerView
@@ -193,6 +197,14 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     expect(send).toHaveBeenCalledTimes(1)
     const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
     expect([gameId, kind, rev, args]).toEqual(['game-1', 'gunpowder', 7, { resources: ['Silk', 'Incense'] }])
+  })
+
+  it('starts the Gunpowder picker on the resources the player holds as tokens, so the default does not need a card', async () => {
+    renderPanel(unitView('Gunpowder', 'gunpowder', 'ready', 'Ready to use.', undefined, [hut('Silk'), hut('Incense')]))
+    fireEvent.click(await screen.findByText('Gunpowder'))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder' }))
+    expect((screen.getByLabelText('Resource 1') as HTMLSelectElement).value).toBe('Silk')
+    expect((screen.getByLabelText('Resource 2') as HTMLSelectElement).value).toBe('Incense')
   })
 
   it('can cancel the Gunpowder picker without paying', async () => {

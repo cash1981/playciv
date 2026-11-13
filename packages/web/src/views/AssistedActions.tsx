@@ -210,6 +210,30 @@ interface ButtonProps {
 }
 
 /**
+ * The two resources the Gunpowder picker starts on: the first two tokens the player holds (a hut in the hand or a
+ * resource piece in their own area), so the default pays with tokens. The engine pays any other token before it
+ * would play a culture card, so this is only a convenience; with fewer than two tokens it falls back to Iron and Wheat.
+ */
+function defaultAnyPick(view: PlayerView): readonly [string, string] {
+  const viewer = view.you
+  if (viewer === null) return ['Iron', 'Wheat']
+  const name = (raw: string): string | undefined => ANY_RESOURCES.find((resource) => resource.toLowerCase() === raw.toLowerCase())
+  const huts = viewer.items.flatMap((item) => (item.kind === 'hut' && !item.used ? [name(item.name)] : []))
+  const own = view.boardAreas.find((area) => area.playerId === viewer.playerId)
+  const pieces =
+    own === undefined
+      ? []
+      : view.board.pieces.flatMap((piece) => {
+          const x = piece.x + piece.width / 2
+          const y = piece.y + piece.height / 2
+          const inside = x >= own.x && x < own.x + own.width && y >= own.y && y < own.y + own.height
+          return piece.category === 'resource' && inside ? [name(piece.assetId.replace('resources/', ''))] : []
+        })
+  const held = [...huts, ...pieces].filter((resource): resource is string => resource !== undefined)
+  return [held[0] ?? 'Iron', held[1] ?? (held[0] === 'Wheat' ? 'Iron' : 'Wheat')]
+}
+
+/**
  * What the player is asked before a card that was used this turn is used again.
  * Some Great Persons and culture cards allow it and are not built, so the player
  * is the override, the way the Draw button asks first when it is not your turn.
@@ -410,7 +434,7 @@ export function AssistedActionButton({
   const press = (): void => {
     if (action === 'gunpowder') {
       if (used && !window.confirm(usedAgainQuestion(state.label))) return
-      setAnyPick(['Iron', 'Wheat'])
+      setAnyPick(defaultAnyPick(view))
       return
     }
     if (action === 'combustion') {

@@ -415,6 +415,10 @@ export const usedReason = (label: string): string =>
 
 export const PHASE_REASON = 'Only available during your open City Management phase.'
 
+/** The cards drawn for a choice, which stay in the hand until one is kept: none of them is the player's yet. */
+export const waitingCardIds = (player: Playerhand): ReadonlySet<string> =>
+  new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
+
 export const lastLogId = (state: GameState): string => state.log.at(-1)?.id ?? ''
 
 /**

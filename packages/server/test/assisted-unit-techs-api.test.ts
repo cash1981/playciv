@@ -156,15 +156,11 @@ describe('Gunpowder and Combustion args', () => {
       const bad = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-bad', rev: before.rev, args })
       expect(bad.status).toBe(400)
     }
-    // Naming a resource the player does not hold is refused by the engine, and pays nothing
-    const missing = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-miss', rev: before.rev, args: { resources: ['Iron', 'Silk'] } })
-    expect(missing.status).toBe(400)
-    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
-
-    const paid = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Wheat'] } })
+    const paid = await post(t.starter, actions(t.gameId), { action: 'gunpowder', requestId: 'req-1', rev: before.rev, args: { resources: ['Iron', 'Silk'] } })
     expect(paid.status).toBe(200)
     const after = await paid.json<View>()
     expect(after.assistedActions[0]).toMatchObject({ kind: 'gunpowder', status: 'applied' })
+    // The names are a preference: no Silk is held, so the other token (Wheat) pays for it
     expect(after.assistedActions[0]?.text).toContain('spent Iron and Wheat')
     expect(entryOf(after, 'gunpowder')?.status).toBe('used')
     const state = await repo.findGame(t.gameId)

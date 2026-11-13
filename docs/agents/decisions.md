@@ -489,12 +489,20 @@ the engine; the browser decides no rule.
   token, a culture card in the hand whose play rule lists the resource (A Gift from
   Afar, A Generous Gift: Iron, Wheat, Spy, Silk; A Princely Gift: Iron, Uranium, Spy,
   Wheat, Silk; `card-timing.ts`) is played as it and discarded to `discardedItems` as
-  `playCard` does. This is in the shared payment layer (`assisted-resources.ts`), so
-  every resource ability benefits (Chivalry-style Incense abilities cannot: no card
-  can be played as Incense). The action stays ready with a `warning` naming the card
-  (the viewer's own availability only); the public log line says "played <card> item
-  number #N as <resource>" as `playCard` writes it; the Marie Curie substitute applies
-  as for a token; undo puts the card back in the hand and out of the discard pile.
+  `playCard` does. A card still being chosen between (a candidate of a pending
+  reward) is not the player's yet and never pays. When several cards qualify, the one
+  with the fewest allowed resources is played first, so A Princely Gift (the only
+  Uranium card) is kept for last. This is in the shared payment layer
+  (`assisted-resources.ts`), so every resource ability benefits (Incense abilities
+  cannot: no card can be played as Incense). The action stays ready with a `warning`
+  naming the card (the viewer's own availability only). The public log line carries
+  "played <card name> item number #N as <resource>" in place of "spent 1 <resource>",
+  the card named with `itemNumberText` as `playCard` names a played card. A Gift from
+  Afar is also an event that gives a coin token to another player; the recipient is
+  not asked for here, so its warning and its log line add "another player of your
+  choice also gets a coin token: give it by hand" (A Generous and A Princely Gift add
+  nothing). The Marie Curie substitute applies as for a token; undo puts the card
+  back in the hand and out of the discard pile.
 - **Undo** is the existing vote, extended to assisted log lines
   (`assistedActionId`). A reversal writes a "System:" line and refuses, vote left
   open, when a marker or token moved or a card left the hand. Board Undo refuses
@@ -835,13 +843,15 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   altogether (a new battle started), since wounds already dealt cannot be ruled out; the Iron is not refunded
   then. A confirmed repeat owes a second set; the first set is dealt first, and each record is undone on its own. The Battle panel lists the button and the wound buttons; the tech dialog and phase tabs show the button.
 - **Gunpowder (Any 2, City Management):** pays two resources the player names (`payload.resources`, exactly two
-  names; the same resource twice needs two), through `spendAnyResources` in `assisted-resources.ts`, reusable for
-  Pottery (Any 2) and Philosophy (Any 3). The accepted names are Incense, Iron, Silk, Wheat, Spy and Uranium
-  (human, 2026-11-13). Each is paid token first, else a culture card as above, never the same card twice; the
-  availability counts tokens first and warns when cards would be played. The web tech dialog asks for the two
-  resources before paying. Undo returns exactly the tokens and cards spent. The effect (obsolete an ancient or
-  medieval wonder, or destroy a building of the player's choice) stays manual: obsolescence is not tracked in the
-  engine and the choice is the player's; the log line says so.
+  names), through `spendAnyResources` in `assisted-resources.ts`, reusable for Pottery (Any 2) and Philosophy
+  (Any 3). The accepted names are Incense, Iron, Silk, Wheat, Spy and Uranium (human, 2026-11-13). The names are a
+  preference: each is paid by its own token; one the player does not hold is paid by any other unspent token (hut
+  or piece, of the six kinds); only the shortfall that tokens cannot cover is paid with culture cards as above,
+  never the same card twice, so a card is never burned while any token could pay. The availability warns about
+  exactly those cards. The web tech dialog asks for the two resources before paying, starting on tokens the
+  player holds. Undo returns exactly the tokens and cards spent. The effect (obsolete an ancient or medieval
+  wonder, or destroy a building of the player's choice) stays manual: obsolescence is not tracked in the engine
+  and the choice is the player's; the log line says so.
 - **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
   no-cost assisted action in the open Movement phase (group "Movement abilities"). The player chooses which army
   acts: the payload is the army's piece id (`pieceId`), the square, and the building or walls, follow from it

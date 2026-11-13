@@ -380,9 +380,9 @@ describe('Gunpowder (Any 2, City Management)', () => {
     expect(hasHut(paid, 'Iron')).toBe(false)
   })
 
-  it('refuses a payment that is not exactly two known resources the player holds', () => {
+  it('refuses a payment that is not exactly two known resources', () => {
     const state = rich()
-    for (const resources of [['Iron'], ['Iron', 'Wheat', 'Silk'], ['Iron', 'Gold'], ['Iron', 'Iron'], [1, 2]]) {
+    for (const resources of [['Iron'], ['Iron', 'Wheat', 'Silk'], ['Iron', 'Gold'], [1, 2]]) {
       expect(unwrapErr(press(state, 'gunpowder', 'req-1', { resources })).kind).toBe('ASSISTED_ACTION_REJECTED')
     }
     expect(unwrapErr(press(state, 'gunpowder', 'req-1')).kind).toBe('ASSISTED_ACTION_REJECTED')

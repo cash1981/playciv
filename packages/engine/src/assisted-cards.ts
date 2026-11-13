@@ -23,6 +23,7 @@ import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   LOVELACE_ACTION_NOTE,
   LOVELACE_NAME,
+  waitingCardIds,
   cityActionsTakenThisTurn,
   extraCityActionsLeft,
   lovelaceCreditWasUsed,
@@ -318,10 +319,6 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
     return [{ ...base, ...playableIn(base.timings, now) }]
   })
 }
-
-/** The cards drawn for a choice, which stay in the hand until one is kept. */
-const waitingCardIds = (player: Playerhand): ReadonlySet<string> =>
-  new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
 
 const FRIDA = 'Frida Kahlo'
 const GIANNINI_NAME = 'A. P. Giannini'

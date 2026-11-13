@@ -3,7 +3,8 @@
  * building of your choice."
  *
  * The first "Any N" payment (Pottery's Any 2 and Philosophy's Any 3 can reuse `spendAnyResources`): the player
- * names which tokens to pay. The effect itself stays manual: a wonder's obsolescence is not tracked in the
+ * names the resources to pay, as a preference: one it does not hold is paid by any other token, and only what
+ * tokens cannot cover by a culture card. The effect itself stays manual: a wonder's obsolescence is not tracked in the
  * engine, and the choice between obsoleting a wonder and destroying a building is the player's, so the log
  * says so. The undo vote returns exactly the tokens spent.
  */
@@ -66,7 +67,7 @@ export const gunpowder: AssistedActionDefinition = {
     const names = resources as readonly string[]
     const paid = spendAnyResources(state, player.playerId, names, context.at)
     if (!paid.ok) {
-      return err(rejected('gunpowder', blocked('needs-resource', `You do not have ${paid.error.missing} for every token you named.`)))
+      return err(rejected('gunpowder', blocked('needs-resource', `You cannot pay for ${paid.error.missing}: you hold too few resources, tokens or culture cards that can be played as a resource, to pay two.`)))
     }
     const after = playerOf(paid.value.state, player.playerId) ?? player
     const marked = useTurnAction(paid.value.state, after, turn, USAGE_KEY, after.stats)
