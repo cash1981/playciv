@@ -3,19 +3,19 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
+import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, wondersArea } from '@civ/engine'
 import type { CoinSources, Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
-import { StatusPanel } from './StatusPanel.js'
+import { CoinsPanel } from './CoinsPanel.js'
 
-beforeEach(() => localStorage.setItem('civ.panel.status', 'true'))
+beforeEach(() => localStorage.setItem('civ.panel.coins', 'true'))
 afterEach(() => {
   cleanup()
-  localStorage.removeItem('civ.panel.status')
+  localStorage.removeItem('civ.panel.coins')
   vi.restoreAllMocks()
 })
 
@@ -52,208 +52,7 @@ const run: Run = async (action) => {
   await action()
 }
 
-describe('StatusPanel governments', () => {
-  it('shows every government in each dropdown and every reference card with all effects', () => {
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    const alice = screen.getByRole('combobox', { name: 'Alice government' })
-    expect((alice as HTMLSelectElement).value).toBe('Despotism')
-    expect(alice.querySelectorAll('option')).toHaveLength(GOVERNMENTS.length)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Show government card reference' })[0]!)
-    const expectedEffects = GOVERNMENT_CARDS.flatMap((card) => card.effects)
-    expect(document.querySelectorAll('.reference-card p')).toHaveLength(expectedEffects.length)
-    expect(document.querySelectorAll('.reference-card img')).toHaveLength(GOVERNMENT_CARDS.length)
-
-    for (const card of GOVERNMENT_CARDS) {
-      expect(card.effects.length).toBeGreaterThan(0)
-      expect(screen.getByRole('heading', { name: card.government, hidden: true })).toBeTruthy()
-      expect(
-        screen.getByRole('img', { name: `${card.government} government card`, hidden: true })
-          .getAttribute('src'),
-      ).toBe(`/governments/${card.government.toLowerCase()}.jpg`)
-      for (const effect of card.effects) {
-        expect(screen.getByText(effect, { selector: '.reference-card p' })).toBeTruthy()
-      }
-    }
-  })
-
-  it('saves a selected government through the shared runner', async () => {
-    const setGovernment = vi
-      .spyOn(api, 'setPlayerGovernment')
-      .mockResolvedValue(memberView)
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    fireEvent.change(screen.getByRole('combobox', { name: 'Bob government' }), {
-      target: { value: 'Monarchy' },
-    })
-
-    await waitFor(() =>
-      expect(setGovernment).toHaveBeenCalledWith('game-1', 'player-them', 'Monarchy'),
-    )
-  })
-
-  it('keeps government and numeric bookkeeping read-only for spectators or replay', () => {
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={true} run={run} />,
-    )
-
-    expect(
-      screen.getAllByRole('combobox').every((input) => (input as HTMLSelectElement).disabled),
-    ).toBe(true)
-    expect(
-      screen.getAllByRole('textbox').every((input) => (input as HTMLInputElement).disabled),
-    ).toBe(true)
-  })
-})
-
-describe('StatusPanel player colours', () => {
-  it('puts each player colour on their row, so the separator identifies the row when scrolled sideways', () => {
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    // The rows are Alice (Red) and Bob (Blue) in the shared fixture.
-    const rows = [...document.querySelectorAll<HTMLTableRowElement>('.status-table tbody tr')]
-    expect(rows.map((row) => row.style.getPropertyValue('--player-color'))).toEqual([
-      'red',
-      'blue',
-    ])
-  })
-})
-
-describe('StatusPanel Movement (issue #102)', () => {
-  it('saves a Movement expression as text', async () => {
-    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    const movement = screen.getByRole('textbox', { name: 'Alice Movement' })
-    fireEvent.change(movement, { target: { value: '3+1' } })
-    fireEvent.blur(movement)
-
-    await waitFor(() =>
-      expect(setStat).toHaveBeenCalledWith('game-1', 'player-me', 'mvmt', '3+1'),
-    )
-    // The cell keeps showing the expression it was given, not a reverted value.
-    expect((movement as HTMLInputElement).value).toBe('3+1')
-  })
-
-  it('reverts an invalid Movement value without saving', () => {
-    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    const movement = screen.getByRole('textbox', { name: 'Alice Movement' }) as HTMLInputElement
-    fireEvent.change(movement, { target: { value: '3+' } })
-    fireEvent.blur(movement)
-
-    expect(setStat).not.toHaveBeenCalled()
-    expect(movement.value).toBe('2')
-  })
-})
-
-describe('StatusPanel Aircraft unlocked', () => {
-  it('is an Aircraft checkbox under Units, reflecting each player\'s flag', () => {
-    const view = {
-      ...memberView,
-      opponents: [
-        { ...memberView.opponents[0]!, stats: { ...DEFAULT_PLAYER_STATS, aircraft: true } },
-      ],
-    } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-
-    expect((screen.getByRole('checkbox', { name: 'Alice Aircraft unlocked' }) as HTMLInputElement).checked).toBe(false)
-    expect((screen.getByRole('checkbox', { name: 'Bob Aircraft unlocked' }) as HTMLInputElement).checked).toBe(true)
-    const heads = screen.getAllByRole('columnheader').map((th) => th.textContent)
-    expect(heads.indexOf('Aircraft')).toBe(heads.indexOf('Mounted') + 1)
-  })
-
-  it('saves a tick as a boolean', async () => {
-    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
-    render(<StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />)
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Alice Aircraft unlocked' }))
-
-    await waitFor(() =>
-      expect(setStat).toHaveBeenCalledWith('game-1', 'player-me', 'aircraft', true),
-    )
-  })
-
-  it('saves an untick as false', async () => {
-    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
-    const view = {
-      ...memberView,
-      opponents: [
-        { ...memberView.opponents[0]!, stats: { ...DEFAULT_PLAYER_STATS, aircraft: true } },
-      ],
-    } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob Aircraft unlocked' }))
-
-    await waitFor(() =>
-      expect(setStat).toHaveBeenCalledWith('game-1', 'player-them', 'aircraft', false),
-    )
-  })
-
-  it('is disabled for spectators or replay', () => {
-    render(<StatusPanel gameId="game-1" view={memberView} busy={false} readOnly run={run} />)
-    expect((screen.getByRole('checkbox', { name: 'Alice Aircraft unlocked' }) as HTMLInputElement).disabled).toBe(true)
-  })
-})
-
-describe('StatusPanel hand sizes', () => {
-  it('shows Culture hand size as a read-only number in the Trade, Coins & Culture cards group', () => {
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    expect(screen.getByLabelText('Alice Culture hand size').textContent).toBe('2')
-    expect(screen.queryByRole('textbox', { name: 'Alice Culture hand size' })).toBeNull()
-  })
-
-  it('has no column called plain Hand Size any more', () => {
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    expect(screen.queryByRole('columnheader', { name: 'Hand Size' })).toBeNull()
-    expect(screen.getByRole('columnheader', { name: 'Combat hand size' })).toBeTruthy()
-  })
-
-  it('saves Combat hand size as typed, so +1 and +2 work', async () => {
-    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    const input = screen.getByRole('textbox', { name: 'Alice Combat hand size' })
-    fireEvent.change(input, { target: { value: '+2' } })
-    fireEvent.blur(input)
-
-    await waitFor(() =>
-      expect(setStat).toHaveBeenCalledWith('game-1', 'player-me', 'combatHandSize', '+2'),
-    )
-    expect((input as HTMLInputElement).value).toBe('+2')
-  })
-
-  it('stops Combat hand size at 20 characters', () => {
-    render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
-    )
-
-    const input = screen.getByRole('textbox', { name: 'Alice Combat hand size' }) as HTMLInputElement
-    expect(input.maxLength).toBe(20)
-  })
-})
-
-describe('StatusPanel Coins section', () => {
+describe('CoinsPanel', () => {
   /**
    * The shared fixture with counters filled in for Alice, plus the optional
    * public cards and board state that make a conditional source available.
@@ -306,13 +105,9 @@ describe('StatusPanel Coins section', () => {
     } as unknown as PlayerView
   }
 
-  function openCoins(): void {
-    fireEvent.click(screen.getByRole('tab', { name: 'Coins' }))
-  }
-
-  it('switches from the status table to the sources a player has, with the sheet’s helper text', () => {
+  it('shows the sources a player has, with the sheet’s helper text, and no status table', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { techs: ['Code of Laws'], panamaOwner: 'player-me' })}
         busy={false}
@@ -321,11 +116,11 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    expect(screen.getByRole('tab', { name: 'Status' })).toBeTruthy()
-    expect(screen.queryByText('Code of Laws (I)')).toBeNull()
-
-    openCoins()
-
+    // The old Status table and its tabs moved to the sidebar beside the map.
+    expect(screen.queryByRole('tab')).toBeNull()
+    expect(screen.queryByRole('table', { name: /status/i })).toBeNull()
+    expect(document.querySelectorAll('table')).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: 'Coins' })).toBeTruthy()
     expect(screen.getByText('Code of Laws (I)')).toBeTruthy()
     expect(screen.getByText('Up to 4 for winning battles')).toBeTruthy()
     expect(screen.getByText('Panama Canal')).toBeTruthy()
@@ -335,7 +130,7 @@ describe('StatusPanel Coins section', () => {
 
   it('shows Education coins only after Education is revealed', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { techs: ['Education'] })}
         busy={false}
@@ -343,17 +138,14 @@ describe('StatusPanel Coins section', () => {
         run={run}
       />,
     )
-    openCoins()
     expect(screen.getByText('Education (III)')).toBeTruthy()
     expect(screen.getByText('1 coin each time you build a wonder (up to 4)')).toBeTruthy()
   })
 
   it('leaves out every source nobody has', () => {
     render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+      <CoinsPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
     )
-
-    openCoins()
 
     // Bank, Great People, Terrain and Sheet are the always-available rows.
     expect(screen.getByText('Bank (Building)')).toBeTruthy()
@@ -380,7 +172,7 @@ describe('StatusPanel Coins section', () => {
 
   it('offers a tech row in the column of the player who revealed it only', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { techs: ['Pottery'] })}
         busy={false}
@@ -388,8 +180,6 @@ describe('StatusPanel Coins section', () => {
         run={run}
       />,
     )
-
-    openCoins()
 
     expect(screen.getByRole('button', { name: 'Increase Alice Pottery (I)' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Increase Bob Pottery (I)' })).toBeNull()
@@ -403,16 +193,14 @@ describe('StatusPanel Coins section', () => {
         techsChosen: [{ name: 'Pottery', hidden: true }],
       },
     } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-
-    openCoins()
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
     expect(screen.queryByText('Pottery (I)')).toBeNull()
   })
 
   it('offers Democracy (Govt) only to a player whose government is Democracy', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { government: 'Democracy' })}
         busy={false}
@@ -421,15 +209,13 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    openCoins()
-
     expect(screen.getByRole('button', { name: 'Increase Alice Democracy (Govt)' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Increase Bob Democracy (Govt)' })).toBeNull()
   })
 
   it('offers Organized Religion only with the revealed policy', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { policies: ['Organized Religion'] })}
         busy={false}
@@ -438,15 +224,13 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    openCoins()
-
     expect(screen.getByRole('button', { name: 'Increase Alice Organized Religion' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Increase Bob Organized Religion' })).toBeNull()
   })
 
   it('shows Adam Smith as a separate derived coin with no manual controls', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({ adamSmith: 1 })}
         busy={false}
@@ -454,7 +238,6 @@ describe('StatusPanel Coins section', () => {
         run={run}
       />,
     )
-    openCoins()
     expect(screen.getByText('Adam Smith')).toBeTruthy()
     expect(screen.getByLabelText('Alice Adam Smith').textContent).toBe('1')
     expect(screen.queryByRole('button', { name: 'Increase Alice Adam Smith' })).toBeNull()
@@ -462,9 +245,8 @@ describe('StatusPanel Coins section', () => {
 
   it('hides the Adam Smith row until he is revealed and usable (issue #310)', () => {
     render(
-      <StatusPanel gameId="game-1" view={coinView({})} busy={false} readOnly={false} run={run} />,
+      <CoinsPanel gameId="game-1" view={coinView({})} busy={false} readOnly={false} run={run} />,
     )
-    openCoins()
     expect(screen.queryByText('Adam Smith')).toBeNull()
   })
 
@@ -486,9 +268,8 @@ describe('StatusPanel Coins section', () => {
   it('buys a Democracy coin through the assisted action route, with the revision it saw', async () => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
     const view = democracyView(democracyAction('ready', 'Spend 6 trade to add 1 coin to Democracy.'))
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
-    openCoins()
     fireEvent.click(screen.getByRole('button', { name: 'Spend 6 trade' }))
 
     await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
@@ -500,9 +281,8 @@ describe('StatusPanel Coins section', () => {
     const view = democracyView(
       democracyAction('wrong-phase', 'Only available during your open City Management phase.'),
     )
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
-    openCoins()
     const button = screen.getByRole('button', { name: 'Spend 6 trade' })
 
     expect((button as HTMLButtonElement).disabled).toBe(true)
@@ -521,9 +301,8 @@ describe('StatusPanel Coins section', () => {
     const view = democracyView(
       democracyAction('used', 'Democracy has already been used this turn. You will be asked to confirm.'),
     )
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
-    openCoins()
     const button = screen.getByRole('button', { name: 'Spend 6 trade' }) as HTMLButtonElement
     expect(button.disabled).toBe(false)
     expect(button.getAttribute('title')).toBe('Democracy has already been used this turn. You will be asked to confirm.')
@@ -568,9 +347,8 @@ describe('StatusPanel Coins section', () => {
         },
       ],
     } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
-    openCoins()
     const buttons = screen.getAllByRole('button', { name: 'Spend 5 culture' })
     expect(buttons).toHaveLength(1)
     fireEvent.click(buttons[0]!)
@@ -596,9 +374,7 @@ describe('StatusPanel Coins section', () => {
         },
       ],
     } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-
-    openCoins()
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
     // Bob's counter is there, so the source row renders, but without the purchase
     expect(screen.getByRole('button', { name: 'Increase Bob Printing Press (II)' })).toBeTruthy()
@@ -608,7 +384,7 @@ describe('StatusPanel Coins section', () => {
 
   it('offers Panama Canal to its owner wherever the wonder is displayed', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { panamaOwner: 'player-me' })}
         busy={false}
@@ -617,15 +393,13 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    openCoins()
-
     expect(screen.getByRole('button', { name: 'Increase Alice Panama Canal' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Increase Bob Panama Canal' })).toBeNull()
   })
 
   it('a Panama Canal in a player area or on the map remains an active source', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { panamaOwner: 'player-me', panamaOutsideWondersArea: true })}
         busy={false}
@@ -634,14 +408,12 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    openCoins()
-
     expect(screen.getByRole('button', { name: 'Increase Alice Panama Canal' })).toBeTruthy()
   })
 
   it('keeps a counter with coins on it visible even when its source is not available', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({ organizedReligion: 1 })}
         busy={false}
@@ -650,18 +422,14 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    openCoins()
-
     // No policy chosen: the value must stay reachable or it could never be lowered.
     expect(screen.getByRole('button', { name: 'Decrease Alice Organized Religion' })).toBeTruthy()
   })
 
   it('shows the Great People row without the removed helper text', () => {
     render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+      <CoinsPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
     )
-
-    openCoins()
 
     expect(screen.getByText('Great People')).toBeTruthy()
     expect(screen.queryByText('50% chance of providing 1 coin')).toBeNull()
@@ -669,7 +437,7 @@ describe('StatusPanel Coins section', () => {
 
   it('shows the Great People row as a number the engine derives, with no buttons (issue #241)', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({ greatPeople: 2 })}
         busy={false}
@@ -677,8 +445,6 @@ describe('StatusPanel Coins section', () => {
         run={run}
       />,
     )
-
-    openCoins()
 
     expect(screen.getByText("Builder, Merchant and Humanitarian on the map in your cities' outskirts")).toBeTruthy()
     expect(screen.getByLabelText('Alice Great People').textContent).toBe('2')
@@ -695,9 +461,7 @@ describe('StatusPanel Coins section', () => {
       ...coinView({ panamaCanal: 3 }, { panamaOwner: 'player-me', panamaOutsideWondersArea: true }),
       blockadedPieceIds: ['panama-canal'],
     } as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-
-    openCoins()
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
     // The engine already shows the coins as 0; the row stays visible so the reason can be read.
     expect(screen.getByText('Panama Canal')).toBeTruthy()
@@ -708,7 +472,7 @@ describe('StatusPanel Coins section', () => {
 
   it('shows no hint and the usual buttons when the Panama Canal is free', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({}, { panamaOwner: 'player-me' })}
         busy={false}
@@ -717,17 +481,13 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    openCoins()
-
     expect(screen.queryByText('blockaded')).toBeNull()
     expect(screen.getByRole('button', { name: 'Increase Alice Panama Canal' })).toBeTruthy()
   })
 
   it('shows the empty state when nobody has joined', () => {
     const view = { ...memberView, you: null, opponents: [] } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-
-    openCoins()
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
     expect(screen.getByText('Nobody has joined yet.')).toBeTruthy()
   })
@@ -735,10 +495,9 @@ describe('StatusPanel Coins section', () => {
   it('increases a counter through the shared runner', async () => {
     const setCoin = vi.spyOn(api, 'setPlayerCoin').mockResolvedValue(memberView)
     render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+      <CoinsPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
     )
 
-    openCoins()
     fireEvent.click(screen.getByRole('button', { name: 'Increase Bob Sheet' }))
 
     await waitFor(() =>
@@ -748,7 +507,7 @@ describe('StatusPanel Coins section', () => {
 
   it('disables + at the printed limit and − at zero, and leaves the two unlimited sources open', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({ codeOfLaws: 4 }, { techs: ['Code of Laws'], panamaOwner: 'player-me' })}
         busy={false}
@@ -756,8 +515,6 @@ describe('StatusPanel Coins section', () => {
         run={run}
       />,
     )
-
-    openCoins()
 
     const increase = (name: string): HTMLButtonElement =>
       screen.getByRole('button', { name }) as HTMLButtonElement
@@ -788,8 +545,7 @@ describe('StatusPanel Coins section', () => {
         }],
       },
     } as unknown as PlayerView
-    render(<StatusPanel gameId="g" view={view} busy={false} readOnly={false} run={run} />)
-    openCoins()
+    render(<CoinsPanel gameId="g" view={view} busy={false} readOnly={false} run={run} />)
     expect((screen.getByRole('button', { name: 'Increase Alice Code of Laws (I)' }) as HTMLButtonElement).disabled).toBe(false)
     expect((screen.getByRole('button', { name: 'Increase Bob Code of Laws (I)' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Increase Alice Democracy (II)' }) as HTMLButtonElement).disabled).toBe(false)
@@ -798,39 +554,9 @@ describe('StatusPanel Coins section', () => {
     expect((screen.getByRole('button', { name: 'Increase Alice Civil Service (II)' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('shows Combat as a read-only calculated number (issue #197)', () => {
-    render(
-      <StatusPanel
-        gameId="game-1"
-        view={coinView({})}
-        busy={false}
-        readOnly={false}
-        run={run}
-      />,
-    )
-
-    expect(screen.getByLabelText('Alice Combat').textContent).toBe('0')
-    expect(screen.queryByRole('textbox', { name: 'Alice Combat' })).toBeNull()
-  })
-
-  it('shows the summed total in the status table, read-only', () => {
-    render(
-      <StatusPanel
-        gameId="game-1"
-        view={coinView({ codeOfLaws: 4, sheet: 3 })}
-        busy={false}
-        readOnly={false}
-        run={run}
-      />,
-    )
-
-    expect(screen.getByLabelText('Alice Coins').textContent).toBe('7')
-    expect(screen.queryByRole('textbox', { name: 'Alice Coins' })).toBeNull()
-  })
-
   it('keeps every counter disabled for a spectator or replay', () => {
     render(
-      <StatusPanel
+      <CoinsPanel
         gameId="game-1"
         view={coinView({ codeOfLaws: 2 })}
         busy={false}
@@ -839,7 +565,6 @@ describe('StatusPanel Coins section', () => {
       />,
     )
 
-    openCoins()
     const counters = screen.getAllByRole('button', { name: /^(Increase|Decrease) / })
     expect(counters.length).toBeGreaterThan(0)
     expect(counters.every((button) => (button as HTMLButtonElement).disabled)).toBe(true)
@@ -850,20 +575,16 @@ describe('StatusPanel Coins section', () => {
       ...coinView(),
       you: { ...coinView().you, civilization: { name: 'Egypt' } },
     } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-
-    openCoins()
+    render(<CoinsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
     const headers = [...document.querySelectorAll('.coin-table thead th')].slice(1)
     expect(headers.map((header) => header.textContent)).toEqual(['Egypt', 'Bob'])
   })
 
-  it('gives every player column in the Coins table the same vertical divider the Status table uses (issue #173)', () => {
+  it('gives every player column in the Coins table a vertical divider (issue #173)', () => {
     render(
-      <StatusPanel gameId="game-1" view={coinView({ sheet: 1 })} busy={false} readOnly={false} run={run} />,
+      <CoinsPanel gameId="game-1" view={coinView({ sheet: 1 })} busy={false} readOnly={false} run={run} />,
     )
-
-    openCoins()
 
     const headers = [...document.querySelectorAll('.coin-table thead th')].slice(1)
     expect(headers.every((header) => header.classList.contains('status-group-start'))).toBe(true)
@@ -873,67 +594,5 @@ describe('StatusPanel Coins section', () => {
     const totalCells = [...document.querySelectorAll('.coin-table tfoot td')]
     expect(totalCells.length).toBeGreaterThan(0)
     expect(totalCells.every((cell) => cell.classList.contains('status-group-start'))).toBe(true)
-  })
-})
-
-describe('StatusPanel turn tag', () => {
-  const rowsWithTurnTag = (): string[] =>
-    Array.from(document.querySelectorAll('tr'))
-      .filter((row) => row.querySelector('.tag.turn') !== null)
-      .map((row) => row.querySelector('strong')?.textContent ?? '')
-
-  it('follows the active turn, not the stored yourTurn flag', () => {
-    // Alice is still flagged yourTurn in the data, but the active turn is Bob's
-    const view = {
-      ...memberView,
-      activeTurn: {
-        playerId: 'player-them',
-        username: 'Bob',
-        turnNumber: 2,
-        phase: 'SOT',
-        waitingFor: [{ username: 'Bob', phase: 'SOT' }],
-      },
-    } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-    expect(rowsWithTurnTag()).toEqual(['Bob'])
-  })
-
-  it('tags the viewer when the active turn is theirs', () => {
-    const view = {
-      ...memberView,
-      activeTurn: {
-        playerId: 'player-me',
-        username: 'Alice',
-        turnNumber: 2,
-        phase: 'SOT',
-        waitingFor: [{ username: 'Alice', phase: 'SOT' }],
-      },
-    } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-    expect(rowsWithTurnTag()).toEqual(['Alice'])
-  })
-
-  it('tags the player furthest behind, the same one the title names, not the holder', () => {
-    const view = {
-      ...memberView,
-      activeTurn: {
-        playerId: 'player-me',
-        username: 'Alice',
-        turnNumber: 2,
-        phase: 'MOVEMENT',
-        waitingFor: [
-          { username: 'Alice', phase: 'MOVEMENT' },
-          { username: 'Bob', phase: 'CM' },
-        ],
-      },
-    } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-    expect(rowsWithTurnTag()).toEqual(['Bob'])
-  })
-
-  it('tags nobody when no one is up', () => {
-    const view = { ...memberView, activeTurn: null } as unknown as PlayerView
-    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
-    expect(rowsWithTurnTag()).toEqual([])
   })
 })

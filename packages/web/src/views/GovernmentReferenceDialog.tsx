@@ -1,7 +1,8 @@
 /**
  * The government card reference: every government card with its printed effects.
- * One copy for the Player status panel and the status sidebar, so both open the
- * same dialog. Public player aid; it never shows a player's choice.
+ * One copy for the status sidebar (its `?`) and the Social policy panel's `?`
+ * (through `openGovernmentReference`), so both open the same dialog. Public player
+ * aid; it never shows a player's choice.
  */
 
 import type { RefObject } from 'react'
@@ -42,4 +43,12 @@ export function GovernmentReferenceDialog({ onClose, returnFocusTo }: Props): Re
       </div>
     </ReferenceDialog>
   )
+}
+
+/** The window event that opens the government card reference from outside the status sidebar. */
+export const OPEN_GOVERNMENT_REFERENCE = 'civ:open-government-reference'
+
+/** Asks the status sidebar to open the same reference its own `?` opens. */
+export function openGovernmentReference(): void {
+  window.dispatchEvent(new Event(OPEN_GOVERNMENT_REFERENCE))
 }

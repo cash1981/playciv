@@ -31,10 +31,10 @@ deployment reports do not establish present health.
   open phase. Used policies and wonders are disabled; a repeat of a Great Person
   or culture card asks first.
 - Player status sidebar (#342): a per-player overview with icons sits beside the
-  map and edits the same fields as the Player status panel (government select
-  included); Coins are still edited in the panel.
+  map and edits every status value (government select included). It replaced the
+  old Player status table; the Coins panel is what is left of that panel.
 - Display settings (#342): a gear in the Board header opens sliders for map zoom,
-  status icon size and status panel width plus a Show labels switch (on by
+  status icon size, status panel width and icons per row plus a Show labels switch (on by
   default), saved per browser. The sidebar can be minimised under the map.
 - Tech resource abilities (#327, in progress): Currency, Chivalry, Metal Casting, Communism, Steam Power,
   Mathematics, Ballistics, Gunpowder and Combustion have assisted buttons; the rest of the checklist is open.

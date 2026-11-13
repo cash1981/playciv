@@ -545,12 +545,13 @@ export function BoardView({
 
   const width = boardWidth(board)
   const zoom = displaySettings.mapZoom === 'auto' ? autoZoom : displaySettings.mapZoom
-  // The status sidebar reads its icon size and width from these (and whether to show its
+  // The status sidebar reads its icon size, width and (unless Auto) icons per row from these (and whether to show its
   // labels from `data-pss-labels` below); the stylesheet decides where they apply (the width
   // not at all once the sidebar is stacked under the map).
   const sidebarStyle = {
     '--pss-scale': displaySettings.iconScale,
     '--pss-width': `${displaySettings.sidebarWidth}rem`,
+    ...(displaySettings.sidebarColumns === 'auto' ? {} : { '--pss-columns': displaySettings.sidebarColumns }),
   } as CSSProperties
 
   // The board scrolls inside its own box, so entering pick mode brings the
@@ -1002,7 +1003,12 @@ export function BoardView({
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="board-layout">
-        <div className="board-main" style={sidebarStyle} data-pss-labels={displaySettings.showLabels ? 'on' : 'off'}>
+        <div
+          className="board-main"
+          style={sidebarStyle}
+          data-pss-labels={displaySettings.showLabels ? 'on' : 'off'}
+          data-pss-columns={displaySettings.sidebarColumns === 'auto' ? 'auto' : 'fixed'}
+        >
           <div className="board-scroll" ref={scrollRef}>
             <div
               ref={frameRef}

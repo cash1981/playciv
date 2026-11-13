@@ -29,8 +29,6 @@
   border-radius: var(--radius);
   padding: 0.5rem 0.55rem;
   min-width: 0;
-  /* Lets the grids ask how wide the block is (see the labels rules below). */
-  container-type: inline-size;
 }
 
 .pss-header {
@@ -88,11 +86,16 @@
 .pss-grid {
   /* --pss-scale comes from the Display settings (set on .board-main); 1 without it. */
   --pss-box: calc(1.9rem * var(--pss-scale, 1));
+  /* The narrowest a cell may get. The columns are not fixed: as many as fit the block
+     (auto-fit), so a wider panel or a smaller icon size gives more per row and a narrower
+     panel or a larger icon fewer. A cell is its icon box plus room for the value and, with
+     the labels on, for a label that wraps over two lines ("Culture hand size"). */
+  --pss-cell-min: calc(var(--pss-box) + 1.4rem);
   list-style: none;
   margin: 0;
   padding: 0.3rem 0 0.05rem;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--pss-cell-min), 100%), 1fr));
   /* Every stat spans three rows, top to bottom: label slot, icon box, value. The
      rows are shared by the cells of a grid row, so the icons and the values line up
      across it, and a label slot is as tall as the tallest label of its row (nothing
@@ -161,6 +164,12 @@
   display: block;
 }
 
+/* The Display settings' icons per row, when it is not Auto (BoardView sets the attribute
+   and `--pss-columns` on .board-main). */
+[data-pss-columns='fixed'] .pss-grid {
+  grid-template-columns: repeat(var(--pss-columns, 4), minmax(0, 1fr));
+}
+
 /* The box is the same square in every cell. */
 .pss-icon-box {
   display: flex;
@@ -200,19 +209,6 @@
      than cut them off, so the whole value stays readable. */
   overflow-wrap: anywhere;
   white-space: normal;
-}
-
-/* With the labels on a cell needs more width: two columns, or four where the block
-   is wide enough. 21rem, not the 24rem panel maximum minus its padding (about 22.6rem),
-   because a classic scrollbar of about 1rem still has to fit beside the map. */
-[data-pss-labels='on'] .pss-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-@container (min-width: 21rem) {
-  [data-pss-labels='on'] .pss-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 .pss-locked-stat .pss-value,

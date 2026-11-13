@@ -56,7 +56,8 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   per request.
 - Some card images exceed 1 MB.
 - Player status sidebar (#342): the per-source Coins counters can only be edited in
-  the Player status panel's Coins tab, so that panel cannot be retired yet.
+  the Coins panel below the map (the sidebar shows only the read-only total), so
+  that panel cannot be retired yet.
 - Player status sidebar (#342): with an editor open, tapping another stat saves the
   open one first. The editor row closes and the grid shifts up, so that tap can miss
   and a second tap may be needed.

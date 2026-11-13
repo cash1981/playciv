@@ -199,6 +199,32 @@ describe('BoardView zoom', () => {
     expect(main.getAttribute('data-pss-labels')).toBe('on')
   })
 
+  it('hands the chosen icons per row to the sidebar, and nothing while it is Auto', () => {
+    const renderBoard = (): HTMLElement => {
+      const { container } = render(
+        <BoardView
+          gameId="game"
+          board={createBoard()}
+          numOfPlayers={2}
+          areas={[]}
+          busy={false}
+          run={async () => undefined}
+          statusSidebar={<aside data-testid="side" />}
+        />,
+      )
+      return container.querySelector('.board-main') as HTMLElement
+    }
+    const auto = renderBoard()
+    expect(auto.getAttribute('data-pss-columns')).toBe('auto')
+    expect(auto.style.getPropertyValue('--pss-columns')).toBe('')
+    cleanup()
+
+    localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"sidebarColumns":3}')
+    const fixed = renderBoard()
+    expect(fixed.getAttribute('data-pss-columns')).toBe('fixed')
+    expect(fixed.style.getPropertyValue('--pss-columns')).toBe('3')
+  })
+
   it('starts with the labels off when this browser saved them off', () => {
     localStorage.setItem(DISPLAY_SETTINGS_KEY, '{"showLabels":false}')
     const { container } = render(
