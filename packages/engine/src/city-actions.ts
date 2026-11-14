@@ -14,7 +14,7 @@
  * call each other inside functions, never while the modules load.
  */
 
-import { PHASE_REASON, atomicExtraActionFor, cityActionsTakenThisTurn, extraCityActionsLeft, openCityManagementTurn } from './assisted-core.js'
+import { PHASE_REASON, cityActionsTakenThisTurn, extraCityActionFor, openCityManagementTurn } from './assisted-core.js'
 import { darwinStatusOf } from './assisted-arts.js'
 import { cityFootprintsOf, mapCellOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
@@ -74,7 +74,7 @@ export interface CityActionOptions {
    * one action a turn as a rule; the client asks the player to confirm before another.
    */
   readonly actedThisTurn: readonly string[]
-  /** An extra city action from Ada Lovelace is left this turn, so a city's second action needs no question. */
+  /** An extra city action (Ada Lovelace, Supply Drop for a non-capital city, Atomic Theory, Monarchy for the capital) is left this turn, so a city's second action needs no question. */
   readonly extraAction: boolean
 }
 
@@ -139,7 +139,6 @@ export function cityActionsOf(state: GameState, player: Playerhand): readonly Ci
   const productions = cityProductionsOf(state, player)
   const open = openCityManagementTurn(state, player) !== undefined
   const darwin = darwinStatusOf(state, player)
-  const extraAction = extraCityActionsLeft(state, player) > 0
   return footprints.flatMap((footprint) => {
     const city = productions.find((candidate) => candidate.pieceId === footprint.piece.id)
     if (city === undefined) return []
@@ -155,7 +154,7 @@ export function cityActionsOf(state: GameState, player: Playerhand): readonly Ci
       : { ...gathering.devote, darwin, status: 'wrong-phase', reason: PHASE_REASON }
     const harvest = harvestOptionOf(state, gathering.harvest, city.label, open)
     const actedThisTurn = cityActionsTakenThisTurn(state, player, city.pieceId)
-    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest, actedThisTurn, extraAction: extraAction || atomicExtraActionFor(state, player, city.pieceId) }]
+    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest, actedThisTurn, extraAction: extraCityActionFor(state, player, city.pieceId, undefined) !== undefined }]
   })
 }
 

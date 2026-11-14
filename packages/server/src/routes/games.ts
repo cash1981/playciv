@@ -35,6 +35,7 @@ import {
   isLockedForViewer,
   optionalNumber,
   optionalString,
+  optionalStringList,
   readGame,
   requireString,
   stampLog,
@@ -116,6 +117,10 @@ export interface GameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private: boolean
+  /** False for a private game the viewer is not invited to: it is listed, but they cannot join it. */
+  readonly mayJoin: boolean
   readonly availableColors: readonly string[]
   /** Final standings of an ended game with a winner, best first; empty otherwise. */
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
@@ -133,6 +138,10 @@ export interface PublicGameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private: boolean
+  /** False for a private game the viewer is not invited to: it is listed, but they cannot join it. */
+  readonly mayJoin: boolean
   readonly availableColors: readonly string[]
   /** Final standings of an ended game with a winner, best first; empty otherwise. */
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
@@ -165,9 +174,17 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: game.players.some((player) => player.playerId === viewerId),
+    private: game.invitedPlayerIds !== undefined,
+    mayJoin: mayJoin(game, viewerId),
     availableColors: availableColors(game),
     placements: placementsOf(game),
   }
+}
+
+/** Whether the viewer may take a seat: any viewer in a public game, only the invited in a private one (issue #348). */
+function mayJoin(game: GameState, viewerId: string | undefined): boolean {
+  if (game.invitedPlayerIds === undefined) return true
+  return viewerId !== undefined && game.invitedPlayerIds.includes(viewerId)
 }
 
 export function toPublicSummary(game: GameState, viewerId?: string): PublicGameSummary {
@@ -185,6 +202,8 @@ export function toPublicSummary(game: GameState, viewerId?: string): PublicGameS
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: viewerId !== undefined && game.players.some((player) => player.playerId === viewerId),
+    private: game.invitedPlayerIds !== undefined,
+    mayJoin: mayJoin(game, viewerId),
     availableColors: availableColors(game),
     placements: placementsOf(game),
   }
@@ -268,6 +287,8 @@ function newestFirst<T extends { readonly createdAt: string | null }>(entries: r
 /** A spectator has no account, so revision history needs a placeholder actor. */
 const SPECTATOR = { id: '', username: 'Spectator' }
 
+const PLAYER_SEARCH_LIMIT = 8
+
 export function registerGameRoutes(app: App, context: AppContext): void {
   const auth = authenticateWith(context)
   // Read-only routes accept an absent or non-member viewer (issue #81): the
@@ -286,18 +307,70 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     )
   })
 
+  /**
+   * Autocomplete for the invite field of a private game (issue #348). Signed-in only, at least one character,
+   * usernames only (never an email or id), at most `PLAYER_SEARCH_LIMIT` hits, and never the caller or a disabled
+   * account. Names that start with the query come before names that merely contain it.
+   */
+  app.get('/api/players/search', auth, async (c) => {
+    const query = (c.req.query('q') ?? '').trim().toLowerCase()
+    if (query === '') return c.json([])
+    const me = currentPlayer(c).id
+    const matches = (await context.repo.allPlayers())
+      .filter((player) => player.id !== me && player.disabled !== true)
+      .map((player) => ({ username: player.username, at: player.username.toLowerCase().indexOf(query) }))
+      .filter((entry) => entry.at >= 0)
+      .sort((a, b) => Number(a.at !== 0) - Number(b.at !== 0) || a.username.localeCompare(b.username))
+      .slice(0, PLAYER_SEARCH_LIMIT)
+      .map((entry) => ({ username: entry.username }))
+    return c.json(matches)
+  })
+
   /** Java: `GameResource.createGame` with `CreateNewGameDTO`. */
   app.post('/api/games', auth, async (c) => {
     const body = asRecord(await c.req.json().catch(() => ({})))
     const name = requireString(body, 'name')
     const numOfPlayers = optionalNumber(body, 'numOfPlayers') ?? 4
     const color = optionalString(body, 'color')
+    const invitedNames = optionalStringList(body, 'invitedUsernames')
 
     if (name === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
+    // Fail closed: a malformed list must not quietly make a requested private game public.
+    if (invitedNames === null) {
+      return sendError(c, 400, 'BAD_REQUEST', 'invitedUsernames must be a list of usernames')
+    }
     if (numOfPlayers < 2 || numOfPlayers > 5) {
       return sendError(c, 400, 'BAD_REQUEST', 'numOfPlayers must be between 2 and 5')
+    }
+
+    const me = currentPlayer(c)
+
+    // A private game (issue #348): the creator names who may join, before the game exists.
+    let invitedPlayerIds: readonly string[] | undefined
+    if (invitedNames !== undefined) {
+      // Usernames keep their whitespace (registration does), and the autocomplete returns them exactly, so an entry
+      // is looked up as given; trimming is only for spotting blanks.
+      const wanted = [...new Set(invitedNames.filter((entry) => entry.trim() !== ''))]
+      const invitees: string[] = []
+      for (const username of wanted) {
+        const account = await context.repo.findPlayerByUsername(username)
+        if (account === undefined || account.disabled === true) {
+          return sendError(c, 400, 'BAD_REQUEST', `There is no player named ${username}`)
+        }
+        if (account.id !== me.id && !invitees.includes(account.id)) invitees.push(account.id)
+      }
+      // Exactly one invitee per other seat: nobody else can join, so fewer would leave the game unable to start.
+      if (invitees.length !== numOfPlayers - 1) {
+        return sendError(
+          c,
+          400,
+          'BAD_REQUEST',
+          `A ${numOfPlayers}-player private game needs ${numOfPlayers - 1} invited players`,
+        )
+      }
+      invitedPlayerIds = [me.id, ...invitees]
     }
 
     const existing = await context.repo.allGames()
@@ -306,9 +379,8 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       return sendError(c, 409, 'GAME_EXISTS', `A game named ${name} already exists`)
     }
 
-    const me = currentPlayer(c)
     // Java: @Min(2) @Max(5) on CreateNewGameDTO.numOfPlayers
-    const empty = createGame({
+    const created = createGame({
       name,
       numOfPlayers,
       // The seed decides the shuffle and the itemNumbers. A random id per game
@@ -319,6 +391,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       players: [],
       createdAt: new Date().toISOString(),
     })
+    const empty = invitedPlayerIds === undefined ? created : { ...created, invitedPlayerIds }
 
     // Java: createNewGame finished with joinGame(..., gameCreator = true).
     // Going through joinGame rather than seating the creator directly is what
@@ -344,6 +417,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       null,
     )
     if (!saved) return sendError(c, 409, 'CONFLICT', 'Game id already exists')
+    if (invitedPlayerIds !== undefined) {
+      await context.notifications.playersInvited(stamped, me.username, me.id)
+    }
     return c.json(toSummary(stamped, me.id), 201)
   })
 

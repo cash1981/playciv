@@ -5,7 +5,7 @@
  *
  * Two modes in one action, one use a turn (a confirmed repeat lifts it):
  * - `extraActions` (City Management): every city of the player may take one more city action. The allowance is not stored: it
- *   is derived from the applied record (`atomicExtraActionFor` in `assisted-core.ts`), so the undo vote removes it.
+ *   is derived from the applied record (`extraCityActionFor` in `assisted-core.ts`), so the undo vote removes it.
  * - `nuke` (Movement, `cityPieceId`): the city and what stood in its outskirts are removed through the board actions, each as
  *   its own history entry, and the undo vote puts every piece back exactly as it stood. Which cities qualify is `atomic-theory.ts`.
  */

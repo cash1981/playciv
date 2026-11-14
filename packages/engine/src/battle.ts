@@ -117,8 +117,9 @@ export interface ArenaArrival {
 
 /**
  * Both units' vitals before and after a face-off. Undoing restores a unit
- * only while it still has the "after" vitals: a later hand edit or kill
- * toggle is the player's own, and is never overwritten.
+ * only while it still has the "after" vitals: a later hand HP edit is the
+ * player's own and is never overwritten. A kill toggle alone is kept, but the
+ * HP the round took still comes back (`restoredVitals`).
  */
 export interface ArenaFaceOff {
   /** Null once the opponent has moved, invalidating its restoration. */
@@ -127,6 +128,18 @@ export interface ArenaFaceOff {
   readonly opponentAfter: ArenaVitals
   readonly selfBefore: ArenaVitals
   readonly selfAfter: ArenaVitals
+}
+
+/**
+ * A face-off fought again because a unit's attack changed after it was fought (Metalworking): the record before and after,
+ * so taking the change back puts both units where the earlier round left them.
+ */
+export interface ArenaRefight {
+  /** The unit whose arrival fought the round, and the unit it fought. */
+  readonly arrivalId: string
+  readonly opponentId: string
+  readonly previous: ArenaFaceOff
+  readonly next: ArenaFaceOff
 }
 
 /**

@@ -270,6 +270,20 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   credit. Her play cannot be undone while an action that carries its id is in
   force; undo that action first. Anarchy is not enforced for the capital anywhere, so her anarchy
   clause needs nothing.
+  Every extra city action goes through one function, `extraCityActionFor` (`assisted-core.ts`), for the question, the log
+  line and the credit an action uses. In order: Atomic Theory (a city that has acted once), Monarchy, then the cards.
+  **Monarchy** (human, 2026-11-14): the capital of a player under that government takes one more action each turn with no
+  question, but not the same action as its first ("Devote to the Arts (Jerry Garcia)" counts as a devotion): the same
+  action again is refused, with no confirmation to lift it (the card forbids it, and the client does not ask about the
+  capital's second action under Monarchy), while a third action and any other city's second action are asked about as before.
+  Playing Jerry Garcia is refused by the same rule in either order, so the card stays in the hand (human, 2026-11-14; a card asks
+  no confirmation, so outside Monarchy it still plays with a note when the capital had acted).
+  Atomic Theory and the cards cover a city first or after it, so they are not stacked on Monarchy: one extra action, not two. It is derived from the player's
+  government, so it needs no record and no undo. It comes before the cards, so the free action does not use up a credit.
+  **Supply Drop** (human, 2026-11-14) is a credit like Ada Lovelace's, with two differences: it counts only when it was played in
+  City Management (its other timing is Start of Turn, where it gains 7 trade), and only for a city that is not the capital;
+  Ada's stays for the capital. A city that is not the capital uses a Supply Drop credit before an Ada one. Tests:
+  `great-person-arts.test.ts` (Monarchy, Supply Drop).
 - Akira Kurosawa, faceup and not blockaded, pays his holder 1 culture for every
   city another player devotes (also each city of Garcia's play), in the same log
   line; the holder's own devotions pay nothing. Undoing the devotion takes the
@@ -519,8 +533,14 @@ if that is lethal (attack >= opposing HP), takes no damage and the victim is
 flagged `killed`; otherwise both lose the other's attack. The opponent's
 *current* HP takes the damage, so earlier rounds persist. Rotating re-seeds the
 unit to its new tier and re-applies only its opponent's blows. Later rounds and
-corrections stay manual via the ATK/HP fields. Aircraft trump nothing. Tests:
-`arena.test.ts` "face-off on arrival", `ArenaUnitCard.test.tsx`.
+corrections stay manual via the ATK/HP fields. Taking an arrival back (return to hand, move) gives back the HP its round took, also
+when the kill flag was toggled by hand since (the toggle stays; any other HP edit stays too; human, 2026-11-14). Metalworking's +3 fights the round again (`refightWithAttack`): both units go back to what they had before the round and it is
+worked out with the new attack, so an Infantry that now out-hits the Mounted it faces kills it and keeps its HP; only while both still
+have what the round left them with. Its undo (`undoRefight`) puts the boosted pair back as the round fought without the boost left them: the arriving
+unit while it is still in the arena, its opponent only while it still faces it; otherwise only the attack goes back
+(human, 2026-11-14). Mathematics and Ballistics wounds
+kill a unit at 0 HP without a manual kill. Aircraft trump nothing. Tests:
+`arena.test.ts` "face-off on arrival", `assisted-metalworking.test.ts` (re-fight and its undo), `ArenaUnitCard.test.tsx`.
 
 Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`,
 `actions/undo.ts`, `state.ts`, arena tests and `undo-civ-reveal.test.ts`.
@@ -799,12 +819,20 @@ speed, checking path, water and ownership, writing position and spent movement
 in one board history entry so board Undo restores both. The stored turn number
 refreshes the allowance next turn. Battle and loot stay manual (human).
 
+- **Tech speed** (human, 2026-11-14): a revealed tech gives a travel speed (Horseback Riding 3, Sailing 4, Steam Power 5, Flight 6;
+  `TECH_SPEEDS`, `techSpeedOf` in `movement.ts`). The highest counts and they do not add up; the base is the larger of the
+  typed base (the first term of `mvmt`) and that speed, so a typed base that is higher (a correction by hand) still wins. Typed
+  `+` terms after the base are bonuses and are added on top: Spain's "travel speed increased by 1", typed as `2+1`, gives 5 with
+  Sailing (`splitMovement`). Spain's +1 itself is not applied by the engine; it stays typed. A hidden tech gives
+  nothing. Flight also flies over huts, villages and other players' figures (see Water and Huts below). Natural Religion, Henry Ford and Captain James Cook
+  apply on top. The status sidebar shows the tech's speed as the Movement value (with the tech named in its tooltip) when it
+  is more than what is typed. Tests: `movement.test.ts`, `PlayerStatusSidebar.test.tsx`.
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
   for an army outside Anarchy unless the expression already has a `+` term (older
   saves recorded `3+1`, which a scout does not get: it loses one point of it
   while Natural Religion is active); Henry Ford +1 while faceup; Captain James Cook doubles it
   for the turn (`card:Captain James Cook` marker, freed by undo). Spain's bonus
-  and tech speed steps stay typed; while Natural Religion is active any `+` term
+  stays typed; while Natural Religion is active any `+` term
   is read as its bonus, so a typed Spain bonus makes a scout lose a point. Group movement is out of scope.
 - **Pool** (human): each travel adds to `movement.used`; the figure may move again
   while speed is left. It locks when the pool is spent or the move ends on a hut,
@@ -924,8 +952,11 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   actions (phase `ANY`, group "Battle", usage key `card:<tech>`, once per turn with the usual confirmed repeat).
   Ready only in a battle the player fights in (the barbarian controller does not), with the tech revealed and an
   Iron token. Pressing pays the Iron and records the wounds owed in `Battle.techWounds`; the player deals them
-  one click at a time with `techWound` (`POST /battle/arena/tech-wound`, body `tech` and `arenaUnitId`), modelled
-  on Zhukov: -1 health, a unit at 0 is killed, own and killed units are refused, nothing beyond what was paid.
+  with `techWound` (`POST /battle/arena/tech-wound`, body `tech`, `arenaUnitId` and `wounds`). The player chooses how many
+  wounds an enemy unit takes (human, 2026-11-14): the Battle panel opens an OK/Cancel popup per unit with a number from 1
+  up to what is owed and what the unit has health for, and nothing is sent until OK. The engine refuses anything that is
+  not a whole number in that range. A choice larger than what the first set has left runs over into the second set. A unit
+  at 0 is killed, own and killed units are refused, nothing beyond what was paid. Zhukov's wound stays one at a time.
   "Up to": the player may stop; what is left is lost when the battle ends. Undo by vote returns the Iron and
   removes the owed wounds from the battle on now or the one End battle has set aside, and is refused once a wound has
   been dealt there (as for Zhukov; health is corrected by hand). It is also refused once the battle is gone
@@ -992,6 +1023,14 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   takes that part back or refuses with a reason, then returns exactly what was paid. The web asks through one picker per
   kind (`ASSISTED_TECH_PICKERS` in `assisted-techs.ts`, a leaf table the web reads); the server parsers are strict and the
   engine decides legality.
+- **Choices are a popup** (human, 2026-11-14; `ChoiceDialog.tsx`): every ability that asks something (resource payment, city,
+  player, coin counter, unit, Combustion's army, and the modes of Monarchy, Gunpowder and Atomic Theory) opens one OK/Cancel
+  popup over the page, not an inline form. Escape and a click outside cancel, and nothing is sent until OK. Only a choice that
+  can be carried out is offered: Monarchy shows "Obsolete an ancient wonder" only when a player owns one, and "Kill a random
+  unit" only outside a battle and with an opponent who holds a unit card (those are the only opponents listed); Gunpowder and
+  Atomic Theory hide the obsolete/destroy and nuke modes the same way (Atomic Theory offers the extra action only while the
+  viewer's City Management is open, and the nuke only in Movement with a city to nuke). A single mode is stated without a radio, and with no
+  valid choice at all the popup does not open and a hint says why.
 - **Production boosts** (Wheat, City Management; +3, +5, +7, +10): the player names one of their cities. The bonus is not
   stored on the city: `cityProductionsOf` sums the applied, not undone, records of this turn that name the city (like the
   Communism lock), so the undo vote removes it and it ends with the turn. It is in `boost`, `estimate`, the Building Program
@@ -1051,7 +1090,10 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
 - **Metalworking** (Iron, Battle; button in the Battle panel beside Mathematics and Ballistics): adds 3 to the typed `attack`
   of one of the player's own living arena units (`placedBy`), once per turn. A unit not yet announced is not named in the
   public line (as the arena's own lines do not name it); the owner's private line names it. The undo is refused when the unit
-  is gone or its attack was edited since (it must still read the value the action set).
+  is gone or its attack was edited since (it must still read the value the action set). A unit that fell in the round its own
+  arrival fought, and has not been touched since, may still take it (the +3 belongs to the play of the unit): the round is fought
+  again and the unit may now live (`fellOnArrival`; human, 2026-11-14). A kill toggled by hand later does not block the undo
+  giving the round's HP back: `undoRefight` restores both units through `restoredVitals`, as taking an arrival back does.
 - **Atomic Theory** (Uranium; Marie Curie's substitution applies through the shared layer): one action, one use a turn, two modes.
   `extraActions` (City Management): every city may take one more city action. The allowance is derived from the applied record
   (`atomicExtraActionFor`): a city that has acted once acts again without the question, noted in its line, and one that has acted
@@ -1447,3 +1489,25 @@ configuration and migration instructions.
 - In development the web app imports the engine from `packages/engine/dist`;
   engine changes need `pnpm --filter @civ/engine build` (or `tsc --watch`) and a
   reload.
+
+## Private games and board area colour (#347, #348)
+
+- A game created with `invitedUsernames` is private: `GameState.invitedPlayerIds` holds the creator and the invited
+  account ids (absent on a public game, so no migration). `joinGame` answers `NOT_INVITED` (403) to anyone else, a
+  withdrawn player's seat included. The creator must name exactly `numOfPlayers - 1` distinct, existing, enabled
+  accounts other than themself, because nobody else can join and fewer would leave a game that never starts. A
+  malformed `invitedUsernames` is a 400, never a quietly public game. Each invitee is mailed the game link once,
+  without the per-game hold.
+- A seat freed by a withdrawal in a private game can only be retaken by an invited account that is not seated, in
+  practice the player who left. There is no way to change the invite list afterwards.
+- The invite field autocompletes from `GET /api/players/search?q=` (signed in; usernames only, caller and disabled
+  accounts left out, prefix matches first, at most 8).
+- A private game stays in `/api/games` and `/api/public/games` for everyone, so nobody wonders where it went; the
+  summary's `mayJoin` is false for a viewer who is not invited and the lobby then shows no Join button. Anyone holding
+  the direct game link can still spectate it, as for any game, and a finished game still counts in the highscore; the
+  invitation controls who may play.
+- On the board, a player's area is filled with their colour (not only the border and the name tab), and the shared
+  Wonders area with the wonder accent, in every theme.
+- The invite mail is not throttled: any signed-in account can mail any enabled account an invitation, and the game
+  name is the sender's text. The repo has no rate limiting anywhere and the mail carries the unsubscribe link; add a
+  per-sender limit if it is ever abused.

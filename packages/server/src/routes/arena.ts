@@ -317,8 +317,8 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
   })
 
   /**
-   * Mathematics and Ballistics: deal one of the wounds paid for with Iron to an enemy unit.
-   * Body: `{ tech: 'Mathematics' | 'Ballistics', arenaUnitId: string, rev: number }`.
+   * Mathematics and Ballistics: deal some of the wounds paid for with Iron to an enemy unit.
+   * Body: `{ tech: 'Mathematics' | 'Ballistics', arenaUnitId: string, wounds: number, rev: number }`.
    */
   app.post('/api/games/:gameId/battle/arena/tech-wound', auth, async (c) => {
     const gameId = c.req.param('gameId')
@@ -328,13 +328,15 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
     if (arenaUnitId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'arenaUnitId is required')
     const tech = requireString(body, 'tech')
     if (tech === undefined) return sendError(c, 400, 'BAD_REQUEST', 'tech is required')
+    const wounds = optionalNumber(body, 'wounds')
+    if (wounds === undefined) return sendError(c, 400, 'BAD_REQUEST', 'wounds is required')
     const player = currentPlayer(c)
 
     return applyToGame(
       context,
       c,
       gameId,
-      (state) => techWound(state, { playerId: player.id, tech, arenaUnitId }),
+      (state) => techWound(state, { playerId: player.id, tech, arenaUnitId, wounds }),
       clientRev,
     )
   })

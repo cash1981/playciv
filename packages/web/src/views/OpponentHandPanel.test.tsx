@@ -48,4 +48,11 @@ describe('OpponentHandPanel', () => {
     expect(screen.getByRole('heading', { name: 'Villages (1)' })).toBeTruthy()
     expect(document.querySelector('.opponent-hand img')).toBeNull()
   })
+
+  it('shows the unit types in the Units heading', () => {
+    render(<OpponentHandPanel opponents={[
+      { ...opponent('one', 'Alice', { cultureCards: 0, huts: 0, villages: 0, greatPersons: 0, units: 3 }), unitTypes: { infantry: 2, artillery: 0, mounted: 1, aircraft: 0 } },
+    ]} />)
+    expect(screen.getByRole('heading', { name: 'Units (3): 2 infantry, 1 mounted' })).toBeTruthy()
+  })
 })

@@ -44,7 +44,7 @@ import {
   turnStatus,
 } from './turn.js'
 import type { Undo } from './undo.js'
-import type { ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
+import type { ArenaRefight, ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import type { ResourcePaymentOption } from './assisted-resources.js'
@@ -1067,9 +1067,11 @@ export type TechAbilityEffect =
       readonly arenaUnitId: string
       readonly before: number
       readonly after: number
+      /** The face-off on the unit's front that the new attack made fight again, when there was one to fight again. */
+      readonly refight?: ArenaRefight
     }
   | {
-      /** Atomic Theory, "extra action with each city": every city of the player may act once more this turn (`atomicExtraActionFor`). */
+      /** Atomic Theory, "extra action with each city": every city of the player may act once more this turn (`extraCityActionFor`). */
       readonly kind: 'atomicTheory'
       readonly mode: 'extraActions'
       readonly spent: readonly SpentResource[]
@@ -1252,6 +1254,11 @@ export interface GameState {
    */
   readonly createdAt: string | null
   readonly numOfPlayers: number
+  /**
+   * A private game (issue #348): the account ids allowed to join, the creator included. Absent on a public game,
+   * where anyone may take a free seat. Ids only, so nothing here is a hidden-information leak.
+   */
+  readonly invitedPlayerIds?: readonly string[]
   readonly active: boolean
   readonly winner: string | null
   /** The deck. Java: `PBF.items`. */
@@ -1559,6 +1566,8 @@ export interface OpaquePlayerhand {
   readonly numberOfItemsInHand: number
   /** Counts of the five public hand categories; no item data or order. */
   readonly publicHand: PublicHandCounts
+  /** How many of the hand's units are of each type; the unit type is on the card back, so it is public. */
+  readonly unitTypes: Readonly<Record<UnitType, number>>
   readonly numberOfTechsChosen: number
   readonly numberOfBarbarians: number
   readonly numberOfSocialPolicies: number
@@ -1615,6 +1624,12 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
       villages: player.items.filter((item) => item.kind === 'village').length,
       greatPersons: player.items.filter((item) => item.kind === 'greatperson').length,
       units: player.items.filter(isUnit).length,
+    },
+    unitTypes: {
+      infantry: player.items.filter((item) => item.kind === 'infantry').length,
+      artillery: player.items.filter((item) => item.kind === 'artillery').length,
+      mounted: player.items.filter((item) => item.kind === 'mounted').length,
+      aircraft: player.items.filter((item) => item.kind === 'aircraft').length,
     },
     numberOfTechsChosen: player.techsChosen.length,
     numberOfBarbarians: player.barbarians.length,

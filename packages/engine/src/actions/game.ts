@@ -56,6 +56,10 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
   if (state.players.some((player) => player.playerId === input.playerId)) {
     return err({ kind: 'ALREADY_JOINED', playerId: input.playerId })
   }
+  // A private game (issue #348) seats only the people the creator invited.
+  if (state.invitedPlayerIds !== undefined && !state.invitedPlayerIds.includes(input.playerId)) {
+    return err({ kind: 'NOT_INVITED', playerId: input.playerId })
+  }
 
   if (input.color !== undefined && !PLAYER_COLORS.some((color) => color === input.color)) {
     return err({ kind: 'INVALID_PLAYER_COLOR', color: input.color })

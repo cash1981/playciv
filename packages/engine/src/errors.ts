@@ -61,6 +61,8 @@ export type EngineError =
   | { readonly kind: 'CIV_REVEAL_NOT_UNDOABLE'; readonly logId: string }
   /** Java: 400 "Cannot join the game. Its full!" */
   | { readonly kind: 'GAME_IS_FULL'; readonly numOfPlayers: number }
+  /** A private game (issue #348): only the invited players may join */
+  | { readonly kind: 'NOT_INVITED'; readonly playerId: string }
   /** Java: 400 "Cannot join the game. You have already joined!" */
   | { readonly kind: 'ALREADY_JOINED'; readonly playerId: string }
   /** Java: 403 "As game creator, you must end game not withdraw from it" */
@@ -225,6 +227,8 @@ export function describeError(error: EngineError): string {
       return 'This civilization reveal cannot be undone'
     case 'GAME_IS_FULL':
       return 'Cannot join the game. Its full!'
+    case 'NOT_INVITED':
+      return 'This is a private game. Only invited players can join'
     case 'ALREADY_JOINED':
       return 'Cannot join the game. You have already joined!'
     case 'GAME_CREATOR_MUST_END_GAME':

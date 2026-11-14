@@ -21,8 +21,8 @@ export interface GovernmentCard {
 
 /**
  * Public reference text from the Wisdom and Warfare replacement cards.
- * These are player aids only: the engine records the selected card but does
- * not apply or enforce its effects.
+ * These are player aids: the engine records the selected card and applies only
+ * Monarchy's additional capital action (`extraCityActionFor`), not its other effects.
  */
 export const GOVERNMENT_CARDS: readonly GovernmentCard[] = [
   {

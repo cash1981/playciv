@@ -21,13 +21,11 @@ import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './
 import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, undoTesla } from './tesla.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
-  ATOMIC_ACTION_NOTE,
-  LOVELACE_ACTION_NOTE,
-  atomicExtraActionFor,
-  LOVELACE_NAME,
+  EXTRA_ACTION_CARD_NAMES,
   waitingCardIds,
   cityActionsTakenThisTurn,
-  extraCityActionsLeft,
+  earlierCityActions,
+  extraCityActionFor,
   lovelaceCreditWasUsed,
 } from './assisted-core.js'
 import { capitalOf, investableCoinsOf } from './sot.js'
@@ -589,6 +587,10 @@ function automate(
       }))
       const culture = devoted.reduce((total, city) => total + city.culture, 0)
       const acted = cityActionsTakenThisTurn(state, player, capital.cityPieceId)
+      // Garcia's devotion is the capital's action like any other, so the Monarchy rule that forbids the same action twice applies to it
+      // in either order; confirming is not asked of a card, so only the refusal is taken from here
+      const refusal = earlierCityActions(state, player, capital, true, 'Devote to the Arts').refusal
+      if (refusal !== undefined) return err(refusal.reason)
       const gained = withPlayerHand(state, {
         ...player,
         stats: { ...player.stats, culture: player.stats.culture + culture },
@@ -607,11 +609,8 @@ function automate(
           `and gaining ${culture} (${player.stats.culture + culture}) culture (${list})` +
           (acted.length === 0
             ? ''
-            : atomicExtraActionFor(state, player, capital.cityPieceId)
-              ? ATOMIC_ACTION_NOTE
-              : extraCityActionsLeft(state, player) > 0
-                ? LOVELACE_ACTION_NOTE
-                : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
+            : (extraCityActionFor(state, player, capital.cityPieceId, 'Devote to the Arts')?.note ??
+              ` (${capital.label} had already acted this turn: ${acted.join(', ')})`)) +
           kurosawa.said,
       })
     }
@@ -1328,8 +1327,8 @@ export const playCard: AssistedActionDefinition = {
       if (laterUse) return blockedBy(`A later use of ${effect.name} is still applied. Undo it first.`)
     }
 
-    // Her extra city action cannot be taken away while a city action that used it is in force
-    if (effect.name === LOVELACE_NAME && lovelaceCreditWasUsed(state, record.id)) {
+    // The extra city action of Ada Lovelace or Supply Drop cannot be taken away while a city action that used it is in force
+    if (EXTRA_ACTION_CARD_NAMES.includes(effect.name) && lovelaceCreditWasUsed(state, record.id)) {
       return blockedBy(`The extra city action from ${effect.name} has already been used. Undo that city action first.`)
     }
 

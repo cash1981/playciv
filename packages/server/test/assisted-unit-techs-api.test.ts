@@ -109,11 +109,13 @@ describe('Mathematics through the routes', () => {
     const target = before.battle?.arena.find((unit) => unit.side === 'defender')
     if (target === undefined) throw new Error('no enemy unit')
 
-    const unpaid = await post(t.starter, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics', arenaUnitId: target.id })
+    const unpaid = await post(t.starter, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics', arenaUnitId: target.id, wounds: 1 })
     expect(unpaid.status).toBe(409)
     expect(JSON.stringify(await unpaid.json())).toContain('Mathematics')
     expect((await post(t.starter, `/api/games/${t.gameId}/battle/arena/tech-wound`, { arenaUnitId: target.id })).status).toBe(400)
     expect((await post(t.starter, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics' })).status).toBe(400)
+    // The number of wounds is required
+    expect((await post(t.starter, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics', arenaUnitId: target.id })).status).toBe(400)
 
     expect(entryOf(before, 'mathematics')).toMatchObject({ status: 'ready' })
     const paid = await post(t.starter, actions(t.gameId), { action: 'mathematics', requestId: 'req-1', rev: before.rev })
@@ -124,10 +126,12 @@ describe('Mathematics through the routes', () => {
     expect(entryOf(afterPaying, 'mathematics')?.status).toBe('used')
     expect(afterPaying.battle?.techWounds).toHaveLength(1)
 
-    const hit = await post(t.starter, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics', arenaUnitId: target.id, rev: afterPaying.rev })
+    // The unit's health is drawn at random: two wounds when it can take them, else its last one
+    const dealing = Math.min(2, target.health)
+    const hit = await post(t.starter, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics', arenaUnitId: target.id, wounds: dealing, rev: afterPaying.rev })
     expect(hit.status).toBe(200)
     const hitView = await hit.json<View>()
-    expect(hitView.battle?.arena.find((unit) => unit.id === target.id)?.health).toBe(target.health - 1)
+    expect(hitView.battle?.arena.find((unit) => unit.id === target.id)?.health).toBe(target.health - dealing)
 
     // The opponent never sees an effect, a usage key or the Iron token
     const theirs = JSON.stringify(await view(t.gameId, t.other))
@@ -141,7 +145,7 @@ describe('Mathematics through the routes', () => {
     const mine = await view(t.gameId, t.starter)
     const own = mine.battle?.arena.find((unit) => unit.side === 'attacker')
     if (own === undefined) throw new Error('no own unit')
-    const response = await post(t.other, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics', arenaUnitId: own.id })
+    const response = await post(t.other, `/api/games/${t.gameId}/battle/arena/tech-wound`, { tech: 'Mathematics', arenaUnitId: own.id, wounds: 1 })
     expect(response.status).toBe(409)
   })
 })
