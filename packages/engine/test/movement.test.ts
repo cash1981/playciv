@@ -17,6 +17,7 @@ import {
   figureMovementOptions,
   movementOf,
   movementTotal,
+  splitMovement,
   travelSpeedOf,
 } from '../src/movement.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -111,6 +112,14 @@ describe('movement speed', () => {
     expect(movementTotal('2+1+1')).toBe(4)
   })
 
+  it('splits the typed Movement into its base and its bonus', () => {
+    expect(splitMovement('2')).toEqual({ base: 2, bonus: 0 })
+    expect(splitMovement('2+1')).toEqual({ base: 2, bonus: 1 })
+    expect(splitMovement('3+1+1')).toEqual({ base: 3, bonus: 2 })
+    expect(splitMovement('')).toEqual({ base: 0, bonus: 0 })
+    expect(splitMovement('x+1')).toEqual({ base: 1, bonus: 0 })
+  })
+
   it('gives Natural Religion +1 to an army but not a scout', () => {
     let state = place(game(), 'figures/redarmy', 1, 1)
     state = place(state, 'figures/redscout', 4, 1)
@@ -177,7 +186,14 @@ describe('movement speed', () => {
     expect(speedWith(['Mathematics'])).toBe(2)
     // A typed value above what the techs give stays, so a correction by hand still wins
     expect(speedWith(['Sailing'], false, '6')).toBe(6)
-    expect(speedWith(['Sailing'], false, '3+1')).toBe(4)
+    // A typed bonus (Spain's +1) is added on top of the tech's speed, and is not swallowed by it
+    expect(speedWith(['Sailing'], false, '2+1')).toBe(5)
+    expect(speedWith(['Horseback Riding'], false, '2+1')).toBe(4)
+    expect(speedWith(['Flight'], false, '2+1')).toBe(7)
+    expect(speedWith([], false, '2+1')).toBe(3)
+    // A typed base that is higher than the tech's stays, with its bonus
+    expect(speedWith(['Sailing'], false, '3+1')).toBe(5)
+    expect(speedWith(['Horseback Riding'], false, '5+1')).toBe(6)
 
     // Natural Religion, Henry Ford and Captain James Cook apply on top of the tech's speed
     const religious = (mvmt: string) => {

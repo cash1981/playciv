@@ -30,7 +30,7 @@ import {
   INVESTMENT_CARDS,
   MAX_COMBAT_HAND_SIZE_LENGTH,
   leaderAssetId,
-  movementTotal,
+  splitMovement,
   techSpeedOf,
   totalCoins,
   tradeCeilingOf,
@@ -496,10 +496,13 @@ function PlayerBlock({
   const heading = `${block.username} - ${block.civilizationName ?? 'hidden'}`
   // The speed the revealed techs give, when it is more than what is typed: shown as the value, with the tech that gives it
   const techSpeed = techSpeedOf(block.techs)
-  const techSpeedShown = techSpeed !== null && techSpeed.speed > movementTotal(stats.mvmt) ? techSpeed : null
+  const typedMovement = splitMovement(stats.mvmt)
+  const techSpeedShown = techSpeed !== null && techSpeed.speed > typedMovement.base ? techSpeed : null
+  // The typed bonus (Spain's +1) stays on top of the tech's speed
+  const movementValue = techSpeedShown === null ? 0 : techSpeedShown.speed + typedMovement.bonus
   const movementShown: React.ReactNode =
     techSpeedShown !== null ? (
-      <span title={`${techSpeedShown.tech} gives ${techSpeedShown.speed} (the typed value is ${stats.mvmt.trim() || 'empty'})`}>{techSpeedShown.speed}</span>
+      <span title={`${techSpeedShown.tech} gives ${techSpeedShown.speed}${typedMovement.bonus > 0 ? `, plus the typed ${typedMovement.bonus}` : ''} (the typed value is ${stats.mvmt.trim() || 'empty'})`}>{movementValue}</span>
     ) : (
       stats.mvmt
     )
@@ -552,7 +555,7 @@ function PlayerBlock({
           // the editor changes the typed one
           label:
             `Edit ${block.username} ${EDIT_LABELS[key]}, currently ${String(stats[key]).trim() || 'empty'}` +
-            (key === 'mvmt' && techSpeedShown !== null ? `, shown as ${techSpeedShown.speed} because of ${techSpeedShown.tech}` : ''),
+            (key === 'mvmt' && techSpeedShown !== null ? `, shown as ${movementValue} because of ${techSpeedShown.tech}` : ''),
           open: active === key,
           disabled: busy,
           onPressStart: () => {

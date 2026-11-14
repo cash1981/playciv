@@ -714,7 +714,9 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 
 - **Tech speed** (human, 2026-11-14): a revealed tech gives a travel speed (Horseback Riding 3, Sailing 4, Steam Power 5, Flight 6;
   `TECH_SPEEDS`, `techSpeedOf` in `movement.ts`). The highest counts and they do not add up; the base is the larger of the
-  typed `mvmt` total and that speed, so a typed value that is higher (a correction by hand) still wins. A hidden tech gives
+  typed base (the first term of `mvmt`) and that speed, so a typed base that is higher (a correction by hand) still wins. Typed
+  `+` terms after the base are bonuses and are added on top: Spain's "travel speed increased by 1", typed as `2+1`, gives 5 with
+  Sailing (`splitMovement`). Spain's +1 itself is not applied by the engine; it stays typed. A hidden tech gives
   nothing. Flight also flies over huts, villages and other players' figures (see Water and Huts below). Natural Religion, Henry Ford and Captain James Cook
   apply on top. The status sidebar shows the tech's speed as the Movement value (with the tech named in its tooltip) when it
   is more than what is typed. Tests: `movement.test.ts`, `PlayerStatusSidebar.test.tsx`.

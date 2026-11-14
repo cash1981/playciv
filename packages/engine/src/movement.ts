@@ -106,6 +106,19 @@ export function techSpeedOf(techs: readonly { readonly name: string; readonly hi
   return best
 }
 
+/**
+ * The typed Movement split into its base (the first term) and its bonus (every `+` term after it: Spain's +1, or how older
+ * saves typed Natural Religion). A revealed tech replaces the base when it gives more; the bonus is added on top.
+ */
+export function splitMovement(expression: string): { readonly base: number; readonly bonus: number } {
+  const parts = expression
+    .split('+')
+    .map((part) => Number(part))
+    .filter((part) => Number.isFinite(part) && part >= 0)
+  const [base = 0, ...rest] = parts
+  return { base, bonus: rest.reduce((total, part) => total + part, 0) }
+}
+
 /** What figure ownership needs to know: the seat's colour and civilization. */
 export type FigureOwner = Pick<MovementPlayer, 'color' | 'civilization'>
 
@@ -140,21 +153,26 @@ const hasRevealedTech = (player: MovementPlayer, name: string): boolean =>
   player.techsChosen.some((tech) => tech.name === name && !tech.hidden)
 
 /**
- * The player's travel speed: the larger of the status expression and what the revealed techs give (`techSpeedOf`), plus
- * Natural Religion for an army (group movement is not implemented, so every army move is individual), plus Henry Ford while
- * his card is faceup, doubled by Captain James Cook for this turn.
+ * The player's travel speed: the larger of the typed base and what the revealed techs give (`techSpeedOf`), plus the typed
+ * bonus (Spain's +1), plus Natural Religion for an army (group movement is not implemented, so every army move is
+ * individual), plus Henry Ford while his card is faceup, doubled by Captain James Cook for this turn.
  */
 export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNumber: number): number {
-  const expression = player.stats.mvmt
-  const typed = movementTotal(expression)
+  const typed = splitMovement(player.stats.mvmt)
   const naturalReligion = hasPolicy(player, 'Natural Religion') && !inAnarchy(player)
   // Natural Religion is army-only. A `+` in the typed expression is the players'
   // existing way of recording it (issue #102, `3+1`), so that expression is the
-  // army's speed and already includes the bonus: the typed base is one less, and the
-  // army gets the bonus back. Without a `+` the engine adds the bonus to an army itself.
-  const typedBase = naturalReligion && expression.includes('+') ? Math.max(0, typed - 1) : typed
-  let speed = Math.max(typedBase, techSpeedOf(player.techsChosen)?.speed ?? 0)
-  if (naturalReligion && isArmy(piece)) speed += 1
+  // army's speed and already includes the bonus: a scout gives one point of it
+  // back. Without a `+` the engine adds the bonus to an army itself.
+  let bonus = typed.bonus
+  if (naturalReligion) {
+    if (typed.bonus === 0) {
+      if (isArmy(piece)) bonus = 1
+    } else if (!isArmy(piece)) {
+      bonus = Math.max(0, typed.bonus - 1)
+    }
+  }
+  let speed = Math.max(typed.base, techSpeedOf(player.techsChosen)?.speed ?? 0) + bonus
   if (hasActiveGreatPerson(player, 'Henry Ford')) speed += 1
   const cook = player.playerTurns
     .find((turn) => turn.turnNumber === turnNumber)

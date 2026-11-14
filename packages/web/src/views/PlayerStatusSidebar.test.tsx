@@ -158,9 +158,9 @@ describe('PlayerStatusSidebar', () => {
     expect(movement('Alice')?.querySelector('[title]:not(li)')?.getAttribute('title')).toContain('Sailing gives 4')
     expect(movement('Bob')?.textContent).toContain('3')
     cleanup()
-    // A typed value that is higher stays as typed
-    render(<PlayerStatusSidebar {...READ_ONLY} view={{ ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '3+2' } } } as PlayerView} />)
-    expect(within(block('Alice')).getByRole('img', { name: 'Movement' }).closest('li')?.textContent).toContain('3+2')
+    // A typed base that is higher than the tech's stays as typed
+    render(<PlayerStatusSidebar {...READ_ONLY} view={{ ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '5+2' } } } as PlayerView} />)
+    expect(within(block('Alice')).getByRole('img', { name: 'Movement' }).closest('li')?.textContent).toContain('5+2')
   })
 
   it('an editor names both the typed Movement and the speed a revealed tech gives, and the editor changes the typed one', () => {
@@ -175,6 +175,12 @@ describe('PlayerStatusSidebar', () => {
     fireEvent.click(cell)
     // The field holds the typed value, not the speed shown
     expect((screen.getByLabelText('Alice Movement') as HTMLInputElement).value).toBe('2')
+    cleanup()
+    cleanup()
+    // A typed bonus (Spain's +1) is added on top of the tech's speed, in the cell and in the label
+    const spanish = { ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2+1' } } } as unknown as PlayerView
+    render(<PlayerStatusSidebar {...EDITABLE} view={spanish} />)
+    expect(within(block('Alice')).getByRole('button', { name: 'Edit Alice Movement, currently 2+1, shown as 5 because of Sailing' }).textContent).toContain('5')
     cleanup()
     // Without a higher tech speed the label is as before
     render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
