@@ -630,18 +630,65 @@ describe('BattlePanel Mathematics and Ballistics', () => {
     expect(api.performAction).toHaveBeenCalledWith('game', 'mathematics', expect.any(String), 4)
   })
 
-  it('offers a wound on each living enemy unit while wounds are owed, and sends the tech and the unit', () => {
+  it('offers a wound on each living enemy unit while wounds are owed, asks how many in a popup, and sends the tech, the unit and the number', () => {
     vi.mocked(api.techWound).mockResolvedValue(view)
     const owed = { playerId: 'me', tech: 'Ballistics', total: 6, dealt: 2, actionId: 'x' }
-    const { getByText, queryAllByText } = render(
+    const { getByText, getByRole, getByLabelText, queryAllByText, queryByRole } = render(
       <BattlePanel gameId="game" busy={false} run={run} view={techView([owed], [action('ballistics', 'Ballistics', 'used')])} />,
     )
     fireEvent.click(getByText('Battle'))
-    expect(getByText(/Ballistics: deal up to 4 wounds, one to an enemy unit at a time/)).toBeTruthy()
+    expect(getByText(/Ballistics: deal up to 4 wounds, choosing how many each enemy unit takes/)).toBeTruthy()
     // The killed enemy unit and own units are not offered
     expect(queryAllByText(/^Wound /)).toHaveLength(1)
     fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
-    expect(api.techWound).toHaveBeenCalledWith('game', 'Ballistics', 'd1', 4)
+    // Nothing is sent by opening it; the unit has 3 HP and 4 wounds are owed, so 1 to 3 may be chosen (3 offered first)
+    expect(api.techWound).not.toHaveBeenCalled()
+    const select = getByLabelText('Wounds to deal') as HTMLSelectElement
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(['1', '2', '3'])
+    expect(select.value).toBe('3')
+    expect(getByText('Deal 3 wounds: the unit is killed')).toBeTruthy()
+    fireEvent.change(select, { target: { value: '2' } })
+    expect(getByText('Deal 2 wounds (1 HP left)')).toBeTruthy()
+    // Cancel sends nothing
+    expect(getByRole('dialog', { name: 'Ballistics: wound' })).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: 'Cancel' }))
+    expect(queryByRole('dialog', { name: 'Ballistics: wound' })).toBeNull()
+    expect(api.techWound).not.toHaveBeenCalled()
+    fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
+    fireEvent.change(getByLabelText('Wounds to deal'), { target: { value: '2' } })
+    fireEvent.click(getByRole('button', { name: 'OK' }))
+    expect(api.techWound).toHaveBeenCalledWith('game', 'Ballistics', 'd1', 2, 4)
+  })
+
+  it('offers at most the wounds that are owed, and what is owed is read again while the popup is open', () => {
+    vi.mocked(api.techWound).mockResolvedValue(view)
+    const owed = (dealt: number) => ({ playerId: 'me', tech: 'Mathematics', total: 3, dealt, actionId: 'x' })
+    const { getByText, getByRole, getByLabelText, queryAllByText, rerender } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={techView([owed(2)], [action('mathematics', 'Mathematics', 'used')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
+    expect(Array.from((getByLabelText('Wounds to deal') as HTMLSelectElement).options).map((option) => option.value)).toEqual(['1'])
+    // All wounds are dealt in another tab: nothing is left to send
+    rerender(<BattlePanel gameId="game" busy={false} run={run} view={techView([owed(3)], [action('mathematics', 'Mathematics', 'used')])} />)
+    expect(getByText('Mathematics has no wound left to deal.')).toBeTruthy()
+    expect((getByRole('button', { name: 'OK' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(api.techWound).not.toHaveBeenCalled()
+  })
+
+  it('the unit being killed while the popup is open leaves nothing to send', () => {
+    vi.mocked(api.techWound).mockResolvedValue(view)
+    const owed = [{ playerId: 'me', tech: 'Ballistics', total: 6, dealt: 0, actionId: 'x' }]
+    const actions = [action('ballistics', 'Ballistics', 'used')]
+    const { getByText, getByRole, queryAllByText, rerender } = render(<BattlePanel gameId="game" busy={false} run={run} view={techView(owed, actions)} />)
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
+    const killed = techView(owed, actions)
+    const dead = { ...killed, battle: { ...killed.battle, arena: killed.battle!.arena.map((unit) => (unit.id === 'd1' ? { ...unit, killed: true } : unit)) } } as unknown as PlayerView
+    rerender(<BattlePanel gameId="game" busy={false} run={run} view={dead} />)
+    expect(getByText('That unit is no longer in the arena.')).toBeTruthy()
+    expect((getByRole('button', { name: 'OK' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(api.techWound).not.toHaveBeenCalled()
   })
 
   it('lists nothing without the tech, for a player outside the battle, or for a spectator', () => {

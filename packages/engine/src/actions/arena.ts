@@ -1227,6 +1227,8 @@ export interface TechWoundInput {
   /** Mathematics or Ballistics. */
   readonly tech: string
   readonly arenaUnitId: string
+  /** How many of the owed wounds the player deals to this unit: a whole number from 1 up to what is owed and the unit's health. */
+  readonly wounds: number
 }
 
 /**
@@ -1239,8 +1241,8 @@ const publicUnitName = (unit: ArenaUnit): string =>
 /**
  * Mathematics and Ballistics (issue #327): "while involved in a battle, deal up to 3 (6) wounds, spread across enemy
  * units however you choose." Pressing the tech's button pays the Iron and records the wounds owed
- * (`Battle.techWounds`); this deals one of them to a living enemy unit, -1 health, and a unit at 0 is killed, as
- * Zhukov's wound does. The player may stop early. Like Zhukov's, the health is corrected by hand if wrong, and the
+ * (`Battle.techWounds`); each call deals the number of them the player chose to one living enemy unit, and a unit at 0 is
+ * killed. The player may stop early. Like Zhukov's, the health is corrected by hand if wrong, and the
  * assisted-action undo is refused once a wound has been dealt.
  */
 export function techWound(state: GameState, input: TechWoundInput): ActionResult {
@@ -1265,22 +1267,32 @@ export function techWound(state: GameState, input: TechWoundInput): ActionResult
   if (target.side === side) return refuse('Choose an enemy unit.')
   if (target.killed) return refuse('That unit is already killed.')
 
-  const health = Math.max(0, target.health - 1)
+  // The player chooses how many wounds this unit takes (human, 2026-11-14), at most what is owed and what the unit has health for
+  const owed = techWoundsOwed(battle, input.playerId, input.tech)
+  const dealing = input.wounds
+  if (!Number.isInteger(dealing) || dealing < 1) return refuse('Choose how many wounds to deal: a whole number, at least 1.')
+  if (dealing > owed) return refuse(`${input.tech} has only ${owed} wound${owed === 1 ? '' : 's'} left to deal.`)
+  if (dealing > Math.max(1, target.health)) return refuse(`That unit has only ${Math.max(1, target.health)} health, so it cannot take ${dealing} wounds.`)
+  const health = Math.max(0, target.health - dealing)
   const dead = health === 0
   const next = appendPublicLog(
     state,
     player.username,
     player.playerId,
-    `uses ${input.tech}: deals 1 wound to ${publicUnitName(target)}${dead ? ', which is killed' : ` (${health} health left)`}`,
+    `uses ${input.tech}: deals ${dealing} wound${dealing === 1 ? '' : 's'} to ${publicUnitName(target)}${dead ? ', which is killed' : ` (${health} health left)`}`,
   )
+  let left = dealing
   return ok({
     ...next,
     battle: {
       ...battle,
       arena: battle.arena.map((unit) => (unit.id === target.id ? { ...unit, health, killed: dead } : unit)),
-      techWounds: (battle.techWounds ?? []).map((candidate) =>
-        candidate === entry ? { ...candidate, dealt: candidate.dealt + 1 } : candidate,
-      ),
+      techWounds: (battle.techWounds ?? []).map((candidate) => {
+        if (candidate.playerId !== input.playerId || candidate.tech !== input.tech || left <= 0) return candidate
+        const take = Math.min(left, candidate.total - candidate.dealt)
+        left -= take
+        return take === 0 ? candidate : { ...candidate, dealt: candidate.dealt + take }
+      }),
     },
   })
 }

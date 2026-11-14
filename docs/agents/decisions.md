@@ -904,8 +904,11 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   actions (phase `ANY`, group "Battle", usage key `card:<tech>`, once per turn with the usual confirmed repeat).
   Ready only in a battle the player fights in (the barbarian controller does not), with the tech revealed and an
   Iron token. Pressing pays the Iron and records the wounds owed in `Battle.techWounds`; the player deals them
-  one click at a time with `techWound` (`POST /battle/arena/tech-wound`, body `tech` and `arenaUnitId`), modelled
-  on Zhukov: -1 health, a unit at 0 is killed, own and killed units are refused, nothing beyond what was paid.
+  with `techWound` (`POST /battle/arena/tech-wound`, body `tech`, `arenaUnitId` and `wounds`). The player chooses how many
+  wounds an enemy unit takes (human, 2026-11-14): the Battle panel opens an OK/Cancel popup per unit with a number from 1
+  up to what is owed and what the unit has health for, and nothing is sent until OK. The engine refuses anything that is
+  not a whole number in that range. A choice larger than what the first set has left runs over into the second set. A unit
+  at 0 is killed, own and killed units are refused, nothing beyond what was paid. Zhukov's wound stays one at a time.
   "Up to": the player may stop; what is left is lost when the battle ends. Undo by vote returns the Iron and
   removes the owed wounds from the battle on now or the one End battle has set aside, and is refused once a wound has
   been dealt there (as for Zhukov; health is corrected by hand). It is also refused once the battle is gone

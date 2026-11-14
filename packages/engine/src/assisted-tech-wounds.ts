@@ -3,7 +3,7 @@
  * wounds, spread across enemy units however you choose."
  *
  * Pressing the button pays the Iron and records the wounds owed on the battle (`Battle.techWounds`); the
- * player then deals them one click at a time with `techWound` (`actions/arena.ts`), modelled on Georgy
+ * player then deals them with `techWound` (`actions/arena.ts`), choosing how many each unit takes, modelled on Georgy
  * Zhukov's wounds. The player may stop early. The undo vote returns the Iron and removes the wounds owed, and
  * is refused once a wound has been dealt (the health is corrected by hand, as for Zhukov), and once its battle
  * is gone altogether, since wounds already dealt cannot then be ruled out.

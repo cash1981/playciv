@@ -22,6 +22,7 @@ import { AssistedActionButton, hasActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
 import type { PickableSquare, PickSquares } from './BoardView.js'
 import { BuildBar } from './BuildPicker.js'
+import { ChoiceDialog } from './ChoiceDialog.js'
 import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
@@ -1413,6 +1414,8 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   const [opponentId, setOpponentId] = useState('')
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null)
+  // Mathematics and Ballistics: the enemy unit the player is choosing a number of wounds for, and the number picked (`null` while closed)
+  const [woundPick, setWoundPick] = useState<{ readonly tech: string; readonly unitId: string; readonly wounds: number | null } | null>(null)
   const [draggingArenaUnitId, setDraggingArenaUnitId] = useState<string | null>(null)
   const [selectedBattlePiece, setSelectedBattlePiece] = useState<{
     readonly kind: 'hand' | 'arena'
@@ -1427,6 +1430,9 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
     moved: boolean
   } | null>(null)
 
+  // The wound popup belongs to the battle it was opened in: it does not come back in a later battle or after End battle is undone
+  const battleId = battle?.id ?? null
+  useEffect(() => { setWoundPick(null) }, [battleId])
   useEffect(() => {
     if (selectedBattlePiece === null) return
     const stillAvailable = selectedBattlePiece.kind === 'hand'
@@ -1587,7 +1593,13 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
     battle !== null && mySideInBattle !== null
       ? battle.arena.filter((unit) => unit.side !== mySideInBattle && !unit.killed)
       : []
-  // Mathematics and Ballistics: the button that pays the Iron, and the wounds it owes, dealt one click at a time like Zhukov's.
+  // The wound popup works from the current view: the unit's health and the wounds still owed are read again on every render, so the
+  // number offered is what the engine will accept
+  const woundTarget = woundPick === null ? undefined : zhukovTargets.find((unit) => unit.id === woundPick.unitId)
+  const woundOwed = woundPick === null || battle === null ? 0 : techWoundsOwed(battle, myId, woundPick.tech)
+  const woundMax = woundTarget === undefined ? 0 : Math.min(Math.max(1, woundTarget.health), woundOwed)
+  const woundCount = Math.min(Math.max(1, woundPick?.wounds ?? woundMax), Math.max(1, woundMax))
+  // Mathematics and Ballistics: the button that pays the Iron, and the wounds it owes, dealt to one enemy unit at a time in the number the player chooses.
   // Metalworking sits in the same list: its button pays the Iron and asks which of the player's own units gets +3 attack, and owes nothing.
   // Listed once the tech is revealed and a battle is on, so the player sees why it is not pressable (no Iron, used this turn).
   const woundTechs =
@@ -1910,7 +1922,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               {owed > 0 && (
                 <>
                   <strong>
-                    {tech}: deal up to {owed} wound{owed === 1 ? '' : 's'}, one to an enemy unit at a time
+                    {tech}: deal up to {owed} wound{owed === 1 ? '' : 's'}, choosing how many each enemy unit takes
                   </strong>
                   {zhukovTargets.length === 0 && <span className="muted">No living enemy unit is left.</span>}
                   {zhukovTargets.map((unit) => (
@@ -1918,7 +1930,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                       key={unit.id}
                       className="small"
                       disabled={busy || noMutations}
-                      onClick={() => runBattleAction(() => api.techWound(gameId, tech, unit.id, rev))}
+                      onClick={() => setWoundPick({ tech, unitId: unit.id, wounds: null })}
                     >
                       Wound {itemName(unit.unit)} (front {unit.position + 1}, {unit.health} HP)
                     </button>
@@ -1927,6 +1939,45 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               )}
             </div>
           ))}
+
+          {woundPick !== null && (
+            <ChoiceDialog
+              title={`${woundPick.tech}: wound`}
+              okDisabled={busy || noMutations || woundTarget === undefined || woundMax < 1}
+              onOk={() => {
+                const { tech, unitId } = woundPick
+                setWoundPick(null)
+                runBattleAction(() => api.techWound(gameId, tech, unitId, woundCount, rev))
+              }}
+              onCancel={() => setWoundPick(null)}
+            >
+              {woundTarget === undefined || woundMax < 1 ? (
+                <p role="status" className="assisted-warning">
+                  {woundTarget === undefined ? 'That unit is no longer in the arena.' : `${woundPick.tech} has no wound left to deal.`}
+                </p>
+              ) : (
+                <>
+                  <p>
+                    {itemName(woundTarget.unit)} (front {woundTarget.position + 1}, {woundTarget.health} HP)
+                  </p>
+                  <label>
+                    Wounds to deal{' '}
+                    <select aria-label="Wounds to deal" value={woundCount} onChange={(event) => setWoundPick({ ...woundPick, wounds: Number(event.target.value) })}>
+                      {Array.from({ length: woundMax }, (_, index) => index + 1).map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="choice-summary">
+                    Deal {woundCount} wound{woundCount === 1 ? '' : 's'}
+                    {woundCount >= woundTarget.health ? ': the unit is killed' : ` (${woundTarget.health - woundCount} HP left)`}
+                  </p>
+                </>
+              )}
+            </ChoiceDialog>
+          )}
 
           <SavedCasualties units={(battle?.departedUnits ?? []).filter((u) => u.killed && u.saved === true)} />
 

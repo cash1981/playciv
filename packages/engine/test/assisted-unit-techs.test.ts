@@ -112,7 +112,7 @@ const WOUND_TECHS = [
 describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
   const armed = (): GameState => withHutInHand(withTech(fight(), tech), 'Iron').state
   const used = (): GameState => unwrap(press(armed(), kind))
-  const wound = (state: GameState, unitId: string) => techWound(state, { playerId: CASH1981, tech, arenaUnitId: unitId })
+  const wound = (state: GameState, unitId: string, wounds = 1) => techWound(state, { playerId: CASH1981, tech, arenaUnitId: unitId, wounds })
 
   it('is not available outside a battle, and says so', () => {
     const state = withHutInHand(withTech(firstCivGame(), tech), 'Iron').state
@@ -155,17 +155,53 @@ describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
     expect(undoLastBoardChange(paid, CASH1981)).toMatchObject({ ok: false })
   })
 
-  it('deals the wounds one at a time, spread over the enemy units however the player chooses', () => {
+  it('deals the number of wounds the player chooses to a unit, spread over the enemy units however they choose', () => {
     let state = used()
     const [first, second] = enemyUnits(state)
     if (first === undefined || second === undefined) throw new Error('missing enemy units')
-    state = unwrap(wound(state, first.id))
-    state = unwrap(wound(state, second.id))
-    expect(enemyUnits(state).map((unit) => unit.health)).toEqual([2, 2])
+    state = unwrap(wound(state, first.id, 2))
+    expect(enemyUnits(state)[0]?.health).toBe(1)
     expect(techWoundsOwed(state.battle!, CASH1981, tech)).toBe(wounds - 2)
-    expect(state.log.at(-1)?.publicLog).toContain(`uses ${tech}: deals 1 wound`)
+    expect(state.log.at(-1)?.publicLog).toContain(`uses ${tech}: deals 2 wounds to`)
+    expect(state.log.at(-1)?.publicLog).toContain('(1 health left)')
+    state = unwrap(wound(state, second.id))
+    expect(enemyUnits(state).map((unit) => unit.health)).toEqual([1, 2])
+    expect(techWoundsOwed(state.battle!, CASH1981, tech)).toBe(wounds - 3)
+    expect(state.log.at(-1)?.publicLog).toContain('deals 1 wound to')
     // The player may stop early: nothing forces the rest
     expect(state.battle?.arena.some((unit) => unit.killed)).toBe(false)
+  })
+
+  it('kills a unit that takes all its health in one choice, in one line', () => {
+    const state = unwrap(wound(used(), enemyUnits(used())[0]!.id, 3))
+    expect(enemyUnits(state)[0]).toMatchObject({ health: 0, killed: true })
+    expect(state.log.at(-1)?.publicLog).toContain('deals 3 wounds to')
+    expect(state.log.at(-1)?.publicLog).toContain('which is killed')
+  })
+
+  it('refuses a number that is not a whole number from 1 to what is owed and what the unit has health for, and changes nothing', () => {
+    const state = used()
+    const target = enemyUnits(state)[0]!
+    for (const count of [0, -1, 1.5, Number.NaN, 4, wounds + 1]) {
+      expect(unwrapErr(wound(state, target.id, count)).kind).toBe('BATTLE_CARD_REFUSED')
+    }
+    // More than is owed: one wound left owed, two asked
+    const owedOne: GameState = { ...state, battle: { ...state.battle!, techWounds: state.battle!.techWounds!.map((entry) => ({ ...entry, dealt: entry.total - 1 })) } }
+    expect(JSON.stringify(unwrapErr(wound(owedOne, target.id, 2)))).toContain('only 1 wound left')
+  })
+
+  it('a choice that is more than the first set has left runs over into the second set', () => {
+    const state = withHutInHand(used(), 'Iron').state
+    const again = unwrap(press(state, kind, 'req-2', undefined, true))
+    const target = enemyUnits(again)[0]!
+    const oneLeft: GameState = {
+      ...again,
+      battle: { ...again.battle!, techWounds: again.battle!.techWounds!.map((entry, index) => (index === 0 ? { ...entry, dealt: entry.total - 1 } : entry)) },
+    }
+    const hit = unwrap(wound(oneLeft, target.id, 3))
+    // 1 wound left in the first set and a full second set: the unit's 3 health take 1 + 2
+    expect(hit.battle?.techWounds?.map((entry) => entry.dealt)).toEqual([wounds, 2])
+    expect(enemyUnits(hit)[0]).toMatchObject({ health: 0, killed: true })
   })
 
   it('does not name an unannounced target in the public line, and names it in full once its placement is announced', () => {
@@ -215,9 +251,9 @@ describe.each(WOUND_TECHS)('%s (%s, up to %i wounds)', (kind, tech, wounds) => {
     expect(unwrapErr(wound(paid, own.id)).kind).toBe('BATTLE_CARD_REFUSED')
     expect(unwrapErr(wound(paid, 'nobody')).kind).toBe('ARENA_UNIT_NOT_FOUND')
     // The opponent paid nothing, so their wound is refused even though the battle has the entry
-    expect(unwrapErr(techWound(paid, { playerId: KARANDRAS1, tech, arenaUnitId: own.id })).kind).toBe('BATTLE_CARD_REFUSED')
+    expect(unwrapErr(techWound(paid, { playerId: KARANDRAS1, tech, arenaUnitId: own.id, wounds: 1 })).kind).toBe('BATTLE_CARD_REFUSED')
     const other = tech === 'Mathematics' ? 'Ballistics' : 'Mathematics'
-    expect(unwrapErr(techWound(paid, { playerId: CASH1981, tech: other, arenaUnitId: target.id })).kind).toBe('BATTLE_CARD_REFUSED')
+    expect(unwrapErr(techWound(paid, { playerId: CASH1981, tech: other, arenaUnitId: target.id, wounds: 1 })).kind).toBe('BATTLE_CARD_REFUSED')
 
     const killed = unwrap(killArenaUnit(paid, { playerId: KARANDRAS1, arenaUnitId: target.id }))
     expect(unwrapErr(wound(killed, target.id)).kind).toBe('BATTLE_CARD_REFUSED')
@@ -354,11 +390,11 @@ describe('Mathematics against barbarians, and with no battle', () => {
     expect(state.battle?.defender).toEqual({ kind: 'barbarians', playerId: KARANDRAS1 })
     expect(assistedAvailability(state, KARANDRAS1, 'mathematics')).toMatchObject({ status: 'unavailable' })
     expect(unwrapErr(press(state, 'mathematics', 'req-b', undefined, false, KARANDRAS1)).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrapErr(techWound(state, { playerId: KARANDRAS1, tech: 'Mathematics', arenaUnitId: 'any' })).kind).toBe('NOT_IN_THIS_BATTLE')
+    expect(unwrapErr(techWound(state, { playerId: KARANDRAS1, tech: 'Mathematics', arenaUnitId: 'any', wounds: 1 })).kind).toBe('NOT_IN_THIS_BATTLE')
   })
 
   it('techWound with no battle on is refused', () => {
-    expect(unwrapErr(techWound(firstCivGame(), { playerId: CASH1981, tech: 'Mathematics', arenaUnitId: 'any' })).kind).toBe('NO_BATTLE_ACTIVE')
+    expect(unwrapErr(techWound(firstCivGame(), { playerId: CASH1981, tech: 'Mathematics', arenaUnitId: 'any', wounds: 1 })).kind).toBe('NO_BATTLE_ACTIVE')
   })
 })
 
