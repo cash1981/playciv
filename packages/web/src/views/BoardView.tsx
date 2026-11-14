@@ -1121,6 +1121,12 @@ export function BoardView({
                         borderColor: isWonders
                           ? 'var(--wonder-accent)'
                           : (area.color?.toLowerCase() ?? 'var(--line)'),
+                        // The whole box takes the player's colour (issue #347), not just its border and name.
+                        ...(isWonders
+                          ? { background: 'var(--wonder-accent)' }
+                          : area.color
+                            ? { background: area.color.toLowerCase() }
+                            : {}),
                       }}
                     >
                       <span

@@ -23,6 +23,8 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
   const [name, setName] = useState('')
   const [numOfPlayers, setNumOfPlayers] = useState(4)
   const [color, setColor] = useState('Green')
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [invited, setInvited] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // Covers the write and the reload after it, which `request()` alone would not.
@@ -122,8 +124,12 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             onSubmit={(event) => {
               event.preventDefault()
               void run(async () => {
-                const created = await api.createGame(name, numOfPlayers, color)
+                const invitees = invited.split(/[,\n]/).map((entry) => entry.trim()).filter((entry) => entry !== '')
+                const created = isPrivate
+                  ? await api.createGame(name, numOfPlayers, color, invitees)
+                  : await api.createGame(name, numOfPlayers, color)
                 setName('')
+                setInvited('')
                 onOpenGame(created.id)
               }).catch(() => undefined)
             }}
@@ -151,7 +157,30 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             >
               {[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} players</option>)}
             </select>
-            <button className="primary" type="submit" disabled={busy || name.trim() === ''}>Create</button>
+            <label>
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(event) => setIsPrivate(event.target.checked)}
+              />{' '}
+              Private game
+            </label>
+            {isPrivate && (
+              <input
+                aria-label="Invited players"
+                value={invited}
+                onChange={(event) => setInvited(event.target.value)}
+                placeholder="Usernames to invite, comma separated"
+                required
+              />
+            )}
+            <button
+              className="primary"
+              type="submit"
+              disabled={busy || name.trim() === '' || (isPrivate && invited.trim() === '')}
+            >
+              Create
+            </button>
           </form>
         </section>
       )}

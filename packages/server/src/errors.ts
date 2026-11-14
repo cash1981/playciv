@@ -123,6 +123,8 @@ export function statusFor(error: EngineError): number {
     case 'ALREADY_JOINED':
     case 'NO_COLOR_AVAILABLE':
       return 400
+    case 'NOT_INVITED':
+      return 403
   }
 }
 

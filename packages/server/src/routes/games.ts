@@ -35,6 +35,7 @@ import {
   isLockedForViewer,
   optionalNumber,
   optionalString,
+  optionalStringList,
   readGame,
   requireString,
   stampLog,
@@ -116,6 +117,8 @@ export interface GameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private: boolean
   readonly availableColors: readonly string[]
   /** Final standings of an ended game with a winner, best first; empty otherwise. */
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
@@ -133,6 +136,8 @@ export interface PublicGameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private: boolean
   readonly availableColors: readonly string[]
   /** Final standings of an ended game with a winner, best first; empty otherwise. */
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
@@ -165,9 +170,23 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: game.players.some((player) => player.playerId === viewerId),
+    private: game.invitedPlayerIds !== undefined,
     availableColors: availableColors(game),
     placements: placementsOf(game),
   }
+}
+
+/**
+ * A private game (issue #348) is listed only for the people it was made for: the invited and those already seated.
+ * Everyone else never sees it in a lobby list.
+ */
+export function canSeeInLobby(game: GameState, viewerId: string | undefined): boolean {
+  if (game.invitedPlayerIds === undefined) return true
+  if (viewerId === undefined) return false
+  return (
+    game.invitedPlayerIds.includes(viewerId) ||
+    game.players.some((player) => player.playerId === viewerId)
+  )
 }
 
 export function toPublicSummary(game: GameState, viewerId?: string): PublicGameSummary {
@@ -185,6 +204,7 @@ export function toPublicSummary(game: GameState, viewerId?: string): PublicGameS
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: viewerId !== undefined && game.players.some((player) => player.playerId === viewerId),
+    private: game.invitedPlayerIds !== undefined,
     availableColors: availableColors(game),
     placements: placementsOf(game),
   }
@@ -281,6 +301,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     const me = currentPlayer(c).id
     return c.json(
       [...games]
+        .filter((game) => canSeeInLobby(game, me))
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
         .map((game) => toSummary(game, me)),
     )
@@ -292,6 +313,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     const name = requireString(body, 'name')
     const numOfPlayers = optionalNumber(body, 'numOfPlayers') ?? 4
     const color = optionalString(body, 'color')
+    const invitedNames = optionalStringList(body, 'invitedUsernames')
 
     if (name === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'name is required')
@@ -300,15 +322,42 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'numOfPlayers must be between 2 and 5')
     }
 
+    const me = currentPlayer(c)
+
+    // A private game (issue #348): the creator names who may join, before the game exists.
+    let invitedPlayerIds: readonly string[] | undefined
+    if (invitedNames !== undefined) {
+      const wanted = [...new Set(invitedNames.map((entry) => entry.trim()).filter((entry) => entry !== ''))]
+      const invitees: string[] = []
+      for (const username of wanted) {
+        const account = await context.repo.findPlayerByUsername(username)
+        if (account === undefined || account.disabled === true) {
+          return sendError(c, 400, 'BAD_REQUEST', `There is no player named ${username}`)
+        }
+        if (account.id !== me.id && !invitees.includes(account.id)) invitees.push(account.id)
+      }
+      if (invitees.length === 0) {
+        return sendError(c, 400, 'BAD_REQUEST', 'A private game needs at least one invited player')
+      }
+      if (invitees.length > numOfPlayers - 1) {
+        return sendError(
+          c,
+          400,
+          'BAD_REQUEST',
+          `A ${numOfPlayers}-player game has room for ${numOfPlayers - 1} invited players`,
+        )
+      }
+      invitedPlayerIds = [me.id, ...invitees]
+    }
+
     const existing = await context.repo.allGames()
     // Java had a unique index on pbf.name
     if (existing.some((game) => game.name.toLowerCase() === name.toLowerCase())) {
       return sendError(c, 409, 'GAME_EXISTS', `A game named ${name} already exists`)
     }
 
-    const me = currentPlayer(c)
     // Java: @Min(2) @Max(5) on CreateNewGameDTO.numOfPlayers
-    const empty = createGame({
+    const created = createGame({
       name,
       numOfPlayers,
       // The seed decides the shuffle and the itemNumbers. A random id per game
@@ -319,6 +368,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       players: [],
       createdAt: new Date().toISOString(),
     })
+    const empty = invitedPlayerIds === undefined ? created : { ...created, invitedPlayerIds }
 
     // Java: createNewGame finished with joinGame(..., gameCreator = true).
     // Going through joinGame rather than seating the creator directly is what
@@ -344,6 +394,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       null,
     )
     if (!saved) return sendError(c, 409, 'CONFLICT', 'Game id already exists')
+    if (invitedPlayerIds !== undefined) {
+      await context.notifications.playersInvited(stamped, me.username, me.id)
+    }
     return c.json(toSummary(stamped, me.id), 201)
   })
 

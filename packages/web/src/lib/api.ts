@@ -275,6 +275,8 @@ export interface GameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private?: boolean
   readonly availableColors: readonly string[]
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
@@ -290,6 +292,8 @@ export interface PublicGameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private?: boolean
   readonly availableColors: readonly string[]
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
@@ -613,8 +617,18 @@ export const api = {
   sendLobbyChat: (message: string) => post<ChatMessageDto>('/api/chat', { message }),
 
   games: () => get<GameSummary[]>('/api/games'),
-  createGame: (name: string, numOfPlayers: number, color?: string) =>
-    post<GameSummary>('/api/games', { name, numOfPlayers, ...(color === undefined ? {} : { color }) }),
+  createGame: (
+    name: string,
+    numOfPlayers: number,
+    color?: string,
+    invitedUsernames?: readonly string[],
+  ) =>
+    post<GameSummary>('/api/games', {
+      name,
+      numOfPlayers,
+      ...(color === undefined ? {} : { color }),
+      ...(invitedUsernames === undefined ? {} : { invitedUsernames }),
+    }),
   /**
    * `background` marks an auto-refresh poll: the server must not count it as the
    * player opening the game, or an open tab would re-arm their game mail.

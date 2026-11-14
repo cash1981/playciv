@@ -176,6 +176,11 @@ export interface Notifications {
    * and admins are ignored.
    */
   gameOpened(game: GameState, viewerId: string): Promise<void>
+  /**
+   * Issue #348 — a private game was created: one mail to every invited account except the creator, with the link to
+   * join. Not held, since each invitee gets exactly one.
+   */
+  playersInvited(game: GameState, inviterUsername: string, inviterPlayerId: string): Promise<void>
   /** Java `GameAction.joinGame` — the other players, held until they open the game. */
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
   /**
@@ -468,6 +473,20 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         await repo.recordGameOpened(game.id, viewerId, clock())
       } catch (error) {
         console.error(`Recording that ${viewerId} opened ${game.id} failed`, error)
+      }
+    },
+
+    async playersInvited(
+      game: GameState,
+      inviterUsername: string,
+      inviterPlayerId: string,
+    ): Promise<void> {
+      const body =
+        `${inviterUsername} has invited you to the private game ${game.name}. ` +
+        `Only invited players can join.\n\nGo to ${gameLink(game.id)} to join`
+      for (const playerId of game.invitedPlayerIds ?? []) {
+        if (playerId === inviterPlayerId) continue
+        await notify(playerId, `You are invited to ${game.name}`, body)
       }
     },
 

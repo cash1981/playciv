@@ -1065,6 +1065,11 @@ export interface GameState {
    */
   readonly createdAt: string | null
   readonly numOfPlayers: number
+  /**
+   * A private game (issue #348): the account ids allowed to join, the creator included. Absent on a public game,
+   * where anyone may take a free seat. Ids only, so nothing here is a hidden-information leak.
+   */
+  readonly invitedPlayerIds?: readonly string[]
   readonly active: boolean
   readonly winner: string | null
   /** The deck. Java: `PBF.items`. */

@@ -1186,3 +1186,14 @@ configuration and migration instructions.
 - In development the web app imports the engine from `packages/engine/dist`;
   engine changes need `pnpm --filter @civ/engine build` (or `tsc --watch`) and a
   reload.
+
+## Private games and board area colour (#347, #348)
+
+- A game created with `invitedUsernames` is private: `GameState.invitedPlayerIds` holds the creator and the invited
+  account ids (absent on a public game, so no migration). `joinGame` answers `NOT_INVITED` (403) to anyone else, and the
+  creator gets at most `numOfPlayers - 1` invitees, who must be existing, enabled accounts. Each invitee is mailed the
+  game link once, without the per-game hold.
+- A private game is left out of `/api/games` and `/api/public/games` for everyone who is neither invited nor seated.
+  Anyone holding the direct game link can still spectate it, as for any game; the invitation controls who may play.
+- On the board, a player's area is filled with their colour (not only the border and the name tab), and the shared
+  Wonders area with the wonder accent, in every theme.

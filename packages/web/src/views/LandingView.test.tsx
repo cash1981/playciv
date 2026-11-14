@@ -41,6 +41,19 @@ describe('LandingView', () => {
     await waitFor(() => expect(apiMocks.createGame).toHaveBeenCalledWith('My game', 4, 'Red'))
   })
 
+  it('creates a private game with the invited usernames (issue #348)', async () => {
+    render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Game name'), { target: { value: 'Secret' } })
+    expect(screen.queryByLabelText('Invited players')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Private game'))
+    expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('Invited players'), { target: { value: 'anna, bob ,' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() =>
+      expect(apiMocks.createGame).toHaveBeenCalledWith('Secret', 4, 'Green', ['anna', 'bob']),
+    )
+  })
+
   it('keeps the global spinner busy through the reload after a write (issue #225)', async () => {
     render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
     await waitFor(() => expect(apiMocks.publicGames).toHaveBeenCalled())

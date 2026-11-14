@@ -7,7 +7,7 @@ import type { Context } from 'hono'
 
 import type { App } from '../app.js'
 import type { AppContext, Variables } from '../context.js'
-import { toPublicSummary } from './games.js'
+import { canSeeInLobby, toPublicSummary } from './games.js'
 
 async function optionalViewerId(
   c: Context<{ Variables: Variables }>,
@@ -32,6 +32,7 @@ export function registerPublicRoutes(app: App, context: AppContext): void {
     const viewerId = await optionalViewerId(c, context)
     return c.json(
       [...games]
+        .filter((game) => canSeeInLobby(game, viewerId))
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
         .map((game) => toPublicSummary(game, viewerId)),
     )
