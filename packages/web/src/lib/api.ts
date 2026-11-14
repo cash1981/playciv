@@ -277,6 +277,8 @@ export interface GameSummary {
   readonly youAreIn: boolean
   /** A private game (issue #348): only invited players can join. */
   readonly private?: boolean
+  /** False for a private game the viewer is not invited to. Absent means they may. */
+  readonly mayJoin?: boolean
   readonly availableColors: readonly string[]
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
@@ -294,6 +296,8 @@ export interface PublicGameSummary {
   readonly youAreIn: boolean
   /** A private game (issue #348): only invited players can join. */
   readonly private?: boolean
+  /** False for a private game the viewer is not invited to. Absent means they may. */
+  readonly mayJoin?: boolean
   readonly availableColors: readonly string[]
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }

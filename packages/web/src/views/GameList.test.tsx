@@ -6,7 +6,7 @@
  * ten rows per page.
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
@@ -102,6 +102,30 @@ describe('GameList', () => {
 
     fireEvent.change(screen.getByLabelText('Search games'), { target: { value: 'waw' } })
     expect(names()).toEqual(['Alpha'])
+  })
+
+  it('lists a private game for everyone but offers Join only to the invited (issue #348)', () => {
+    const games = [
+      game({ id: 'open', name: 'Open table' }),
+      game({ id: 'closed', name: 'Closed table', private: true, mayJoin: false }),
+      game({ id: 'invited', name: 'Invited table', private: true, mayJoin: true }),
+    ]
+    const joinFor = (name: string): HTMLElement | null => {
+      const row = screen.getByRole('link', { name }).closest('tr')
+      return row === null ? null : within(row).queryByRole('button', { name: 'Join' })
+    }
+
+    render(<GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />)
+    expect(names()).toEqual(['Closed table', 'Invited table', 'Open table'])
+    expect(joinFor('Open table')).not.toBeNull()
+    expect(joinFor('Invited table')).not.toBeNull()
+    expect(joinFor('Closed table')).toBeNull()
+
+    cleanup()
+    render(<GameList games={games} player={null} busy={false} onOpenGame={noop} onJoin={noop} />)
+    expect(names()).toEqual(['Closed table', 'Invited table', 'Open table'])
+    const closedRow = screen.getByRole('link', { name: 'Closed table' }).closest('tr')
+    expect(closedRow?.textContent).not.toContain('Sign in to join')
   })
 
   it('keeps only games the player is in, and hides the checkbox when signed out', () => {

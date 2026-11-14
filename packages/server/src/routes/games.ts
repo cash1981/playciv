@@ -119,6 +119,8 @@ export interface GameSummary {
   readonly youAreIn: boolean
   /** A private game (issue #348): only invited players can join. */
   readonly private: boolean
+  /** False for a private game the viewer is not invited to: it is listed, but they cannot join it. */
+  readonly mayJoin: boolean
   readonly availableColors: readonly string[]
   /** Final standings of an ended game with a winner, best first; empty otherwise. */
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
@@ -138,6 +140,8 @@ export interface PublicGameSummary {
   readonly youAreIn: boolean
   /** A private game (issue #348): only invited players can join. */
   readonly private: boolean
+  /** False for a private game the viewer is not invited to: it is listed, but they cannot join it. */
+  readonly mayJoin: boolean
   readonly availableColors: readonly string[]
   /** Final standings of an ended game with a winner, best first; empty otherwise. */
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
@@ -171,22 +175,16 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: game.players.some((player) => player.playerId === viewerId),
     private: game.invitedPlayerIds !== undefined,
+    mayJoin: mayJoin(game, viewerId),
     availableColors: availableColors(game),
     placements: placementsOf(game),
   }
 }
 
-/**
- * A private game (issue #348) is listed only for the people it was made for: the invited and those already seated.
- * Everyone else never sees it in a lobby list.
- */
-export function canSeeInLobby(game: GameState, viewerId: string | undefined): boolean {
+/** Whether the viewer may take a seat: any viewer in a public game, only the invited in a private one (issue #348). */
+function mayJoin(game: GameState, viewerId: string | undefined): boolean {
   if (game.invitedPlayerIds === undefined) return true
-  if (viewerId === undefined) return false
-  return (
-    game.invitedPlayerIds.includes(viewerId) ||
-    game.players.some((player) => player.playerId === viewerId)
-  )
+  return viewerId !== undefined && game.invitedPlayerIds.includes(viewerId)
 }
 
 export function toPublicSummary(game: GameState, viewerId?: string): PublicGameSummary {
@@ -205,6 +203,7 @@ export function toPublicSummary(game: GameState, viewerId?: string): PublicGameS
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: viewerId !== undefined && game.players.some((player) => player.playerId === viewerId),
     private: game.invitedPlayerIds !== undefined,
+    mayJoin: mayJoin(game, viewerId),
     availableColors: availableColors(game),
     placements: placementsOf(game),
   }
@@ -303,7 +302,6 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     const me = currentPlayer(c).id
     return c.json(
       [...games]
-        .filter((game) => canSeeInLobby(game, me))
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
         .map((game) => toSummary(game, me)),
     )

@@ -1199,9 +1199,10 @@ configuration and migration instructions.
   practice the player who left. There is no way to change the invite list afterwards.
 - The invite field autocompletes from `GET /api/players/search?q=` (signed in; usernames only, caller and disabled
   accounts left out, prefix matches first, at most 8).
-- A private game is left out of `/api/games` and `/api/public/games` for everyone who is neither invited nor seated.
-  Anyone holding the direct game link can still spectate it, as for any game, and a finished game still counts in the
-  highscore; the invitation controls who may play.
+- A private game stays in `/api/games` and `/api/public/games` for everyone, so nobody wonders where it went; the
+  summary's `mayJoin` is false for a viewer who is not invited and the lobby then shows no Join button. Anyone holding
+  the direct game link can still spectate it, as for any game, and a finished game still counts in the highscore; the
+  invitation controls who may play.
 - On the board, a player's area is filled with their colour (not only the border and the name tab), and the shared
   Wonders area with the wonder accent, in every theme.
 - The invite mail is not throttled: any signed-in account can mail any enabled account an invitation, and the game

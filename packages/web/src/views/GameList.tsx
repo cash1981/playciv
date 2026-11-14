@@ -71,6 +71,8 @@ function actionCell(
   onRequestJoin: (game: PublicGameSummary, button: HTMLButtonElement) => void,
 ): React.ReactNode {
   const full = game.players.length >= game.numOfPlayers
+  // A private game (issue #348) is listed for everyone, but only the invited can join it, so others get no Join.
+  const closed = game.private === true && game.mayJoin === false
 
   if (player !== null) {
     if (game.youAreIn) {
@@ -80,6 +82,8 @@ function actionCell(
         </button>
       )
     }
+    // Listed, but nothing to press: only the invited can join a private game.
+    if (game.active && !full && closed) return null
     if (game.active && !full) {
       return (
         <button
@@ -104,6 +108,7 @@ function actionCell(
 
   // The old client only offered Join to a signed-in user; keep the current
   // "sign in to join" hint rather than a button that cannot work.
+  if (game.active && !full && closed) return null
   return game.active && !full ? <span className="muted">Sign in to join</span> : null
 }
 

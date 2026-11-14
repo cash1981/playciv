@@ -1,6 +1,6 @@
 /**
- * Private games (issue #348): the creator invites players by username, an email goes out, only they can join,
- * and nobody else sees the game in a lobby list. New in the port, so there is no Java counterpart.
+ * Private games (issue #348): the creator invites players by username, an email goes out, only they can join.
+ * New in the port, so there is no Java counterpart.
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -51,7 +51,7 @@ const listed = async (token: string | null, url: string): Promise<string[]> => {
 }
 
 describe('private games', () => {
-  it('mails the invited, lets only them join and hides the game from everyone else', async () => {
+  it('mails the invited and lets only them join, though everyone sees the game', async () => {
     const owner = await register('priv-owner')
     await register('priv-friend')
     const friend = await inject(app, {
@@ -72,11 +72,18 @@ describe('private games', () => {
     expect(mailer.sent[0]?.text).toContain('https://playciv.app/')
     expect(mailer.sent[0]?.text).toContain('press Join on Secret table')
 
-    expect(await listed(friendToken, '/api/games')).toContain('Secret table')
-    expect(await listed(owner, '/api/public/games')).toContain('Secret table')
-    expect(await listed(stranger, '/api/games')).not.toContain('Secret table')
-    expect(await listed(stranger, '/api/public/games')).not.toContain('Secret table')
-    expect(await listed(null, '/api/public/games')).not.toContain('Secret table')
+    // Listed for everyone; only the invited may join.
+    const mayJoin = async (token: string | null, url: string): Promise<boolean | undefined> => {
+      const response = await inject(app, { url, ...(token === null ? {} : { headers: bearer(token) }) })
+      return ((await response.json()) as { name: string; mayJoin: boolean }[]).find(
+        (game) => game.name === 'Secret table',
+      )?.mayJoin
+    }
+    expect(await mayJoin(friendToken, '/api/games')).toBe(true)
+    expect(await mayJoin(owner, '/api/public/games')).toBe(true)
+    expect(await mayJoin(stranger, '/api/games')).toBe(false)
+    expect(await mayJoin(stranger, '/api/public/games')).toBe(false)
+    expect(await mayJoin(null, '/api/public/games')).toBe(false)
 
     const rejected = await join(stranger, summary.id)
     expect(rejected.status).toBe(403)
