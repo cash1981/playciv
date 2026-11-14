@@ -465,6 +465,18 @@ export function techBlock(player: Playerhand, techName: string): BlockedAvailabi
   return undefined
 }
 
+/**
+ * Mass Media: "Your culture events cannot be canceled, regardless of other game effects." A sentence for the player when `target`
+ * has the tech revealed, so a cancel aimed at one of their culture events is refused; `undefined` otherwise. A hidden tech is
+ * private and does not count. Only what always cancels a culture event is checked (Civil Service's Spy, Jousting Tourney,
+ * Bread and Circuses); the cards that may cancel something else as well (Primetime TV, Mark Twain) do not say which they cancel.
+ */
+export function massMediaShield(target: Playerhand): string | undefined {
+  return target.techsChosen.some((tech) => tech.name === 'Mass Media' && !tech.hidden)
+    ? `${target.username} has Mass Media, so their culture events cannot be canceled. Nothing was spent.`
+    : undefined
+}
+
 /** Added to the public line of a use the player confirmed after the card was used. */
 export const REPEAT_NOTE = ' (used again, confirmed by the player)'
 

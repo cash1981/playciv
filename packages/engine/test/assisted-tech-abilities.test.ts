@@ -700,6 +700,26 @@ describe.each([
   })
 })
 
+describe('Civil Service against Mass Media', () => {
+  const ready = (): GameState => huts(cmTurn('Civil Service'), 'Spy')
+
+  it('cannot cancel a culture event of a player with Mass Media revealed, and pays nothing', () => {
+    const shielded = withTech(ready(), 'Mass Media', KARANDRAS1)
+    const result = unwrapErr(press(shielded, 'civilService', { targetId: KARANDRAS1 }))
+    expect(JSON.stringify(result)).toContain('Mass Media')
+    expect(hasHut(shielded, 'Spy')).toBe(true)
+    // Another player is not shielded
+    expect(unwrap(press(shielded, 'civilService', { targetId: ITCHI })).log.at(-1)?.publicLog).toContain('cancelling a culture event of Itchi')
+  })
+
+  it('does not protect a hidden Mass Media, and does not stop Writing from canceling a city action', () => {
+    const hidden = unwrap(chooseTech(ready(), { playerId: KARANDRAS1, techName: 'Mass Media' }))
+    expect(unwrap(press(hidden, 'civilService', { targetId: KARANDRAS1 })).log.at(-1)?.publicLog).toContain('culture event of Karandras1')
+    const writing = withTech(huts(cmTurn('Writing'), 'Spy'), 'Mass Media', KARANDRAS1)
+    expect(unwrap(press(writing, 'writing', { targetId: KARANDRAS1 })).log.at(-1)?.publicLog).toContain('a city action of Karandras1')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Monarchy
 // ---------------------------------------------------------------------------

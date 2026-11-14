@@ -25,6 +25,8 @@ import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
 import { SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, playerSideOf, techWoundsOwed, zhukovOwed } from '../battle-cards.js'
 import { blockadedGreatPersonTypes } from '../blockade.js'
+import { earnTechCoin, returnTechCoin } from '../tech-coins.js'
+import type { TechCoinGrant } from '../tech-coins.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -1390,6 +1392,22 @@ export function endBattleAction(
       : `ends the battle — ${outcome.winner.label} won with ${outcome.winnerScore} HP vs ${outcome.loserScore} HP`,
   )
 
+  // Code of Laws: once per turn, after winning a battle, a coin on the tech (max 4). Barbarians win for nobody
+  let codeOfLawsCoin: TechCoinGrant | undefined
+  if (outcome !== null && outcome.winner.kind === 'player') {
+    const earned = earnTechCoin(nextState, outcome.winner.playerId, 'Code of Laws')
+    if (earned.granted !== null) {
+      const winnerHand = findPlayer(earned.state, outcome.winner.playerId)
+      nextState = appendPublicLog(
+        earned.state,
+        player.username,
+        player.playerId,
+        `${outcome.winner.label} gains a coin on Code of Laws for winning (${winnerHand?.stats.coinSources.codeOfLaws ?? 0}/${earned.granted.capacity})`,
+      )
+      codeOfLawsCoin = earned.granted
+    }
+  }
+
   // A fortification is used up by the battle for its city, whoever won (Fame and Fortune p. 7, the human)
   const defence = summaries.find((s) => s.side === 'defender')?.cityDefence ?? null
   const fortification =
@@ -1423,6 +1441,7 @@ export function endBattleAction(
       endedBy: input.playerId,
       summary: summaries,
       ...(fortification === undefined ? {} : { fortification }),
+      ...(codeOfLawsCoin === undefined ? {} : { codeOfLawsCoin }),
     },
   })
 }
@@ -1514,11 +1533,15 @@ export function undoEndBattle(
     cityMarkerMayReturn(nextState.board, fortification)
   if (restoring) nextState = placeBack(nextState, player, fortification, input.at ?? null)
 
+  // The coin the winner earned for this battle goes back with it, and the turn's use is free again
+  const coinBack = ended.codeOfLawsCoin !== undefined
+  if (ended.codeOfLawsCoin !== undefined) nextState = returnTechCoin(nextState, ended.codeOfLawsCoin)
+
   nextState = appendPublicLog(
     nextState,
     player.username,
     player.playerId,
-    restoring ? 'undoes ending the battle and puts the fortification back' : 'undoes ending the battle',
+    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}`,
   )
 
   return ok({ ...nextState, battle, endedBattle: null })

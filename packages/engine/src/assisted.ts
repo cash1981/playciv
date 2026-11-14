@@ -25,6 +25,7 @@
  * `openCityManagementTurn` back.
  */
 
+import { earnTechCoin, returnTechCoin } from './tech-coins.js'
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
 import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
@@ -833,12 +834,16 @@ const build: AssistedActionDefinition = {
       payload.item.kind === 'wonder' ? paying.wonderDiscount : 0
     // Jim Henson, while faceup, takes a wound marker for every wonder built
     const hensonWound = payload.item.kind === 'wonder' && activeGreatPerson(board, paying, 'Jim Henson')
-    const paid = withPlayerHand(board, {
+    const paidFor = withPlayerHand(board, {
       ...paying,
       wonderDiscount: paying.wonderDiscount - wonderDiscount,
       ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
       stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
     })
+    // Education: once per turn, a wonder adds a coin to the tech (max 4)
+    const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
+    const paid = educated.state
+    const educationCoin = educated.granted ?? undefined
     const where =
       made.kind === 'placed'
         ? ` on square ${made.square.label}` +
@@ -858,6 +863,7 @@ const build: AssistedActionDefinition = {
         (removal === null ? '' : ', using up the Building Program marker') +
         (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
         (hensonWound ? ', and Jim Henson took a wound marker' : '') +
+        (educationCoin === undefined ? '' : `, and Education gained a coin (${(playerOf(paid, paying.playerId) ?? paying).stats.coinSources.education}/${educationCoin.capacity})`) +
         again.note,
       privateLog: '',
       createdAt: context.at ?? null,
@@ -957,6 +963,7 @@ const build: AssistedActionDefinition = {
         ...(caravan === undefined ? {} : { caravan }),
         ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
         ...(hensonWound ? { hensonWound: true as const } : {}),
+        ...(educationCoin === undefined ? {} : { educationCoin }),
       },
       logId,
     })
@@ -1097,11 +1104,13 @@ const build: AssistedActionDefinition = {
       const withOld = putReplacedBack(returned, refunded, effect, at)
       const withMarker = markersBack(withOld, refunded, effect, at)
       const restoredPlayer = playerOf(withMarker, record.playerId) ?? refunded
-      const restored = withPlayerHand(withMarker, {
+      const handBack = withPlayerHand(withMarker, {
         ...restoredPlayer,
         wonderDiscount: restoredPlayer.wonderDiscount + (effect.wonderDiscount ?? 0),
         hensonWounds: Math.max(0, restoredPlayer.hensonWounds - (effect.hensonWound === true ? 1 : 0)),
       })
+      // Education's coin for this wonder goes back with it, and the turn's use is free again
+      const restored = effect.educationCoin === undefined ? handBack : returnTechCoin(handBack, effect.educationCoin)
       return ok({
         state: restored,
         text:
@@ -2009,7 +2018,8 @@ export function reverseAssistedAction(
     (effect.kind === 'atomicTheory' && effect.mode === 'nuke') ||
     (effect.kind === 'monarchy' && effect.wonder !== undefined) ||
     (effect.kind === 'philosophy' && effect.marker !== null) ||
-    (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined))
+    (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined)) ||
+    (effect.kind === 'combustion' && (effect.building !== undefined || effect.unwalled !== undefined))
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }

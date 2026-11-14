@@ -957,10 +957,26 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   player's own when it stands in the outskirts of the player's city, i.e. its square is in the footprint of exactly
   one colour's cities (`pieceCityOwnerColor`, the owner the coin and blockade rules use, without the "placed by"
   fallback). A building in the outskirts of another player's city is a target; so is one outside every city's
-  outskirts, or in outskirts of cities of two colours (it has no owner). Walls come before buildings. The log line
-  names the building or "the walls of ..." and says to remove it by hand. **Manual:** removing the building,
-  turning the walled city marker back to its unwalled side, and judging that the army really ended its movement
-  there or attacked the city. Undo by vote only frees the use for the turn.
+  outskirts, or in outskirts of cities of two colours (it has no owner). Walls come before buildings. **Automated
+  (human, 2026-11-14):** the use now does the destruction. A building is removed from the board, as Gunpowder's destroy does
+  (`removePiece`, restored by `restoreDestroyedBuilding`); the walls of a walled city turn the city marker back to its plain
+  side (`flipPieceUnchecked` with `unwalledAssetIdOf`), the same piece and one board history entry. Both go through the board
+  history, so the board Undo cannot take either alone (`isAssistedBoardChange`, `undoFloor`). The undo by vote frees the use
+  and puts the building or the walls back exactly; it is refused when the piece is on the board again, another building,
+  wonder, city or city-state now stands on the square, the supply place was used by another build, the city is gone or its
+  marker is no longer on the plain side. **Manual:** judging that the army really ended its movement there or attacked the
+  city. A record made before this change has nothing on the board to put back, so its undo only frees the use.
+- **Tech coins** (Education, Code of Laws; human, 2026-11-14; `tech-coins.ts`): Education "once per turn, when you build a wonder,
+  add one coin to this tech (max 4)" and Code of Laws "once per turn, after you win a battle, add 1 coin to this token (max
+  4)" add the coin themselves. The tech must be revealed (a hidden one is private); the counter must be below its limit (4,
+  or 6 for the owner of an active Internet, like every tech counter), and the coin must not have been earned yet this turn
+  (usage key `coin:<tech>` on the player's turn record, written with the coin and taken off with it). A coin typed by hand
+  counts toward the limit. Education is earned by the build of a wonder (not a building, unit or walls), recorded as
+  `educationCoin` on the build record, so the undo of that build takes it off and frees the use; the build's log line says
+  "Education gained a coin (n/4)". Code of Laws is earned by the winner when End battle is pressed (the end-of-battle rule: a
+  draw goes to the defender; a barbarian side wins for nobody), recorded as `endedBattle.codeOfLawsCoin`, so undoing End
+  battle (the ender alone) takes the coin off again; its own log line names the winner. "Once per turn" counts the
+  game's turn number, so a defender who wins during another player's turn earns it for that turn.
 - **Once per turn, not per battle** (human, 2026-11-13): Mathematics, Ballistics and every tech card are once per
   turn, which is the `card:<tech>` usage key with the confirmed repeat; only the healing abilities (Animal
   Husbandry, Biology) are once per battle.
@@ -1017,7 +1033,7 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   spends a grant whose phase equals the open phase (no phase means Start of Turn), so a Start of Turn grant is not spent in
   City Management and the reverse. The player chooses and reveals the tech in the tech tree; the grant is listed in the
   Start of Turn view. The undo is refused once a tech was learned with it (the existing rule). Education's coin for building
-  a wonder stays the manual counter in `coins.ts` (covered by `coin-sources.test.ts`).
+  a wonder is automatic (see **Tech coins** below).
 - **Horseback Riding** (Silk, Trade phase): +9 trade for the player, +6 for another player they name, each stopped at the end
   of the trade track; what was added is what an undo takes off, and the undo is refused when either has spent it.
 - **Mysticism** (Spy): the opponent loses one coin token on the counter the player names. The counters that hold tokens are
@@ -1027,7 +1043,13 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   act at different paces and nothing is blocked anyway (human, 2026-11-13); Mass Media says the resources of the
   cancelled ability are lost): the Spy is paid, the other player and free text for what is cancelled are logged. The game
   has no pending action, so it never blocks the cancelled thing: the other player undoes it with the vote or corrects it by
-  hand, and the line says so.
+  hand, and the line says so. **Mass Media's shield** (human text "Your culture events cannot be canceled, regardless of
+  other game effects"; `massMediaShield`): what always cancels a culture event is refused, with nothing spent, when it is
+  aimed at a player who has Mass Media revealed: Civil Service's Spy, and the Jousting Tourney and Bread and Circuses cards
+  (the player they name). A hidden Mass Media does not shield (it is private and not in play). Not enforced: Primetime TV and
+  Mark Twain, because their card text lets them cancel something else as well (a resource ability, a city action) and the
+  play does not say which; Writing and Mass Media's own Spy cancel a city action and a resource ability, which it does
+  not shield. Regression tests: `assisted-tech-abilities.test.ts` and `assisted-play-card.test.ts`.
 - **Monarchy** (Silk, City Management): `obsolete` takes a `wonderPieceId` and marks that wonder disabled on the owner list (human,
   2026-11-13), through the same board change and history entry as the hand-made disable (`setWonderOwner` with `disable: true`,
   #306): the owner is cleared, the piece stays and is drawn crossed out, its culture token is unaffected. Eligible: an ANCIENT

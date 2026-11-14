@@ -34,6 +34,7 @@ import { buildOptionsOf, buildSquareRefusal, marketWondersOf } from '../src/buil
 import type { BuildChoice, CityBuildOptions } from '../src/build-options.js'
 import { describeError } from '../src/errors.js'
 import { unwrap, unwrapErr } from '../src/result.js'
+import { earnTechCoin } from '../src/tech-coins.js'
 import type { Item } from '../src/item.js'
 import { findPlayer } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
@@ -800,5 +801,70 @@ describe('replacing a wonder or a building with a wonder (base rules p. 17)', ()
       'cash1981 built the Colossus in City B2 on square C2, replacing the Scientist (Great Person), which goes back to the player area',
     )
     expect(piecesOf(undoByVote(done, 'req-1'), 'great people/scientist')).toEqual([person])
+  })
+})
+
+describe('Education: a coin for a wonder, once per turn, max 4', () => {
+  const coins = (state: GameState): number => me(state).stats.coinSources.education
+  const withEducationCoins = (state: GameState, education: number): GameState => ({
+    ...state,
+    players: state.players.map((p) =>
+      p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, coinSources: { ...p.stats.coinSources, education } } } : p,
+    ),
+  })
+
+  it('adds a coin to the tech when the wonder is built, says so in the log, and an undo takes it off again', () => {
+    const done = build(ready({ techs: ['Education'] }), COLOSSUS, C2)
+    expect(coins(done)).toBe(1)
+    expect(buildLine(done)).toContain('and Education gained a coin (1/4)')
+    expect(me(done).playerTurns.at(-1)?.usedActions).toContain('coin:Education')
+    expect(done.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'build', educationCoin: { tech: 'Education', source: 'education' } })
+    const undone = undoByVote(done, 'req-1')
+    expect(coins(undone)).toBe(0)
+    expect(me(undone).playerTurns.at(-1)?.usedActions ?? []).not.toContain('coin:Education')
+  })
+
+  it('adds nothing for a building, without the tech, with the tech hidden, or at 4 coins', () => {
+    expect(coins(build(ready(), COLOSSUS, C2))).toBe(0)
+    const hidden = unwrap(chooseTech(ready(), { playerId: CASH1981, techName: 'Education' }))
+    expect(coins(build(hidden, COLOSSUS, C2))).toBe(0)
+    const full = build(withEducationCoins(ready({ techs: ['Education'] }), 4), COLOSSUS, C2)
+    expect(coins(full)).toBe(4)
+    expect(buildLine(full)).not.toContain('Education')
+    // Undoing a build that earned no coin leaves the counter as the players set it
+    expect(coins(undoByVote(full, 'req-1'))).toBe(4)
+  })
+
+  it('a second wonder built the same turn through the reducer adds no coin, and undoing it keeps the first coin', () => {
+    const state = put(ready({ techs: ['Education'], production: 15, trade: 60 }), CASH1981, 'cities/redcity2', 3, 3)
+    const first = build(state, COLOSSUS, C2, 'req-1')
+    const second = unwrap(
+      performAssistedAction(first, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-2',
+        at: AT,
+        payload: {
+          cityPieceId: (first.board.pieces.filter((piece) => piece.category === 'city')[1] as BoardPiece).id,
+          item: { kind: 'wonder', assetId: 'wonders/greatwall' },
+          target: { column: 3, row: 2 },
+          rush: true,
+        },
+      }),
+    )
+    expect(coins(second)).toBe(1)
+    expect(second.assistedActions.at(-1)?.effect).not.toHaveProperty('educationCoin')
+    expect(buildLine(second, 'req-2')).not.toContain('Education')
+    expect(coins(undoByVote(second, 'req-2'))).toBe(1)
+  })
+
+  it('is once per turn: a second coin the same turn is not added, the next turn it is', () => {
+    const first = build(ready({ techs: ['Education'], production: 40 }), COLOSSUS, C2)
+    const earned = earnTechCoin(first, CASH1981, 'Education')
+    expect(earned.granted).toBeNull()
+    expect(coins(earned.state)).toBe(1)
+    // The next turn it can be earned again
+    const next = { ...first, players: first.players.map((p) => (p.playerId === CASH1981 ? { ...p, playerTurns: [] } : p)) }
+    expect(coins(earnTechCoin(next, CASH1981, 'Education').state)).toBe(2)
   })
 })
