@@ -8,8 +8,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { placePiece, removePiece } from '../src/actions/board.js'
+import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
+import { turnStatus } from '../src/turn.js'
 import { cityActionsTakenThisTurn, performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
@@ -20,7 +22,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
-import { withCardInHand } from './assisted-fixture.js'
+import { withCardInHand, withHutInHand } from './assisted-fixture.js'
 import { withStats } from './culture-advance-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -181,6 +183,121 @@ describe('Jerry Garcia', () => {
     const card = withCardInHand(firstCivGame(), 'Jerry Garcia')
     const listed = playableCardsOf(card.state, me(card.state)).find((candidate) => candidate.itemId === card.itemId)
     expect(listed?.status).toBe('wrong-phase')
+  })
+})
+
+const withGovernment = (state: GameState, government: Playerhand['government']): GameState => ({
+  ...state,
+  players: state.players.map((candidate) => (candidate.playerId === CASH1981 ? { ...candidate, government } : candidate)),
+})
+
+const startProgram = (state: GameState, requestId: string, cityPieceId: string) =>
+  performAssistedAction(state, { playerId: CASH1981, action: 'startBuildingProgram', requestId, at: AT, payload: { cityPieceId } })
+
+const extraOf = (state: GameState, cityPieceId: string): boolean | undefined =>
+  cityActionsOf(state, me(state)).find((option) => option.cityPieceId === cityPieceId)?.extraAction
+
+describe('Monarchy', () => {
+  it('lets the capital take a second, different action with no question, and no third', () => {
+    const state = withGovernment(scene(), 'Monarchy')
+    const capital = capitalId(state)
+    const first = unwrap(devote(state, 'm1', capital))
+    expect(extraOf(first, capital)).toBe(true)
+
+    const second = unwrap(startProgram(first, 'm2', capital))
+    expect(second.log.at(-1)?.publicLog).toContain('the additional capital action of Monarchy')
+    expect(extraOf(second, capital)).toBe(false)
+    expect(JSON.stringify(unwrapErr(devote(second, 'm3', capital)))).toContain('already acted')
+  })
+
+  it('does not let the capital take the same action twice, nor give another city a second action', () => {
+    const state = withGovernment(scene(), 'Monarchy')
+    const capital = capitalId(state)
+    const city = otherCityId(state)
+    const first = unwrap(devote(state, 'm1', capital))
+    expect(JSON.stringify(unwrapErr(devote(first, 'm2', capital)))).toContain('not the same action twice')
+    // A confirmation does not lift it: the card forbids it
+    expect(JSON.stringify(unwrapErr(devote(first, 'm2', capital, { confirmed: true })))).toContain('not the same action twice')
+
+    const other = unwrap(devote(state, 'm3', city))
+    expect(extraOf(other, city)).toBe(false)
+    expect(JSON.stringify(unwrapErr(startProgram(other, 'm4', city)))).toContain('already acted')
+  })
+
+  it("does not let Jerry Garcia repeat the capital's devotion, in either order", () => {
+    const state = withGovernment(scene(), 'Monarchy')
+    const capital = capitalId(state)
+    const card = withCardInHand(unwrap(devote(state, 'm1', capital)), 'Jerry Garcia')
+    const refused = unwrapErr(play(card.state, 'g1', card.itemId))
+    expect(JSON.stringify(refused)).toContain('not the same action twice')
+    // A refusal changes nothing: the culture is what the capital's own devotion gave
+    expect(me(card.state).stats.culture).toBe(me(state).stats.culture + estimate(state, capital))
+
+    const first = withCardInHand(state, 'Jerry Garcia')
+    const played = unwrap(play(first.state, 'g2', first.itemId))
+    expect(JSON.stringify(unwrapErr(devote(played, 'm2', capitalId(played))))).toContain('not the same action twice')
+  })
+
+  it('gives the capital nothing under another government', () => {
+    const state = withGovernment(scene(), 'Despotism')
+    const capital = capitalId(state)
+    const first = unwrap(devote(state, 'm1', capital))
+    expect(extraOf(first, capital)).toBe(false)
+    expect(JSON.stringify(unwrapErr(startProgram(first, 'm2', capital)))).toContain('already acted')
+  })
+
+  it('keeps Ada Lovelace for later: the free second action of the capital uses none of her credits', () => {
+    const state = withGovernment(scene(), 'Monarchy')
+    const card = withCardInHand(state, 'Ada Lovelace')
+    const capital = capitalId(card.state)
+    const played = unwrap(play(unwrap(devote(card.state, 'm1', capital)), 'l1', card.itemId))
+    const second = unwrap(startProgram(played, 'm2', capital))
+    expect(second.log.at(-1)?.publicLog).toContain('Monarchy')
+    // Her credit is still there for a third action
+    expect(unwrap(devote(second, 'm3', capital)).log.at(-1)?.publicLog).toContain('an extra city action from Ada Lovelace')
+  })
+})
+
+describe('Supply Drop', () => {
+  it('gives a city that is not the capital one more action, noted in the log, and no more than one', () => {
+    const state = withGovernment(scene(), 'Despotism')
+    const card = holding(state, 'Supply Drop')
+    const city = otherCityId(card.state)
+    const first = unwrap(devote(card.state, 's1', city))
+    const played = unwrap(play(first, 's2', card.itemId))
+    expect(extraOf(played, city)).toBe(true)
+
+    const extra = unwrap(startProgram(played, 's3', city))
+    expect(extra.log.at(-1)?.publicLog).toContain('an extra city action from Supply Drop')
+    expect(extraOf(extra, city)).toBe(false)
+    expect(JSON.stringify(unwrapErr(devote(extra, 's4', city)))).toContain('already acted')
+  })
+
+  it('is not for the capital, and an action of the capital does not use it up', () => {
+    const state = withGovernment(scene(), 'Despotism')
+    const card = holding(state, 'Supply Drop')
+    const capital = capitalId(card.state)
+    const city = otherCityId(card.state)
+    const played = unwrap(play(unwrap(devote(card.state, 's1', capital)), 's2', card.itemId))
+    expect(extraOf(played, capital)).toBe(false)
+    expect(JSON.stringify(unwrapErr(startProgram(played, 's3', capital)))).toContain('already acted')
+
+    // The city that is not the capital still has it
+    const cityFirst = unwrap(devote(played, 's4', city))
+    expect(unwrap(startProgram(cityFirst, 's5', city)).log.at(-1)?.publicLog).toContain('Supply Drop')
+  })
+
+  it('is taken back by the vote, and not while an action has used it', () => {
+    const state = withGovernment(scene(), 'Despotism')
+    const card = holding(state, 'Supply Drop')
+    const city = otherCityId(card.state)
+    const played = unwrap(play(unwrap(devote(card.state, 's1', city)), 's2', card.itemId))
+    const used = unwrap(startProgram(played, 's3', city))
+    expect(JSON.stringify(unwrapErr(undoRejection(used, 's2')))).toContain('already been used')
+
+    const freed = undoByVote(used, 's3')
+    expect(extraOf(freed, city)).toBe(true)
+    expect(extraOf(undoByVote(freed, 's2'), city)).toBe(false)
   })
 })
 
@@ -490,5 +607,111 @@ describe('hidden information', () => {
     // A facedown Darwin in the hand is not told to anyone, the owner included
     const facedown = withCardInHand(scene(), 'Charles Darwin')
     expect(toPlayerView(facedown.state, CASH1981).you?.cityActions?.[0]?.devoteToTheArts.darwin).toBeNull()
+  })
+})
+
+describe('Ada Lovelace together with Atomic Theory (extra action with each city)', () => {
+  /** Atomic Theory revealed, a Uranium in hand and Ada Lovelace's card in hand, City Management open. */
+  function both() {
+    const learned = unwrap(revealTech(unwrap(chooseTech(scene(), { playerId: CASH1981, techName: 'Atomic Theory' })), { playerId: CASH1981, techName: 'Atomic Theory' }))
+    const card = withCardInHand(withHutInHand(learned, 'Uranium').state, 'Ada Lovelace')
+    return { state: card.state, itemId: card.itemId }
+  }
+  const atomic = (state: GameState, requestId = 'at1') =>
+    performAssistedAction(state, { playerId: CASH1981, action: 'atomicTheory', requestId, at: AT, payload: { mode: 'extraActions' } })
+  const recordOf = (state: GameState, requestId: string) => state.assistedActions.find((record) => record.id === requestId)
+
+  it('Atomic Theory covers a city\'s second action first, so the Lovelace credit is kept for its third', () => {
+    const { state, itemId } = both()
+    const city = capitalId(state)
+    const first = unwrap(devote(state, 'a1', city))
+    const played = unwrap(play(first, 'l1', itemId))
+    const used = unwrap(atomic(played))
+
+    const second = unwrap(devote(used, 'a2', city))
+    expect(second.log.at(-1)?.publicLog).toContain(' (an extra city action from Atomic Theory)')
+    expect(second.log.at(-1)?.publicLog).not.toContain('Ada Lovelace')
+    expect(recordOf(second, 'a2')?.lovelaceCreditId).toBeUndefined()
+
+    // Her credit is still there: the third action uses it
+    expect(cityActionsOf(second, me(second)).find((option) => option.cityPieceId === city)?.extraAction).toBe(true)
+    const third = unwrap(devote(second, 'a3', city))
+    expect(third.log.at(-1)?.publicLog).toContain('an extra city action from Ada Lovelace')
+    expect(recordOf(third, 'a3')?.lovelaceCreditId).toBe('l1')
+    expect(JSON.stringify(unwrapErr(devote(third, 'a4', city)))).toContain('already acted')
+
+    // Undoing the third action frees the credit again
+    const freed = undoByVote(third, 'a3')
+    expect(cityActionsOf(freed, me(freed)).find((option) => option.cityPieceId === city)?.extraAction).toBe(true)
+    expect(recordOf(unwrap(devote(freed, 'a3b', city)), 'a3b')?.lovelaceCreditId).toBe('l1')
+  })
+
+  it("Jerry Garcia's capital action covered by Atomic Theory says so, and does not claim the Lovelace credit", () => {
+    const { state, itemId } = both()
+    const capital = capitalId(state)
+    const garcia = withCardInHand(state, 'Jerry Garcia')
+    const first = unwrap(devote(garcia.state, 'a1', capital))
+    const lovelace = unwrap(play(first, 'l1', itemId))
+    const used = unwrap(atomic(lovelace))
+    const played = unwrap(play(used, 'g1', garcia.itemId))
+    expect(played.log.at(-1)?.publicLog).toContain(' (an extra city action from Atomic Theory)')
+    expect(played.log.at(-1)?.publicLog).not.toContain('Ada Lovelace')
+    expect(recordOf(played, 'g1')?.lovelaceCreditId).toBeUndefined()
+    // The credit is untouched, so Lovelace's own play can still be undone
+    expect(me(undoByVote(played, 'g1')).items.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Atomic Theory: undoing the allowance after the turn has moved on', () => {
+  function atomicTurn() {
+    const learned = unwrap(revealTech(unwrap(chooseTech(scene(), { playerId: CASH1981, techName: 'Atomic Theory' })), { playerId: CASH1981, techName: 'Atomic Theory' }))
+    return withHutInHand(learned, 'Uranium').state
+  }
+  const atomic = (state: GameState) =>
+    performAssistedAction(state, { playerId: CASH1981, action: 'atomicTheory', requestId: 'at1', at: AT, payload: { mode: 'extraActions' } })
+  /** Every player ends the turn; Cash then has City Management open in turn 2. */
+  function nextTurn(state: GameState): GameState {
+    let next = state
+    for (const playerId of [CASH1981, ...OTHERS]) {
+      next = unwrap(markPhasesDone(next, { playerId, turnNumber: 1, upToPhase: 'RESEARCH' }))
+    }
+    return unwrap(markPhasesDone(next, { playerId: CASH1981, turnNumber: 2, upToPhase: 'TRADE' }))
+  }
+  const turnOf = (state: GameState): number => turnStatus(state).currentTurn
+
+  it('is refused while the second action of the turn it was given in is still applied', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const used = unwrap(atomic(state))
+    const second = unwrap(devote(unwrap(devote(used, 'a1', city)), 'a2', city))
+    const later = nextTurn(second)
+    expect(turnOf(later)).toBe(2)
+    // Turn 2 has no city action at all, but the dependent action of turn 1 is still applied
+    expect(JSON.stringify(unwrapErr(undoRejection(later, 'at1')))).toContain('already taken a second action that turn')
+    // Taking that action back first frees the allowance
+    const freed = undoByVote(later, 'a2')
+    expect(me(undoByVote(freed, 'at1')).items.some((item) => item.kind === 'hut' && item.name === 'Uranium')).toBe(true)
+  })
+
+  it('is allowed when only unrelated actions of the new turn exist, even two on one city', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const used = unwrap(atomic(state))
+    const first = unwrap(devote(used, 'a1', city))
+    const later = nextTurn(first)
+    // Two actions of the same city in turn 2, the second confirmed: unrelated to turn 1's allowance
+    const turn2 = unwrap(devote(unwrap(devote(later, 'b1', city)), 'b2', city, { confirmed: true }))
+    expect(cityActionsTakenThisTurn(turn2, me(turn2), city)).toHaveLength(2)
+    const undone = undoByVote(turn2, 'at1')
+    expect(me(undone).items.some((item) => item.kind === 'hut' && item.name === 'Uranium')).toBe(true)
+  })
+
+  it('the allowance itself belongs to the turn it was given in: the new turn gets no extra action from it', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const later = nextTurn(unwrap(atomic(state)))
+    const first = unwrap(devote(later, 'b1', city))
+    expect(cityActionsOf(first, me(first)).find((option) => option.cityPieceId === city)?.extraAction).toBe(false)
+    expect(JSON.stringify(unwrapErr(devote(first, 'b2', city)))).toContain('already acted')
   })
 })

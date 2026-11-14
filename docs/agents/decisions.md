@@ -270,6 +270,20 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   credit. Her play cannot be undone while an action that carries its id is in
   force; undo that action first. Anarchy is not enforced for the capital anywhere, so her anarchy
   clause needs nothing.
+  Every extra city action goes through one function, `extraCityActionFor` (`assisted-core.ts`), for the question, the log
+  line and the credit an action uses. In order: Atomic Theory (a city that has acted once), Monarchy, then the cards.
+  **Monarchy** (human, 2026-11-14): the capital of a player under that government takes one more action each turn with no
+  question, but not the same action as its first ("Devote to the Arts (Jerry Garcia)" counts as a devotion): the same
+  action again is refused, with no confirmation to lift it (the card forbids it, and the client does not ask about the
+  capital's second action under Monarchy), while a third action and any other city's second action are asked about as before.
+  Playing Jerry Garcia is refused by the same rule in either order, so the card stays in the hand (human, 2026-11-14; a card asks
+  no confirmation, so outside Monarchy it still plays with a note when the capital had acted).
+  Atomic Theory and the cards cover a city first or after it, so they are not stacked on Monarchy: one extra action, not two. It is derived from the player's
+  government, so it needs no record and no undo. It comes before the cards, so the free action does not use up a credit.
+  **Supply Drop** (human, 2026-11-14) is a credit like Ada Lovelace's, with two differences: it counts only when it was played in
+  City Management (its other timing is Start of Turn, where it gains 7 trade), and only for a city that is not the capital;
+  Ada's stays for the capital. A city that is not the capital uses a Supply Drop credit before an Ada one. Tests:
+  `great-person-arts.test.ts` (Monarchy, Supply Drop).
 - Akira Kurosawa, faceup and not blockaded, pays his holder 1 culture for every
   city another player devotes (also each city of Garcia's play), in the same log
   line; the holder's own devotions pay nothing. Undoing the devotion takes the
@@ -479,8 +493,14 @@ if that is lethal (attack >= opposing HP), takes no damage and the victim is
 flagged `killed`; otherwise both lose the other's attack. The opponent's
 *current* HP takes the damage, so earlier rounds persist. Rotating re-seeds the
 unit to its new tier and re-applies only its opponent's blows. Later rounds and
-corrections stay manual via the ATK/HP fields. Aircraft trump nothing. Tests:
-`arena.test.ts` "face-off on arrival", `ArenaUnitCard.test.tsx`.
+corrections stay manual via the ATK/HP fields. Taking an arrival back (return to hand, move) gives back the HP its round took, also
+when the kill flag was toggled by hand since (the toggle stays; any other HP edit stays too; human, 2026-11-14). Metalworking's +3 fights the round again (`refightWithAttack`): both units go back to what they had before the round and it is
+worked out with the new attack, so an Infantry that now out-hits the Mounted it faces kills it and keeps its HP; only while both still
+have what the round left them with. Its undo (`undoRefight`) puts the boosted pair back as the round fought without the boost left them: the arriving
+unit while it is still in the arena, its opponent only while it still faces it; otherwise only the attack goes back
+(human, 2026-11-14). Mathematics and Ballistics wounds
+kill a unit at 0 HP without a manual kill. Aircraft trump nothing. Tests:
+`arena.test.ts` "face-off on arrival", `assisted-metalworking.test.ts` (re-fight and its undo), `ArenaUnitCard.test.tsx`.
 
 Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`,
 `actions/undo.ts`, `state.ts`, arena tests and `undo-civ-reveal.test.ts`.
@@ -501,10 +521,57 @@ the engine; the browser decides no rule.
   wonders are strict once (human): `repeatable: false`, button disabled,
   `confirmedRepeat` cannot lift it. Government changes and investments are strict
   once too (`strictOnce`), disabled by their own panel.
-- **Resources** (human): pay with an unspent hut item of that name first, else a
+- **Resources** (human): automatic payments use an unspent hut or village item of that name first, else a
   `resources/<name>` piece whose centre lies in the player's own area, which goes
   back to stock. Applies to every resource kind; a piece outside every area is
-  never taken.
+  never taken. **A culture card counts as a resource** (human, 2026-11-13): with no
+  token, a culture card in the hand whose play rule lists the resource (A Gift from
+  Afar, A Generous Gift: Iron, Wheat, Spy, Silk; A Princely Gift: Iron, Uranium, Spy,
+  Wheat, Silk; `card-timing.ts`) is played as it and discarded to `discardedItems` as
+  `playCard` does. A card still being chosen between (a candidate of a pending
+  reward) is not the player's yet and never pays. When several cards qualify, the one
+  with the fewest allowed resources is played first, so A Princely Gift (the only
+  Uranium card) is kept for last. This is in the shared payment layer
+  (`assisted-resources.ts`), so every resource ability benefits (Incense abilities
+  cannot: no card can be played as Incense). The action stays ready with a `warning`
+  naming the card (the viewer's own availability only). The public log line carries
+  "played <card name> item number #N as <resource>" in place of "spent 1 <resource>",
+  the card named with `itemNumberText` as `playCard` names a played card. A Gift from
+  Afar is also an event that gives a coin token to another player; the recipient is
+  not asked for here, so its warning and its log line add "another player of your
+  choice also gets a coin token: give it by hand" (A Generous and A Princely Gift add
+  nothing). The Marie Curie substitute applies as for a token; undo puts the card
+  back in the hand and out of the discard pile.
+- **Explicit resource payments** (human correction, 2026-11-13): every assisted
+  resource-cost action shares one payment selector. The engine supplies only
+  unspent resource huts and villages in the viewer's hand, resource pieces centred in their own
+  player area, and usable resource culture cards in their hand (never pending
+  reward candidates). Fixed costs restrict each slot to its required resource;
+  Any N costs allow any held payable resource. Individual tokens and cards are
+  identified explicitly, so two copies of a resource can pay twice, but no
+  physical payment or one-shot Marie Curie substitution can be counted twice.
+  The player may explicitly play a Gift even while holding a token; this
+  supersedes the token-first rule only for explicit choices. The server and pure
+  engine validate the complete payment and consume exactly those choices, with
+  no fallback to another token or card. A stale selection disables submission
+  until the player chooses again. Older callers without `payments` keep the
+  automatic token-first behavior. Choices are private to the viewer's
+  `availableActions`, not public action records or opponent/spectator views.
+- **Hand-resource origins and icons** (human correction, 2026-11-13): spending
+  a resource hut or village in the hand also removes one corresponding
+  `resources/hut` or `resources/village` icon centred in that player's own area.
+  The hand item's actual kind decides which icon, not the resource name (Iron
+  may come from either). Icons have no stored link to individual held items;
+  one same-kind own-area icon is removed per spent item. Never take a map,
+  foreign-area, different-kind or still-bound uncollected token. A missing icon
+  does not prevent spending a held resource or cause a different icon to be
+  removed. The exact removed icon is recorded with the payment and restored on
+  undo, with duplicate and supply checks; Board Undo cannot return it alone.
+  Older payment records without an icon stay compatible. Every hand payment is
+  named publicly with its origin and item number, for example
+  `Wheat (hut) item number #210` or `Uranium (village) item number #N`.
+  Repeated resources retain their distinct numbers. This applies to automatic,
+  explicit, fixed, Any N and one-of-each payments; unrelated held items stay private.
 - **Undo** is the existing vote, extended to assisted log lines
   (`assistedActionId`). A reversal writes a "System:" line and refuses, vote left
   open, when a marker or token moved or a card left the hand. Board Undo refuses
@@ -825,6 +892,194 @@ Source: `engine/src/galileo.ts`, `card-movement.ts`, `empty-square.ts`,
 `actions/board.ts` (`moveFigureWithMovementUnchecked`), `assisted-core.ts`
 (`CardSquare`), `web/src/views/mapPick.ts`, `PlayableCards.tsx`; tests
 `galileo`, `card-movement`, `hannibal`, `steam-power`.
+
+### Unit tech abilities (#327)
+
+First slice of automating the tech resource abilities. Scope: Mathematics, Ballistics, Gunpowder, Combustion
+(human, 2026-11-13); Metalworking and the other techs are later slices.
+
+- **Level raise on reveal** is existing behaviour (`revealTech`, `UNIT_LEVEL_TECHS`; never lowers, only a hidden
+  copy counts); `unit-tech-levels.test.ts` covers every unit tech and Flight.
+- **Mathematics (3 wounds) and Ballistics (6), Iron, Battle:** `mathematics` / `ballistics` are assisted
+  actions (phase `ANY`, group "Battle", usage key `card:<tech>`, once per turn with the usual confirmed repeat).
+  Ready only in a battle the player fights in (the barbarian controller does not), with the tech revealed and an
+  Iron token. Pressing pays the Iron and records the wounds owed in `Battle.techWounds`; the player deals them
+  with `techWound` (`POST /battle/arena/tech-wound`, body `tech`, `arenaUnitId` and `wounds`). The player chooses how many
+  wounds an enemy unit takes (human, 2026-11-14): the Battle panel opens an OK/Cancel popup per unit with a number from 1
+  up to what is owed and what the unit has health for, and nothing is sent until OK. The engine refuses anything that is
+  not a whole number in that range. A choice larger than what the first set has left runs over into the second set. A unit
+  at 0 is killed, own and killed units are refused, nothing beyond what was paid. Zhukov's wound stays one at a time.
+  "Up to": the player may stop; what is left is lost when the battle ends. Undo by vote returns the Iron and
+  removes the owed wounds from the battle on now or the one End battle has set aside, and is refused once a wound has
+  been dealt there (as for Zhukov; health is corrected by hand). It is also refused once the battle is gone
+  altogether (a new battle started), since wounds already dealt cannot be ruled out; the Iron is not refunded
+  then. A confirmed repeat owes a second set; the first set is dealt first, and each record is undone on its own. The Battle panel lists the button and the wound buttons; the tech dialog and phase tabs show the button.
+- **Gunpowder (Any 2, City Management):** pays two resources the player names (`payload.resources`, exactly two
+  names), through `spendAnyResources` in `assisted-resources.ts`, reusable for Pottery (Any 2) and Philosophy
+  (Any 3). The accepted names are Incense, Iron, Silk, Wheat, Spy and Uranium (human, 2026-11-13). The names are a
+  preference: each is paid by its own token; one the player does not hold is paid by any other unspent token (hut
+  or piece, of the six kinds); only the shortfall that tokens cannot cover is paid with culture cards as above,
+  never the same card twice, so an automatic payment never burns a card while any token could pay. The names do not choose the
+  card: the fewest-allowed card goes first over the six resources, the rule the availability uses, so its warning
+  names exactly the cards played, except while Marie Curie is armed and the player holds both the armed
+  substitute token and a real Uranium token (see limitations.md). The log says each card is played "as" the
+  resource it was assigned in that order, which is currently always Iron, not one that was named. The web tech dialog asks for the two resources before paying, starting on tokens the
+  player holds. The shared explicit-payment selector now names exact tokens or
+  cards instead; `resources` remains for compatibility and `payments` is
+  authoritative when supplied. Undo returns exactly the tokens and cards spent. The effect is automated (human, 2026-11-13), in
+  `assisted-gunpowder.ts`: the payload carries the two resources and a `mode`. `obsolete` (`wonderPieceId`) marks an ANCIENT or
+  MEDIEVAL wonder that a player owns and that is not disabled as disabled, through the same board change and history entry as
+  the hand-made disable and as Monarchy does (`disableWonder`: the owner is cleared, the piece stays and is drawn crossed out,
+  the culture token is unaffected); modern wonders are not eligible. `destroy` (`buildingPieceId`) really removes a building
+  from the board through `removePiece`, so the board history records it: any building on a map square, whoever's, the player's
+  own included, never a wonder or a city (their own categories); the line names the building, its square and whose outskirts it
+  stood in ("no single player's" for one outside every outskirts or in those of two colours) (`destroyableBuildingsOf`, the owner being the one city whose footprint holds the square, as the coin rules read
+  it). Both lists come from the public board (`obsoletableWondersOf` with the eras, `destroyableBuildingsOf`), so the web lists
+  what the engine accepts. A target that is not eligible is refused with nothing spent. With no wonder to obsolete and no
+  building at all the button is not usable and says why; with one of the two it stays ready and warns which is missing. The
+  undo by vote restores a wonder's owner and flag exactly (refused when it changed since) or puts the building back with
+  `placeBack` exactly (refused when the piece is on the board again, another building, wonder, city or city-state now stands on its square, or the supply place it freed has been used by another build, `restoreSupplyBlock`);
+  the board Undo cannot take either alone (`isAssistedBoardChange`) nor walk back through the restoration (`undoFloor`).
+- **Combustion (passive, Movement):** the engine has no trigger on the end of a move, so it is a once-per-turn,
+  no-cost assisted action in the open Movement phase (group "Movement abilities"). The player chooses which army
+  acts: the payload is the army's piece id (`pieceId`), the square, and the building or walls, follow from it
+  (`combustionTargetFor`; the web picker lists one entry per army that stands on something to destroy). The army
+  must be the player's own army on a map square. **Never the player's own:** an army cannot attack its own city,
+  so the owner's walled city is never a target (colour read with `pieceColorOf` as elsewhere); a building is the
+  player's own when it stands in the outskirts of the player's city, i.e. its square is in the footprint of exactly
+  one colour's cities (`pieceCityOwnerColor`, the owner the coin and blockade rules use, without the "placed by"
+  fallback). A building in the outskirts of another player's city is a target; so is one outside every city's
+  outskirts, or in outskirts of cities of two colours (it has no owner). Walls come before buildings. The log line
+  names the building or "the walls of ..." and says to remove it by hand. **Manual:** removing the building,
+  turning the walled city marker back to its unwalled side, and judging that the army really ended its movement
+  there or attacked the city. Undo by vote only frees the use for the turn.
+- **Once per turn, not per battle** (human, 2026-11-13): Mathematics, Ballistics and every tech card are once per
+  turn, which is the `card:<tech>` usage key with the confirmed repeat; only the healing abilities (Animal
+  Husbandry, Biology) are once per battle.
+
+Source: `engine/src/assisted-tech-wounds.ts`, `assisted-gunpowder.ts`, `assisted-combustion.ts`, `combustion.ts`,
+`assisted-resources.ts`, `battle-cards.ts` (`TECH_WOUNDS`), `actions/arena.ts` (`techWound`),
+`server/src/routes/arena.ts`, `assisted-args.ts`, `web/src/views/GameView.tsx` (Battle panel),
+`AssistedActions.tsx`; tests `assisted-unit-techs`, `unit-tech-levels`, `assisted-unit-techs-api`,
+`BattlePanel.test.tsx`, `TechPanelAssisted.test.tsx`.
+
+### Tech resource abilities (#327)
+
+Second slice (human, 2026-11-13): Animal Husbandry, Construction, Banking, Plastics, Pottery, Philosophy, Education, Horseback
+Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy and Printing Press were already automated
+(`coinPurchase`, covered by `assisted.test.ts`). Batch 2 (Metalworking, Atomic Theory, Bureaucracy) follows below.
+
+- **One shape** (`assisted-tech-abilities.ts`, `techAbility`): tech revealed, phase open, `card:<tech>` once per turn with the
+  confirmed repeat, payload checked BEFORE anything is paid (a refusal spends nothing), every payment through the shared
+  layer (exact explicit choices, otherwise token first and culture cards only for the shortfall; the Gift from Afar note), then the ability's own part. An undo
+  takes that part back or refuses with a reason, then returns exactly what was paid. The web asks through one picker per
+  kind (`ASSISTED_TECH_PICKERS` in `assisted-techs.ts`, a leaf table the web reads); the server parsers are strict and the
+  engine decides legality.
+- **Choices are a popup** (human, 2026-11-14; `ChoiceDialog.tsx`): every ability that asks something (resource payment, city,
+  player, coin counter, unit, Combustion's army, and the modes of Monarchy, Gunpowder and Atomic Theory) opens one OK/Cancel
+  popup over the page, not an inline form. Escape and a click outside cancel, and nothing is sent until OK. Only a choice that
+  can be carried out is offered: Monarchy shows "Obsolete an ancient wonder" only when a player owns one, and "Kill a random
+  unit" only outside a battle and with an opponent who holds a unit card (those are the only opponents listed); Gunpowder and
+  Atomic Theory hide the obsolete/destroy and nuke modes the same way (Atomic Theory offers the extra action only while the
+  viewer's City Management is open, and the nuke only in Movement with a city to nuke). A single mode is stated without a radio, and with no
+  valid choice at all the popup does not open and a hint says why.
+- **Production boosts** (Wheat, City Management; +3, +5, +7, +10): the player names one of their cities. The bonus is not
+  stored on the city: `cityProductionsOf` sums the applied, not undone, records of this turn that name the city (like the
+  Communism lock), so the undo vote removes it and it ends with the turn. It is in `boost`, `estimate`, the Building Program
+  figure (added after the doubling, as every modifier) and appears as a per-city modifier. A number set by hand does not
+  include it, so a Build adds it to that number too. It is not used up by a Build: the city produces that much for the turn,
+  so a second Build in it counts it again. Undoing a boost after a Build used it does not refund that Build (limitations).
+  Animal Husbandry's heal and Plastics' Start of Turn build are unchanged.
+- **Pottery** (Any 2): one coin on its counter, capacity 4 (+2 with an active Internet, as Democracy's purchase). The undo
+  refuses when the counter holds no coin (it was edited by hand).
+- **Philosophy** (Any 3): a Great Person is gained exactly as a culture advance's Great Person space gains one
+  (`gainGreatPerson`: supply, faceup discard of an exhausted type, the marker taken into the player's area). With no marker
+  left the button is blocked and nothing is paid. The card is private: the public line names the marker type and the item
+  number, the name only the player's own log. The undo puts the card back in the deck, shuffled twice as every undo of a
+  draw does, and takes the marker; it is refused once the card has left the hand. (The brief said "at its place": the shared
+  convention was kept, because the owner has seen the card and a known top card would be a leak.)
+- **Education** (Incense, Iron, Silk and Wheat, one of each; human, 2026-11-13): exactly these four kinds,
+  with the shared selector choosing which held token or card pays each. The route
+  accepts explicit `payments`; an older call without args still pays automatically
+  with the usual repeat confirmation. Each automatic payment uses its own token first, else a culture card that can be played as it (Gift from Afar,
+  Generous Gift, Princely Gift: Iron, Wheat, Spy, Silk), several cards when the player holds several and each card once; a
+  token of another kind never stands in. No card can be played as Incense, so an Incense token is always needed, which the
+  availability reason says. The warning names every card that would be played (the Gift from Afar note included), and the
+  line says "played <card> item number #N as <kind>" for each (`spendEachResource`). The free tech reuses `TechGrant` with `phase: 'CM'`: `revealTech`
+  spends a grant whose phase equals the open phase (no phase means Start of Turn), so a Start of Turn grant is not spent in
+  City Management and the reverse. The player chooses and reveals the tech in the tech tree; the grant is listed in the
+  Start of Turn view. The undo is refused once a tech was learned with it (the existing rule). Education's coin for building
+  a wonder stays the manual counter in `coins.ts` (covered by `coin-sources.test.ts`).
+- **Horseback Riding** (Silk, Trade phase): +9 trade for the player, +6 for another player they name, each stopped at the end
+  of the trade track; what was added is what an undo takes off, and the undo is refused when either has spent it.
+- **Mysticism** (Spy): the opponent loses one coin token on the counter the player names. The counters that hold tokens are
+  the ones a coin can be invested from (`INVESTABLE_COIN_SOURCES`; printed coins and wonder coins are not tokens), read from
+  the public status board. Refused when the opponent holds no coin there. The undo gives the coin back.
+- **Cancels** (Writing, Civil Service, Mass Media: Spy, any open phase; Writing is City Management on its card but players
+  act at different paces and nothing is blocked anyway (human, 2026-11-13); Mass Media says the resources of the
+  cancelled ability are lost): the Spy is paid, the other player and free text for what is cancelled are logged. The game
+  has no pending action, so it never blocks the cancelled thing: the other player undoes it with the vote or corrects it by
+  hand, and the line says so.
+- **Monarchy** (Silk, City Management): `obsolete` takes a `wonderPieceId` and marks that wonder disabled on the owner list (human,
+  2026-11-13), through the same board change and history entry as the hand-made disable (`setWonderOwner` with `disable: true`,
+  #306): the owner is cleared, the piece stays and is drawn crossed out, its culture token is unaffected. Eligible: an ANCIENT
+  wonder (`wonder-data.ts`) on the board that a player owns (any player's, the user's own included) and that is not already
+  disabled (`obsoletableWondersOf`, from the public board, so the web lists what the engine accepts). The public line names the
+  wonder and its former owner. The undo by vote restores owner and flag exactly (`setWonderOwner` back to the former owner) and
+  is refused with a reason when the wonder is gone, its owner or disabled mark changed since, or the former owner left; the
+  board Undo cannot take the disable back alone (`isAssistedBoardChange`) nor walk back through the restoration (`undoFloor`).
+  With no eligible wonder the mode is refused with nothing spent, and the button, which stays ready for the kill, warns that
+  there is no wonder to obsolete. `kill` takes one random
+  unit card from the chosen other player's hand with the game's seed and discards it. The kill cannot be used while a battle
+  is on at all (human, 2026-11-13): it is refused with a reason and nothing is paid, in the action and, as a warning, on the
+  button (which stays ready because `obsolete` is not limited by a battle; the web disables the kill mode). A battle set aside by End
+  battle is over, so a kill is allowed then, and the pick is every unit card in the hand: a unit End battle sent back to the
+  hand is an ordinary standing unit, and undoing End battle already skips a card that has left the hand (tested). Units drawn for
+  a battle and not placed (the battlehand) are in the hand and can be picked; an undo puts such a card back in the battlehand too. A discard is open information, so the line names the unit in full with its item
+  number as Gustavus Adolphus' discards do, and only after the discard; the rest of the hand stays private. Refused, with
+  nothing paid, when the opponent holds no such card. The undo returns the card while it is still in the discard pile.
+
+- **Metalworking** (Iron, Battle; button in the Battle panel beside Mathematics and Ballistics): adds 3 to the typed `attack`
+  of one of the player's own living arena units (`placedBy`), once per turn. A unit not yet announced is not named in the
+  public line (as the arena's own lines do not name it); the owner's private line names it. The undo is refused when the unit
+  is gone or its attack was edited since (it must still read the value the action set). A unit that fell in the round its own
+  arrival fought, and has not been touched since, may still take it (the +3 belongs to the play of the unit): the round is fought
+  again and the unit may now live (`fellOnArrival`; human, 2026-11-14). A kill toggled by hand later does not block the undo
+  giving the round's HP back: `undoRefight` restores both units through `restoredVitals`, as taking an arrival back does.
+- **Atomic Theory** (Uranium; Marie Curie's substitution applies through the shared layer): one action, one use a turn, two modes.
+  `extraActions` (City Management): every city may take one more city action. The allowance is derived from the applied record
+  (`atomicExtraActionFor`): a city that has acted once acts again without the question, noted in its line, and one that has acted
+  twice is back to the question (and to an Ada Lovelace credit, which Atomic Theory covers first so none is wasted). The undo
+  is refused while any city has taken two actions in the turn the allowance was given in (counted from the record's own turn, not the current one), whatever made the second action possible (a confirmed repeat,
+  Lovelace or Atomic Theory): the records cannot tell which, and a refusal is the safe side. A city that had already taken a
+  second action (confirmed, or with a Lovelace credit) before Atomic Theory was used gets no extra action from it: the extra is
+  the second action, so that city falls back to the confirm question for its third. `nuke` (Movement, `cityPieceId`): the target is any city that is not
+  a capital, the player's own included (human, 2026-11-13: the point may be to kill the many enemy figures standing around it),
+  i.e. not the capital marker and not the metropolis, which only a capital grows into (`capitalOf`). What stands in the outskirts
+  goes whoever owns it, so a nuke of an own city also destroys the player's own buildings, wonders, figures and great persons;
+  the web marks the player's own city and says so when it asks. Records that point at the destroyed city: a production boost and a scout assignment are read only for cities still on the
+  map, so they are harmless and count again when the undo brings the city back; city-action records are not checked against
+  the board (`cityActionCountsThisTurn`), so they stay and still count. The dead end: after a nuke of an own city the undo of
+  `extraActions` can be refused because of a record for the destroyed city that has taken two actions; undoing the nuke first
+  recovers it. The web lists other players' cities first and never preselects the player's own (with only their own none is
+  preselected until one is picked, and a confirm still guards it). It removes, as separate board history entries, every building, wonder, figure and Great
+  Person marker on a square of the city's outskirts, the caravan, fortification and Building Program markers on its centre, and
+  the city; a figure standing on the centre square, resource tokens, huts and city-states stay. The line names everything
+  destroyed with its square. Only the undo vote puts it back, each piece exactly as it stood (`placeBack`), refused if one is on
+  the board again, a city (any player's) now stands on a centre square of the destroyed one, or the shared supply no longer holds
+  all the pieces (counted together, per pool, by `restoreSupplyBlock`: another player's build may have used a freed place of the
+  six Libraries and Universities, an army or a Great Person marker; undo that build first); the board Undo cannot take a removal alone and cannot walk back through the restoration (`undoFloor`). The web
+  lists the same targets from the public board (`nukeTargetsOf`) and asks before a nuke. With no legal target the action is
+  refused and nothing is spent.
+- **Bureaucracy** (once per turn, Research): the engine never limits when or how often a social policy is chosen, removed or
+  revealed (`actions/player.ts`), so there is nothing to permit. The action is a once-per-turn logged note in the open Research
+  phase, costs nothing, and the switch itself stays manual in the social policy panel. The 1 coin is the existing flat-coin
+  handling on reveal (`coinOnReveal`, tested).
+
+Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-resources.ts` (`spendEachResource`), `city-production.ts`
+(`boost`), `build-options.ts`, `actions/player.ts` (`revealTech`), `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
+`web/src/views/AssistedActions.tsx` (`TechPickerForm`); tests `assisted-tech-abilities`, `assisted-tech-abilities-api`,
+`TechPanelAssisted.test.tsx`.
 
 ### Tech in the Research tab
 

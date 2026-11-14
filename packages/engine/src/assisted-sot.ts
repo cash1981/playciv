@@ -1364,6 +1364,7 @@ export function startOfTurnViewOf(state: GameState, player: Playerhand): StartOf
         source: grant.source,
         level: grant.level,
         ...(grant.allowedTechNames === undefined ? {} : { allowedTechNames: grant.allowedTechNames }),
+        ...(grant.phase === undefined ? {} : { phase: grant.phase }),
       })),
   }
 }

@@ -8,6 +8,7 @@ import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { playerAreas } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
+import { itemNumberText } from '../src/log.js'
 import { unwrap } from '../src/result.js'
 import type { GameState, Playerhand } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
@@ -19,6 +20,19 @@ export const player = (state: GameState, playerId = CASH1981): Playerhand => {
   if (found === undefined) throw new Error(`fixture player ${playerId} missing`)
   return found
 }
+
+/** Expected public identity of a particular fixture resource (also works after it was discarded). */
+export function resourceText(state: GameState, resource: string, playerId = CASH1981): string {
+  const holder = player(state, playerId)
+  const item = [...holder.items, ...state.discardedItems].find((candidate) =>
+    (candidate.kind === 'hut' || candidate.kind === 'village') && candidate.name === resource && candidate.ownerId === playerId,
+  )
+  if (item === undefined) throw new Error(`missing ${resource} fixture resource`)
+  return `${resource} (${item.kind}) ${itemNumberText(state.logSecret, holder.username, item)}`
+}
+
+export const resourcePattern = (state: GameState, resource: string, playerId = CASH1981): string =>
+  resourceText(state, resource, playerId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Chivalry chosen and revealed, Start of Turn and Trade done, so City Management is open. */
 export function chivalryTurn(techName = 'Chivalry'): GameState {
@@ -63,6 +77,26 @@ export function withHutInHand(
           ? { ...candidate, items: [...candidate.items, inHand] }
           : candidate,
       ),
+    },
+  }
+}
+
+/** A real village resource, without substituting a same-named hut. */
+export function withVillageInHand(
+  state: GameState,
+  name: string,
+  ownerId = CASH1981,
+): { readonly state: GameState; readonly itemId: string } {
+  const item = state.items.find((candidate) => candidate.kind === 'village' && candidate.name === name)
+  if (item === undefined) throw new Error(`no ${name} village in the fixture deck`)
+  return {
+    itemId: item.id,
+    state: {
+      ...state,
+      items: state.items.filter((candidate) => candidate.id !== item.id),
+      players: state.players.map((candidate) => candidate.playerId === ownerId
+        ? { ...candidate, items: [...candidate.items, { ...item, hidden: true, ownerId }] }
+        : candidate),
     },
   }
 }

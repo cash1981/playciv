@@ -117,8 +117,9 @@ export interface ArenaArrival {
 
 /**
  * Both units' vitals before and after a face-off. Undoing restores a unit
- * only while it still has the "after" vitals: a later hand edit or kill
- * toggle is the player's own, and is never overwritten.
+ * only while it still has the "after" vitals: a later hand HP edit is the
+ * player's own and is never overwritten. A kill toggle alone is kept, but the
+ * HP the round took still comes back (`restoredVitals`).
  */
 export interface ArenaFaceOff {
   /** Null once the opponent has moved, invalidating its restoration. */
@@ -127,6 +128,18 @@ export interface ArenaFaceOff {
   readonly opponentAfter: ArenaVitals
   readonly selfBefore: ArenaVitals
   readonly selfAfter: ArenaVitals
+}
+
+/**
+ * A face-off fought again because a unit's attack changed after it was fought (Metalworking): the record before and after,
+ * so taking the change back puts both units where the earlier round left them.
+ */
+export interface ArenaRefight {
+  /** The unit whose arrival fought the round, and the unit it fought. */
+  readonly arrivalId: string
+  readonly opponentId: string
+  readonly previous: ArenaFaceOff
+  readonly next: ArenaFaceOff
 }
 
 /**
@@ -148,6 +161,19 @@ export interface BattleCardBonus {
 export interface ZhukovEntry {
   readonly playerId: string
   readonly deadIds: readonly string[]
+  readonly dealt: number
+  readonly actionId: string
+}
+
+/**
+ * Wounds a player paid Iron for with Mathematics or Ballistics (issue #327): `total` may be dealt to living enemy
+ * units one at a time, `dealt` of which have been. "Up to" lets the player stop early; what is left when the battle
+ * ends is lost. `actionId` names the assisted action, so its undo takes the entry back.
+ */
+export interface TechWoundEntry {
+  readonly playerId: string
+  readonly tech: string
+  readonly total: number
   readonly dealt: number
   readonly actionId: string
 }
@@ -180,6 +206,8 @@ export interface Battle {
   readonly sunTzu?: readonly string[]
   /** The players who have played Georgy Zhukov in this battle; absent when none has. */
   readonly zhukov?: readonly ZhukovEntry[]
+  /** The wounds paid for with Mathematics and Ballistics, to be dealt; absent when none was paid. */
+  readonly techWounds?: readonly TechWoundEntry[]
 }
 
 /** Derived totals per side — computed in `toPlayerView`, never stored. */

@@ -1356,6 +1356,31 @@ describe('taking back an arrival', () => {
     expect(next.battle!.arena.find((u) => u.id === fallenId)).toMatchObject({ killed: true })
   })
 
+  it('gives back the HP a face-off took even when the opponent was marked killed by hand in between', () => {
+    let state = withBattlehand(CASH1981, 1)
+    state = addBattlehand(state, KARANDRAS1, 1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const cashUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const karUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(placeUnitInArena(state, {
+      playerId: KARANDRAS1, unitId: karUnit.id, side: 'defender', position: 0, attack: 3, health: 4,
+    }))
+    state = unwrap(placeUnitInArena(state, {
+      playerId: CASH1981, unitId: cashUnit.id, side: 'attacker', position: 0, attack: 2, health: 4,
+    }))
+    const opponent = state.battle!.arena.find((u) => u.side === 'defender')!
+    const mover = state.battle!.arena.find((u) => u.side === 'attacker')!
+    expect(opponent.health).toBe(2)
+
+    // The kill toggle is the player's own decision and stays, but the two HP the face-off took are not kept
+    state = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: opponent.id }))
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId: mover.id }))
+    expect(state.battle!.arena.find((u) => u.id === opponent.id)).toMatchObject({ health: 4, killed: true })
+
+    state = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: opponent.id }))
+    expect(state.battle!.arena.find((u) => u.id === opponent.id)).toMatchObject({ health: 4, killed: false })
+  })
+
   it('returning a unit that displaced nothing and fought nobody changes nothing else', () => {
     let state = withBattlehand(CASH1981, 1)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))

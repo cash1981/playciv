@@ -18,6 +18,7 @@ import {
   rotateArenaUnit,
   setArenaUnitStat,
   sunTzuPass,
+  techWound,
   zhukovWound,
   undoEndBattle,
 } from '@civ/engine'
@@ -311,6 +312,31 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       c,
       gameId,
       (state) => zhukovWound(state, { playerId: player.id, arenaUnitId }),
+      clientRev,
+    )
+  })
+
+  /**
+   * Mathematics and Ballistics: deal some of the wounds paid for with Iron to an enemy unit.
+   * Body: `{ tech: 'Mathematics' | 'Ballistics', arenaUnitId: string, wounds: number, rev: number }`.
+   */
+  app.post('/api/games/:gameId/battle/arena/tech-wound', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+    const arenaUnitId = requireString(body, 'arenaUnitId')
+    if (arenaUnitId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'arenaUnitId is required')
+    const tech = requireString(body, 'tech')
+    if (tech === undefined) return sendError(c, 400, 'BAD_REQUEST', 'tech is required')
+    const wounds = optionalNumber(body, 'wounds')
+    if (wounds === undefined) return sendError(c, 400, 'BAD_REQUEST', 'wounds is required')
+    const player = currentPlayer(c)
+
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => techWound(state, { playerId: player.id, tech, arenaUnitId, wounds }),
       clientRev,
     )
   })

@@ -736,6 +736,8 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/arena/sun-tzu`, { rev }),
   zhukovWound: (gameId: string, arenaUnitId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/zhukov`, { arenaUnitId, rev }),
+  techWound: (gameId: string, tech: string, arenaUnitId: string, wounds: number, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/tech-wound`, { tech, arenaUnitId, wounds, rev }),
   endBattleArena: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
   undoEndBattle: (gameId: string, rev: number) =>
