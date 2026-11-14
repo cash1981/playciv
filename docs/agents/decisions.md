@@ -779,12 +779,20 @@ speed, checking path, water and ownership, writing position and spent movement
 in one board history entry so board Undo restores both. The stored turn number
 refreshes the allowance next turn. Battle and loot stay manual (human).
 
+- **Tech speed** (human, 2026-11-14): a revealed tech gives a travel speed (Horseback Riding 3, Sailing 4, Steam Power 5, Flight 6;
+  `TECH_SPEEDS`, `techSpeedOf` in `movement.ts`). The highest counts and they do not add up; the base is the larger of the
+  typed base (the first term of `mvmt`) and that speed, so a typed base that is higher (a correction by hand) still wins. Typed
+  `+` terms after the base are bonuses and are added on top: Spain's "travel speed increased by 1", typed as `2+1`, gives 5 with
+  Sailing (`splitMovement`). Spain's +1 itself is not applied by the engine; it stays typed. A hidden tech gives
+  nothing. Flight also flies over huts, villages and other players' figures (see Water and Huts below). Natural Religion, Henry Ford and Captain James Cook
+  apply on top. The status sidebar shows the tech's speed as the Movement value (with the tech named in its tooltip) when it
+  is more than what is typed. Tests: `movement.test.ts`, `PlayerStatusSidebar.test.tsx`.
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
   for an army outside Anarchy unless the expression already has a `+` term (older
   saves recorded `3+1`, which a scout does not get: it loses one point of it
   while Natural Religion is active); Henry Ford +1 while faceup; Captain James Cook doubles it
   for the turn (`card:Captain James Cook` marker, freed by undo). Spain's bonus
-  and tech speed steps stay typed; while Natural Religion is active any `+` term
+  stays typed; while Natural Religion is active any `+` term
   is read as its bonus, so a typed Spain bonus makes a scout lose a point. Group movement is out of scope.
 - **Pool** (human): each travel adds to `movement.used`; the figure may move again
   while speed is left. It locks when the pool is spent or the move ends on a hut,

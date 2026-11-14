@@ -17,6 +17,7 @@ import {
   figureMovementOptions,
   movementOf,
   movementTotal,
+  splitMovement,
   travelSpeedOf,
 } from '../src/movement.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -111,6 +112,14 @@ describe('movement speed', () => {
     expect(movementTotal('2+1+1')).toBe(4)
   })
 
+  it('splits the typed Movement into its base and its bonus', () => {
+    expect(splitMovement('2')).toEqual({ base: 2, bonus: 0 })
+    expect(splitMovement('2+1')).toEqual({ base: 2, bonus: 1 })
+    expect(splitMovement('3+1+1')).toEqual({ base: 3, bonus: 2 })
+    expect(splitMovement('')).toEqual({ base: 0, bonus: 0 })
+    expect(splitMovement('x+1')).toEqual({ base: 1, bonus: 0 })
+  })
+
   it('gives Natural Religion +1 to an army but not a scout', () => {
     let state = place(game(), 'figures/redarmy', 1, 1)
     state = place(state, 'figures/redscout', 4, 1)
@@ -152,6 +161,49 @@ describe('movement speed', () => {
       government: 'Anarchy',
     })
     expect(travelSpeedOf(playerOf(anarchy), armyPiece, 1)).toBe(2)
+  })
+
+  it('takes the highest speed a revealed tech gives, never below the typed one, and the techs do not add up', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const piece = figure(state)
+    const speedWith = (names: readonly string[], hidden = false, mvmt = '2'): number => {
+      const tech = names.reduce((held, name) => withTech(held, name, hidden), state)
+      const player = playerOf(tech)
+      return travelSpeedOf({ ...player, stats: { ...player.stats, mvmt } }, piece, 1)
+    }
+    expect(speedWith([])).toBe(2)
+    expect(speedWith(['Horseback Riding'])).toBe(3)
+    expect(speedWith(['Sailing'])).toBe(4)
+    expect(speedWith(['Steam Power'])).toBe(5)
+    // The highest counts, whatever the order: they do not add up
+    expect(speedWith(['Horseback Riding', 'Sailing'])).toBe(4)
+    expect(speedWith(['Steam Power', 'Horseback Riding', 'Sailing'])).toBe(5)
+    expect(speedWith(['Flight'])).toBe(6)
+    expect(speedWith(['Flight', 'Steam Power', 'Sailing'])).toBe(6)
+    // A hidden tech gives nothing, and a tech with no speed of its own leaves the typed one
+    expect(speedWith(['Steam Power'], true)).toBe(2)
+    expect(speedWith(['Flight'], true)).toBe(2)
+    expect(speedWith(['Mathematics'])).toBe(2)
+    // A typed value above what the techs give stays, so a correction by hand still wins
+    expect(speedWith(['Sailing'], false, '6')).toBe(6)
+    // A typed bonus (Spain's +1) is added on top of the tech's speed, and is not swallowed by it
+    expect(speedWith(['Sailing'], false, '2+1')).toBe(5)
+    expect(speedWith(['Horseback Riding'], false, '2+1')).toBe(4)
+    expect(speedWith(['Flight'], false, '2+1')).toBe(7)
+    expect(speedWith([], false, '2+1')).toBe(3)
+    // A typed base that is higher than the tech's stays, with its bonus
+    expect(speedWith(['Sailing'], false, '3+1')).toBe(5)
+    expect(speedWith(['Horseback Riding'], false, '5+1')).toBe(6)
+
+    // Natural Religion, Henry Ford and Captain James Cook apply on top of the tech's speed
+    const religious = (mvmt: string) => {
+      const tech = withTech(state, 'Sailing')
+      const player = playerOf(tech)
+      return travelSpeedOf({ ...player, stats: { ...player.stats, mvmt }, socialPolicies: [{ name: 'Natural Religion', hidden: false } as Playerhand['socialPolicies'][number]] }, piece, 1)
+    }
+    expect(religious('2')).toBe(5)
+    // `3+1` typed as an older save did: its base is 3, the tech gives 4, the army gets the bonus once
+    expect(religious('3+1')).toBe(5)
   })
 
   it('adds Henry Ford while faceup and doubles with Captain James Cook this turn', () => {
@@ -278,6 +330,40 @@ describe('reachable squares', () => {
 // Tile 05 has water in the upper-left and land below it.
 const waterGame = (): GameState =>
   place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 0, 3)
+
+describe('Flight', () => {
+  const distanceTo = (state: GameState, column: number, row: number): number | undefined => {
+    const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
+    if (options === null) throw new Error('expected movement options')
+    return options.destinations.find((cell) => cell.column === column && cell.row === row)?.distance
+  }
+
+  it('moves 6 squares', () => {
+    const flying = withTech(place(game(), 'figures/redarmy', 1, 1), 'Flight')
+    expect(distanceTo(flying, 7, 1)).toBe(6)
+    expect(distanceTo(flying, 8, 1)).toBeUndefined()
+  })
+
+  it("flies over another player's figures, which block the same squares for a figure without it", () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    // The same speed typed by hand: the army can end on the Blue army's square but not pass it, so it goes round
+    const walker = withPlayer(state, { ...playerOf(state), stats: { ...playerOf(state).stats, mvmt: '6' } })
+    expect(distanceTo(walker, 3, 1)).toBe(4)
+    const flying = withTech(state, 'Flight')
+    expect(distanceTo(flying, 3, 1)).toBe(2)
+    // It may still end its move on the Blue army to fight it, as an army without Flight may
+    expect(distanceTo(flying, 2, 1)).toBe(1)
+  })
+
+  it('is not stopped by buildings and cities on the way', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'cities/bluecity2', 2, 1, KARANDRAS1)
+    state = place(state, 'buildings/library', 3, 1, KARANDRAS1)
+    const flying = withTech(state, 'Flight')
+    expect(distanceTo(flying, 4, 1)).toBe(3)
+  })
+})
 
 describe('huts and villages', () => {
   it.each(['resources/hut', 'resources/village'])(

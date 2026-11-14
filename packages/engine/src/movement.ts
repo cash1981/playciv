@@ -90,6 +90,35 @@ export function movementTotal(expression: string): number {
     .reduce((total, part) => total + part, 0)
 }
 
+/**
+ * The travel speed a revealed tech gives (human, 2026-11-14): Horseback Riding 3, Sailing 4, Steam Power 5, Flight 6. The highest
+ * one counts; they do not add up. A tech not listed gives no speed of its own.
+ */
+export const TECH_SPEEDS: Readonly<Record<string, number>> = { 'Horseback Riding': 3, Sailing: 4, 'Steam Power': 5, Flight: 6 }
+
+/** The speed the player's revealed techs give, and the tech that gives it, or `null` when none does. */
+export function techSpeedOf(techs: readonly { readonly name: string; readonly hidden: boolean }[]): { readonly speed: number; readonly tech: string } | null {
+  let best: { readonly speed: number; readonly tech: string } | null = null
+  for (const tech of techs) {
+    const speed = tech.hidden ? undefined : TECH_SPEEDS[tech.name]
+    if (speed !== undefined && (best === null || speed > best.speed)) best = { speed, tech: tech.name }
+  }
+  return best
+}
+
+/**
+ * The typed Movement split into its base (the first term) and its bonus (every `+` term after it: Spain's +1, or how older
+ * saves typed Natural Religion). A revealed tech replaces the base when it gives more; the bonus is added on top.
+ */
+export function splitMovement(expression: string): { readonly base: number; readonly bonus: number } {
+  const parts = expression
+    .split('+')
+    .map((part) => Number(part))
+    .filter((part) => Number.isFinite(part) && part >= 0)
+  const [base = 0, ...rest] = parts
+  return { base, bonus: rest.reduce((total, part) => total + part, 0) }
+}
+
 /** What figure ownership needs to know: the seat's colour and civilization. */
 export type FigureOwner = Pick<MovementPlayer, 'color' | 'civilization'>
 
@@ -124,25 +153,26 @@ const hasRevealedTech = (player: MovementPlayer, name: string): boolean =>
   player.techsChosen.some((tech) => tech.name === name && !tech.hidden)
 
 /**
- * The player's travel speed: the status expression, plus Natural Religion for an
- * army (group movement is not implemented, so every army move is individual),
- * plus Henry Ford while his card is faceup, doubled by Captain James Cook for
- * this turn.
+ * The player's travel speed: the larger of the typed base and what the revealed techs give (`techSpeedOf`), plus the typed
+ * bonus (Spain's +1), plus Natural Religion for an army (group movement is not implemented, so every army move is
+ * individual), plus Henry Ford while his card is faceup, doubled by Captain James Cook for this turn.
  */
 export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNumber: number): number {
-  const expression = player.stats.mvmt
-  let speed = movementTotal(expression)
+  const typed = splitMovement(player.stats.mvmt)
+  const naturalReligion = hasPolicy(player, 'Natural Religion') && !inAnarchy(player)
   // Natural Religion is army-only. A `+` in the typed expression is the players'
   // existing way of recording it (issue #102, `3+1`), so that expression is the
   // army's speed and already includes the bonus: a scout gives one point of it
   // back. Without a `+` the engine adds the bonus to an army itself.
-  if (hasPolicy(player, 'Natural Religion') && !inAnarchy(player)) {
-    if (!expression.includes('+')) {
-      if (isArmy(piece)) speed += 1
+  let bonus = typed.bonus
+  if (naturalReligion) {
+    if (typed.bonus === 0) {
+      if (isArmy(piece)) bonus = 1
     } else if (!isArmy(piece)) {
-      speed = Math.max(0, speed - 1)
+      bonus = Math.max(0, typed.bonus - 1)
     }
   }
+  let speed = Math.max(typed.base, techSpeedOf(player.techsChosen)?.speed ?? 0) + bonus
   if (hasActiveGreatPerson(player, 'Henry Ford')) speed += 1
   const cook = player.playerTurns
     .find((turn) => turn.turnNumber === turnNumber)

@@ -144,6 +144,49 @@ describe('PlayerStatusSidebar', () => {
     expect(alice.getByRole('img', { name: 'Aircraft locked' })).toBeTruthy()
   })
 
+  it('shows the speed a revealed tech gives as the Movement value, when it is more than what is typed, and not a hidden tech', () => {
+    const base = makeView()
+    const view = {
+      ...base,
+      you: { ...base.you, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2' }, techsChosen: [{ name: 'Sailing', hidden: false }, { name: 'Steam Power', hidden: true }] },
+      opponents: [{ ...base.opponents[0], stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2' }, revealedTechs: [{ name: 'Horseback Riding', hidden: false }] }],
+    } as unknown as PlayerView
+    render(<PlayerStatusSidebar {...READ_ONLY} view={view} />)
+    const movement = (name: string) => within(block(name)).getByRole('img', { name: 'Movement' }).closest('li')
+    // Alice: Sailing gives 4, the hidden Steam Power nothing. Bob: Horseback Riding gives 3
+    expect(movement('Alice')?.textContent).toContain('4')
+    expect(movement('Alice')?.querySelector('[title]:not(li)')?.getAttribute('title')).toContain('Sailing gives 4')
+    expect(movement('Bob')?.textContent).toContain('3')
+    cleanup()
+    // A typed base that is higher than the tech's stays as typed
+    render(<PlayerStatusSidebar {...READ_ONLY} view={{ ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '5+2' } } } as PlayerView} />)
+    expect(within(block('Alice')).getByRole('img', { name: 'Movement' }).closest('li')?.textContent).toContain('5+2')
+  })
+
+  it('an editor names both the typed Movement and the speed a revealed tech gives, and the editor changes the typed one', () => {
+    const base = makeView()
+    const view = {
+      ...base,
+      you: { ...base.you, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2' }, techsChosen: [{ name: 'Sailing', hidden: false }] },
+    } as unknown as PlayerView
+    render(<PlayerStatusSidebar {...EDITABLE} view={view} />)
+    const cell = within(block('Alice')).getByRole('button', { name: 'Edit Alice Movement, currently 2, shown as 4 because of Sailing' })
+    expect(cell.textContent).toContain('4')
+    fireEvent.click(cell)
+    // The field holds the typed value, not the speed shown
+    expect((screen.getByLabelText('Alice Movement') as HTMLInputElement).value).toBe('2')
+    cleanup()
+    cleanup()
+    // A typed bonus (Spain's +1) is added on top of the tech's speed, in the cell and in the label
+    const spanish = { ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2+1' } } } as unknown as PlayerView
+    render(<PlayerStatusSidebar {...EDITABLE} view={spanish} />)
+    expect(within(block('Alice')).getByRole('button', { name: 'Edit Alice Movement, currently 2+1, shown as 5 because of Sailing' }).textContent).toContain('5')
+    cleanup()
+    // Without a higher tech speed the label is as before
+    render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    expect(screen.getByRole('button', { name: 'Edit Alice Movement, currently 3+1' })).toBeTruthy()
+  })
+
   it('shows username, civilization, the civ marker and the government as text with the seal', () => {
     render(<PlayerStatusSidebar {...READ_ONLY} view={makeView()} />)
     const alice = within(block('Alice'))

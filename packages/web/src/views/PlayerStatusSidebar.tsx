@@ -30,6 +30,8 @@ import {
   INVESTMENT_CARDS,
   MAX_COMBAT_HAND_SIZE_LENGTH,
   leaderAssetId,
+  splitMovement,
+  techSpeedOf,
   totalCoins,
   tradeCeilingOf,
 } from '@civ/engine'
@@ -65,6 +67,8 @@ interface Block {
   readonly civilizationName: string | null
   readonly government: string
   readonly stats: PlayerStats
+  /** The techs the viewer may see: the player's own, and the revealed ones of an opponent. */
+  readonly techs: readonly { readonly name: string; readonly hidden: boolean }[]
 }
 
 const ICON_DIR = '/status-icons'
@@ -450,6 +454,7 @@ function blocksOf(view: PlayerView): Block[] {
       civilizationName: view.you.civilization?.name ?? null,
       government: view.you.government,
       stats: view.you.stats,
+      techs: view.you.techsChosen,
     })
   }
   for (const opponent of view.opponents) {
@@ -461,6 +466,7 @@ function blocksOf(view: PlayerView): Block[] {
       civilizationName: opponent.civilization?.name ?? null,
       government: opponent.government,
       stats: opponent.stats,
+      techs: opponent.revealedTechs,
     })
   }
   return blocks
@@ -488,6 +494,18 @@ function PlayerBlock({
   const { stats } = block
   const leader = leaderUrl(block.civilizationName, block.color)
   const heading = `${block.username} - ${block.civilizationName ?? 'hidden'}`
+  // The speed the revealed techs give, when it is more than what is typed: shown as the value, with the tech that gives it
+  const techSpeed = techSpeedOf(block.techs)
+  const typedMovement = splitMovement(stats.mvmt)
+  const techSpeedShown = techSpeed !== null && techSpeed.speed > typedMovement.base ? techSpeed : null
+  // The typed bonus (Spain's +1) stays on top of the tech's speed
+  const movementValue = techSpeedShown === null ? 0 : techSpeedShown.speed + typedMovement.bonus
+  const movementShown: React.ReactNode =
+    techSpeedShown !== null ? (
+      <span title={`${techSpeedShown.tech} gives ${techSpeedShown.speed}${typedMovement.bonus > 0 ? `, plus the typed ${typedMovement.bonus}` : ''} (the typed value is ${stats.mvmt.trim() || 'empty'})`}>{movementValue}</span>
+    ) : (
+      stats.mvmt
+    )
   const combatHandSize = stats.combatHandSize.trim()
   const [editing, setEditing] = useState<EditableStatKey | null>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
@@ -533,7 +551,11 @@ function PlayerBlock({
       ? undefined
       : {
           kind: 'edit',
-          label: `Edit ${block.username} ${EDIT_LABELS[key]}, currently ${String(stats[key]).trim() || 'empty'}`,
+          // Movement shows the speed a revealed tech gives when it is more than the typed value: the label says both, since
+          // the editor changes the typed one
+          label:
+            `Edit ${block.username} ${EDIT_LABELS[key]}, currently ${String(stats[key]).trim() || 'empty'}` +
+            (key === 'mvmt' && techSpeedShown !== null ? `, shown as ${movementValue} because of ${techSpeedShown.tech}` : ''),
           open: active === key,
           disabled: busy,
           onPressStart: () => {
@@ -640,7 +662,7 @@ function PlayerBlock({
         <Stat name="Culture" value={stats.culture} control={edit('culture')}>
           <FileIcon file="culture.png" label="Culture" />
         </Stat>
-        <Stat name="Movement" value={stats.mvmt} control={edit('mvmt')}>
+        <Stat name="Movement" value={movementShown} control={edit('mvmt')}>
           <MovementIcon color={block.color} />
         </Stat>
         {editorIn(['trade', 'culture', 'mvmt'])}
