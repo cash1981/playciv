@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { NIGHTINGALE, SUN_TZU, SUN_TZU_COST, ZHUKOV, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType, zhukovOwed } from '@civ/engine'
+import { ASSISTED_TECH_ACTIONS, NIGHTINGALE, SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType, techWoundsOwed, zhukovOwed } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -18,7 +18,7 @@ import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { DrawToken, GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
-import { hasActionsPanel } from './AssistedActions.js'
+import { AssistedActionButton, hasActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
 import type { PickableSquare, PickSquares } from './BoardView.js'
 import { BuildBar } from './BuildPicker.js'
@@ -1588,6 +1588,19 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
     battle !== null && mySideInBattle !== null
       ? battle.arena.filter((unit) => unit.side !== mySideInBattle && !unit.killed)
       : []
+  // Mathematics and Ballistics: the button that pays the Iron, and the wounds it owes, dealt one click at a time like Zhukov's.
+  // Metalworking sits in the same list: its button pays the Iron and asks which of the player's own units gets +3 attack, and owes nothing.
+  // Listed once the tech is revealed and a battle is on, so the player sees why it is not pressable (no Iron, used this turn).
+  const woundTechs =
+    battle !== null && myCombatant
+      ? [...Object.keys(TECH_WOUNDS), 'Metalworking'].flatMap((tech) => {
+          const action = ASSISTED_TECH_ACTIONS.get(tech)
+          const status = view.you?.availableActions?.find((candidate) => candidate.action === action)?.status
+          const owed = techWoundsOwed(battle, myId, tech)
+          const listed = status === 'ready' || status === 'used' || status === 'needs-resource'
+          return action !== undefined && (owed > 0 || listed) ? [{ tech, action, owed, listed }] : []
+        })
+      : []
   const sunTzuCard = (view.you?.items ?? []).find((item) => item.kind === 'greatperson' && item.name === SUN_TZU)
   const sunTzuAvailable = myCombatant && sunTzuCard !== undefined && !(battle?.sunTzu ?? []).includes(myId)
   // The engine refuses the pass while every figure of the card's type is blockaded
@@ -1882,6 +1895,39 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               ))}
             </div>
           )}
+
+          {woundTechs.map(({ tech, action, owed, listed }) => (
+            <div key={tech} className="row battle-tech-wounds" role="group" aria-label={tech in TECH_WOUNDS ? `${tech} wounds` : tech}>
+              {listed && (
+                <AssistedActionButton
+                  action={action}
+                  gameId={gameId}
+                  view={view}
+                  busy={busy}
+                  readOnly={noMutations}
+                  run={run}
+                />
+              )}
+              {owed > 0 && (
+                <>
+                  <strong>
+                    {tech}: deal up to {owed} wound{owed === 1 ? '' : 's'}, one to an enemy unit at a time
+                  </strong>
+                  {zhukovTargets.length === 0 && <span className="muted">No living enemy unit is left.</span>}
+                  {zhukovTargets.map((unit) => (
+                    <button
+                      key={unit.id}
+                      className="small"
+                      disabled={busy || noMutations}
+                      onClick={() => runBattleAction(() => api.techWound(gameId, tech, unit.id, rev))}
+                    >
+                      Wound {itemName(unit.unit)} (front {unit.position + 1}, {unit.health} HP)
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          ))}
 
           <SavedCasualties units={(battle?.departedUnits ?? []).filter((u) => u.killed && u.saved === true)} />
 

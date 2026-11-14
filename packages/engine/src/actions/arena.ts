@@ -23,7 +23,7 @@ import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
-import { SUN_TZU, SUN_TZU_COST, ZHUKOV, playerSideOf, zhukovOwed } from '../battle-cards.js'
+import { SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, playerSideOf, techWoundsOwed, zhukovOwed } from '../battle-cards.js'
 import { blockadedGreatPersonTypes } from '../blockade.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -1091,7 +1091,7 @@ export function zhukovWound(state: GameState, input: ZhukovWoundInput): ActionRe
     state,
     player.username,
     player.playerId,
-    `uses ${ZHUKOV}: deals 1 wound to ${revealAll(target.unit)} in the arena${dead ? ', which is killed' : ` (${health} health left)`}`,
+    `uses ${ZHUKOV}: deals 1 wound to ${publicUnitName(target)}${dead ? ', which is killed' : ` (${health} health left)`}`,
   )
   return ok({
     ...next,
@@ -1100,6 +1100,73 @@ export function zhukovWound(state: GameState, input: ZhukovWoundInput): ActionRe
       arena: battle.arena.map((unit) => (unit.id === target.id ? { ...unit, health, killed: dead } : unit)),
       zhukov: (battle.zhukov ?? []).map((candidate) =>
         candidate.playerId === input.playerId ? { ...candidate, dealt: candidate.dealt + 1 } : candidate,
+      ),
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// techWound
+// ---------------------------------------------------------------------------
+
+export interface TechWoundInput {
+  readonly playerId: string
+  /** Mathematics or Ballistics. */
+  readonly tech: string
+  readonly arenaUnitId: string
+}
+
+/**
+ * How a public line names an arena unit: in full once it is announced; before that by its front, since a freshly placed unit's
+ * card is not public yet and may be taken back (its placement line comes when its owner ends their battle turn).
+ */
+const publicUnitName = (unit: ArenaUnit): string =>
+  unit.announced === false ? `the unit on ${unit.side} front #${unit.position}` : `${revealAll(unit.unit)} in the arena`
+
+/**
+ * Mathematics and Ballistics (issue #327): "while involved in a battle, deal up to 3 (6) wounds, spread across enemy
+ * units however you choose." Pressing the tech's button pays the Iron and records the wounds owed
+ * (`Battle.techWounds`); this deals one of them to a living enemy unit, -1 health, and a unit at 0 is killed, as
+ * Zhukov's wound does. The player may stop early. Like Zhukov's, the health is corrected by hand if wrong, and the
+ * assisted-action undo is refused once a wound has been dealt.
+ */
+export function techWound(state: GameState, input: TechWoundInput): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+  const battle = state.battle
+  const side = playerSideOf(battle, input.playerId)
+  if (side === null) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+
+  const refuse = (reason: string): ActionResult => err({ kind: 'BATTLE_CARD_REFUSED', reason })
+  if (!Object.hasOwn(TECH_WOUNDS, input.tech)) return refuse(`${input.tech} deals no wounds in a battle.`)
+  const entry = (battle.techWounds ?? []).find(
+    (candidate) => candidate.playerId === input.playerId && candidate.tech === input.tech && candidate.dealt < candidate.total,
+  )
+  if (entry === undefined || techWoundsOwed(battle, input.playerId, input.tech) <= 0) {
+    return refuse(`${input.tech} has no wound to deal: spend Iron on it first, or all its wounds have been dealt.`)
+  }
+  const target = battle.arena.find((unit) => unit.id === input.arenaUnitId)
+  if (target === undefined) return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
+  if (target.side === side) return refuse('Choose an enemy unit.')
+  if (target.killed) return refuse('That unit is already killed.')
+
+  const health = Math.max(0, target.health - 1)
+  const dead = health === 0
+  const next = appendPublicLog(
+    state,
+    player.username,
+    player.playerId,
+    `uses ${input.tech}: deals 1 wound to ${publicUnitName(target)}${dead ? ', which is killed' : ` (${health} health left)`}`,
+  )
+  return ok({
+    ...next,
+    battle: {
+      ...battle,
+      arena: battle.arena.map((unit) => (unit.id === target.id ? { ...unit, health, killed: dead } : unit)),
+      techWounds: (battle.techWounds ?? []).map((candidate) =>
+        candidate === entry ? { ...candidate, dealt: candidate.dealt + 1 } : candidate,
       ),
     },
   })

@@ -14,7 +14,7 @@
  * call each other inside functions, never while the modules load.
  */
 
-import { PHASE_REASON, cityActionsTakenThisTurn, extraCityActionsLeft, openCityManagementTurn } from './assisted-core.js'
+import { PHASE_REASON, atomicExtraActionFor, cityActionsTakenThisTurn, extraCityActionsLeft, openCityManagementTurn } from './assisted-core.js'
 import { darwinStatusOf } from './assisted-arts.js'
 import { cityFootprintsOf, mapCellOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
@@ -155,7 +155,7 @@ export function cityActionsOf(state: GameState, player: Playerhand): readonly Ci
       : { ...gathering.devote, darwin, status: 'wrong-phase', reason: PHASE_REASON }
     const harvest = harvestOptionOf(state, gathering.harvest, city.label, open)
     const actedThisTurn = cityActionsTakenThisTurn(state, player, city.pieceId)
-    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest, actedThisTurn, extraAction }]
+    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest, actedThisTurn, extraAction: extraAction || atomicExtraActionFor(state, player, city.pieceId) }]
   })
 }
 

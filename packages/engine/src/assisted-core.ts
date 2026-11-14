@@ -9,14 +9,15 @@
  * `assisted.ts` documents. Keep it that way.
  */
 
-import { boardAreas, locationOf } from './board.js'
-import type { BoardPiece } from './board.js'
+import { boardAreas, findBoardAsset, locationOf, remainingBoardAssetCount, supplyPoolOf } from './board.js'
+import type { BoardAsset, BoardPiece } from './board.js'
 import type { BuildPayload } from './build-options.js'
 import type { CultureLevel } from './culture-track.js'
 import type { EngineError } from './errors.js'
 import type { Government } from './government.js'
 import { nextId } from './random.js'
 import type { Result } from './result.js'
+import type { ResourcePaymentChoice } from './assisted-resources.js'
 import type { SheetName } from './sheet-name.js'
 import type {
   AssistedActionKind,
@@ -268,6 +269,62 @@ export interface CommunismPayload {
   readonly square: CardSquare
 }
 
+/** What `combustion` carries: the army figure that acts; the square, and the building or walls, follow from it. */
+export interface CombustionPayload {
+  readonly pieceId: string
+}
+
+/**
+ * What `gunpowder` carries: the two resource tokens to pay, by name, in the player's own choice, and what it does: `obsolete`
+ * the ancient or medieval wonder `wonderPieceId`, or `destroy` the building `buildingPieceId`.
+ */
+export interface GunpowderPayload {
+  readonly resources: readonly string[]
+  readonly mode: 'obsolete' | 'destroy'
+  readonly wonderPieceId?: string
+  readonly buildingPieceId?: string
+}
+
+/** What Pottery and Philosophy carry, as Gunpowder does: the resource tokens to pay, by name (2 and 3). Education carries nothing. */
+export interface ResourcesPayload {
+  readonly resources: readonly string[]
+}
+
+/** What Animal Husbandry, Construction, Banking and Plastics carry: the city that produces more this turn. */
+export interface ProductionBoostPayload {
+  readonly cityPieceId: string
+}
+
+/** What Horseback Riding, Writing, Civil Service and Mass Media carry: the other player, and for a cancel what is cancelled, as free text. */
+export interface TargetPlayerPayload {
+  readonly targetId: string
+  readonly note?: string
+}
+
+/** What Mysticism carries: the opponent and the coin counter (`CoinSourceKey`) one coin token is taken from. */
+export interface MysticismPayload {
+  readonly targetId: string
+  readonly source: string
+}
+
+/** What Monarchy carries: `obsolete` the ancient wonder to disable (`wonderPieceId`); `kill` the other player whose hand loses a unit card (`targetId`). */
+export interface MonarchyPayload {
+  readonly mode: 'obsolete' | 'kill'
+  readonly targetId?: string
+  readonly wonderPieceId?: string
+}
+
+/** What Metalworking carries: the arena unit (`ArenaUnit.id`) of the player's own that gets +3 attack. */
+export interface ArenaUnitPayload {
+  readonly arenaUnitId: string
+}
+
+/** What Atomic Theory carries: `extraActions`, or `nuke` with the city (`cityPieceId`) to destroy. */
+export interface AtomicTheoryPayload {
+  readonly mode: 'extraActions' | 'nuke'
+  readonly cityPieceId?: string
+}
+
 /** What `steamPower` carries: the square whose figures move, and the water square they move to. */
 export interface SteamPowerPayload {
   readonly from: CardSquare
@@ -291,7 +348,7 @@ export interface AssignScoutPayload {
   readonly cityPieceId: string | null
 }
 
-export type AssistedPayload =
+export type AssistedPayload = (
   | ChooseRewardPayload
   | BuildPayload
   | StartBuildingProgramPayload
@@ -303,10 +360,21 @@ export type AssistedPayload =
   | InvestPayload
   | GianniniBuildPayload
   | CommunismPayload
+  | CombustionPayload
+  | GunpowderPayload
+  | ResourcesPayload
+  | ProductionBoostPayload
+  | TargetPlayerPayload
+  | MysticismPayload
+  | MonarchyPayload
+  | ArenaUnitPayload
+  | AtomicTheoryPayload
   | SteamPowerPayload
   | FeudalismHarvestPayload
   | FoundCityPayload
   | AssignScoutPayload
+  | { readonly payments?: readonly ResourcePaymentChoice[] }
+) & { readonly payments?: readonly ResourcePaymentChoice[] }
 
 export interface ApplyContext {
   readonly requestId: string
@@ -349,6 +417,8 @@ export type AssistedActionDefinition = {
   readonly phase: TurnPhase | 'ANY'
   /** The heading the action is listed under in its tab. */
   readonly group: string
+  /** One payable slot per entry; `null` accepts any resource. Absent for non-resource actions. */
+  readonly cost?: readonly (string | null)[]
   /** What the button says when "Use <label>" is not it ("Draw two level II events"). */
   readonly buttonText?: string
   /**
@@ -403,6 +473,10 @@ export const usedReason = (label: string): string =>
 
 export const PHASE_REASON = 'Only available during your open City Management phase.'
 
+/** The cards drawn for a choice, which stay in the hand until one is kept: none of them is the player's yet. */
+export const waitingCardIds = (player: Playerhand): ReadonlySet<string> =>
+  new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
+
 export const lastLogId = (state: GameState): string => state.log.at(-1)?.id ?? ''
 
 /**
@@ -416,6 +490,34 @@ export function grantUndoBlock(player: Playerhand, grantId: string): string | un
   return grant.usedFor === undefined
     ? undefined
     : `You learned ${grant.usedFor} with it. Remove ${grant.usedFor} first, then undo this.`
+}
+
+/**
+ * Why a set of pieces cannot all be put back on the board for lack of supply, or `undefined`. A piece taken off the board freed
+ * a place in its pool (the six Library, University and so on, the army or scout of a colour, a Great Person marker, a resource
+ * token), and another player's build or placement may have used it since. The whole restoration is counted together, per pool,
+ * against what the board holds now, so a refusal changes nothing. `placeBack` itself never refuses.
+ */
+export function restoreSupplyBlock(state: GameState, pieces: readonly BoardPiece[]): string | undefined {
+  const pools = new Map<string, { readonly asset: BoardAsset; count: number }>()
+  for (const piece of pieces) {
+    const asset = findBoardAsset(piece.assetId)
+    if (asset === undefined) continue
+    const key = supplyPoolOf(asset)
+    const found = pools.get(key)
+    if (found === undefined) pools.set(key, { asset, count: 1 })
+    else found.count += 1
+  }
+  for (const { asset, count } of pools.values()) {
+    const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
+    if (remaining !== undefined && remaining < count) {
+      return (
+        `Putting back ${count === 1 ? 'the' : count} ${asset.label}${count === 1 ? '' : ' pieces'} would use more of the supply than is left ` +
+        `(${remaining} left): another build or placement has used the freed place. Undo that first.`
+      )
+    }
+  }
+  return undefined
 }
 
 /**
@@ -488,8 +590,7 @@ export function cityActionOf(record: Pick<AssistedActionRecord, 'kind' | 'effect
 }
 
 /** The player's city actions of the current turn that have not been undone, oldest first. */
-function cityActionRecordsThisTurn(state: GameState, player: Playerhand): readonly CityActionRecord[] {
-  const turn = turnStatus(state).currentTurn
+function cityActionRecordsThisTurn(state: GameState, player: Playerhand, turn: number = turnStatus(state).currentTurn): readonly CityActionRecord[] {
   return state.assistedActions.flatMap((record) => {
     const action = cityActionOf(record)
     if (action === undefined || record.status === 'undone' || record.status === 'superseded' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
@@ -531,9 +632,44 @@ function lovelaceCreditsLeft(state: GameState, player: Playerhand): readonly str
 /** The extra city actions Ada Lovelace has given this turn that no action has used yet. */
 export const extraCityActionsLeft = (state: GameState, player: Playerhand): number => lovelaceCreditsLeft(state, player).length
 
-/** The Lovelace play whose credit an action of this city would use: only a city that has already acted uses one. */
+/**
+ * Whether Atomic Theory's "extra action with each city" is in force this turn for the player: an applied, not undone,
+ * record of it. Derived from the record, so the undo vote removes it.
+ */
+export function atomicExtraActionsActive(state: GameState, player: Playerhand): boolean {
+  const turn = turnStatus(state).currentTurn
+  return state.assistedActions.some(
+    (record) =>
+      record.status === 'applied' &&
+      record.playerId === player.playerId &&
+      record.turnNumber === turn &&
+      record.effect.kind === 'atomicTheory' &&
+      record.effect.mode === 'extraActions',
+  )
+}
+
+/**
+ * Atomic Theory gives every city one more action: a city that has acted exactly once may act again without being
+ * asked, a city that has acted twice is back to the question (and to a Lovelace credit, if one is left).
+ */
+export const atomicExtraActionFor = (state: GameState, player: Playerhand, cityPieceId: string): boolean =>
+  atomicExtraActionsActive(state, player) && cityActionsTakenThisTurn(state, player, cityPieceId).length === 1
+
+/**
+ * How many city actions still in force each of the player's cities has taken in a turn (the current one unless `turn` says
+ * another: an undo of an earlier turn's allowance counts that turn's actions, not the new turn's), by city piece id.
+ */
+export function cityActionCountsThisTurn(state: GameState, player: Playerhand, turn?: number): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>()
+  for (const record of cityActionRecordsThisTurn(state, player, turn)) counts.set(record.cityPieceId, (counts.get(record.cityPieceId) ?? 0) + 1)
+  return counts
+}
+
+/** The Lovelace play whose credit an action of this city would use: only a city that has already acted uses one, and not when Atomic Theory covers it. */
 export function lovelaceCreditForAction(state: GameState, player: Playerhand, cityPieceId: string): string | undefined {
-  return cityActionsTakenThisTurn(state, player, cityPieceId).length === 0 ? undefined : lovelaceCreditsLeft(state, player)[0]
+  if (cityActionsTakenThisTurn(state, player, cityPieceId).length === 0) return undefined
+  if (atomicExtraActionFor(state, player, cityPieceId)) return undefined
+  return lovelaceCreditsLeft(state, player)[0]
 }
 
 /** Whether a city action still in force used this Lovelace play's credit. */
@@ -542,6 +678,7 @@ export const lovelaceCreditWasUsed = (state: GameState, creditId: string): boole
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
 export const LOVELACE_ACTION_NOTE = ' (an extra city action from Ada Lovelace)'
+export const ATOMIC_ACTION_NOTE = ' (an extra city action from Atomic Theory)'
 
 /**
  * What the city's earlier actions this turn mean for one more: nothing to say, a note for the log
@@ -555,6 +692,7 @@ export function earlierCityActions(
 ): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
   const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
   if (taken.length === 0) return { refusal: undefined, note: '' }
+  if (atomicExtraActionFor(state, player, city.cityPieceId)) return { refusal: undefined, note: ATOMIC_ACTION_NOTE }
   if (extraCityActionsLeft(state, player) > 0) return { refusal: undefined, note: LOVELACE_ACTION_NOTE }
   if (confirmed) return { refusal: undefined, note: SECOND_ACTION_NOTE }
   return {

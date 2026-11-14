@@ -142,6 +142,8 @@ export interface CityBuildOptions {
   readonly productionSource: BuildProductionSource
   /** A caravan on the city centre (Fame and Fortune p. 7): `production` includes its 2, and a Build uses it up. */
   readonly caravan: boolean
+  /** The production a tech ability gave this city for this turn only (Animal Husbandry, Construction, Banking, Plastics); `production` includes it. */
+  readonly boost: number
   /** Empty unless `status` is `ready`. */
   readonly choices: readonly BuildChoice[]
   /** Empty unless `status` is `ready`. */
@@ -707,6 +709,8 @@ interface CityBuildProduction {
   readonly value: number
   readonly source: BuildProductionSource
   readonly caravan: boolean
+  /** Production a tech ability gave this city this turn (Animal Husbandry and the like), included in `value`. */
+  readonly boost: number
 }
 
 /**
@@ -716,11 +720,13 @@ interface CityBuildProduction {
  */
 function productionOf(city: CityProduction): CityBuildProduction {
   const caravan = city.caravan ? CARAVAN_PRODUCTION : 0
-  if (city.override !== null) return { value: city.override + caravan, source: 'override', caravan: city.caravan }
+  const { boost } = city
+  // The boost is in the estimate and the Building Program figure; a number set by hand does not count it, so it is added
+  if (city.override !== null) return { value: city.override + boost + caravan, source: 'override', caravan: city.caravan, boost }
   if (city.withBuildingProgram !== null) {
-    return { value: city.withBuildingProgram + caravan, source: 'building-program', caravan: city.caravan }
+    return { value: city.withBuildingProgram + caravan, source: 'building-program', caravan: city.caravan, boost }
   }
-  return { value: city.estimate + caravan, source: 'estimate', caravan: city.caravan }
+  return { value: city.estimate + caravan, source: 'estimate', caravan: city.caravan, boost }
 }
 
 const SOURCE_TEXT: Readonly<Record<BuildProductionSource, string>> = {
@@ -896,7 +902,7 @@ function paymentFor(
   if (tradeToPay <= player.stats.trade) return { tradeToPay }
   return {
     short:
-      `${costText} and ${city.label} has ${production.value} (${SOURCE_TEXT[production.source]}${production.caravan ? ', plus 2 from the caravan' : ''}). ` +
+      `${costText} and ${city.label} has ${production.value} (${SOURCE_TEXT[production.source]}${production.caravan ? ', plus 2 from the caravan' : ''}${production.boost > 0 ? `, including ${production.boost} from a tech ability this turn` : ''}). ` +
       `Covering the missing ${shortfall} takes ${tradeToPay} trade and you have ${player.stats.trade}. ` +
       'If the city makes more than that, set its production by hand on the city.',
   }
@@ -961,6 +967,7 @@ function optionsForCity(
     production: production.value,
     productionSource: production.source,
     caravan: production.caravan,
+    boost: production.boost,
   }
   if (!open) {
     return { ...base, status: 'wrong-phase', reason: PHASE_REASON, choices: [], unavailable: [] }

@@ -126,6 +126,7 @@ export function CityCard({
         ) : (
           <>
             <strong className="city-number">Set by hand: {city.override}</strong>{' '}
+            {city.boost > 0 && <small className="muted">plus {city.boost} from a tech ability this turn, </small>}
             <small className="muted">estimate was {city.estimate}</small>{' '}
             {countLink}
           </>

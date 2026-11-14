@@ -21,6 +21,10 @@ export * from './empty-square.js'
 export * from './card-movement.js'
 export * from './brandenburg.js'
 export * from './communism.js'
+export * from './combustion.js'
+export * from './atomic-theory.js'
+export * from './obsolete-wonders.js'
+export * from './destroy-buildings.js'
 export * from './tile-icons.js'
 export * from './migrate.js'
 export * from './turn.js'
@@ -49,6 +53,8 @@ export { playableCardsOf } from './assisted-cards.js'
 export { KING_NAME, TWAIN_NAME } from './twain.js'
 export { applyCancellation, cancellationBaselineRevision, cancellationHistory, cancellationView, isCancellationCard } from './cancellation.js'
 export type { CancellationCommand, CancellationEvent, CancellationInput, CancellationHistory, CancellationView } from './cancellation.js'
+export { ANY_RESOURCES, parseResourcePayments } from './assisted-resources.js'
+export type { ResourcePaymentChoice, ResourcePaymentOption } from './assisted-resources.js'
 export { boardTokensOf, mapTokensOf } from './zheng-he.js'
 export type { BoardToken, MapToken } from './zheng-he.js'
 export {
@@ -69,9 +75,18 @@ export type {
   AssistedAvailability,
   AssistedPayload,
   BlockedAvailability,
+  ArenaUnitPayload,
+  AtomicTheoryPayload,
   AssignScoutPayload,
   ChooseRewardPayload,
+  CombustionPayload,
   CommunismPayload,
+  GunpowderPayload,
+  MonarchyPayload,
+  MysticismPayload,
+  ProductionBoostPayload,
+  ResourcesPayload,
+  TargetPlayerPayload,
   DevoteToTheArtsPayload,
   FeudalismHarvestPayload,
   FoundCityPayload,
