@@ -91,10 +91,10 @@ export function movementTotal(expression: string): number {
 }
 
 /**
- * The travel speed a revealed tech gives (human, 2026-11-14): Horseback Riding 3, Sailing 4, Steam Power 5. The highest one counts;
- * they do not add up. A tech not listed gives no speed of its own, and Flight is not listed until the human gives its value.
+ * The travel speed a revealed tech gives (human, 2026-11-14): Horseback Riding 3, Sailing 4, Steam Power 5, Flight 6. The highest
+ * one counts; they do not add up. A tech not listed gives no speed of its own.
  */
-export const TECH_SPEEDS: Readonly<Record<string, number>> = { 'Horseback Riding': 3, Sailing: 4, 'Steam Power': 5 }
+export const TECH_SPEEDS: Readonly<Record<string, number>> = { 'Horseback Riding': 3, Sailing: 4, 'Steam Power': 5, Flight: 6 }
 
 /** The speed the player's revealed techs give, and the tech that gives it, or `null` when none does. */
 export function techSpeedOf(techs: readonly { readonly name: string; readonly hidden: boolean }[]): { readonly speed: number; readonly tech: string } | null {

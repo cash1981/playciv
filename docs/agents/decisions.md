@@ -712,10 +712,10 @@ speed, checking path, water and ownership, writing position and spent movement
 in one board history entry so board Undo restores both. The stored turn number
 refreshes the allowance next turn. Battle and loot stay manual (human).
 
-- **Tech speed** (human, 2026-11-14): a revealed tech gives a travel speed (Horseback Riding 3, Sailing 4, Steam Power 5;
+- **Tech speed** (human, 2026-11-14): a revealed tech gives a travel speed (Horseback Riding 3, Sailing 4, Steam Power 5, Flight 6;
   `TECH_SPEEDS`, `techSpeedOf` in `movement.ts`). The highest counts and they do not add up; the base is the larger of the
   typed `mvmt` total and that speed, so a typed value that is higher (a correction by hand) still wins. A hidden tech gives
-  nothing. Flight has no value of its own until the human gives one. Natural Religion, Henry Ford and Captain James Cook
+  nothing. Flight also flies over huts, villages and other players' figures (see Water and Huts below). Natural Religion, Henry Ford and Captain James Cook
   apply on top. The status sidebar shows the tech's speed as the Movement value (with the tech named in its tooltip) when it
   is more than what is typed. Tests: `movement.test.ts`, `PlayerStatusSidebar.test.tsx`.
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1

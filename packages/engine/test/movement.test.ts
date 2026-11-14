@@ -169,9 +169,12 @@ describe('movement speed', () => {
     // The highest counts, whatever the order: they do not add up
     expect(speedWith(['Horseback Riding', 'Sailing'])).toBe(4)
     expect(speedWith(['Steam Power', 'Horseback Riding', 'Sailing'])).toBe(5)
-    // A hidden tech gives nothing, and a tech with no speed of its own (Flight) leaves the typed one
+    expect(speedWith(['Flight'])).toBe(6)
+    expect(speedWith(['Flight', 'Steam Power', 'Sailing'])).toBe(6)
+    // A hidden tech gives nothing, and a tech with no speed of its own leaves the typed one
     expect(speedWith(['Steam Power'], true)).toBe(2)
-    expect(speedWith(['Flight'])).toBe(2)
+    expect(speedWith(['Flight'], true)).toBe(2)
+    expect(speedWith(['Mathematics'])).toBe(2)
     // A typed value above what the techs give stays, so a correction by hand still wins
     expect(speedWith(['Sailing'], false, '6')).toBe(6)
     expect(speedWith(['Sailing'], false, '3+1')).toBe(4)
@@ -311,6 +314,40 @@ describe('reachable squares', () => {
 // Tile 05 has water in the upper-left and land below it.
 const waterGame = (): GameState =>
   place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 0, 3)
+
+describe('Flight', () => {
+  const distanceTo = (state: GameState, column: number, row: number): number | undefined => {
+    const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
+    if (options === null) throw new Error('expected movement options')
+    return options.destinations.find((cell) => cell.column === column && cell.row === row)?.distance
+  }
+
+  it('moves 6 squares', () => {
+    const flying = withTech(place(game(), 'figures/redarmy', 1, 1), 'Flight')
+    expect(distanceTo(flying, 7, 1)).toBe(6)
+    expect(distanceTo(flying, 8, 1)).toBeUndefined()
+  })
+
+  it("flies over another player's figures, which block the same squares for a figure without it", () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    // The same speed typed by hand: the army can end on the Blue army's square but not pass it, so it goes round
+    const walker = withPlayer(state, { ...playerOf(state), stats: { ...playerOf(state).stats, mvmt: '6' } })
+    expect(distanceTo(walker, 3, 1)).toBe(4)
+    const flying = withTech(state, 'Flight')
+    expect(distanceTo(flying, 3, 1)).toBe(2)
+    // It may still end its move on the Blue army to fight it, as an army without Flight may
+    expect(distanceTo(flying, 2, 1)).toBe(1)
+  })
+
+  it('is not stopped by buildings and cities on the way', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'cities/bluecity2', 2, 1, KARANDRAS1)
+    state = place(state, 'buildings/library', 3, 1, KARANDRAS1)
+    const flying = withTech(state, 'Flight')
+    expect(distanceTo(flying, 4, 1)).toBe(3)
+  })
+})
 
 describe('huts and villages', () => {
   it.each(['resources/hut', 'resources/village'])(
