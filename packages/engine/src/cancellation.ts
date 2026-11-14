@@ -177,7 +177,7 @@ function rewind(current: GameState, baseline: GameState, rollbackTurn: number, c
     cancellations: cancellationHistory(current),
     log: [...baseline.log, ...current.log.slice(baseline.log.length).map((entry) => entry.id.startsWith('cancellation:') ? entry : {
       ...entry, undo: null, superseded: true,
-      publicLog: entry.publicLog === '' ? '' : `${entry.id === cancelled?.logId ? 'Cancelled' : 'Superseded'}: ${entry.publicLog}`,
+      publicLog: entry.publicLog === '' ? '' : `${entry.id === cancelled?.logId ? 'Cancelled' : 'Undone'}: ${entry.publicLog}`,
     })],
     assistedActions: [...baseline.assistedActions, ...current.assistedActions.slice(baseline.assistedActions.length)
       .map((r): AssistedActionRecord => ({ ...r, status: r.id === cancelled?.id ? 'cancelled' : 'superseded' }))],
@@ -273,7 +273,7 @@ export function applyCancellation(
   const text = state.log.find((l) => l.id === record.logId)?.publicLog ?? ''
   const costs = [card, ...(cityActionOf(record) === undefined && record.effect.kind === 'playCard' ? [record.effect.item] : [])]
   const next = reshuffleChanged(pay(rewind(state, baseline, record.turnNumber, record), costs), state)
-  return finish(eventLog(next, input.requestId, `${actor.username} cancelled "${text}" with ${itemName(card)}. Later gameplay is superseded; orders and notes are kept.`, input.playerId),
+  return finish(eventLog(next, input.requestId, `${actor.username} cancelled "${text}" with ${itemName(card)}. Everything played after it is undone; orders and notes are kept.`, input.playerId),
     { id: input.requestId, kind: 'cancel', playerId: input.playerId, card, logId: eventLogId(input.requestId), targetLogId: record.logId, priorRevision: state.rev })
 }
 

@@ -1,6 +1,14 @@
 import { startCancelPick } from '../lib/cancelPick.js'
 import type { PlayerView } from '../lib/api.js'
 import { revealPanel } from '../lib/reveal.js'
+import { HelpHint } from './HelpHint.js'
+
+const CANCEL_TEXT: Readonly<Record<string, string>> = {
+  'Bread and Circuses': 'Cancel a culture event targeting you, one of your figures, or a square or building in one of your cities',
+  'Jousting Tourney': 'Cancel any culture event',
+  'Primetime TV': 'Cancel any culture event or resource ability',
+  'Mark Twain': 'Cancel a city action or a culture event',
+}
 
 interface Props {
   readonly view: PlayerView
@@ -19,7 +27,10 @@ export function CancellationCardControl({ view, busy, readOnly, itemId, name }: 
   const choice = view.cancellations?.responseCards.find((c) => c.itemId === itemId)
   const eligible = choice?.targets.some((t) => t.blocked === null) === true
   return <div className="play-card-control">
-    <p className="muted">Cancels an action at once; everything played after it is superseded. Wait for the others before you play on.</p>
+    <HelpHint label={name}>
+      {CANCEL_TEXT[name] ?? 'Cancel a culture event'}
+      ; everything played after it is undone, for every player. Wait for the others before you play on.
+    </HelpHint>
     <button type="button" className="small" aria-label={`Play ${name}`}
       disabled={busy || readOnly || !eligible}
       onClick={() => { startCancelPick({ itemId, name }); revealPanel('log') }}>Play</button>

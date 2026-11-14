@@ -109,13 +109,34 @@ describe('which cards can be played, and when', () => {
     expect(henryFord.discards).toBe(false)
 
     const king = withCardInHand(startOfTurn(), 'Dr. Martin Luther King').state
-    expect(cardOf(king, 'Dr. Martin Luther King')).toMatchObject({ passive: true, status: 'ready', discards: false })
+    expect(cardOf(king, 'Dr. Martin Luther King')).toMatchObject({
+      passive: true,
+      status: 'ready',
+      discards: false,
+      targets: { kind: 'none' },
+    })
 
     const anyTime = withCardInHand(startOfTurn(), 'Marco Polo').state
     const card = cardOf(anyTime, 'Marco Polo')
     expect(card.kind).toBe('greatPerson')
     expect(card.status).toBe('ready')
     expect(card.discards).toBe(true)
+  })
+
+  it('refuses to name a player with a faceup Dr. Martin Luther King for The Citizens are Revolting!', () => {
+    const base = withCardInHand(withCardInHand(startOfTurn(), 'The Citizens are Revolting!', ITCHI).state, 'Dr. Martin Luther King')
+    const revealed: GameState = {
+      ...base.state,
+      players: base.state.players.map((candidate) =>
+        candidate.playerId === CASH1981
+          ? { ...candidate, items: candidate.items.map((item) => (item.id === base.itemId ? { ...item, hidden: false } : item)) }
+          : candidate,
+      ),
+    }
+    const revolting = player(revealed, ITCHI).items.find((item) => itemName(item) === 'The Citizens are Revolting!')
+    if (revolting === undefined) throw new Error('card missing')
+    const result = play(revealed, 'r1', revolting.id, { playerId: ITCHI, targets: [CASH1981] })
+    expect(JSON.stringify(unwrapErr(result))).toMatch(/never needs Anarchy/)
   })
 
   it('says a Great Person that stays faceup does not discard', () => {

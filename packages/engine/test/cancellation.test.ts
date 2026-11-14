@@ -113,6 +113,8 @@ describe('cancellation', () => {
     expect(player(done, C).gamenote).toBe(`private-${C}`)
     expect(done.itemCounter).toBe(current.itemCounter)
     expect(done.log.find((l) => l.id === logOf(current, 'later'))).toMatchObject({ superseded: true })
+    expect(done.log.find((l) => l.id === logOf(current, 'later'))?.publicLog).toMatch(/^Undone: /)
+    expect(done.log.at(-1)?.publicLog).toContain('Everything played after it is undone')
     expect(done.items.filter((i) => i.sheetName === 'CULTURE_1')).not.toEqual(baseline.items.filter((i) => i.sheetName === 'CULTURE_1'))
     expect(new Set(done.items.map((i) => i.id))).toEqual(new Set(baseline.items.map((i) => i.id)))
     expect(initiateUndo(done, { playerId: A, logId: logOf(current, 'later') }).ok).toBe(false)

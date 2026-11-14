@@ -355,7 +355,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Spectators are read-only, including game chat; existing admin chat moderation remains available.
 - A cancellation restores the exact before-action revision, keeps the cancelled city's action spent (or discards
   the target culture event), spends the cards played and reshuffles changed decks once (a counter reshuffles
-  nothing: the saved state is the game as it was). Later gameplay becomes superseded history, not deleted
+  nothing: the saved state is the game as it was). Later gameplay is shown in the log as "Undone:", never deleted
   history. Current notes and order text/versions survive. Turns before the rollback target retain their
   baseline completion/revision flags, even when their historical orders were edited. From the target turn
   onward, restored phase flags reopen affected work, including revised orders in baseline-completed phases.

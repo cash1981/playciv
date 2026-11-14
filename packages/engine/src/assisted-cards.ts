@@ -28,7 +28,7 @@ import {
   extraCityActionFor,
   lovelaceCreditWasUsed,
 } from './assisted-core.js'
-import { capitalOf, investableCoinsOf } from './sot.js'
+import { capitalOf, investableCoinsOf, isImmuneToAnarchy } from './sot.js'
 import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
@@ -1206,6 +1206,13 @@ export const playCard: AssistedActionDefinition = {
       const { min, max } = card.targets
       const wanted = min === max ? `${min}` : `${min} to ${max}`
       return err(rejected('playCard', blocked('unavailable', `${card.name} names ${wanted} other player${max === 1 ? '' : 's'}.`)))
+    }
+
+    if (/^The Citizens are Revolting/.test(card.name)) {
+      const shielded = targets.find((target) => isImmuneToAnarchy(state, target))
+      if (shielded !== undefined) {
+        return err(rejected('playCard', blocked('unavailable', `${shielded.username} never needs Anarchy, so ${card.name} cannot target them.`)))
+      }
     }
 
     if (card.name === 'Mother Teresa' && !card.coinSources.some((source) => source.key === payload.coinSource)) {
