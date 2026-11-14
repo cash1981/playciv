@@ -29,6 +29,7 @@ import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, se
 import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
+  CITY_ACTION_LABELS,
   PHASE_REASON,
   REPEAT_NOTE,
   cityActionOf,
@@ -36,7 +37,7 @@ import {
   earlierCityActions,
   freeTurnAction,
   lastLogId,
-  lovelaceCreditForAction,
+  extraCityActionFor,
   openCityManagementTurn,
   placeBack,
   playerOf,
@@ -767,7 +768,7 @@ const build: AssistedActionDefinition = {
       )
     }
     // After everything that makes the build impossible, so that a refusal says what is wrong and the question only comes for a build that would go through
-    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.build ?? 'build')
     if (again.refusal !== undefined) return err(rejected('build', again.refusal))
     const at = context.at === undefined ? {} : { at: context.at }
 
@@ -1194,7 +1195,7 @@ const startBuildingProgram: AssistedActionDefinition = {
     const option = city.startBuildingProgram
     if (option.status === 'wrong-phase') return err(rejected('startBuildingProgram', blocked('wrong-phase', option.reason)))
     if (option.status !== 'ready') return err(failed(`${city.label}: ${option.reason}`))
-    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.startBuildingProgram ?? 'startBuildingProgram')
     if (again.refusal !== undefined) return err(rejected('startBuildingProgram', again.refusal))
 
     const asset = findBoardAsset(BUILDING_PROGRAM_ASSET_ID)
@@ -1344,7 +1345,7 @@ const devoteToTheArts: AssistedActionDefinition = {
       if (option.darwin === null) return err(failed('Charles Darwin must be faceup in your hand, and not blockaded.'))
       if (option.darwin === 'used') return err(rejected('devoteToTheArts', blocked('used', 'Charles Darwin can turn culture into trade only once each turn.')))
     }
-    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.devoteToTheArts ?? 'devoteToTheArts')
     if (again.refusal !== undefined) return err(rejected('devoteToTheArts', again.refusal))
     const estimate = option.culture + chosen.reduce((total, scout) => total + scout.culture, 0)
     const culture = typeof typed === 'number' ? typed : estimate
@@ -1486,7 +1487,7 @@ const harvest: AssistedActionDefinition = {
     if (!choice.available) return err(failed(choice.unavailableReason ?? `The market has no ${resource} token left.`))
     const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
     if (area === undefined) return err(failed('You have no player area to put the token in.'))
-    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.harvest ?? 'harvest')
     if (again.refusal !== undefined) return err(rejected('harvest', again.refusal))
     const region = areaSlotRegion(area)
     const placed = placeUnchecked(state, {
@@ -1884,7 +1885,7 @@ export function performAssistedAction(
   const effect = applied.value.effect
   const cityAction = cityActionOf({ kind: input.action, effect })
   const lovelaceCreditId =
-    cityAction === undefined ? undefined : lovelaceCreditForAction(state, player, cityAction.cityPieceId)
+    cityAction === undefined ? undefined : extraCityActionFor(state, player, cityAction.cityPieceId, cityAction.label)?.creditId
   const record: AssistedActionRecord = {
     id: input.requestId,
     kind: input.action,

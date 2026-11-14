@@ -29,6 +29,7 @@ import type {
   Playerhand,
   PlayerStats,
 } from './state.js'
+import { capitalOf } from './sot.js'
 import { publicTurn, publicTurnKey, sameTurn, turnStatus } from './turn.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 
@@ -568,6 +569,7 @@ export const CITY_ACTION_LABELS: Readonly<Partial<Record<AssistedActionKind, str
 }
 
 export const LOVELACE_NAME = 'Ada Lovelace'
+export const SUPPLY_DROP_NAME = 'Supply Drop'
 
 /** One city action of the turn that is still in force: the city it counts against and what it is called. */
 interface CityActionRecord {
@@ -610,27 +612,40 @@ export function cityActionsTakenThisTurn(state: GameState, player: Playerhand, c
 }
 
 /**
- * The Ada Lovelace plays of this turn, still in force, that no city action has used: the ids of the
- * credits left. An action that used one carries its id as `lovelaceCreditId`, so undoing that action
- * frees it again and an action taken before her card was played used none.
+ * The cards whose play gives a city one more action. Ada Lovelace's is for any city. Supply Drop's is played in City
+ * Management and is for a city that is not the capital, so it is used first and Ada's stays for the capital.
  */
-function lovelaceCreditsLeft(state: GameState, player: Playerhand): readonly string[] {
+const EXTRA_ACTION_CARDS: readonly { readonly name: string; readonly phase?: TurnPhase; readonly capital: boolean }[] = [
+  { name: SUPPLY_DROP_NAME, phase: 'CM', capital: false },
+  { name: LOVELACE_NAME, capital: true },
+]
+
+/** The cards whose play is an extra city action: an undo of the play is refused while an action used it. */
+export const EXTRA_ACTION_CARD_NAMES: readonly string[] = EXTRA_ACTION_CARDS.map((card) => card.name)
+
+/**
+ * The plays of this turn, still in force, that no city action has used yet and that suit this city. An action that used
+ * one carries its id as `lovelaceCreditId`, so undoing that action frees it again and an action taken before the card was
+ * played used none.
+ */
+function extraActionCredits(state: GameState, player: Playerhand, cityPieceId: string): readonly { readonly id: string; readonly name: string }[] {
   const turn = turnStatus(state).currentTurn
   const used = new Set(state.assistedActions.flatMap((record) => (record.status === 'applied' && record.lovelaceCreditId !== undefined ? [record.lovelaceCreditId] : [])))
-  return state.assistedActions.flatMap((record) =>
-    record.status === 'applied' &&
-    record.playerId === player.playerId &&
-    record.turnNumber === turn &&
-    record.effect.kind === 'playCard' &&
-    record.effect.name === LOVELACE_NAME &&
-    !used.has(record.id)
-      ? [record.id]
-      : [],
+  const isCapital = capitalOf(state, player)?.id === cityPieceId
+  return EXTRA_ACTION_CARDS.filter((card) => card.capital || !isCapital).flatMap((card) =>
+    state.assistedActions.flatMap((record) =>
+      record.status === 'applied' &&
+      record.playerId === player.playerId &&
+      record.turnNumber === turn &&
+      record.effect.kind === 'playCard' &&
+      record.effect.name === card.name &&
+      (card.phase === undefined || record.phase === card.phase) &&
+      !used.has(record.id)
+        ? [{ id: record.id, name: card.name }]
+        : [],
+    ),
   )
 }
-
-/** The extra city actions Ada Lovelace has given this turn that no action has used yet. */
-export const extraCityActionsLeft = (state: GameState, player: Playerhand): number => lovelaceCreditsLeft(state, player).length
 
 /**
  * Whether Atomic Theory's "extra action with each city" is in force this turn for the player: an applied, not undone,
@@ -648,12 +663,41 @@ export function atomicExtraActionsActive(state: GameState, player: Playerhand): 
   )
 }
 
+/** An action's name without what it was taken through: Jerry Garcia's devotion is still a devotion. */
+const baseActionName = (label: string): string => label.replace(/ \(.*\)$/, '')
+
+/** Whether this city is the capital of a player under Monarchy. */
+const isMonarchyCapital = (state: GameState, player: Playerhand, cityPieceId: string): boolean =>
+  player.government === 'Monarchy' && capitalOf(state, player)?.id === cityPieceId
+
+/** The extra city action that covers one more action of a city: the line for the log, and the card play it uses up, if any. */
+export interface ExtraCityAction {
+  readonly note: string
+  readonly creditId?: string
+}
+
 /**
- * Atomic Theory gives every city one more action: a city that has acted exactly once may act again without being
- * asked, a city that has acted twice is back to the question (and to a Lovelace credit, if one is left).
+ * The extra action that covers this city's next action, or undefined when none does and the player is asked first. A city
+ * that has not acted yet is covered by nothing, as its first action needs none, unless `action` is undefined: that asks
+ * whether an extra action is on offer to the city at all (the flag the client reads). In order:
+ * - Atomic Theory gives every city one more action.
+ * - Monarchy gives the capital one, not the same action as its first ("You cannot take the same action twice with your
+ *   capital in the same turn").
+ * Those two cover a city that has acted exactly once; a city that has acted twice is back to the cards:
+ * - Supply Drop (a city that is not the capital) and Ada Lovelace, one action each, the credit of the play that is used.
+ * Everything is derived from the applied records, so an undo vote removes it.
  */
-export const atomicExtraActionFor = (state: GameState, player: Playerhand, cityPieceId: string): boolean =>
-  atomicExtraActionsActive(state, player) && cityActionsTakenThisTurn(state, player, cityPieceId).length === 1
+export function extraCityActionFor(state: GameState, player: Playerhand, cityPieceId: string, action: string | undefined): ExtraCityAction | undefined {
+  const taken = cityActionsTakenThisTurn(state, player, cityPieceId)
+  const [first] = taken
+  if (first === undefined && action !== undefined) return undefined
+  if (first !== undefined && taken.length === 1) {
+    if (atomicExtraActionsActive(state, player)) return { note: ATOMIC_ACTION_NOTE }
+    if (isMonarchyCapital(state, player, cityPieceId) && (action === undefined || baseActionName(first) !== baseActionName(action))) return { note: MONARCHY_ACTION_NOTE }
+  }
+  const credit = extraActionCredits(state, player, cityPieceId)[0]
+  return credit === undefined ? undefined : { note: ` (an extra city action from ${credit.name})`, creditId: credit.id }
+}
 
 /**
  * How many city actions still in force each of the player's cities has taken in a turn (the current one unless `turn` says
@@ -665,20 +709,13 @@ export function cityActionCountsThisTurn(state: GameState, player: Playerhand, t
   return counts
 }
 
-/** The Lovelace play whose credit an action of this city would use: only a city that has already acted uses one, and not when Atomic Theory covers it. */
-export function lovelaceCreditForAction(state: GameState, player: Playerhand, cityPieceId: string): string | undefined {
-  if (cityActionsTakenThisTurn(state, player, cityPieceId).length === 0) return undefined
-  if (atomicExtraActionFor(state, player, cityPieceId)) return undefined
-  return lovelaceCreditsLeft(state, player)[0]
-}
-
-/** Whether a city action still in force used this Lovelace play's credit. */
+/** Whether a city action still in force used this card play's credit. */
 export const lovelaceCreditWasUsed = (state: GameState, creditId: string): boolean =>
   state.assistedActions.some((record) => record.status === 'applied' && record.lovelaceCreditId === creditId)
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
-export const LOVELACE_ACTION_NOTE = ' (an extra city action from Ada Lovelace)'
 export const ATOMIC_ACTION_NOTE = ' (an extra city action from Atomic Theory)'
+export const MONARCHY_ACTION_NOTE = ' (the additional capital action of Monarchy)'
 
 /**
  * What the city's earlier actions this turn mean for one more: nothing to say, a note for the log
@@ -689,11 +726,19 @@ export function earlierCityActions(
   player: Playerhand,
   city: { readonly cityPieceId: string; readonly label: string },
   confirmed: boolean,
+  action: string,
 ): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
   const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
   if (taken.length === 0) return { refusal: undefined, note: '' }
-  if (atomicExtraActionFor(state, player, city.cityPieceId)) return { refusal: undefined, note: ATOMIC_ACTION_NOTE }
-  if (extraCityActionsLeft(state, player) > 0) return { refusal: undefined, note: LOVELACE_ACTION_NOTE }
+  const extra = extraCityActionFor(state, player, city.cityPieceId, action)
+  if (extra !== undefined) return { refusal: undefined, note: extra.note }
+  // A rule of the card, not a second action to ask about: a confirmation does not lift it, and the client does not ask about the capital's second action under Monarchy
+  if (taken.length === 1 && isMonarchyCapital(state, player, city.cityPieceId)) {
+    return {
+      refusal: blocked('used', `${city.label} has already taken ${taken.join(', ')} this turn. Monarchy lets the capital take one more action, but not the same action twice.`),
+      note: '',
+    }
+  }
   if (confirmed) return { refusal: undefined, note: SECOND_ACTION_NOTE }
   return {
     refusal: blocked(

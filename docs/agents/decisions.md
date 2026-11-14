@@ -270,6 +270,18 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   credit. Her play cannot be undone while an action that carries its id is in
   force; undo that action first. Anarchy is not enforced for the capital anywhere, so her anarchy
   clause needs nothing.
+  Every extra city action goes through one function, `extraCityActionFor` (`assisted-core.ts`), for the question, the log
+  line and the credit an action uses. In order: Atomic Theory (a city that has acted once), Monarchy, then the cards.
+  **Monarchy** (human, 2026-11-14): the capital of a player under that government takes one more action each turn with no
+  question, but not the same action as its first ("Devote to the Arts (Jerry Garcia)" counts as a devotion): the same
+  action again is refused, with no confirmation to lift it (the card forbids it, and the client does not ask about the
+  capital's second action under Monarchy), while a third action and any other city's second action are asked about as before.
+  Atomic Theory and the cards cover a city first or after it, so they are not stacked on Monarchy: one extra action, not two. It is derived from the player's
+  government, so it needs no record and no undo. It comes before the cards, so the free action does not use up a credit.
+  **Supply Drop** (human, 2026-11-14) is a credit like Ada Lovelace's, with two differences: it counts only when it was played in
+  City Management (its other timing is Start of Turn, where it gains 7 trade), and only for a city that is not the capital;
+  Ada's stays for the capital. A city that is not the capital uses a Supply Drop credit before an Ada one. Tests:
+  `great-person-arts.test.ts` (Monarchy, Supply Drop).
 - Akira Kurosawa, faceup and not blockaded, pays his holder 1 culture for every
   city another player devotes (also each city of Garcia's play), in the same log
   line; the holder's own devotions pay nothing. Undoing the devotion takes the

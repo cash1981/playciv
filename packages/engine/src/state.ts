@@ -1068,7 +1068,7 @@ export type TechAbilityEffect =
       readonly refight?: ArenaRefight
     }
   | {
-      /** Atomic Theory, "extra action with each city": every city of the player may act once more this turn (`atomicExtraActionFor`). */
+      /** Atomic Theory, "extra action with each city": every city of the player may act once more this turn (`extraCityActionFor`). */
       readonly kind: 'atomicTheory'
       readonly mode: 'extraActions'
       readonly spent: readonly SpentResource[]
