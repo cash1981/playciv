@@ -8,8 +8,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { placePiece, removePiece } from '../src/actions/board.js'
+import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
+import { turnStatus } from '../src/turn.js'
 import { cityActionsTakenThisTurn, performAssistedAction } from '../src/assisted.js'
 import { playableCardsOf } from '../src/assisted-cards.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
@@ -20,7 +22,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
-import { withCardInHand } from './assisted-fixture.js'
+import { withCardInHand, withHutInHand } from './assisted-fixture.js'
 import { withStats } from './culture-advance-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -490,5 +492,111 @@ describe('hidden information', () => {
     // A facedown Darwin in the hand is not told to anyone, the owner included
     const facedown = withCardInHand(scene(), 'Charles Darwin')
     expect(toPlayerView(facedown.state, CASH1981).you?.cityActions?.[0]?.devoteToTheArts.darwin).toBeNull()
+  })
+})
+
+describe('Ada Lovelace together with Atomic Theory (extra action with each city)', () => {
+  /** Atomic Theory revealed, a Uranium in hand and Ada Lovelace's card in hand, City Management open. */
+  function both() {
+    const learned = unwrap(revealTech(unwrap(chooseTech(scene(), { playerId: CASH1981, techName: 'Atomic Theory' })), { playerId: CASH1981, techName: 'Atomic Theory' }))
+    const card = withCardInHand(withHutInHand(learned, 'Uranium').state, 'Ada Lovelace')
+    return { state: card.state, itemId: card.itemId }
+  }
+  const atomic = (state: GameState, requestId = 'at1') =>
+    performAssistedAction(state, { playerId: CASH1981, action: 'atomicTheory', requestId, at: AT, payload: { mode: 'extraActions' } })
+  const recordOf = (state: GameState, requestId: string) => state.assistedActions.find((record) => record.id === requestId)
+
+  it('Atomic Theory covers a city\'s second action first, so the Lovelace credit is kept for its third', () => {
+    const { state, itemId } = both()
+    const city = capitalId(state)
+    const first = unwrap(devote(state, 'a1', city))
+    const played = unwrap(play(first, 'l1', itemId))
+    const used = unwrap(atomic(played))
+
+    const second = unwrap(devote(used, 'a2', city))
+    expect(second.log.at(-1)?.publicLog).toContain(' (an extra city action from Atomic Theory)')
+    expect(second.log.at(-1)?.publicLog).not.toContain('Ada Lovelace')
+    expect(recordOf(second, 'a2')?.lovelaceCreditId).toBeUndefined()
+
+    // Her credit is still there: the third action uses it
+    expect(cityActionsOf(second, me(second)).find((option) => option.cityPieceId === city)?.extraAction).toBe(true)
+    const third = unwrap(devote(second, 'a3', city))
+    expect(third.log.at(-1)?.publicLog).toContain('an extra city action from Ada Lovelace')
+    expect(recordOf(third, 'a3')?.lovelaceCreditId).toBe('l1')
+    expect(JSON.stringify(unwrapErr(devote(third, 'a4', city)))).toContain('already acted')
+
+    // Undoing the third action frees the credit again
+    const freed = undoByVote(third, 'a3')
+    expect(cityActionsOf(freed, me(freed)).find((option) => option.cityPieceId === city)?.extraAction).toBe(true)
+    expect(recordOf(unwrap(devote(freed, 'a3b', city)), 'a3b')?.lovelaceCreditId).toBe('l1')
+  })
+
+  it("Jerry Garcia's capital action covered by Atomic Theory says so, and does not claim the Lovelace credit", () => {
+    const { state, itemId } = both()
+    const capital = capitalId(state)
+    const garcia = withCardInHand(state, 'Jerry Garcia')
+    const first = unwrap(devote(garcia.state, 'a1', capital))
+    const lovelace = unwrap(play(first, 'l1', itemId))
+    const used = unwrap(atomic(lovelace))
+    const played = unwrap(play(used, 'g1', garcia.itemId))
+    expect(played.log.at(-1)?.publicLog).toContain(' (an extra city action from Atomic Theory)')
+    expect(played.log.at(-1)?.publicLog).not.toContain('Ada Lovelace')
+    expect(recordOf(played, 'g1')?.lovelaceCreditId).toBeUndefined()
+    // The credit is untouched, so Lovelace's own play can still be undone
+    expect(me(undoByVote(played, 'g1')).items.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Atomic Theory: undoing the allowance after the turn has moved on', () => {
+  function atomicTurn() {
+    const learned = unwrap(revealTech(unwrap(chooseTech(scene(), { playerId: CASH1981, techName: 'Atomic Theory' })), { playerId: CASH1981, techName: 'Atomic Theory' }))
+    return withHutInHand(learned, 'Uranium').state
+  }
+  const atomic = (state: GameState) =>
+    performAssistedAction(state, { playerId: CASH1981, action: 'atomicTheory', requestId: 'at1', at: AT, payload: { mode: 'extraActions' } })
+  /** Every player ends the turn; Cash then has City Management open in turn 2. */
+  function nextTurn(state: GameState): GameState {
+    let next = state
+    for (const playerId of [CASH1981, ...OTHERS]) {
+      next = unwrap(markPhasesDone(next, { playerId, turnNumber: 1, upToPhase: 'RESEARCH' }))
+    }
+    return unwrap(markPhasesDone(next, { playerId: CASH1981, turnNumber: 2, upToPhase: 'TRADE' }))
+  }
+  const turnOf = (state: GameState): number => turnStatus(state).currentTurn
+
+  it('is refused while the second action of the turn it was given in is still applied', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const used = unwrap(atomic(state))
+    const second = unwrap(devote(unwrap(devote(used, 'a1', city)), 'a2', city))
+    const later = nextTurn(second)
+    expect(turnOf(later)).toBe(2)
+    // Turn 2 has no city action at all, but the dependent action of turn 1 is still applied
+    expect(JSON.stringify(unwrapErr(undoRejection(later, 'at1')))).toContain('already taken a second action that turn')
+    // Taking that action back first frees the allowance
+    const freed = undoByVote(later, 'a2')
+    expect(me(undoByVote(freed, 'at1')).items.some((item) => item.kind === 'hut' && item.name === 'Uranium')).toBe(true)
+  })
+
+  it('is allowed when only unrelated actions of the new turn exist, even two on one city', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const used = unwrap(atomic(state))
+    const first = unwrap(devote(used, 'a1', city))
+    const later = nextTurn(first)
+    // Two actions of the same city in turn 2, the second confirmed: unrelated to turn 1's allowance
+    const turn2 = unwrap(devote(unwrap(devote(later, 'b1', city)), 'b2', city, { confirmed: true }))
+    expect(cityActionsTakenThisTurn(turn2, me(turn2), city)).toHaveLength(2)
+    const undone = undoByVote(turn2, 'at1')
+    expect(me(undone).items.some((item) => item.kind === 'hut' && item.name === 'Uranium')).toBe(true)
+  })
+
+  it('the allowance itself belongs to the turn it was given in: the new turn gets no extra action from it', () => {
+    const state = atomicTurn()
+    const city = capitalId(state)
+    const later = nextTurn(unwrap(atomic(state)))
+    const first = unwrap(devote(later, 'b1', city))
+    expect(cityActionsOf(first, me(first)).find((option) => option.cityPieceId === city)?.extraAction).toBe(false)
+    expect(JSON.stringify(unwrapErr(devote(first, 'b2', city)))).toContain('already acted')
   })
 })

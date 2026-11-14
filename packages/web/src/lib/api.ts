@@ -7,6 +7,7 @@
  */
 
 import type {
+  CancellationCommand,
   ActiveTurnStatus,
   AssistedActionKind,
   Board,
@@ -716,6 +717,8 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/arena/sun-tzu`, { rev }),
   zhukovWound: (gameId: string, arenaUnitId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/zhukov`, { arenaUnitId, rev }),
+  techWound: (gameId: string, tech: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/tech-wound`, { tech, arenaUnitId, rev }),
   endBattleArena: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
   undoEndBattle: (gameId: string, rev: number) =>
@@ -953,6 +956,9 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/undo/${logId}`),
   voteUndo: (gameId: string, logId: string, vote: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/undo/${logId}/vote`, { vote }),
+  /** Cancels an action, or undoes the latest cancellation, with one of the player's cards; takes effect at once. */
+  cancellation: (gameId: string, command: CancellationCommand, rev: number, requestId: string) =>
+    post<PlayerView>(`/api/games/${gameId}/cancellations`, { ...command, rev, requestId }),
   pendingUndos: (gameId: string) => get<PendingUndoDto[]>(`/api/games/${gameId}/undo/pending`),
 
   boardAssets: () => get<BoardAsset[]>('/api/board/assets'),

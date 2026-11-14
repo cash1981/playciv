@@ -26,11 +26,11 @@
  */
 
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
+import { availableKingId } from './twain.js'
 import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
   PHASE_REASON,
-  READY,
   REPEAT_NOTE,
   cityActionOf,
   blocked,
@@ -50,7 +50,7 @@ import {
 import { DARWIN_NAME, darwinTradeOf, greatPersonActionIdOf, payKurosawa, takeBackKurosawa, useDarwin } from './assisted-arts.js'
 import { playCard } from './assisted-cards.js'
 import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
-import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
+import { findResourceToken, parseResourcePayments, resourceAvailability, resourcePaymentOptions, returnedText, returnResource, spendActionResource, spendResource } from './assisted-resources.js'
 import { CITY_ACTIONS } from './assisted-city.js'
 import { ABILITY_ACTIONS } from './assisted-abilities.js'
 import { SOT_ACTIONS } from './assisted-sot.js'
@@ -179,6 +179,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
     usageKey,
     phase: 'CM',
     group: 'Resource abilities',
+    cost: [card.resource],
 
     availability(state, playerId) {
       const player = playerOf(state, playerId)
@@ -190,18 +191,12 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
       if (turn.usedActions.includes(usageKey)) {
         return blocked('used', usedReason(card.techName))
       }
-      if (findResourceToken(state, playerId, card.resource) === undefined) {
-        return blocked(
-          'needs-resource',
-          `You need an ${card.resource} token: an ${card.resource} hut in your hand or an ${card.resource} piece in your player area.`,
-        )
-      }
-      return READY
+      return resourceAvailability(state, playerId, card.resource)
     },
 
     apply(state, player, context) {
       const turn = openCityManagementTurn(state, player)
-      const spend = spendResource(state, player.playerId, card.resource, context.at)
+      const spend = spendActionResource(state, player.playerId, card.resource, context)
       if (turn === undefined || !spend.ok) {
         return err(
           rejected(
@@ -218,7 +213,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         username: player.username,
         playerId: player.playerId,
         publicLog:
-          `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} (${stats.culture}) culture` +
+          `${player.username} used ${card.techName}: ${spend.value.said} and gained ${card.culture} (${stats.culture}) culture` +
           (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
@@ -240,11 +235,12 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         { ...player, stats },
         effect.spent,
         at,
+        record.logId,
       )
       if (!returned.ok) return returned
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and the ${effect.spent.resource} token returned`,
+        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and ${returnedText(effect.spent)} returned`,
       })
     },
   }
@@ -1696,6 +1692,12 @@ const upgradeBuildings: AssistedActionDefinition = {
 
 import { communism } from './assisted-communism.js'
 import { steamPower } from './assisted-steam-power.js'
+import { ballistics, mathematics } from './assisted-tech-wounds.js'
+import { gunpowder } from './assisted-gunpowder.js'
+import { combustion } from './assisted-combustion.js'
+import { TECH_ABILITY_ACTIONS } from './assisted-tech-abilities.js'
+import { atomicTheory } from './assisted-atomic-theory.js'
+import { bureaucracy } from './assisted-bureaucracy.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 
 /** Every assisted action, in the order the projection lists them. */
@@ -1705,6 +1707,13 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   coinPurchase('printingPress'),
   communism,
   steamPower,
+  mathematics,
+  ballistics,
+  gunpowder,
+  combustion,
+  ...TECH_ABILITY_ACTIONS,
+  atomicTheory,
+  bureaucracy,
   cultureAdvance,
   cultureAdvanceSkip,
   chooseReward,
@@ -1732,6 +1741,10 @@ export function isAssistedActionKind(value: unknown): value is AssistedActionKin
 
 const definitionOf = (kind: AssistedActionKind): AssistedActionDefinition | undefined =>
   ASSISTED_ACTIONS.find((definition) => definition.kind === kind)
+
+/** Public action metadata only: no player state or private payment options. */
+export const resourceCostOf = (action: string): readonly (string | null)[] | undefined =>
+  ASSISTED_ACTIONS.find((definition) => definition.kind === action)?.cost
 
 /** How a record is named in the public list and in an undo request. */
 const labelOfRecord = (record: AssistedActionRecord): string => {
@@ -1770,6 +1783,9 @@ export function availableActionsFor(state: GameState, playerId: string): readonl
     group: definition.group,
     ...(definition.buttonText === undefined ? {} : { buttonText: definition.buttonText }),
     ...(definition.techName === null ? {} : { techName: definition.techName }),
+    ...(definition.cost === undefined ? {} : {
+      payment: { cost: definition.cost, options: resourcePaymentOptions(state, playerId, definition.cost) },
+    }),
     repeatable: definition.strictOnce !== true,
     ...definition.availability(state, playerId),
   }))
@@ -1843,6 +1859,11 @@ export function performAssistedAction(
     return err(rejected(input.action, blocked('unavailable', 'This request id was already used.')))
   }
 
+  if (input.payload?.payments !== undefined) {
+    const checked = parseResourcePayments(input.payload.payments, definition.cost)
+    if (!checked.ok) return err(rejected(input.action, blocked('unavailable', checked.error)))
+  }
+
   const availability = definition.availability(state, input.playerId)
   // Some Great Persons and culture cards allow a second use and are not built, so
   // the player may override `used` and nothing else. The reducers re-check the
@@ -1866,6 +1887,9 @@ export function performAssistedAction(
   const lovelaceCreditId =
     cityAction === undefined ? undefined : lovelaceCreditForAction(state, player, cityAction.cityPieceId)
   const record: AssistedActionRecord = {
+    kingAtAction: availableKingId(state, player),
+    beforeRevision: state.rev,
+    selectedInputs: input.payload,
     id: input.requestId,
     kind: input.action,
     playerId: input.playerId,
@@ -1921,6 +1945,10 @@ export function reverseAssistedAction(
   if (record === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: recordId })
   if (record.status === 'undone') {
     return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: record.logId })
+  }
+  if (record.status === 'superseded') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+  if (record.status === 'cancelled') {
+    return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: 'That action was cancelled with Mark Twain, so it cannot be undone.' })
   }
   const definition = definitionOf(record.kind)
   const player = playerOf(state, record.playerId)
@@ -1984,7 +2012,10 @@ export function reverseAssistedAction(
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
       (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
-    effect.kind === 'gianniniBuild'
+    effect.kind === 'gianniniBuild' ||
+    (effect.kind === 'atomicTheory' && effect.mode === 'nuke') ||
+    (effect.kind === 'monarchy' && effect.wonder !== undefined) ||
+    (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined))
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }

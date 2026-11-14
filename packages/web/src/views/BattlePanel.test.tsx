@@ -19,6 +19,13 @@ vi.mock('../lib/api.js', () => ({
     setArenaUnitStat: vi.fn(),
     sunTzuPass: vi.fn(),
     zhukovWound: vi.fn(),
+    techWound: vi.fn(),
+    performAction: vi.fn(),
+    actionWithArgs: vi.fn(),
+  },
+  // The assisted action buttons of the Battle panel read it when a press fails
+  ApiError: class ApiError extends Error {
+    status = 0
   },
 }))
 
@@ -583,5 +590,160 @@ describe('BattlePanel Zhukov', () => {
     const unplayed = render(<BattlePanel gameId="game" busy={false} run={run} view={zhukovView([], true)} />)
     fireEvent.click(unplayed.getByText('Battle'))
     expect(unplayed.queryByText(/Georgy Zhukov: deal/)).toBeNull()
+  })
+})
+
+describe('BattlePanel Mathematics and Ballistics', () => {
+  // The panel remembers whether it was left open, so each test starts closed and the click below opens it
+  beforeEach(() => localStorage.clear())
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  const unit = (id: string, side: 'attacker' | 'defender', killed: boolean, position: number) => ({
+    id, side, position, unit: { ...infantry, id: `card-${id}` }, attack: 1, health: 3, placedBy: side === 'attacker' ? 'me' : 'other',
+    rotation: 0, killed, arrival: null,
+  })
+  const action = (kind: string, label: string, status: string) => ({
+    action: kind, label, phase: 'ANY', group: 'Battle', status, reason: `${label} is ${status}`, repeatable: true, techName: label, buttonText: `Use ${label} (Iron)`,
+  })
+  const techView = (techWounds: object[], availableActions: object[], combatant = true): PlayerView =>
+    ({
+      ...view,
+      you: { ...view.you, playerId: combatant ? 'me' : 'bystander', stats: { trade: 5 }, availableActions },
+      battle: {
+        ...view.battle,
+        arena: [unit('a1', 'attacker', false, 0), unit('d1', 'defender', false, 1), unit('d2', 'defender', true, 2)],
+        techWounds,
+      },
+    }) as unknown as PlayerView
+
+  it('shows the Mathematics button, which pays the Iron through the assisted action', async () => {
+    vi.mocked(api.performAction).mockResolvedValue(view)
+    const { getByText, getByRole } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={techView([], [action('mathematics', 'Mathematics', 'ready')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByRole('group', { name: 'Mathematics wounds' })).toBeTruthy()
+    fireEvent.click(getByText('Use Mathematics (Iron)'))
+    expect(api.performAction).toHaveBeenCalledWith('game', 'mathematics', expect.any(String), 4)
+  })
+
+  it('offers a wound on each living enemy unit while wounds are owed, and sends the tech and the unit', () => {
+    vi.mocked(api.techWound).mockResolvedValue(view)
+    const owed = { playerId: 'me', tech: 'Ballistics', total: 6, dealt: 2, actionId: 'x' }
+    const { getByText, queryAllByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={techView([owed], [action('ballistics', 'Ballistics', 'used')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByText(/Ballistics: deal up to 4 wounds, one to an enemy unit at a time/)).toBeTruthy()
+    // The killed enemy unit and own units are not offered
+    expect(queryAllByText(/^Wound /)).toHaveLength(1)
+    fireEvent.click(queryAllByText(/^Wound /)[0] as HTMLElement)
+    expect(api.techWound).toHaveBeenCalledWith('game', 'Ballistics', 'd1', 4)
+  })
+
+  it('lists nothing without the tech, for a player outside the battle, or for a spectator', () => {
+    const none = render(<BattlePanel gameId="game" busy={false} run={run} view={techView([], [action('mathematics', 'Mathematics', 'not-owned')])} />)
+    fireEvent.click(none.getByText('Battle'))
+    expect(none.queryByText(/Mathematics/)).toBeNull()
+    cleanup()
+    const bystander = render(<BattlePanel gameId="game" busy={false} run={run} view={techView([], [action('mathematics', 'Mathematics', 'ready')], false)} />)
+    fireEvent.click(bystander.getByText('Battle'))
+    expect(bystander.queryByText(/Mathematics/)).toBeNull()
+    cleanup()
+    const spectator = render(<BattlePanel gameId="game" busy={false} run={run} readOnly view={techView([{ playerId: 'me', tech: 'Mathematics', total: 3, dealt: 0, actionId: 'x' }], [action('mathematics', 'Mathematics', 'used')])} />)
+    fireEvent.click(spectator.getByText('Battle'))
+    expect((spectator.queryAllByText(/^Wound /)[0] as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('stops offering wounds once all have been dealt', () => {
+    const spent = { playerId: 'me', tech: 'Mathematics', total: 3, dealt: 3, actionId: 'x' }
+    const { getByText, queryByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={techView([spent], [action('mathematics', 'Mathematics', 'used')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(queryByText(/Mathematics: deal up to/)).toBeNull()
+  })
+})
+
+describe('BattlePanel Metalworking', () => {
+  beforeEach(() => localStorage.clear())
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  const unit = (id: string, side: 'attacker' | 'defender', killed: boolean, position: number, placedBy: string) => ({
+    id, side, position, unit: { ...infantry, id: `card-${id}` }, attack: 1, health: 3, placedBy, rotation: 0, killed, arrival: null,
+  })
+  const action = (status: string) => ({
+    action: 'metalworking', label: 'Metalworking', phase: 'ANY', group: 'Battle', status, reason: `Metalworking is ${status}`, repeatable: true, techName: 'Metalworking', buttonText: 'Use Metalworking (Iron: +3 attack)',
+  })
+  const metalView = (status = 'ready', arena = [unit('a1', 'attacker', false, 0, 'me'), unit('a2', 'attacker', true, 1, 'me'), unit('a3', 'attacker', false, 2, 'me'), unit('d1', 'defender', false, 3, 'other')]): PlayerView =>
+    ({ ...view, you: { ...view.you, availableActions: [action(status)] }, battle: { ...view.battle, arena, techWounds: [] } }) as unknown as PlayerView
+
+  it('lists the button next to Mathematics and Ballistics, and asks which of the player\'s own living units gets the attack', () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue(view)
+    const { getByText, getByRole, getAllByRole, getByLabelText } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView()} />)
+    fireEvent.click(getByText('Battle'))
+    expect(getByRole('group', { name: 'Metalworking' })).toBeTruthy()
+    fireEvent.click(getByText('Use Metalworking (Iron: +3 attack)'))
+    expect(api.actionWithArgs).not.toHaveBeenCalled()
+    // Only the player's own living units: not the killed one, not the enemy
+    expect(getAllByRole('option').map((option) => option.textContent)).toEqual([
+      expect.stringContaining('front 1'),
+      expect.stringContaining('front 3'),
+    ])
+    fireEvent.change(getByLabelText('Unit'), { target: { value: 'a3' } })
+    fireEvent.click(getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a3' }, false)
+  })
+
+  it('the unit that was picked is gone: the unit shown is the unit sent', () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue(view)
+    const { getByText, getByRole, getByLabelText, rerender } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView()} />)
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(getByText('Use Metalworking (Iron: +3 attack)'))
+    fireEvent.change(getByLabelText('Unit'), { target: { value: 'a3' } })
+    // The unit a3 is killed; a1 is the only one left and must be what is shown and sent
+    rerender(<BattlePanel gameId="game" busy={false} run={run} view={metalView('ready', [unit('a1', 'attacker', false, 0, 'me'), unit('a3', 'attacker', true, 2, 'me'), unit('d1', 'defender', false, 3, 'other')])} />)
+    expect((getByLabelText('Unit') as HTMLSelectElement).value).toBe('a1')
+    fireEvent.click(getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a1' }, false)
+  })
+
+  it('says so when no unit of the player stands in the arena, and sends nothing', () => {
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView('ready', [unit('d1', 'defender', false, 1, 'other')])} />)
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(getByText('Use Metalworking (Iron: +3 attack)'))
+    expect(getByText('You have no living unit of your own in the arena.')).toBeTruthy()
+    expect(api.actionWithArgs).not.toHaveBeenCalled()
+  })
+
+  it('asks about a repeat use at submit, and a used or read-only panel cannot send', () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue(view)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const used = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView('used')} />)
+    fireEvent.click(used.getByText('Battle'))
+    fireEvent.click(used.getByText('Use Metalworking (Iron: +3 attack)'))
+    expect(confirm).not.toHaveBeenCalled()
+    fireEvent.click(used.getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).not.toHaveBeenCalled()
+    fireEvent.click(used.getByRole('button', { name: /^Add 3 attack to / }))
+    expect(api.actionWithArgs).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(api.actionWithArgs).mock.calls[0]?.[5]).toBe(true)
+    cleanup()
+
+    const readOnly = render(<BattlePanel gameId="game" busy={false} run={run} readOnly view={metalView()} />)
+    fireEvent.click(readOnly.getByText('Battle'))
+    expect((readOnly.getByText('Use Metalworking (Iron: +3 attack)') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('lists nothing outside a battle the player fights in', () => {
+    const none = render(<BattlePanel gameId="game" busy={false} run={run} view={{ ...metalView(), you: { ...metalView().you, playerId: 'bystander' } } as unknown as PlayerView} />)
+    fireEvent.click(none.getByText('Battle'))
+    expect(none.queryByText(/Metalworking/)).toBeNull()
   })
 })

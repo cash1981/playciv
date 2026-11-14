@@ -93,7 +93,7 @@ describe('which cards can be played, and when', () => {
     expect(card.reason).toBe('Played during a battle.')
   })
 
-  it('lists an automated passive Great Person as a Use button, and an unautomated one not at all', () => {
+  it('lists an automated passive Great Person as a Use button', () => {
     const passive = withCardInHand(startOfTurn(), 'Valmiki').state
     const valmiki = cardOf(passive, 'Valmiki')
     expect(valmiki.kind).toBe('greatPerson')
@@ -108,8 +108,8 @@ describe('which cards can be played, and when', () => {
     expect(henryFord.status).toBe('ready')
     expect(henryFord.discards).toBe(false)
 
-    const unimplemented = withCardInHand(startOfTurn(), 'Dr. Martin Luther King').state
-    expect(playableCardsOf(unimplemented, player(unimplemented)).some((card) => card.name === 'Dr. Martin Luther King')).toBe(false)
+    const king = withCardInHand(startOfTurn(), 'Dr. Martin Luther King').state
+    expect(cardOf(king, 'Dr. Martin Luther King')).toMatchObject({ passive: true, status: 'ready', discards: false })
 
     const anyTime = withCardInHand(startOfTurn(), 'Marco Polo').state
     const card = cardOf(anyTime, 'Marco Polo')

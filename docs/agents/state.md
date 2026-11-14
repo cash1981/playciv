@@ -36,11 +36,20 @@ deployment reports do not establish present health.
 - Display settings (#342): a gear in the Board header opens sliders for map zoom,
   status icon size, status panel width and icons per row plus a Show labels switch (on by
   default), saved per browser. The sidebar can be minimised under the map.
+- Tech resource abilities (#327): every tech on the issue's checklist has an assisted button with undo. The parts
+  that stay manual (Combustion's removal, Bureaucracy's policy switch, Education's wonder coin) are in
+  limitations.md. Shared resource-payment selectors offer only usable held tokens
+  and culture cards, with explicit card choice and no reuse across payment slots.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
   Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein, Carnegie, Jim Henson, Jacques Cousteau, Jerry Garcia, Ada Lovelace, Akira
   Kurosawa, Charles Darwin, A. P. Giannini, Frida Kahlo, Zheng He, Leonidas, Joan of Arc, Florence Nightingale, Sun Tzu, Georgy Zhukov and Gustavus Adolphus apply through the engine.
 - Trade: free-text trade offers (#265); trade resets to coins at turn start for
   a player who researched, and city trade is collected once when Trade starts.
+- Cancellation (#301, #336): Twain and the culture cancellations act at once;
+  nothing pauses. The action is picked with a Cancel button in the log, and a
+  culture cancellation can be countered the same way. King's Protect button
+  undoes a cancellation of his holder's city action and keeps Twain in hand.
+  Order versions are preserved and each cancellation seals the history before it.
 - Figure movement (#302): enforced speed, water, stacking and stops; movement is
   a pool shared with exploring; card map picker for Galileo, Steam Power,
   Hannibal and movement culture cards; Communism and Brandenburg Gate.

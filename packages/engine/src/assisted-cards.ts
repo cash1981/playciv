@@ -21,8 +21,11 @@ import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './
 import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, undoTesla } from './tesla.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
+  ATOMIC_ACTION_NOTE,
   LOVELACE_ACTION_NOTE,
+  atomicExtraActionFor,
   LOVELACE_NAME,
+  waitingCardIds,
   cityActionsTakenThisTurn,
   extraCityActionsLeft,
   lovelaceCreditWasUsed,
@@ -319,10 +322,6 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
   })
 }
 
-/** The cards drawn for a choice, which stay in the hand until one is kept. */
-const waitingCardIds = (player: Playerhand): ReadonlySet<string> =>
-  new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
-
 const FRIDA = 'Frida Kahlo'
 const GIANNINI_NAME = 'A. P. Giannini'
 
@@ -608,9 +607,11 @@ function automate(
           `and gaining ${culture} (${player.stats.culture + culture}) culture (${list})` +
           (acted.length === 0
             ? ''
-            : extraCityActionsLeft(state, player) > 0
-              ? LOVELACE_ACTION_NOTE
-              : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
+            : atomicExtraActionFor(state, player, capital.cityPieceId)
+              ? ATOMIC_ACTION_NOTE
+              : extraCityActionsLeft(state, player) > 0
+                ? LOVELACE_ACTION_NOTE
+                : ` (${capital.label} had already acted this turn: ${acted.join(', ')})`) +
           kurosawa.said,
       })
     }

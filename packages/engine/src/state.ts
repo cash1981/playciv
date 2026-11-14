@@ -10,6 +10,8 @@
 import type { HutItem, Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement, VillageItem } from './item.js'
 import { isUnit } from './item.js'
 import { drawTokensOf } from './zheng-he.js'
+import { cancellationView } from './cancellation.js'
+import type { CancellationHistory, CancellationView } from './cancellation.js'
 import type { TeslaEffect } from './tesla.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
@@ -45,6 +47,7 @@ import type { Undo } from './undo.js'
 import type { ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
+import type { ResourcePaymentOption } from './assisted-resources.js'
 import { livePendingRewards } from './assisted-culture.js'
 import { playableCardsOf } from './assisted-cards.js'
 import { startOfTurnViewOf } from './assisted-sot.js'
@@ -250,6 +253,11 @@ export interface TechGrant {
   /** When set, only these tech names can be learned with the grant (Thomas Edison). */
   readonly allowedTechNames?: readonly string[]
   /**
+   * The phase the free tech is learned in, when it is not the Start of Turn (Education: City Management). A grant
+   * without it is spent by a reveal in the Start of Turn.
+   */
+  readonly phase?: 'CM'
+  /**
    * The tech that was learned with it, once one was. The grant stays on the player so that removing that
    * tech (or taking its reveal back by vote) gives the free tech back, and so the action that granted
    * it can still be undone after the tech has been taken off again.
@@ -312,6 +320,7 @@ export type LogType =
  * the item sits on its own field that the `publicLog` projection never touches.
  */
 export interface GameLogEntry {
+  readonly superseded?: boolean
   readonly id: string
   readonly username: string
   readonly logType: LogType | null
@@ -441,6 +450,28 @@ export type AssistedActionKind =
   | 'harvest'
   | 'communism'
   | 'steamPower'
+  // The unit techs of issue #327: Iron wounds in a battle, Gunpowder's Any 2 and Combustion's once-per-turn destruction
+  | 'mathematics'
+  | 'ballistics'
+  | 'gunpowder'
+  | 'combustion'
+  // The resource abilities of the other techs (#327, slice 2): production boosts, Any N, Spy and Silk (assisted-tech-abilities.ts)
+  | 'animalHusbandry'
+  | 'construction'
+  | 'banking'
+  | 'plastics'
+  | 'pottery'
+  | 'philosophy'
+  | 'education'
+  | 'horsebackRiding'
+  | 'mysticism'
+  | 'writing'
+  | 'civilService'
+  | 'massMedia'
+  | 'monarchy'
+  | 'metalworking'
+  | 'atomicTheory'
+  | 'bureaucracy'
   // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
   | `militaryTradition:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
@@ -462,13 +493,22 @@ export type AssistedStatus =
   | 'unavailable'
 
 /**
- * The resource token an action spent, exactly, so an undo puts back the same
- * one: a hut from the hand (moved to `discardedItems`), or the board piece that
- * was removed, with its position.
+ * The resource an action paid, exactly, so an undo puts back the same
+ * one: a hut/village from the hand (moved to `discardedItems`) with its collected
+ * icon if present, the board resource with its position, or the culture card played as the resource.
  */
 export type SpentResource =
-  | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
+  | {
+      readonly kind: 'hut' | 'village'
+      readonly resource: string
+      readonly itemId: string
+      /** The collected icon removed with the held item; absent in older saves or when no matching icon remained. */
+      readonly tokenPiece?: BoardPiece
+      readonly curieSubstitute?: string
+    }
   | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string }
+  // A culture card played as the resource (A Gift from Afar, A Generous Gift, A Princely Gift), discarded like a played card
+  | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
 
 /**
  * The Great Person marker a culture advance put in the player's area: which piece, where it
@@ -769,6 +809,23 @@ export type AssistedEffect =
       readonly spent: SpentResource
     }
   | {
+      /** Mathematics or Ballistics: the Iron paid and the wounds it owes in the battle (`Battle.techWounds`). */
+      readonly kind: 'techWounds'
+      readonly tech: string
+      readonly wounds: number
+      readonly battleId: string
+      readonly spent: SpentResource
+    }
+  | TechAbilityEffect
+  | {
+      /** Combustion: the army that acted, the square it stands on and what is to be destroyed there, for the log and the undo line. */
+      readonly kind: 'combustion'
+      readonly pieceId: string
+      readonly square: { readonly column: number; readonly row: number }
+      readonly walls: boolean
+      readonly subject: string
+    }
+  | {
       readonly kind: 'militaryTradition'
       readonly unitType: UnitType
       /** The card drawn and its deck; an undo puts it back and shuffles that deck. Never projected. */
@@ -932,6 +989,122 @@ export type AssistedEffect =
       }[]
     }
 
+/**
+ * What the resource abilities of the techs did (#327, slice 2), enough to take each back. Every one paid `spent`
+ * (a token or a culture card each), which an undo puts back. Server side only, like every effect: the drawn card of
+ * Philosophy and the discarded card of Monarchy are never projected.
+ */
+export type TechAbilityEffect =
+  | {
+      /** Animal Husbandry, Construction, Banking, Plastics: one city produces `amount` more this turn. */
+      readonly kind: 'productionBoost'
+      readonly tech: string
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      readonly amount: number
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /** Pottery: one coin added to its counter (max 4). */
+      readonly kind: 'pottery'
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /** Philosophy: a Great Person gained, as a culture advance gains one: the cards drawn, those discarded faceup, the one kept and its marker. */
+      readonly kind: 'philosophy'
+      readonly spent: readonly SpentResource[]
+      readonly drawn: readonly string[]
+      readonly rejected: readonly string[]
+      readonly kept: string | null
+      readonly marker: GreatPersonMarker | null
+    }
+  | {
+      /** Education: a free tech that may be learned in City Management (`TechGrant.phase`). */
+      readonly kind: 'education'
+      readonly spent: readonly SpentResource[]
+      readonly grantId: string
+    }
+  | {
+      /** Horseback Riding: the trade each player was given, as actually added. */
+      readonly kind: 'horsebackRiding'
+      readonly spent: readonly SpentResource[]
+      readonly gained: number
+      readonly targetId: string
+      readonly targetGained: number
+    }
+  | {
+      /** Mysticism: one coin token taken off the named counter of another player. */
+      readonly kind: 'mysticism'
+      readonly spent: readonly SpentResource[]
+      readonly targetId: string
+      readonly source: string
+    }
+  | {
+      /** Writing, Civil Service, Mass Media: a Spy paid to cancel something of another player, which the game only logs. */
+      readonly kind: 'cancelAbility'
+      readonly tech: string
+      readonly spent: readonly SpentResource[]
+      readonly targetId: string
+      readonly note: string
+    }
+  | {
+      /**
+       * Gunpowder: the two tokens paid, then `obsolete` (an ancient or medieval wonder disabled: `wonder`, as Monarchy keeps it) or
+       * `destroy` (a building removed from the board, exactly as it stood with the history entry that removed it, so an undo puts
+       * it back).
+       */
+      readonly kind: 'gunpowder'
+      readonly spent: readonly SpentResource[]
+      readonly mode: 'obsolete' | 'destroy'
+      readonly wonder?: { readonly pieceId: string; readonly label: string; readonly ownerId: string; readonly ownerUsername: string; readonly historyId: string }
+      readonly building?: { readonly piece: BoardPiece; readonly label: string; readonly square: string; readonly historyId: string }
+    }
+  | {
+      /** Metalworking: +3 attack on one of the player's own arena units, with the attack before and after so an undo can tell whether it was edited since. */
+      readonly kind: 'metalworking'
+      readonly spent: readonly SpentResource[]
+      readonly battleId: string
+      readonly arenaUnitId: string
+      readonly before: number
+      readonly after: number
+    }
+  | {
+      /** Atomic Theory, "extra action with each city": every city of the player may act once more this turn (`atomicExtraActionFor`). */
+      readonly kind: 'atomicTheory'
+      readonly mode: 'extraActions'
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /** Atomic Theory, nuke: the city and what stood in its outskirts, each exactly as it stood and with the board history entry that removed it. */
+      readonly kind: 'atomicTheory'
+      readonly mode: 'nuke'
+      readonly spent: readonly SpentResource[]
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      readonly ownerId: string
+      readonly removed: readonly { readonly piece: BoardPiece; readonly historyId: string }[]
+    }
+  | {
+      /** Bureaucracy: one social policy may be switched during Research this turn. */
+      readonly kind: 'bureaucracy'
+      readonly spent: readonly SpentResource[]
+    }
+  | {
+      /**
+       * Monarchy: `obsolete` disabled one ancient wonder (`wonder`: the former owner and the board history entry of the
+       * change, so an undo can restore it and the board Undo leaves it to the vote); `kill` discarded one unit card from the
+       * target's hand, as it stood, so an undo can return it.
+       */
+      readonly kind: 'monarchy'
+      readonly spent: readonly SpentResource[]
+      readonly mode: 'obsolete' | 'kill'
+      readonly wonder?: { readonly pieceId: string; readonly label: string; readonly ownerId: string; readonly ownerUsername: string; readonly historyId: string }
+      readonly targetId?: string
+      readonly killed?: UnitItem
+      /** The card was one of the units drawn for a battle (in the battlehand), so an undo puts it back there too. */
+      readonly inBattlehand?: true
+    }
+
 /** Culture Akira Kurosawa gave his holder for another player's devotion, kept for the undo. */
 /**
  * What lies under a hut or village piece on the map once Zheng He's player has looked: the item, taken out
@@ -972,6 +1145,12 @@ export interface DrawnWonder {
  * stay on the record so a later "reopen phase" can find what belongs to it.
  */
 export interface AssistedActionRecord {
+  /** Available protection before the action, even if it was still hidden. Private. */
+  readonly kingAtAction?: string | null
+  /** Exact saved revision before the action (not inferred from its last log line). */
+  readonly beforeRevision?: number
+  /** Actual submitted choices, private like the effect. */
+  readonly selectedInputs?: unknown
   readonly id: string
   readonly kind: AssistedActionKind
   readonly playerId: string
@@ -982,7 +1161,8 @@ export interface AssistedActionRecord {
   readonly at: string | null
   /** The public log line the action wrote. */
   readonly logId: string
-  readonly status: 'applied' | 'undone'
+  /** `cancelled`: Mark Twain cancelled it and the game was rewound to before it. The record stays, so the city has acted. */
+  readonly status: 'applied' | 'undone' | 'cancelled' | 'superseded'
   readonly effect: AssistedEffect
   /** The Ada Lovelace play whose extra city action this record consumed. */
   readonly lovelaceCreditId?: string
@@ -996,6 +1176,11 @@ export interface AssistedActionRecord {
 
 /** One entry of `PlayerView.you.availableActions`: the viewer's own button state. */
 export interface AvailableAction {
+  /** Private payment options for the viewer's own hand and player area only. */
+  readonly payment?: {
+    readonly cost: readonly (string | null)[]
+    readonly options: readonly ResourcePaymentOption[]
+  }
   readonly action: AssistedActionKind
   readonly label: string
   /** The phase tab the button belongs to; `'ANY'` for an action that works in every phase. */
@@ -1029,7 +1214,8 @@ export interface PublicAssistedAction {
   readonly username: string
   readonly turnNumber: number
   readonly phase: TurnPhase
-  readonly status: 'applied' | 'undone'
+  /** `cancelled`: Mark Twain cancelled it and the game was rewound to before it. The record stays, so the city has acted. */
+  readonly status: 'applied' | 'undone' | 'cancelled' | 'superseded'
   /** The public log line, as it was written. */
   readonly text: string
   readonly logId: string
@@ -1055,6 +1241,7 @@ export interface CivRevealSetup {
 }
 
 export interface GameState {
+  readonly cancellations?: CancellationHistory
   readonly id: string
   readonly name: string
   readonly gameType: GameType
@@ -1447,6 +1634,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
 
 /** One log entry as everyone may see it. The item contents are gone. */
 export interface PublicLogEntry {
+  readonly superseded?: boolean
   readonly id: string
   readonly username: string
   readonly logType: LogType | null
@@ -1457,6 +1645,7 @@ export interface PublicLogEntry {
 
 export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
   return {
+    ...(entry.superseded === undefined ? {} : { superseded: entry.superseded }),
     id: entry.id,
     username: entry.username,
     logType: entry.logType,
@@ -1605,6 +1794,8 @@ export interface StartOfTurnView {
     readonly source: string
     readonly level: 1 | 2 | 3 | 4 | 5 | null
     readonly allowedTechNames?: readonly string[]
+    /** `CM` for a free tech learned in City Management (Education); absent for the Start of Turn. */
+    readonly phase?: 'CM'
   }[]
 }
 
@@ -1674,6 +1865,7 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
  * appear in public form alone.
  */
 export interface PlayerView {
+  readonly cancellations?: CancellationView
   readonly id: string
   readonly name: string
   readonly gameType: GameType
@@ -1884,6 +2076,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),
     assistedActions: publicAssistedActions(state),
+    cancellations: cancellationView(state, viewerId),
     tradeOffers: publicTradeOffers(state),
     battle: state.battle,
     battleUndo: state.endedBattle === null ? null : { endedBy: state.endedBattle.endedBy },
