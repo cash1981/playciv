@@ -1398,11 +1398,12 @@ export function endBattleAction(
     const earned = earnTechCoin(nextState, outcome.winner.playerId, 'Code of Laws')
     if (earned.granted !== null) {
       const winnerHand = findPlayer(earned.state, outcome.winner.playerId)
+      // The winner is the author of the line (the helper prefixes the name), not the player who pressed End battle
       nextState = appendPublicLog(
         earned.state,
-        player.username,
-        player.playerId,
-        `${outcome.winner.label} gains a coin on Code of Laws for winning (${winnerHand?.stats.coinSources.codeOfLaws ?? 0}/${earned.granted.capacity})`,
+        winnerHand?.username ?? outcome.winner.label,
+        outcome.winner.playerId,
+        `gains a coin on Code of Laws for winning (${winnerHand?.stats.coinSources.codeOfLaws ?? 0}/${earned.granted.capacity})`,
       )
       codeOfLawsCoin = earned.granted
     }

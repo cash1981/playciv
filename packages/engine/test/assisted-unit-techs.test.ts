@@ -716,7 +716,8 @@ describe('Code of Laws: a coin for winning a battle, once per turn, max 4', () =
   it('adds a coin to the winner when the battle ends, and says so in the log', () => {
     const ended = unwrap(endBattleAction(cashWins(), { playerId: CASH1981 }))
     expect(coins(ended)).toBe(1)
-    expect(ended.log.some((line) => (line.publicLog ?? '').includes('gains a coin on Code of Laws for winning (1/4)'))).toBe(true)
+    // The winner's name appears once, as the author of the line
+    expect(ended.log.some((line) => line.publicLog === `${player(ended).username} gains a coin on Code of Laws for winning (1/4)`)).toBe(true)
     expect(ended.endedBattle?.codeOfLawsCoin).toMatchObject({ playerId: CASH1981, tech: 'Code of Laws', source: 'codeOfLaws' })
     expect(player(ended).playerTurns.at(-1)?.usedActions).toContain('coin:Code of Laws')
   })
@@ -727,6 +728,10 @@ describe('Code of Laws: a coin for winning a battle, once per turn, max 4', () =
     const ended = unwrap(endBattleAction(both, { playerId: CASH1981 }))
     expect(coins(ended, KARANDRAS1)).toBe(1)
     expect(coins(ended)).toBe(0)
+    // Cash pressed End battle, but the line names the winner, once, and is theirs
+    const line = ended.log.find((entry) => (entry.publicLog ?? '').includes('gains a coin on Code of Laws'))
+    expect(line?.publicLog).toBe(`${player(ended, KARANDRAS1).username} gains a coin on Code of Laws for winning (1/4)`)
+    expect(line?.playerId).toBe(KARANDRAS1)
     // The defender's own turn record carries the use, though it is not their turn
     expect(player(ended, KARANDRAS1).playerTurns.at(-1)?.usedActions).toContain('coin:Code of Laws')
   })
