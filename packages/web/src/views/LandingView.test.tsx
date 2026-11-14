@@ -17,7 +17,13 @@ const apiMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../lib/api.js', () => ({ api: apiMocks }))
-vi.mock('./GameList.js', () => ({ GameList: () => null }))
+const gameListProps = vi.hoisted(() => ({ games: [] as unknown[] }))
+vi.mock('./GameList.js', () => ({
+  GameList: (props: { games: unknown[] }) => {
+    gameListProps.games = props.games
+    return null
+  },
+}))
 vi.mock('./HighscoreView.js', () => ({ HighscoreView: () => null }))
 vi.mock('./LobbyChat.js', () => ({ LobbyChat: () => null }))
 
@@ -103,6 +109,21 @@ describe('LandingView', () => {
     fireEvent.change(screen.getByLabelText('Invite player'), { target: { value: 'bo' } })
     fireEvent.mouseDown(await screen.findByRole('option', { name: 'bob' }))
     expect((screen.getByLabelText('Invite player') as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it('drops the previous viewer\'s games and ignores their late response on sign-out (issue #348)', async () => {
+    const privateGame = { id: 'g1', name: 'Private table' }
+    let lateResponse: (games: never[]) => void = () => {}
+    apiMocks.publicGames.mockImplementationOnce(async () => [privateGame] as never[])
+    const { rerender } = render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
+    await waitFor(() => expect(gameListProps.games).toHaveLength(1))
+
+    // Signing out: the old rows go at once, and the slow answer for the signed-in viewer must not bring them back.
+    apiMocks.publicGames.mockImplementationOnce(() => new Promise<never[]>((resolve) => { lateResponse = resolve }))
+    rerender(<LandingView player={null} onOpenGame={() => {}} onSignIn={() => {}} />)
+    await waitFor(() => expect(gameListProps.games).toHaveLength(0))
+    await act(async () => { lateResponse([]) })
+    expect(gameListProps.games).toHaveLength(0)
   })
 
   it('keeps the global spinner busy through the reload after a write (issue #225)', async () => {

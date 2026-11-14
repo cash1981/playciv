@@ -483,7 +483,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
     ): Promise<void> {
       const body =
         `${inviterUsername} has invited you to the private game ${game.name}. ` +
-        `Only invited players can join.\n\nGo to ${gameLink(game.id)} to join`
+        `Only invited players can join.\n\nSign in at ${appOrigin}/ and press Join on ${game.name} in the game list`
       for (const playerId of game.invitedPlayerIds ?? []) {
         if (playerId === inviterPlayerId) continue
         await notify(playerId, `You are invited to ${game.name}`, body)

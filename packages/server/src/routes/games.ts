@@ -352,7 +352,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     // A private game (issue #348): the creator names who may join, before the game exists.
     let invitedPlayerIds: readonly string[] | undefined
     if (invitedNames !== undefined) {
-      const wanted = [...new Set(invitedNames.map((entry) => entry.trim()).filter((entry) => entry !== ''))]
+      // Usernames keep their whitespace (registration does), and the autocomplete returns them exactly, so an entry
+      // is looked up as given; trimming is only for spotting blanks.
+      const wanted = [...new Set(invitedNames.filter((entry) => entry.trim() !== ''))]
       const invitees: string[] = []
       for (const username of wanted) {
         const account = await context.repo.findPlayerByUsername(username)

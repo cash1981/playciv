@@ -69,7 +69,8 @@ describe('private games', () => {
     expect(summary.private).toBe(true)
 
     expect(mailer.sent.map((mail) => mail.to)).toEqual(['priv-friend@example.com', 'priv-second@example.com'])
-    expect(mailer.sent[0]?.text).toContain(`https://playciv.app/game/${summary.id}`)
+    expect(mailer.sent[0]?.text).toContain('https://playciv.app/')
+    expect(mailer.sent[0]?.text).toContain('press Join on Secret table')
 
     expect(await listed(friendToken, '/api/games')).toContain('Secret table')
     expect(await listed(owner, '/api/public/games')).toContain('Secret table')
@@ -168,5 +169,22 @@ describe('private games', () => {
     await repo.updatePlayer(friend.id, { disabled: true })
     const response = await create(owner, { name: 'Dis', numOfPlayers: 2, invitedUsernames: ['dis-friend'] })
     expect(response.status).toBe(400)
+  })
+
+  it('looks an invitee up exactly as the autocomplete returned it, whitespace included', async () => {
+    const owner = await register('ws-owner')
+    await register('ws-anna')
+    const spaced = await inject(app, {
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { username: ' ws-anna ', password: 'hemmelig', email: 'ws-spaced@example.com', securityAnswer: 'writing' },
+    })
+    expect(spaced.status).toBe(201)
+    const response = await create(owner, { name: 'Spaces', numOfPlayers: 2, invitedUsernames: [' ws-anna '] })
+    expect(response.status).toBe(201)
+    const game = await repo.findGame(((await response.json()) as { id: string }).id)
+    const invited = await repo.findPlayerByUsername(' ws-anna ')
+    expect(game?.invitedPlayerIds).toContain(invited?.id)
+    expect(mailer.sent.map((mail) => mail.to)).toEqual(['ws-spaced@example.com'])
   })
 })

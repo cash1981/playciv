@@ -1,6 +1,6 @@
 /** The public lobby: games, highscore and the read-only lobby chat. */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { PLAYER_COLORS } from '@civ/engine'
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -31,20 +31,31 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
   // Covers the write and the reload after it, which `request()` alone would not.
   useActivity(busy)
 
+  // The lobby list depends on who is looking (private games, issue #348). A response that was asked for as another
+  // viewer must not land after the viewer changed, e.g. on sign-out.
+  const viewerId = player?.id ?? null
+  const viewerRef = useRef(viewerId)
+  viewerRef.current = viewerId
+
   const reload = useCallback(async () => {
+    const askedAs = viewerRef.current
     try {
       const [nextGames, nextChat] = await Promise.all([api.publicGames(), api.lobbyChat()])
+      if (viewerRef.current !== askedAs) return
       setGames(nextGames)
       setChat(nextChat)
       setError(null)
     } catch (caught) {
+      if (viewerRef.current !== askedAs) return
       setError(errorMessage(caught))
     }
   }, [])
 
   useEffect(() => {
+    // Drop the previous viewer's rows at once, then fetch the new viewer's.
+    setGames([])
     void reload()
-  }, [reload])
+  }, [reload, viewerId])
 
   const run = useCallback(
     async (action: () => Promise<unknown>): Promise<void> => {
