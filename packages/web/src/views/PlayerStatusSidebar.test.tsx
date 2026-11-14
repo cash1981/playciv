@@ -144,6 +144,25 @@ describe('PlayerStatusSidebar', () => {
     expect(alice.getByRole('img', { name: 'Aircraft locked' })).toBeTruthy()
   })
 
+  it('shows the speed a revealed tech gives as the Movement value, when it is more than what is typed, and not a hidden tech', () => {
+    const base = makeView()
+    const view = {
+      ...base,
+      you: { ...base.you, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2' }, techsChosen: [{ name: 'Sailing', hidden: false }, { name: 'Steam Power', hidden: true }] },
+      opponents: [{ ...base.opponents[0], stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2' }, revealedTechs: [{ name: 'Horseback Riding', hidden: false }] }],
+    } as unknown as PlayerView
+    render(<PlayerStatusSidebar {...READ_ONLY} view={view} />)
+    const movement = (name: string) => within(block(name)).getByRole('img', { name: 'Movement' }).closest('li')
+    // Alice: Sailing gives 4, the hidden Steam Power nothing. Bob: Horseback Riding gives 3
+    expect(movement('Alice')?.textContent).toContain('4')
+    expect(movement('Alice')?.querySelector('[title]:not(li)')?.getAttribute('title')).toContain('Sailing gives 4')
+    expect(movement('Bob')?.textContent).toContain('3')
+    cleanup()
+    // A typed value that is higher stays as typed
+    render(<PlayerStatusSidebar {...READ_ONLY} view={{ ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '3+2' } } } as PlayerView} />)
+    expect(within(block('Alice')).getByRole('img', { name: 'Movement' }).closest('li')?.textContent).toContain('3+2')
+  })
+
   it('shows username, civilization, the civ marker and the government as text with the seal', () => {
     render(<PlayerStatusSidebar {...READ_ONLY} view={makeView()} />)
     const alice = within(block('Alice'))

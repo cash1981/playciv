@@ -154,6 +154,39 @@ describe('movement speed', () => {
     expect(travelSpeedOf(playerOf(anarchy), armyPiece, 1)).toBe(2)
   })
 
+  it('takes the highest speed a revealed tech gives, never below the typed one, and the techs do not add up', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const piece = figure(state)
+    const speedWith = (names: readonly string[], hidden = false, mvmt = '2'): number => {
+      const tech = names.reduce((held, name) => withTech(held, name, hidden), state)
+      const player = playerOf(tech)
+      return travelSpeedOf({ ...player, stats: { ...player.stats, mvmt } }, piece, 1)
+    }
+    expect(speedWith([])).toBe(2)
+    expect(speedWith(['Horseback Riding'])).toBe(3)
+    expect(speedWith(['Sailing'])).toBe(4)
+    expect(speedWith(['Steam Power'])).toBe(5)
+    // The highest counts, whatever the order: they do not add up
+    expect(speedWith(['Horseback Riding', 'Sailing'])).toBe(4)
+    expect(speedWith(['Steam Power', 'Horseback Riding', 'Sailing'])).toBe(5)
+    // A hidden tech gives nothing, and a tech with no speed of its own (Flight) leaves the typed one
+    expect(speedWith(['Steam Power'], true)).toBe(2)
+    expect(speedWith(['Flight'])).toBe(2)
+    // A typed value above what the techs give stays, so a correction by hand still wins
+    expect(speedWith(['Sailing'], false, '6')).toBe(6)
+    expect(speedWith(['Sailing'], false, '3+1')).toBe(4)
+
+    // Natural Religion, Henry Ford and Captain James Cook apply on top of the tech's speed
+    const religious = (mvmt: string) => {
+      const tech = withTech(state, 'Sailing')
+      const player = playerOf(tech)
+      return travelSpeedOf({ ...player, stats: { ...player.stats, mvmt }, socialPolicies: [{ name: 'Natural Religion', hidden: false } as Playerhand['socialPolicies'][number]] }, piece, 1)
+    }
+    expect(religious('2')).toBe(5)
+    // `3+1` typed as an older save did: its base is 3, the tech gives 4, the army gets the bonus once
+    expect(religious('3+1')).toBe(5)
+  })
+
   it('adds Henry Ford while faceup and doubles with Captain James Cook this turn', () => {
     const state = place(game(), 'figures/redarmy', 1, 1)
     const piece = figure(state)
