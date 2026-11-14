@@ -2008,6 +2008,7 @@ export function reverseAssistedAction(
     effect.kind === 'gianniniBuild' ||
     (effect.kind === 'atomicTheory' && effect.mode === 'nuke') ||
     (effect.kind === 'monarchy' && effect.wonder !== undefined) ||
+    (effect.kind === 'philosophy' && effect.marker !== null) ||
     (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined))
   ) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })

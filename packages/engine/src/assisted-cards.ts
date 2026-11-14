@@ -24,6 +24,7 @@ import {
   EXTRA_ACTION_CARD_NAMES,
   waitingCardIds,
   cityActionsTakenThisTurn,
+  earlierCityActions,
   extraCityActionFor,
   lovelaceCreditWasUsed,
 } from './assisted-core.js'
@@ -586,6 +587,10 @@ function automate(
       }))
       const culture = devoted.reduce((total, city) => total + city.culture, 0)
       const acted = cityActionsTakenThisTurn(state, player, capital.cityPieceId)
+      // Garcia's devotion is the capital's action like any other, so the Monarchy rule that forbids the same action twice applies to it
+      // in either order; confirming is not asked of a card, so only the refusal is taken from here
+      const refusal = earlierCityActions(state, player, capital, true, 'Devote to the Arts').refusal
+      if (refusal !== undefined) return err(refusal.reason)
       const gained = withPlayerHand(state, {
         ...player,
         stats: { ...player.stats, culture: player.stats.culture + culture },

@@ -867,10 +867,13 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     playerId: 'p2', username: 'Karandras1', color: 'Blue', civilization: null, revealedTechs: [], numberOfTechsChosen: 0, pyramidPlacements: [],
     publicHand: { units: 0, cultureCards: 0, huts: 0, villages: 0, greatPersons: 0 }, stats: { coinSources: {} },
   }
-  const atomicView = (pieces: readonly object[], status = 'ready'): PlayerView => {
+  /** The viewer has `phase` open: Atomic Theory offers an extra action in City Management and a nuke in Movement, and nothing in another phase. */
+  const atomicView = (pieces: readonly object[], status = 'ready', phase = 'CM'): PlayerView => {
     const base = viewOf([tech('Atomic Theory', 4)])
     return {
       ...base,
+      active: true,
+      activeTurn: { turnNumber: 1, waitingFor: [{ username: 'cash1981', phase }] },
       board: { ...createBoard(), pieces },
       boardAreas: [],
       opponents: [BLUE],
@@ -902,8 +905,7 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
 
   it('lists every city that is not a capital, the player\'s own included, says what each takes with it, and asks before nuking', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
-    const send = await open(atomicView(MAP))
-    fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    const send = await open(atomicView(MAP, 'ready', 'MOVEMENT'))
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1', 'City B2 of cash1981 (yours)'])
     // The default is another player's city, never the player's own
     expect((screen.getByLabelText('City to nuke') as HTMLSelectElement).value).toBe('city')
@@ -918,8 +920,7 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
 
   it('offers the player\'s own city only when it is picked, says it is their own when asking, and sends it', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const send = await open(atomicView(MAP))
-    fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    const send = await open(atomicView(MAP, 'ready', 'MOVEMENT'))
     expect((screen.getByLabelText('City to nuke') as HTMLSelectElement).value).toBe('city')
     fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'mine' } })
     expect(summary()).toBe('Nuke City B2')
@@ -930,8 +931,7 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
 
   it('with only the player\'s own cities nothing is preselected and the button waits until one is picked', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const send = await open(atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'city')))
-    fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    const send = await open(atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'city'), 'ready', 'MOVEMENT'))
     expect((screen.getByLabelText('City to nuke') as HTMLSelectElement).value).toBe('')
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Choose a city', 'City B2 of cash1981 (yours)'])
     const nuke = okButton()
@@ -966,27 +966,57 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     expect(send.mock.calls[0]?.[5]).toBe(true)
   })
 
-  it('opens on the mode of the phase the player has open: Movement is a nuke, City Management an extra action', async () => {
-    const inPhase = (phase: string): PlayerView => ({ ...atomicView(MAP), active: true, activeTurn: { turnNumber: 1, waitingFor: [{ username: 'cash1981', phase }] } }) as unknown as PlayerView
-    await open(inPhase('MOVEMENT'))
-    expect((screen.getByLabelText(/Nuke a city/) as HTMLInputElement).checked).toBe(true)
+  it('opens on the mode of the phase the player has open: Movement is a nuke, City Management an extra action, and never the other one', async () => {
+    await open(atomicView(MAP, 'ready', 'MOVEMENT'))
+    expect(summary()).toBe('Nuke City J10')
+    expect(screen.queryByLabelText(/An extra action with each city/)).toBeNull()
     cleanup()
-    await open(inPhase('CM'))
-    expect((screen.getByLabelText(/An extra action with each city/) as HTMLInputElement).checked).toBe(true)
+    await open(atomicView(MAP, 'ready', 'CM'))
+    expect(summary()).toBe('Allow an extra action with each city')
+    expect(screen.queryByLabelText(/Nuke a city/)).toBeNull()
+    expect(screen.queryByLabelText('City to nuke')).toBeNull()
   })
 
-  it('the city to nuke that was picked is gone: the city shown is the city sent', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const twoCities = [...MAP, piece('city2', 'cities/bluecity2', 'city', 'Blue city 2', 12, 12)]
-    const first = atomicView(twoCities)
+  it('opens nothing, and says why, when the open phase has nothing to use it on: Movement with no city to nuke, or any other phase', async () => {
+    const noTargets = MAP.filter((entry) => !['city', 'mine'].includes((entry as { id: string }).id))
+    for (const view of [atomicView(noTargets, 'ready', 'MOVEMENT'), atomicView(MAP, 'ready', 'TRADE'), atomicView(MAP, 'ready', 'RESEARCH')]) {
+      const send = await open(view)
+      expect(document.querySelector('.choice-dialog')).toBeNull()
+      expect(screen.getByText(/Atomic Theory is used in your open City Management phase/)).toBeTruthy()
+      expect(send).not.toHaveBeenCalled()
+      cleanup()
+    }
+  })
+
+  it('the phase moving on while the popup is open leaves nothing chosen: OK waits and nothing is sent', async () => {
+    const first = atomicView(MAP, 'ready', 'CM')
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(first)
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
     const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={first} reloadCount={0} />)
     fireEvent.click(await screen.findByText('Atomic Theory'))
     fireEvent.click(screen.getByRole('button', { name: /^Use Atomic Theory/ }))
+    expect(okButton().disabled).toBe(false)
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={atomicView(MAP, 'ready', 'MOVEMENT')} reloadCount={0} />)
+    // Not swapped for the nuke: the player picks again
+    expect(screen.getByText('What you chose is no longer possible. Choose again.')).toBeTruthy()
+    expect(okButton().disabled).toBe(true)
+    // Choosing the mode that is possible now enables it again
     fireEvent.click(screen.getByLabelText(/Nuke a city/))
+    expect(okButton().disabled).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('the city to nuke that was picked is gone: the city shown is the city sent', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const twoCities = [...MAP, piece('city2', 'cities/bluecity2', 'city', 'Blue city 2', 12, 12)]
+    const first = atomicView(twoCities, 'ready', 'MOVEMENT')
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(first)
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={first} reloadCount={0} />)
+    fireEvent.click(await screen.findByText('Atomic Theory'))
+    fireEvent.click(screen.getByRole('button', { name: /^Use Atomic Theory/ }))
     fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'city2' } })
-    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'mine'))} reloadCount={0} />)
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'mine'), 'ready', 'MOVEMENT')} reloadCount={0} />)
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1'])
     expect(summary()).toBe('Nuke City J10')
     ok()

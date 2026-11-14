@@ -276,6 +276,8 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   question, but not the same action as its first ("Devote to the Arts (Jerry Garcia)" counts as a devotion): the same
   action again is refused, with no confirmation to lift it (the card forbids it, and the client does not ask about the
   capital's second action under Monarchy), while a third action and any other city's second action are asked about as before.
+  Playing Jerry Garcia is refused by the same rule in either order, so the card stays in the hand (human, 2026-11-14; a card asks
+  no confirmation, so outside Monarchy it still plays with a note when the capital had acted).
   Atomic Theory and the cards cover a city first or after it, so they are not stacked on Monarchy: one extra action, not two. It is derived from the player's
   government, so it needs no record and no undo. It comes before the cards, so the free action does not use up a credit.
   **Supply Drop** (human, 2026-11-14) is a credit like Ada Lovelace's, with two differences: it counts only when it was played in
@@ -975,7 +977,8 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   popup over the page, not an inline form. Escape and a click outside cancel, and nothing is sent until OK. Only a choice that
   can be carried out is offered: Monarchy shows "Obsolete an ancient wonder" only when a player owns one, and "Kill a random
   unit" only outside a battle and with an opponent who holds a unit card (those are the only opponents listed); Gunpowder and
-  Atomic Theory hide the obsolete/destroy and nuke modes the same way. A single mode is stated without a radio, and with no
+  Atomic Theory hide the obsolete/destroy and nuke modes the same way (Atomic Theory offers the extra action only while the
+  viewer's City Management is open, and the nuke only in Movement with a city to nuke). A single mode is stated without a radio, and with no
   valid choice at all the popup does not open and a hint says why.
 - **Production boosts** (Wheat, City Management; +3, +5, +7, +10): the player names one of their cities. The bonus is not
   stored on the city: `cityProductionsOf` sums the applied, not undone, records of this turn that name the city (like the
@@ -1036,7 +1039,10 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
 - **Metalworking** (Iron, Battle; button in the Battle panel beside Mathematics and Ballistics): adds 3 to the typed `attack`
   of one of the player's own living arena units (`placedBy`), once per turn. A unit not yet announced is not named in the
   public line (as the arena's own lines do not name it); the owner's private line names it. The undo is refused when the unit
-  is gone or its attack was edited since (it must still read the value the action set).
+  is gone or its attack was edited since (it must still read the value the action set). A unit that fell in the round its own
+  arrival fought, and has not been touched since, may still take it (the +3 belongs to the play of the unit): the round is fought
+  again and the unit may now live (`fellOnArrival`; human, 2026-11-14). A kill toggled by hand later does not block the undo
+  giving the round's HP back: `undoRefight` restores both units through `restoredVitals`, as taking an arrival back does.
 - **Atomic Theory** (Uranium; Marie Curie's substitution applies through the shared layer): one action, one use a turn, two modes.
   `extraActions` (City Management): every city may take one more city action. The allowance is derived from the applied record
   (`atomicExtraActionFor`): a city that has acted once acts again without the question, noted in its line, and one that has acted

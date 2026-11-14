@@ -20,6 +20,7 @@ import {
   INVESTABLE_COIN_SOURCES,
   brandenburgForbiddenCells,
   combustionTargets,
+  fellOnArrival,
   findCoinSource,
   isMapCell,
   itemName,
@@ -212,10 +213,24 @@ type TechPick =
 
 type Opponent = PlayerView['opponents'][number]
 
-/** The viewer's own living units in the arena, which Metalworking may give attack to. */
+/** The viewer's own units in the arena that Metalworking may give attack to: the living, and one that fell the moment it was placed. */
 function ownArenaUnits(view: PlayerView) {
   const me = view.you?.playerId
-  return (view.battle?.arena ?? []).filter((unit) => unit.placedBy === me && !unit.killed)
+  const arena = view.battle?.arena ?? []
+  return arena.filter((unit) => unit.placedBy === me && (!unit.killed || fellOnArrival(arena, unit)))
+}
+
+const ATOMIC_NOT_NOW =
+  'Atomic Theory is used in your open City Management phase (an extra action with each city) or in your open Movement phase when a city can be nuked.'
+
+/** What Atomic Theory can do in the phase the viewer has open: extra actions in City Management, a nuke in Movement while a city can be nuked. */
+function atomicModes(view: PlayerView, hasTarget: boolean): ModeOption<'extraActions' | 'nuke'>[] {
+  const open = endTurnState(view)
+  const phase = open?.kind === 'open' ? open.phase : undefined
+  const modes: ModeOption<'extraActions' | 'nuke'>[] = []
+  if (phase === 'CM') modes.push({ value: 'extraActions', label: 'An extra action with each city (City Management)' })
+  if (phase === 'MOVEMENT' && hasTarget) modes.push({ value: 'nuke', label: 'Nuke a city (Movement)' })
+  return modes
 }
 
 /** The wonders a player owns that Monarchy (ancient) or Gunpowder (ancient and medieval) may obsolete, from the public board and the players' names. */
@@ -476,16 +491,19 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
 
   if (pick.kind === 'atomic') {
     const targets = nukeTargetsInView(view)
-    const modes: ModeOption<'extraActions' | 'nuke'>[] = [{ value: 'extraActions', label: 'An extra action with each city (City Management)' }]
-    if (targets.length > 0) modes.push({ value: 'nuke', label: 'Nuke a city (Movement)' })
-    const nuke = pick.mode === 'nuke' && targets.length > 0
+    // Only what the open phase accepts is offered: an extra action with each city in City Management, a nuke in Movement
+    const modes = atomicModes(view, targets.length > 0)
+    // A chosen mode that is gone (the phase moved on, the last target was lost) is not swapped for another one: nothing is
+    // chosen and OK waits until the player picks again
+    const mode = modes.some((option) => option.value === pick.mode) ? pick.mode : undefined
+    const nuke = mode === 'nuke'
     // Never preselect the player's own city: the default is another player's city, and with only their own the player picks one
     const nukeId = targets.some((candidate) => candidate.pieceId === pick.cityPieceId)
       ? pick.cityPieceId
       : (targets.find((candidate) => !candidate.own)?.pieceId ?? '')
     const target = targets.find((candidate) => candidate.pieceId === nukeId)
     return popup(
-      nuke && target === undefined,
+      mode === undefined || (nuke && target === undefined),
       () => {
         if (!nuke) return send({ mode: 'extraActions' })
         if (target !== undefined && window.confirm(`Nuke ${target.label} of ${target.ownerUsername}${target.own ? ' (your own city)' : ''}? The city and everything in its outskirts is destroyed, whoever owns it.`)) {
@@ -493,7 +511,12 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
         }
       },
       <>
-        {modeChoice(modes, nuke ? 'nuke' : 'extraActions', (next) => setPick({ ...pick, mode: next }))}
+        {modeChoice(modes, mode, (next) => setPick({ ...pick, mode: next }), true)}
+        {mode === undefined && (
+          <p role="status" className="assisted-warning">
+            {modes.length === 0 ? ATOMIC_NOT_NOW : 'What you chose is no longer possible. Choose again.'}
+          </p>
+        )}
         {nuke && (
           <>
             <select aria-label="City to nuke" value={nukeId} onChange={(event) => setPick({ ...pick, cityPieceId: event.target.value })}>
@@ -511,7 +534,7 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
             )}
           </>
         )}
-        <p className="choice-summary">{nuke ? `Nuke ${target?.label ?? 'a city'}` : 'Allow an extra action with each city'}</p>
+        {mode !== undefined && <p className="choice-summary">{nuke ? `Nuke ${target?.label ?? 'a city'}` : 'Allow an extra action with each city'}</p>}
       </>,
     )
   }
@@ -890,10 +913,14 @@ export function AssistedActionButton({
         return
       }
       case 'atomic': {
-        // The mode of the phase the player has open, so a quick press is not refused
-        const phase = endTurnState(view)
+        // Only a mode the open phase accepts opens the popup; with none the player is told why and nothing opens
         const targets = nukeTargetsInView(view)
-        setPick({ kind: 'atomic', mode: phase?.kind === 'open' && phase.phase === 'MOVEMENT' && targets.length > 0 ? 'nuke' : 'extraActions', cityPieceId: targets.find((target) => !target.own)?.pieceId ?? '' })
+        const first = atomicModes(view, targets.length > 0)[0]
+        if (first === undefined) {
+          setHint(ATOMIC_NOT_NOW)
+          return
+        }
+        setPick({ kind: 'atomic', mode: first.value, cityPieceId: targets.find((target) => !target.own)?.pieceId ?? '' })
         return
       }
       case 'monarchy': {

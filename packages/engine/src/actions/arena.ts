@@ -374,6 +374,18 @@ function faceOffOf(
 }
 
 /**
+ * A unit that fell in the round its own arrival fought, and has not been touched since. Metalworking's +3 is added "when
+ * playing a unit", so such a unit may still take it: the round is fought again with the new attack and it may now survive.
+ */
+export function fellOnArrival(arena: readonly ArenaUnit[], unit: ArenaUnit): boolean {
+  const faceOff = unit.arrival?.faceOff ?? null
+  if (!unit.killed || faceOff === null || !faceOff.selfAfter.killed || !hasVitals(unit, faceOff.selfAfter)) return false
+  // Both units must still have what the round left them with, or there is no round to fight again (a wound dealt since, a hand edit)
+  const pair = faceOffOf(arena, unit)
+  return pair !== null && hasVitals(pair.opponent, faceOff.opponentAfter)
+}
+
+/**
  * Gives a unit a new attack (Metalworking's +3) and, when it already fought a round on its front, fights that round
  * again as if the attack had been there: both units go back to what they had before the round and the round is worked
  * out with the new attack (a trumping unit whose attack is now lethal strikes first and takes nothing). Only while both
@@ -404,7 +416,8 @@ export function refightWithAttack(
   return {
     arena: arena.map((u) =>
       u.id === arrival.id
-        ? { ...self, arrival: arrival.arrival === null ? null : { ...arrival.arrival, faceOff: next } }
+        ? // A unit the new round lets live is no longer one of the dead, so Florence Nightingale's mark goes with the death
+          revived({ ...self, arrival: arrival.arrival === null ? null : { ...arrival.arrival, faceOff: next } })
         : u.id === opponent.id
           ? hit
           : u,
@@ -425,8 +438,9 @@ const sameRound = (a: ArenaFaceOff, b: ArenaFaceOff): boolean =>
 /**
  * Takes `refightWithAttack` back, so both units are where the round fought without the new attack left them.
  * - The arriving unit gets that while it is still in the arena with the record the new round wrote (its opponent may have
- *   left since: that does not undo the arriving unit's own round) and still has what the new round left it with.
- * - The opponent gets it only while it still faces the arriving unit and has what the new round left it with. Once the
+ *   left since: that does not undo the arriving unit's own round). A unit that still has what the new round left it with gets
+ *   the earlier vitals; one whose kill flag alone was toggled by hand gets its HP back and keeps the toggle (`restoredVitals`).
+ * - The opponent gets it only while it still faces the arriving unit, by the same rule. Once the
  *   arriving unit has been returned or moved, `undoArrival` has already taken the round back, and nothing is put back.
  * Without the arriving unit only the attack goes back (done by the caller). Undoing two boosts of one face-off in the
  * order they were made is exact; out of order the HP is left as the later round made it, and is corrected by hand.
@@ -437,14 +451,12 @@ export function undoRefight(arena: readonly ArenaUnit[], refight: ArenaRefight):
   if (arrival === undefined || record === null || !sameRound(record, refight.next)) return arena
   const facing = record.opponentId === refight.opponentId
   return arena.map((u) => {
-    if (u.id === refight.arrivalId && hasVitals(u, refight.next.selfAfter)) {
-      return revived({ ...u, ...refight.previous.selfAfter, arrival: arrival.arrival === null ? null : { ...arrival.arrival, faceOff: { ...refight.previous, opponentId: record.opponentId } } })
-    }
     if (u.id === refight.arrivalId) {
-      return { ...u, arrival: arrival.arrival === null ? null : { ...arrival.arrival, faceOff: { ...refight.previous, opponentId: record.opponentId } } }
+      const restored = restoredVitals(u, refight.previous.selfAfter, refight.next.selfAfter)
+      return revived({ ...u, ...restored, arrival: arrival.arrival === null ? null : { ...arrival.arrival, faceOff: { ...refight.previous, opponentId: record.opponentId } } })
     }
-    if (facing && u.id === refight.opponentId && u.side !== arrival.side && u.position === arrival.position && hasVitals(u, refight.next.opponentAfter)) {
-      return revived({ ...u, ...refight.previous.opponentAfter })
+    if (facing && u.id === refight.opponentId && u.side !== arrival.side && u.position === arrival.position) {
+      return revived({ ...u, ...restoredVitals(u, refight.previous.opponentAfter, refight.next.opponentAfter) })
     }
     return u
   })

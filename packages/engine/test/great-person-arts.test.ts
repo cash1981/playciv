@@ -224,6 +224,20 @@ describe('Monarchy', () => {
     expect(JSON.stringify(unwrapErr(startProgram(other, 'm4', city)))).toContain('already acted')
   })
 
+  it("does not let Jerry Garcia repeat the capital's devotion, in either order", () => {
+    const state = withGovernment(scene(), 'Monarchy')
+    const capital = capitalId(state)
+    const card = withCardInHand(unwrap(devote(state, 'm1', capital)), 'Jerry Garcia')
+    const refused = unwrapErr(play(card.state, 'g1', card.itemId))
+    expect(JSON.stringify(refused)).toContain('not the same action twice')
+    // A refusal changes nothing: the culture is what the capital's own devotion gave
+    expect(me(card.state).stats.culture).toBe(me(state).stats.culture + estimate(state, capital))
+
+    const first = withCardInHand(state, 'Jerry Garcia')
+    const played = unwrap(play(first.state, 'g2', first.itemId))
+    expect(JSON.stringify(unwrapErr(devote(played, 'm2', capitalId(played))))).toContain('not the same action twice')
+  })
+
   it('gives the capital nothing under another government', () => {
     const state = withGovernment(scene(), 'Despotism')
     const capital = capitalId(state)

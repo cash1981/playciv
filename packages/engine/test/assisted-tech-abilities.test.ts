@@ -360,6 +360,17 @@ describe('Philosophy (Any 3, City Management: a random great person)', () => {
     expect(usedKeys(undone)).not.toContain('card:Philosophy')
   })
 
+  it('paid with cards alone, the vote undo leaves no board entry the board Undo could use to bring the marker back alone', () => {
+    const cards = ['A Generous Gift', 'A Princely Gift', 'A Gift from Afar']
+    const state = cards.reduce((held, name) => withCardInHand(held, name).state, cmTurn('Philosophy'))
+    const used = unwrap(press(state, 'philosophy', { resources: ['Iron', 'Wheat', 'Silk'] }))
+    expect(used.board.pieces.length).toBe(state.board.pieces.length + 1)
+    const undone = voted(used, 'req-1')
+    expect(undone.board.pieces.length).toBe(state.board.pieces.length)
+    // The marker's removal is the last board entry, and Undo must not walk back past it to put the marker on again
+    expect(undoLastBoardChange(undone, CASH1981)).toMatchObject({ ok: false })
+  })
+
   it('refuses the undo, and keeps everything, once the card has left the hand', () => {
     const used = unwrap(press(ready(), 'philosophy', { resources: ['Iron', 'Wheat', 'Silk'] }))
     const card = greatPersons(used)[0]
@@ -916,6 +927,12 @@ describe('Monarchy (Silk, City Management: obsolete a wonder, or kill a random u
       const back = unwrap(undoEndBattle(used, { playerId: CASH1981 }))
       expect(back.battle).not.toBeNull()
       expect(unitsOf(back)).toHaveLength(2)
+      // Undoing the kill now brings the card back locked in the reopened battle, whose arena still holds its unit
+      const restored = voted(back, 'req-1')
+      const returned = unitsOf(restored).filter((unit) => fought.includes(unit.id))
+      expect(returned).toHaveLength(1)
+      expect(returned.every((unit) => unit.inBattle)).toBe(true)
+      expect(player(restored, KARANDRAS1).battlehand.filter((unit) => fought.includes(unit.id)).every((unit) => unit.inBattle)).toBe(true)
     })
   })
 

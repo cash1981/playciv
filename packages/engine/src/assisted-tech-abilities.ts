@@ -29,7 +29,7 @@ import { discardedName } from './gustavus.js'
 import { obsoletableWondersOf } from './obsolete-wonders.js'
 import type { ObsoletableWonder } from './obsolete-wonders.js'
 import { setWonderOwner } from './actions/board.js'
-import { refightWithAttack, undoRefight } from './actions/arena.js'
+import { fellOnArrival, refightWithAttack, undoRefight } from './actions/arena.js'
 import {
   ANY_RESOURCES,
   anyResourceName,
@@ -826,10 +826,15 @@ const monarchy = techAbility<'monarchy', MonarchyPlan>({
     if (!state.discardedItems.some((item) => item.id === killed.id)) {
       return err(`${itemName(killed)} is no longer in the discard pile, so it cannot be returned to ${victim.username}.`)
     }
+    // A battle reopened since the kill still has this card's unit in its arena (or among its fallen): the card comes back locked
+    // in it, as every card of a unit in the arena is, so it cannot be placed on a second front
+    const inActiveBattle =
+      state.battle !== null && [...state.battle.arena, ...state.battle.departedUnits].some((unit) => unit.unit.id === killed.id)
+    const returned = inActiveBattle && isUnit(killed) ? { ...killed, inBattle: true } : killed
     const back = withPlayerHand(state, {
       ...victim,
-      items: [...victim.items, killed],
-      battlehand: effect.inBattlehand === true ? [...victim.battlehand, killed] : victim.battlehand,
+      items: [...victim.items, returned],
+      battlehand: effect.inBattlehand === true ? [...victim.battlehand, returned as UnitItem] : victim.battlehand,
     })
     return ok({
       state: { ...back, discardedItems: back.discardedItems.filter((item) => item.id !== killed.id) },
@@ -859,9 +864,11 @@ function withBattleArena(state: GameState, battleId: string, arena: readonly Are
   return state
 }
 
-/** The living units of the battle on now that this player placed. */
-const ownArenaUnits = (state: GameState, playerId: string): readonly ArenaUnit[] =>
-  state.battle === null ? [] : state.battle.arena.filter((unit) => unit.placedBy === playerId && !unit.killed)
+/** The units of the battle on now that this player placed and Metalworking may boost: the living, and one that fell on its arrival. */
+const ownArenaUnits = (state: GameState, playerId: string): readonly ArenaUnit[] => {
+  const arena = state.battle?.arena ?? []
+  return arena.filter((unit) => unit.placedBy === playerId && (!unit.killed || fellOnArrival(arena, unit)))
+}
 
 const metalworking = techAbility<'metalworking', ArenaUnit>({
   kind: 'metalworking',
@@ -875,14 +882,14 @@ const metalworking = techAbility<'metalworking', ArenaUnit>({
   block(state, player) {
     if (state.battle === null) return blocked('wrong-phase', BATTLE_REASON)
     if (playerSideOf(state.battle, player.playerId) === null) return blocked('unavailable', 'You are not fighting in this battle.')
-    if (ownArenaUnits(state, player.playerId).length === 0) return blocked('unavailable', 'You have no living unit in the arena to give attack to.')
+    if (ownArenaUnits(state, player.playerId).length === 0) return blocked('unavailable', 'You have no living unit in the arena to give attack to (nor one that fell the moment it was placed).')
     return undefined
   },
 
   plan(state, player, payload) {
     const id = payload['arenaUnitId']
     const unit = typeof id === 'string' ? ownArenaUnits(state, player.playerId).find((candidate) => candidate.id === id) : undefined
-    return unit === undefined ? err('Choose one of your own living units in the arena.') : ok(unit)
+    return unit === undefined ? err('Choose one of your own living units in the arena, or one that fell the moment it was placed.') : ok(unit)
   },
 
   // Arena attack is typed by the players, so the +3 is added to what it shows now. A unit not announced yet is not named in

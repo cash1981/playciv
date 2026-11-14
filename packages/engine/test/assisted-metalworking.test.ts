@@ -213,6 +213,23 @@ describe('Metalworking (Iron, Battle: +3 attack on one of your own arena units)'
       expect(hasIron(undone)).toBe(true)
     })
 
+    it('an undo after a kill flag was toggled by hand still gives the HP of the round back, and keeps the toggle', () => {
+      const state = faced()
+      const used = unwrap(press(state, { arenaUnitId: mine(state)[0]!.id }))
+      expect(vitals(used).mounted).toEqual([[2, 0, true]])
+      // The Mounted is set alive by hand (its HP stays 0), then the boost is undone: the round that took its HP is gone
+      const revived = unwrap(killArenaUnit(used, { playerId: KARANDRAS1, arenaUnitId: theirs(used)[0]!.id }))
+      expect(vitals(revived).mounted).toEqual([[2, 0, false]])
+      const undone = unwrap(tryVote(revived, 'req-1'))
+      expect(vitals(undone).mounted).toEqual([[2, 1, false]])
+      expect(vitals(undone).infantry).toEqual([[1, 1, false]])
+
+      // The same for the boosted Infantry itself: killed by hand after the boost, the undo still returns its HP
+      const slain = unwrap(killArenaUnit(used, { playerId: CASH1981, arenaUnitId: mine(used)[0]!.id }))
+      const undoneSlain = unwrap(tryVote(slain, 'req-1'))
+      expect(vitals(undoneSlain).infantry).toEqual([[1, 1, true]])
+    })
+
     it('an undo after the boosted unit moved away does not re-apply the round that was taken back', () => {
       const state = faced()
       const used = unwrap(press(state, { arenaUnitId: mine(state)[0]!.id }))
@@ -245,6 +262,47 @@ describe('Metalworking (Iron, Battle: +3 attack on one of your own arena units)'
       for (const playerId of [CASH1981, ITCHI]) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
       next = unwrap(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
       expect(vitals(next)).toEqual({ infantry: [], mounted: [[2, 2, false]] })
+    })
+
+    it('lets a unit that fell the moment it was placed take the boost, and fights the round again so it may now live', () => {
+      // Karandras's Mounted 5.4 stands there; Cash's Infantry 1.3 trumps it but hits for 1 only, takes 5 and falls
+      let state = firstCivGame()
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+      state = unwrap(draw(state, { playerId: KARANDRAS1, sheetName: 'MOUNTED', confirmedOutOfTurn: true }))
+      for (const playerId of [CASH1981, KARANDRAS1]) state = unwrap(drawUnitsForBattle(state, { playerId, numberOfDraws: 1 }))
+      state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+      const mounted = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+      const infantry = findPlayer(state, CASH1981)!.battlehand[0]!
+      state = unwrap(placeUnitInArena(state, { playerId: KARANDRAS1, unitId: mounted.id, side: 'defender', position: 0, attack: 5, health: 4 }))
+      state = unwrap(placeUnitInArena(state, { playerId: CASH1981, unitId: infantry.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
+      const armedFell = withHutInHand(withTech(state, 'Metalworking'), 'Iron').state
+      expect(mine(armedFell)[0]?.killed).toBe(true)
+      expect(assistedAvailability(armedFell, CASH1981, 'metalworking').status).toBe('ready')
+
+      // Florence Nightingale had marked the fallen unit as saved: living again, it no longer carries the mark of a death
+      const marked: GameState = { ...armedFell, battle: { ...armedFell.battle!, arena: armedFell.battle!.arena.map((u) => (u.killed && u.placedBy === CASH1981 ? { ...u, saved: true } : u)) } }
+      const used = unwrap(press(marked, { arenaUnitId: mine(marked)[0]!.id }))
+      // 4 attack against 4 HP kills the Mounted first, and the Infantry takes nothing
+      expect(vitals(used)).toEqual({ infantry: [[4, 3, false]], mounted: [[5, 0, true]] })
+      expect(mine(used)[0]?.saved).toBeUndefined()
+
+      const undone = unwrap(tryVote(used, 'req-1'))
+      expect(vitals(undone)).toEqual(vitals(armedFell))
+    })
+
+    it('does not offer a unit that fell on arrival once its opponent has been changed since, as no round could be fought again', () => {
+      let state = firstCivGame()
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+      state = unwrap(draw(state, { playerId: KARANDRAS1, sheetName: 'MOUNTED', confirmedOutOfTurn: true }))
+      for (const playerId of [CASH1981, KARANDRAS1]) state = unwrap(drawUnitsForBattle(state, { playerId, numberOfDraws: 1 }))
+      state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+      const mounted = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+      const infantry = findPlayer(state, CASH1981)!.battlehand[0]!
+      state = unwrap(placeUnitInArena(state, { playerId: KARANDRAS1, unitId: mounted.id, side: 'defender', position: 0, attack: 5, health: 4 }))
+      state = unwrap(placeUnitInArena(state, { playerId: CASH1981, unitId: infantry.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
+      const wounded = unwrap(setArenaUnitStat(withHutInHand(withTech(state, 'Metalworking'), 'Iron').state, { playerId: KARANDRAS1, arenaUnitId: theirs(state)[0]!.id, key: 'health', value: 1 }))
+      expect(mine(wounded)[0]?.killed).toBe(true)
+      expect(assistedAvailability(wounded, CASH1981, 'metalworking')).toMatchObject({ status: 'unavailable' })
     })
 
     it('leaves a unit alone whose HP was edited by hand after the round, changing only the attack', () => {

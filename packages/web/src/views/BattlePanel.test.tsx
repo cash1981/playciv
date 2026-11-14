@@ -701,6 +701,28 @@ describe('BattlePanel Metalworking', () => {
     expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a3' }, false)
   })
 
+  it('also offers a unit that fell the moment it was placed, while the round it fought can still be fought again, and no other dead unit', () => {
+    const alive = { health: 3, killed: false }
+    const fell = (opponentAfter: { health: number; killed: boolean }) => ({
+      ...unit('a2', 'attacker', true, 0, 'me'),
+      health: 0,
+      arrival: { displacedId: null, faceOff: { opponentId: 'd1', opponentBefore: alive, opponentAfter, selfBefore: alive, selfAfter: { health: 0, killed: true } } },
+    })
+    const enemy = { ...unit('d1', 'defender', false, 0, 'other'), health: 2 }
+    const options = (arena: object[]) => {
+      const { getByText, queryAllByRole, unmount } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView('ready', arena as ReturnType<typeof unit>[])} />)
+      fireEvent.click(getByText('Battle'))
+      fireEvent.click(getByText('Use Metalworking (Iron: +3 attack)'))
+      const found = queryAllByRole('option').length
+      unmount()
+      return found
+    }
+    // The opponent still has what the round left it with: the fallen unit may take the boost
+    expect(options([fell({ health: 2, killed: false }), enemy])).toBe(1)
+    // The opponent was wounded since (a hand edit or a Zhukov wound): there is no round to fight again
+    expect(options([fell({ health: 1, killed: false }), enemy])).toBe(0)
+  })
+
   it('the unit that was picked is gone: the unit shown is the unit sent', () => {
     vi.mocked(api.actionWithArgs).mockResolvedValue(view)
     const { getByText, getByRole, getByLabelText, rerender } = render(<BattlePanel gameId="game" busy={false} run={run} view={metalView()} />)
