@@ -163,6 +163,24 @@ describe('PlayerStatusSidebar', () => {
     expect(within(block('Alice')).getByRole('img', { name: 'Movement' }).closest('li')?.textContent).toContain('3+2')
   })
 
+  it('an editor names both the typed Movement and the speed a revealed tech gives, and the editor changes the typed one', () => {
+    const base = makeView()
+    const view = {
+      ...base,
+      you: { ...base.you, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2' }, techsChosen: [{ name: 'Sailing', hidden: false }] },
+    } as unknown as PlayerView
+    render(<PlayerStatusSidebar {...EDITABLE} view={view} />)
+    const cell = within(block('Alice')).getByRole('button', { name: 'Edit Alice Movement, currently 2, shown as 4 because of Sailing' })
+    expect(cell.textContent).toContain('4')
+    fireEvent.click(cell)
+    // The field holds the typed value, not the speed shown
+    expect((screen.getByLabelText('Alice Movement') as HTMLInputElement).value).toBe('2')
+    cleanup()
+    // Without a higher tech speed the label is as before
+    render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)
+    expect(screen.getByRole('button', { name: 'Edit Alice Movement, currently 3+1' })).toBeTruthy()
+  })
+
   it('shows username, civilization, the civ marker and the government as text with the seal', () => {
     render(<PlayerStatusSidebar {...READ_ONLY} view={makeView()} />)
     const alice = within(block('Alice'))

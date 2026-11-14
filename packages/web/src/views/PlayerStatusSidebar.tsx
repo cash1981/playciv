@@ -496,9 +496,10 @@ function PlayerBlock({
   const heading = `${block.username} - ${block.civilizationName ?? 'hidden'}`
   // The speed the revealed techs give, when it is more than what is typed: shown as the value, with the tech that gives it
   const techSpeed = techSpeedOf(block.techs)
+  const techSpeedShown = techSpeed !== null && techSpeed.speed > movementTotal(stats.mvmt) ? techSpeed : null
   const movementShown: React.ReactNode =
-    techSpeed !== null && techSpeed.speed > movementTotal(stats.mvmt) ? (
-      <span title={`${techSpeed.tech} gives ${techSpeed.speed} (the typed value is ${stats.mvmt.trim() || 'empty'})`}>{techSpeed.speed}</span>
+    techSpeedShown !== null ? (
+      <span title={`${techSpeedShown.tech} gives ${techSpeedShown.speed} (the typed value is ${stats.mvmt.trim() || 'empty'})`}>{techSpeedShown.speed}</span>
     ) : (
       stats.mvmt
     )
@@ -547,7 +548,11 @@ function PlayerBlock({
       ? undefined
       : {
           kind: 'edit',
-          label: `Edit ${block.username} ${EDIT_LABELS[key]}, currently ${String(stats[key]).trim() || 'empty'}`,
+          // Movement shows the speed a revealed tech gives when it is more than the typed value: the label says both, since
+          // the editor changes the typed one
+          label:
+            `Edit ${block.username} ${EDIT_LABELS[key]}, currently ${String(stats[key]).trim() || 'empty'}` +
+            (key === 'mvmt' && techSpeedShown !== null ? `, shown as ${techSpeedShown.speed} because of ${techSpeedShown.tech}` : ''),
           open: active === key,
           disabled: busy,
           onPressStart: () => {
