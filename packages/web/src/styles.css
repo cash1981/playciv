@@ -812,14 +812,57 @@ ul.list.vote-needed {
   grid-column: 1 / -1;
 }
 
-/* The board takes the full content width at every size, and the piece palette
-   goes below it. One column also means a zoomed board can never push the page
-   wider than the window (#260). */
+/* The board and the player status sidebar take the full content width at every
+   size, and the piece palette goes below them. One column also means a zoomed
+   board can never push the page wider than the window (#260). */
 .board-layout {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   margin-top: 0.6rem;
+}
+
+/* The map and the player status sidebar share a row on a wide screen; the sidebar
+   drops under the map at 900px and below. */
+.board-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.board-main > .board-scroll {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+
+.board-main > .player-status-sidebar {
+  /* --pss-width is the Display settings slider, set on .board-main. */
+  flex: 0 0 var(--pss-width, 16.5rem);
+  width: var(--pss-width, 16.5rem);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .board-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .board-main > .board-scroll {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .board-main > .player-status-sidebar {
+    flex: 0 0 auto;
+    width: auto;
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
 .board-placement-status {
@@ -1860,7 +1903,7 @@ ul.history > li {
   font-weight: 600;
 }
 
-/* --- Player status --------------------------------------------------------- */
+/* --- Coins table (the Coins panel) ----------------------------------------- */
 
 .status-table {
   width: 100%;
@@ -1886,23 +1929,8 @@ ul.history > li {
   text-transform: uppercase;
 }
 
-.status-table th.status-group-heading {
-  color: var(--text);
-  background: var(--panel-2);
-  text-align: center;
-  border-bottom: 0;
-}
-
-.status-table thead tr + tr th {
-  border-top: 1px solid var(--line);
-}
-
-/* Vertical dividers between section groups (and, in the Coins table, between
-   each player's own column — a single-row thead, so the divider is set on
-   the header `<th>` directly rather than needing a second header row). */
-.status-table th.status-group-heading.status-group-start,
-.status-table thead tr + tr th.status-group-start,
-.status-table thead tr:only-child th.status-group-start,
+/* A vertical divider before each player's own column. */
+.status-table th.status-group-start,
 .status-table td.status-group-start {
   border-left: 2px solid var(--line);
 }
@@ -1911,39 +1939,16 @@ ul.history > li {
   white-space: nowrap;
 }
 
-/* The row separator takes the player's own colour (set on the `<tr>` by
-   `StatusPanel`), so a row stays identifiable when the status board is
-   scrolled sideways. Rows with no colour keep the neutral line. */
-.status-table tbody tr td {
-  border-bottom-color: var(--player-color, var(--line));
-}
-
-/* The status board has many columns; let it scroll sideways on narrow screens. */
+/* The Coins table has a column per player; let it scroll sideways on narrow screens. */
 .scroll-x {
   overflow-x: auto;
 }
 
-/* Inline editable stat fields in the status board. */
+/* Inline editable number fields (the trade offers). */
 .stat-input {
   width: 4.5rem;
   padding: 0.15rem 0.35rem;
 }
-
-/* The Aircraft-unlocked checkbox in the status board. */
-.stat-checkbox {
-  width: 1.1rem;
-  height: 1.1rem;
-  cursor: pointer;
-}
-
-/* The read-only Coins total in the status board (the sum of the Coins tab). */
-.stat-total {
-  display: inline-block;
-  min-width: 2.5rem;
-  font-variant-numeric: tabular-nums;
-}
-
-/* --- Player status: the Coins tab ----------------------------------------- */
 
 /* The source column is a heading cell, so it must not inherit the table's
    small-caps label style; the helper text sits under the name. */

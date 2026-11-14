@@ -94,8 +94,8 @@ import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
-import { appendLog } from './log.js'
-import type { AssistedEffect, GameState, PendingReward, Playerhand } from './state.js'
+import { appendLog, itemNumberText, numberedItemName } from './log.js'
+import type { AssistedEffect, GameState, PendingReward, Playerhand, PlayerStats } from './state.js'
 import { withPlayer } from './state.js'
 import type { PlayCardPayload } from './assisted-core.js'
 import type { TechGrant } from './state.js'
@@ -481,6 +481,19 @@ const hasFlight = (player: Playerhand): boolean =>
  * is only logged and discarded, and the player does the rest by hand. `Err` is a
  * sentence for the player, and then the card stays in the hand.
  */
+/**
+ * ", 17 (10) trade removed": what an undone card took off or gave back, with the new totals. The amount
+ * is the real change of the counter, so what the player had already spent since is not claimed as removed.
+ */
+function gainUndoneText(before: PlayerStats | undefined, after: Playerhand): string {
+  if (before === undefined) return ''
+  const parts = (['trade', 'culture'] as const).flatMap((stat) => {
+    const change = after.stats[stat] - before[stat]
+    return change === 0 ? [] : [`${Math.abs(change)} (${after.stats[stat]}) ${stat} ${change < 0 ? 'removed' : 'returned'}`]
+  })
+  return parts.length === 0 ? '' : `, ${parts.join(' and ')}`
+}
+
 function automate(
   state: GameState,
   player: Playerhand,
@@ -502,11 +515,11 @@ function automate(
   switch (name) {
     case 'Marco Polo': {
       const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + 27) - player.stats.trade)
-      return gained(trade, 0, `, gaining ${trade} trade`)
+      return gained(trade, 0, `, gaining ${trade} (${player.stats.trade + trade}) trade`)
     }
     case 'St. Francis of Assisi': {
       const armies = unbuiltArmies(state, player)
-      return gained(0, armies * 3, `, gaining ${armies * 3} culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
+      return gained(0, armies * 3, `, gaining ${armies * 3} (${player.stats.culture + armies * 3}) culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
     }
     case 'Frank Lloyd Wright': {
       const buildings = buildingsInCitiesOf(state, player)
@@ -514,7 +527,7 @@ function automate(
       return gained(
         trade,
         buildings,
-        `, gaining ${trade} trade and ${buildings} culture for ${buildings} ${buildings === 1 ? 'building' : 'buildings'}`,
+        `, gaining ${trade} (${player.stats.trade + trade}) trade and ${buildings} (${player.stats.culture + buildings}) culture for ${buildings} ${buildings === 1 ? 'building' : 'buildings'}`,
       )
     }
     case 'Albert Einstein': {
@@ -532,9 +545,9 @@ function automate(
         if (convert.amount > room) {
           return err(`Your trade track has room for only ${Math.max(0, room)} more trade.`)
         }
-        return gained(convert.amount, -convert.amount, `, turning ${convert.amount} culture into ${convert.amount} trade`)
+        return gained(convert.amount, -convert.amount, `, turning ${convert.amount} (${player.stats.culture - convert.amount}) culture into ${convert.amount} (${player.stats.trade + convert.amount}) trade`)
       }
-      return gained(-convert.amount, convert.amount, `, turning ${convert.amount} trade into ${convert.amount} culture`)
+      return gained(-convert.amount, convert.amount, `, turning ${convert.amount} (${player.stats.trade - convert.amount}) trade into ${convert.amount} (${player.stats.culture + convert.amount}) culture`)
     }
     case 'Andrew Carnegie': {
       const marker = cultureMarkerOf(state, player)
@@ -592,7 +605,7 @@ function automate(
         },
         said:
           `, devoting ${devoted.length} ${devoted.length === 1 ? 'city' : 'cities'} to the arts as the action of ${capital.label} ` +
-          `and gaining ${culture} culture (${list})` +
+          `and gaining ${culture} (${player.stats.culture + culture}) culture (${list})` +
           (acted.length === 0
             ? ''
             : extraCityActionsLeft(state, player) > 0
@@ -801,7 +814,8 @@ function automate(
       return ok({
         state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
         extra: { drew: { itemId: card.id, sheetName } },
-        said: ', building an aircraft unit for free',
+        said: `, building an aircraft unit for free (${itemNumberText(state.logSecret, player.username, card)})`,
+        privateSaid: `${player.username} drew ${numberedItemName(state.logSecret, player.username, card)} (${SHEET_LABEL[sheetName]}) with Orville Wright`,
       })
     }
     case 'Khalid ibn al-Walid': {
@@ -891,7 +905,7 @@ function automate(
           coin: { source: known.key, targetId: target.playerId },
           advance: advanced.value.effect,
         },
-        said: `, gave their ${known.label} coin to ${target.username} and advanced one space for free`,
+        said: `, gave their ${known.label} coin (${totalCoins(coinSourcesOf(paid, playerOf(paid, player.playerId) ?? player))}) to ${target.username} (${totalCoins(coinSourcesOf(paid, playerOf(paid, target.playerId) ?? target))}) and advanced one space for free`,
       })
     }
     case 'Captain James Cook': {
@@ -1252,16 +1266,19 @@ export const playCard: AssistedActionDefinition = {
         : targets.length > 0
           ? `, targeting ${joinNames(targets.map((target) => target.username))}`
           : ''
+    // A played card is open information, so one line serves the log of everyone and the player's own,
+    // and the card is named with its own item number as well as the cards its effect moves
+    const playedText =
+      `${player.username} ${verb} ${card.name} ${itemNumberText(state.logSecret, player.username, item)} (${when})` +
+      (resource === null ? '' : ` as ${resource}`) +
+      aimed +
+      (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : '') +
+      (automated.value === null ? '' : automated.value.said)
     const logged = appendLog(after, {
       username: player.username,
       playerId: player.playerId,
-      publicLog:
-        `${player.username} ${verb} ${card.name}${card.name === 'Gustavus Adolphus' ? ` item number #${item.itemNumber}` : ''} (${when})` +
-        (resource === null ? '' : ` as ${resource}`) +
-        aimed +
-        (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : '') +
-        (automated.value === null ? '' : automated.value.said),
-      privateLog: '',
+      publicLog: playedText,
+      privateLog: playedText,
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
     })
@@ -1485,6 +1502,8 @@ export const playCard: AssistedActionDefinition = {
       current = reversed.value.state
       hand = playerOf(current, player.playerId) ?? hand
     }
+    // The counters before the gain comes off, so the line can report what really changed
+    const statsBeforeGain = effect.gain === undefined ? undefined : hand.stats
     if (effect.gain !== undefined) {
       hand = {
         ...hand,
@@ -1655,7 +1674,7 @@ export const playCard: AssistedActionDefinition = {
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       })
-      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${kurosawa.said}` })
+      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${gainUndoneText(statsBeforeGain, hand)}${kurosawa.said}` })
     }
     const back = freeTurnUse(
       withPlayerHand(current, {
@@ -1665,6 +1684,6 @@ export const playCard: AssistedActionDefinition = {
         ),
       }),
     )
-    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}` })
+    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}${gainUndoneText(statsBeforeGain, hand)}` })
   },
 }

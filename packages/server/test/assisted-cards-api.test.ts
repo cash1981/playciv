@@ -94,7 +94,7 @@ describe('POST /api/games/:gameId/actions with Currency', () => {
     const after = await response.json<View>()
     expect(after.you?.stats.culture).toBe(3)
     expect(after.assistedActions[0]).toMatchObject({ id: 'req-1', kind: 'currency', status: 'applied' })
-    expect(after.assistedActions[0]?.text).toMatch(/^cur-[ab] used Currency: spent 1 Incense and gained 3 culture$/)
+    expect(after.assistedActions[0]?.text).toMatch(/^cur-[ab] used Currency: spent 1 Incense and gained 3 \(3\) culture$/)
     expect(entryOf(after, 'currency')?.status).toBe('used')
 
     // The same request id again is a no-op; a new one is refused

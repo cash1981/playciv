@@ -97,7 +97,7 @@ describe('Zheng He', () => {
     expect(me(played).items.some((item) => item.id === cardId)).toBe(false)
     expect(played.discardedItems.some((item) => item.id === cardId)).toBe(true)
     expect(played.log.find((entry) => entry.assistedActionId === 'z1')?.publicLog).toBe(
-      "cash1981 played Zheng He (any time) and discarded it, looking under the hut and village tokens on the map and in the other players' hands",
+      "cash1981 played Zheng He item number #187 (any time) and discarded it, looking under the hut and village tokens on the map and in the other players' hands",
     )
   })
 

@@ -106,7 +106,7 @@ describe('a confirmed repeat', () => {
     expect(lines).toHaveLength(2)
     expect(lines[0]?.publicLog).not.toContain(REPEAT_NOTE)
     expect(lines[1]?.publicLog).toBe(
-      `${player(twice).username} used Chivalry: spent 1 Incense and gained 5 culture ${REPEAT_NOTE}`,
+      `${player(twice).username} used Chivalry: spent 1 Incense and gained 5 (10) culture ${REPEAT_NOTE}`,
     )
   })
 

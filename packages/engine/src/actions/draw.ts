@@ -24,6 +24,7 @@ import {
   appendPrivatePublicLog,
   appendPublicLog,
   appendShuffleLog,
+  itemNumberText,
 } from '../log.js'
 import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
@@ -528,7 +529,9 @@ export function revealAndDiscardBattlehand(
 
   if (player.battlehand.length === 0) return ok(state)
 
-  const revealed = player.battlehand.map(revealAll).join(', ')
+  const revealed = player.battlehand
+    .map((unit) => `${revealAll(unit)} ${itemNumberText(state.logSecret, player.username, unit)}`)
+    .join(', ')
   const revealedIds = new Set(player.battlehand.map((unit) => unit.id))
   const next = withPlayer(state, {
     ...player,
@@ -539,7 +542,7 @@ export function revealAndDiscardBattlehand(
   })
 
   return ok(
-    appendPublicLog(
+    appendPrivatePublicLog(
       next,
       player.username,
       player.playerId,
@@ -753,8 +756,9 @@ export function loot(state: GameState, input: LootInput): DrawResult {
     items: [...updatedTo.items, { ...itemToGive, ownerId: playerTo.playerId }],
   })
 
-  const all = revealAll(itemToGive)
-  const pub = revealPublic(itemToGive)
+  const number = itemNumberText(state.logSecret, playerFrom.username, itemToGive)
+  const all = `${revealAll(itemToGive)} ${number}`
+  const pub = `${revealPublic(itemToGive)} ${number}`
 
   next = appendPrivateLog(
     next,

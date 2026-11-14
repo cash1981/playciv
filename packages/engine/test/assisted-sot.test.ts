@@ -98,7 +98,7 @@ describe('Expansionism', () => {
     expect(status(state, 'expansionism').reason).toBe('Gain 3 trade: 1 for each of your 2 cities and 1 for each of your 1 city-state.')
     const used = unwrap(act(state, 'expansionism', 'req-1'))
     expect(me(used).stats.trade).toBe(7)
-    expect(used.log.at(-1)?.publicLog).toBe('cash1981 used Expansionism: gained 3 trade')
+    expect(used.log.at(-1)?.publicLog).toBe('cash1981 used Expansionism: gained 3 (7) trade')
   })
 
   it('does not count a city-state with only an enemy figure on it, nor a city of another colour', () => {
@@ -145,7 +145,7 @@ describe('Expansionism', () => {
     const undone = undoByVote(state, 'req-1')
     expect(me(undone).stats.trade).toBe(2)
     expect(status(undone, 'expansionism').status).toBe('ready')
-    expect(undone.log.at(-1)?.publicLog).toBe("System: cash1981's Expansionism was undone: 1 trade removed")
+    expect(undone.log.at(-1)?.publicLog).toBe("System: cash1981's Expansionism was undone: 1 (2) trade removed")
   })
 })
 
@@ -203,7 +203,7 @@ describe('Rationalism', () => {
     const two = unwrap(act(one, 'rationalismII', 'req-2'))
     expect(me(two).stats.trade).toBe(3)
     expect(me(two).techGrants).toHaveLength(2)
-    expect(two.log.at(-1)?.publicLog).toBe('cash1981 used Rationalism: spent 11 trade to learn a level II tech')
+    expect(two.log.at(-1)?.publicLog).toBe('cash1981 used Rationalism: spent 11 (3) trade to learn a level II tech')
   })
 
   it('needs the trade, and says how much is missing', () => {
@@ -285,7 +285,7 @@ describe('Patronage', () => {
     const used = unwrap(act(state, 'patronage', 'req-1'))
     expect(me(used).stats.culture).toBe(3)
     expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
-      'cash1981 used Patronage: spent 1 culture and drew 1 culture II card',
+      'cash1981 used Patronage: spent 1 (3) culture and drew 1 culture II card (item number #259)',
     )
     // One card is kept without a choice, and it is in the hand, hidden
     const record = used.assistedActions[0]

@@ -173,7 +173,7 @@ export const foundCity: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         `${player.username} founded a city on ${square} with ${withFigure}` +
-        (destroyed === null ? '' : `, destroying the city-state there (+${CITY_STATE_CULTURE} culture)`) +
+        (destroyed === null ? '' : `, destroying the city-state there (+${CITY_STATE_CULTURE} (${holder.stats.culture}) culture)`) +
         (check.zuluHuts.length === 0 ? '' : `, next to a hut they may explore (${check.zuluHuts.join(', ')})`) +
         policyNote,
       privateLog: '',
@@ -270,7 +270,8 @@ export const foundCity: AssistedActionDefinition = {
       text:
         `${player.username}'s city on ${effect.square.label} was undone: the scout is back` +
         (effect.cityState === null ? '' : ' and the city-state stands again') +
-        (effect.advance === null ? '' : ', and the free advance was taken back'),
+        (effect.advance === null ? '' : ', and the free advance was taken back') +
+        (effect.culture > 0 ? `, ${effect.culture} (${playerOf(working, player.playerId)?.stats.culture ?? 0}) culture removed` : ''),
     })
   },
 }

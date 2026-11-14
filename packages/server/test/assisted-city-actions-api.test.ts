@@ -880,11 +880,11 @@ describe('devoting a city to the arts over HTTP', () => {
         kind: 'devoteToTheArts',
         label: 'Devote to the Arts',
         status: 'applied',
-        text: `${table.starterName} devoted City B2 to the arts and gained 3 culture`,
+        text: `${table.starterName} devoted City B2 to the arts and gained 3 (3) culture`,
       }),
     ])
     const publicLog = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
-    expect(publicLog.body).toContain('devoted City B2 to the arts and gained 3 culture')
+    expect(publicLog.body).toContain('devoted City B2 to the arts and gained 3 (3) culture')
   })
 
   it('adds the culture of a scout that is sent, and refuses a scout that is not offered', async () => {
@@ -916,14 +916,14 @@ describe('devoting a city to the arts over HTTP', () => {
     const ok = await post(table.starter, actions(table), devoteBody(table, 'devote-1', before.rev, { scoutPieceIds: [offered[0]?.pieceId] }))
     expect(ok.status).toBe(200)
     expect((await ok.json<View>()).you?.stats.culture).toBe((before.you?.stats.culture ?? 0) + 3)
-    expect((await stored(table)).log.at(-1)?.publicLog).toContain('gained 3 culture, with the squares of the scouts at G7')
+    expect((await stored(table)).log.at(-1)?.publicLog).toContain('gained 3 (3) culture, with the squares of the scouts at G7')
   })
 
   it('takes the number typed by hand', async () => {
     const table = await buildTable('DevoteHand')
     const response = await post(table.starter, actions(table), devoteBody(table, 'devote-1', await revOf(table), { culture: 7 }))
     expect(response.status).toBe(200)
-    expect((await stored(table)).log.at(-1)?.publicLog).toContain('gained 7 culture (set by the player; the estimate was 1)')
+    expect((await stored(table)).log.at(-1)?.publicLog).toContain('gained 7 (7) culture (set by the player; the estimate was 1)')
   })
 
   it('a retry with the same request id adds once and creates no revision', async () => {

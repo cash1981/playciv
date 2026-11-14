@@ -325,8 +325,11 @@ describe('D1Repository', () => {
     const summaries = await repo.finishedGamesForHighscore()
     expect(summaries).toHaveLength(2)
     expect(summaries.find((entry) => entry.winner === 'Alice')?.numOfPlayers).toBe(4)
-    expect(summaries.find((entry) => entry.winner === 'Bob')?.players.map((p) => p.username))
-      .toEqual(second.value.players.map((p) => p.username))
+    // The seat order is shuffled when the game fills up, so only the set of players is checked.
+    expect(summaries.find((entry) => entry.winner === 'Bob')?.players.map((p) => p.username).sort()).toEqual([
+      'Alice',
+      'Bob',
+    ])
     // An unfinished game is not a highscore source.
     const running = fixtureGame('Still running')
     await repo.saveGame(running)

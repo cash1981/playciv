@@ -116,7 +116,7 @@ describe('Frida Kahlo', () => {
     expect(deckIds(played, 'CULTURE_2')).not.toContain(drawn?.id)
     // The discard is open information (full name and item number); the drawn card is hidden (item number only)
     expect(played.log.find((entry) => entry.assistedActionId === 'f1')?.publicLog).toBe(
-      `cash1981 played Frida Kahlo (any time) and discarded it, discarding ${itemName(throwAway)} item number #${throwAway.itemNumber} and drawing 1 from the Culture II deck (item number #${drawn?.itemNumber})`,
+      `cash1981 played Frida Kahlo item number #${me(state).items.find((item) => item.id === fridaId)?.itemNumber} (any time) and discarded it, discarding ${itemName(throwAway)} item number #${throwAway.itemNumber} and drawing 1 from the Culture II deck (item number #${drawn?.itemNumber})`,
     )
   })
 

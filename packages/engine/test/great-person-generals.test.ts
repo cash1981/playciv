@@ -99,7 +99,7 @@ describe('Georgy Zhukov', () => {
     const { state, cardId } = holding(fight([2, 2], [2, 2]), ZHUKOV, CASH1981)
     const played = unwrap(play(state, CASH1981, cardId))
     expect(findPlayer(played, CASH1981)?.items.find((item) => item.id === cardId)?.hidden).toBe(false)
-    expect(played.log.at(-1)?.publicLog).toContain('used Georgy Zhukov (battle)')
+    expect(played.log.at(-1)?.publicLog).toContain('used Georgy Zhukov item number #283 (battle)')
     expect(statusOf(played, CASH1981, ZHUKOV).reason).toContain('already been played')
   })
 

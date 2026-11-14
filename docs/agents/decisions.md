@@ -37,6 +37,17 @@ Source: `packages/engine/src/`, `packages/server/src/app.ts`,
   permutation of the item number for each player (the same card differs between
   players), short (1-999, then by block of 999) and unique within a player's view.
   Existing games keep the numbers they were created with.
+- Every log line that plays, draws, keeps, discards, replaces, gives, loots or places a card carries
+  its item number (#337): played cards and the cards their effect moves are numbered separately.
+  A hidden card is named by number only in the public line and in full in the owner's private
+  line; open information (a played or discarded card, a revealed or placed unit) is named in full
+  with its number. Tech and policy numbers stay the per-player ones. The private log never falls
+  back to the public line (the route drops empty private entries), so a line everyone can read is
+  written to both (`appendOpenLog`, the played-card line).
+- A log line that gains or spends trade, culture or coins gives the new total in parentheses after
+  the amount: "gained 4 (14) trade", "spent 6 (8) trade to learn a level I tech". For a conversion
+  each side shows its own new total. Undo lines do the same ("5 (3) culture removed"), and a
+  culture advance names what it spent ("spending 5 (7) culture"); a free advance spends nothing.
 - Never reconstruct historical revealed cards by matching display names to a
   current hand: duplicate names and redraws can reveal private cards.
 
@@ -111,6 +122,50 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   three-player saves with pieces and five-player saves keep their old rectangle
   so pieces do not move; see [legacy layout limitations](limitations.md#game-behavior).
 - Culture track: 21 positions with freely placed markers.
+- Player status sidebar (#342): a view beside the map (under it at 900px and
+  below) shows every status value per player with an icon whose `alt`/`title`
+  names it. It reads only fields the old Player status panel showed (`username`,
+  `color`, civilization name, `government`, `stats`) and adds nothing to
+  `PlayerView`; a hidden civilization shows a colour swatch, not a
+  leader marker. Combat is the engine-calculated bonus inside a starburst, Movement
+  is the player's colour flag, and Aircraft is dimmed until unlocked.
+  It edits the same fields the old Player status table edited, with shared
+  validation (`parseStatInput`): tap a value to edit it, Aircraft is a switch,
+  Government is a select with a `?` that opens the government card reference.
+  The Coins total, Culture hand size and Combat stay read-only. The per-source Coins counters are
+  not in the sidebar: they are edited in the Coins panel.
+  Spectators, replay and locked games get no edit controls (the government is
+  text, `?` still works); controls are disabled while a save is running. An
+  untouched editor never saves, so a value another member changed during a
+  refresh is not overwritten. Under the map (900px and below) the sidebar can be
+  minimised with a "Player overview" heading and toggle, remembered under
+  `civ.panel.player-status` (default open); beside the map it is always fully
+  shown whatever is stored. The old Player status panel (its table and the Status
+  tab) is removed; the **Coins** panel (`CoinsPanel`, collapsed state under
+  `civ.panel.coins`) is what is left of it, until the counters move over too. The
+  Social policy panel's `?` still opens the government card reference, now through
+  the sidebar.
+- Display settings (#342): the Zoom dropdown in the Board header is replaced by a
+  gear that opens a Display settings panel with sliders for map zoom (25-150 %,
+  with an Auto switch), status icon size (70-150 %) and status panel width
+  (14-24 rem; no effect at 900px and below, where the panel is stacked). The
+  values are kept per browser in `localStorage` under `civ.display`, so they
+  persist across games and reloads (the old dropdown reset to Auto on each
+  mount). The sidebar's stat groups lay out as many columns as fit (CSS `auto-fit`
+  from a minimum cell width that scales with the icon size), so panel width and
+  icon size decide the columns instead of a fixed count; a group has four stats, so
+  four is the most. An "Icons per row" setting (1-4, Auto by default) fixes the
+  number instead (`sidebarColumns`, handed to the sidebar as `--pss-columns`).
+  Movement sits in the Economy group after Culture, and Culture hand size among the
+  modifiers after Stacking. Auto zoom still snaps to the old fitting steps (capped at 100 %); only a
+  manual choice is continuous. Nothing is stored on the server. A "Show labels"
+  switch, on by default, puts the name of every status value above its icon in
+  the sidebar instead of relying on tooltips; a stored explicit off is kept, and
+  settings saved before the switch existed get labels on. Every cell is label,
+  fixed icon box and value, so icons line up across a row. The visible labels of
+  the four investments are the abbreviations (EftA, Infra, MIC, PE); tooltips,
+  alt text and accessible names use the full names (Endowment for the Arts,
+  Infrastructure, Military-Industrial Complex, Public Education).
 - Board undo targets the caller's latest consecutive actions; a new board action
   clears redo. Undoing board edits does not undo game actions.
 - A moved piece keeps the pixel position where it is dropped, including in a
@@ -162,7 +217,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 - Panama's coins belong to the physical wonder and count for its active,
   unblockaded owner.
 - Bank/Great Person/Adam Smith effects derive from board ownership and revealed
-  cards; `placedBy` is not city ownership. The Coins tab lists Adam Smith only
+  cards; `placedBy` is not city ownership. The Coins panel lists Adam Smith only
   while his card is revealed and usable.
 - Metropolis outskirts are the ten squares around two centres, excluding both.
 - A Great Person with no tracked matching token is not assumed blockaded
@@ -699,9 +754,11 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
   for an army outside Anarchy unless the expression already has a `+` term (older
-  saves recorded `3+1`); Henry Ford +1 while faceup; Captain James Cook doubles it
+  saves recorded `3+1`, which a scout does not get: it loses one point of it
+  while Natural Religion is active); Henry Ford +1 while faceup; Captain James Cook doubles it
   for the turn (`card:Captain James Cook` marker, freed by undo). Spain's bonus
-  and tech speed steps stay typed. Group movement is out of scope.
+  and tech speed steps stay typed; while Natural Religion is active any `+` term
+  is read as its bonus, so a typed Spain bonus makes a scout lose a point. Group movement is out of scope.
 - **Pool** (human): each travel adds to `movement.used`; the figure may move again
   while speed is left. It locks when the pool is spent or the move ends on a hut,
   village or another player's figures (`MovementDestination.ends`). Board Undo
@@ -1056,6 +1113,11 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   their capital's outskirts, so the capital may build a figure on it wherever it
   lies, under the same stacking, water and blockade rules. Other cities and
   buildings and wonders still may not.
+- **Held city-states in the estimate** (W&W p. 9, human, hotfix): the capital's
+  production and trade estimate counts each held city-state: its printed trade
+  (cs1 3, cs5 1) and production (cs3 1, cs5 1). There is no base +1 trade per
+  city-state; Expansionism's 1 per city-state is its own Start of Turn gain. Culture, coin, resource and combat icons are not counted. Other
+  cities get nothing.
 - **The metropolis is the capital** (human, #319): only the capital can grow into
   a metropolis, so `capitalOf` falls back to the metropolis when no capital marker
   is on the map. This applies to held city-states and to unsent scouts.
