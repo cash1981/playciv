@@ -27,6 +27,7 @@ const city: CityProduction = {
   modifiers: [],
   buildingProgram: false,
   caravan: false,
+  boost: 0,
   estimate: 4,
   withBuildingProgram: null,
   override: null,

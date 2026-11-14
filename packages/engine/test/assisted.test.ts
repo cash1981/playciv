@@ -25,7 +25,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 
-import { chivalryTurn, player, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { chivalryTurn, player, resourceText, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 /** Nothing from a record's effect, and no hut identity, is allowed in a view. */
@@ -63,6 +63,29 @@ describe('the registry', () => {
       'rationalismI',
       'rationalismII',
       'steamPower',
+      // The unit techs (issue #327)
+      'ballistics',
+      'combustion',
+      'gunpowder',
+      'mathematics',
+      // The resource abilities of the other techs (issue #327, slice 2)
+      'animalHusbandry',
+      'banking',
+      'civilService',
+      'construction',
+      'education',
+      'horsebackRiding',
+      'massMedia',
+      'monarchy',
+      'mysticism',
+      'philosophy',
+      'plastics',
+      'pottery',
+      'writing',
+      // Batch 2: Metalworking, Atomic Theory, Bureaucracy
+      'atomicTheory',
+      'bureaucracy',
+      'metalworking',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -82,9 +105,17 @@ describe('the registry', () => {
       expect(action.phase).toBe(
         startOfTurn.includes(action.action) || action.action.startsWith('sot:')
           ? 'SOT'
-          : action.action === 'communism'
-            ? 'MOVEMENT'
-            : 'CM',
+          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'metalworking' || action.action === 'atomicTheory'
+            ? 'ANY'
+            : action.action === 'writing' || action.action === 'civilService' || action.action === 'massMedia'
+              ? 'ANY'
+              : action.action === 'horsebackRiding'
+                ? 'TRADE'
+                : action.action === 'bureaucracy'
+                  ? 'RESEARCH'
+                : action.action === 'communism' || action.action === 'combustion'
+                  ? 'MOVEMENT'
+                  : 'CM',
       )
     }
     expect(actions.find((action) => action.action === 'chivalry')?.group).toBe('Resource abilities')
@@ -453,7 +484,7 @@ describe('the projection', () => {
           turnNumber: 1,
           phase: 'CM',
           status: 'applied',
-          text: 'cash1981 used Chivalry: spent 1 Incense and gained 5 (5) culture',
+          text: `cash1981 used Chivalry: spent 1 ${resourceText(state, 'Incense')} and gained 5 (5) culture`,
           logId,
         },
       ])

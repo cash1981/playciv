@@ -110,3 +110,13 @@ React and Vite.
 
 The client imports its types from `@civ/engine`, so it cannot drift out of step
 with what the server actually sends.
+
+## Deliberate improvements
+
+Technology resource abilities offer only usable payments actually held in your
+hand or player area. You can explicitly choose a resource culture card such as
+A Generous Gift instead of a token. Multi-resource payments cannot reuse the
+same token or card, and fixed costs only offer payments for the required kind.
+Spending a resource hut or village from your hand also removes one matching
+icon from your player area. The log names its origin and item number, and undo
+restores both the hand item and the removed icon.

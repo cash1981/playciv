@@ -364,7 +364,7 @@ function takeGreatPersonMarker(
 }
 
 /** Where a marker is checked before an undo: still on the board, and still in its owner's area. */
-function markerUndoBlock(state: GameState, ownerId: string, marker: GreatPersonMarker): string | undefined {
+export function markerUndoBlock(state: GameState, ownerId: string, marker: GreatPersonMarker): string | undefined {
   const piece = state.board.pieces.find((candidate) => candidate.id === marker.pieceId)
   if (piece === undefined) {
     return 'The Great Person marker is no longer on the board, so this cannot be undone.'
@@ -392,7 +392,7 @@ export function countLinesIn(state: GameState, historyIds: readonly (string | un
   }
 }
 
-interface GreatPersonOrigin {
+export interface GreatPersonOrigin {
   readonly requestId: string
   readonly at: string | undefined
   /** Cards to draw: `rewardDrawCount` for the Great Person kind. */
@@ -407,7 +407,7 @@ const NONE_BECAUSE_NO_MARKER = 'gained no Great Person, because no marker was av
 const NONE_BECAUSE_NO_CARD = 'gained no Great Person, because no Great Person card could be drawn'
 
 /** What gaining a Great Person did. The caller writes the public line with `phrase` and records `effect`. */
-interface GreatPersonGain {
+export interface GreatPersonGain {
   readonly state: GameState
   readonly outcome: 'none' | 'kept' | 'choice'
   /** Ends the public line: "took a scientist great person marker into reserve", "drew 3 Great Person cards" or the reason nothing came. */
@@ -435,7 +435,7 @@ interface GreatPersonGain {
  * of an exhausted type. The loop then names and discards those cards faceup, as the rule
  * does for each one drawn.
  */
-function gainGreatPerson(
+export function gainGreatPerson(
   state: GameState,
   player: Playerhand,
   origin: GreatPersonOrigin,
@@ -590,7 +590,7 @@ export function restoreDrawnCards(
 }
 
 /** Takes the marker of a gain off the board, through the board history. `Err` is the reason the undo must refuse. */
-function removeGreatPersonMarker(
+export function removeGreatPersonMarker(
   state: GameState,
   record: AssistedActionRecord,
   marker: GreatPersonMarker,
@@ -605,7 +605,7 @@ function removeGreatPersonMarker(
 }
 
 /** The sentence part for a removed marker, or an empty string. */
-const removedMarkerText = (marker: GreatPersonMarker | null | undefined): string =>
+export const removedMarkerText = (marker: GreatPersonMarker | null | undefined): string =>
   marker === null || marker === undefined ? '' : ` and the ${markerLabelOf(marker.assetId)} great person marker was removed`
 
 /** Whether the free advance that goes with another action (the Romans' city, the Arabs' coin, Sydney) can be taken now. */

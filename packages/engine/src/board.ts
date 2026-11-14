@@ -270,6 +270,12 @@ function figureLimit(asset: BoardAsset): number | undefined {
   return undefined
 }
 
+/**
+ * The pool a piece is counted in when supply is checked: the building families share one pool (a Library and a University
+ * come from the same six), every other asset is its own pool.
+ */
+export const supplyPoolOf = (asset: BoardAsset): string => `${asset.category}:${buildingSupplyGroup(asset) ?? asset.id}`
+
 /** Number of copies still available for a palette asset. */
 export function remainingBoardAssetCount(
   asset: BoardAsset,

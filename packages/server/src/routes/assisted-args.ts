@@ -8,11 +8,20 @@
  * `upgradeBuildings`) keep their own top-level fields in `play.ts`.
  */
 
-import { BUILDABLE_BUILDING_IDS, isGovernment } from '@civ/engine'
+import { BUILDABLE_BUILDING_IDS, isGovernment, parseResourcePayments, resourceCostOf } from '@civ/engine'
 import type {
+  ArenaUnitPayload,
+  AtomicTheoryPayload,
   AssignScoutPayload,
   AssistedPayload,
+  CombustionPayload,
   CommunismPayload,
+  GunpowderPayload,
+  MonarchyPayload,
+  MysticismPayload,
+  ProductionBoostPayload,
+  ResourcesPayload,
+  TargetPlayerPayload,
   SteamPowerPayload,
   FoundCityPayload,
   GovernmentPayload,
@@ -173,6 +182,122 @@ function parseCommunism(args: Record<string, unknown>): CommunismPayload | strin
   return { square: { column, row } }
 }
 
+function parseCombustion(args: Record<string, unknown>): CombustionPayload | string {
+  const extra = extraKeys(args, ['pieceId'])
+  if (extra.length > 0) return `combustion takes only pieceId, not ${extra.join(', ')}`
+  if (!isId(args['pieceId'])) return 'pieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  return { pieceId: args['pieceId'] }
+}
+
+/** The most characters of free text a cancel may carry for what it cancels. */
+const MAX_NOTE = 80
+
+/** `resources`: exactly `count` names, each a short text; which names are legal is the engine's call. */
+function parseResources(action: string, count: number) {
+  return (args: Record<string, unknown>): ResourcesPayload | string => {
+    const extra = extraKeys(args, ['resources'])
+    if (extra.length > 0) return `${action} takes only resources, not ${extra.join(', ')}`
+    const resources = args['resources']
+    if (
+      !Array.isArray(resources) ||
+      resources.length !== count ||
+      !resources.every((name) => typeof name === 'string' && name.length > 0 && name.length <= 20)
+    ) {
+      return `resources must be a list of exactly ${count} resource names`
+    }
+    return { resources: resources as readonly string[] }
+  }
+}
+
+/** Gunpowder: exactly two resources, and `obsolete` with a `wonderPieceId` or `destroy` with a `buildingPieceId`, nothing else. */
+function parseGunpowder(args: Record<string, unknown>): GunpowderPayload | string {
+  const extra = extraKeys(args, ['resources', 'mode', 'wonderPieceId', 'buildingPieceId'])
+  if (extra.length > 0) return `gunpowder takes only resources, mode, wonderPieceId and buildingPieceId, not ${extra.join(', ')}`
+  const resources = args['resources']
+  if (
+    !Array.isArray(resources) ||
+    resources.length !== 2 ||
+    !resources.every((name) => typeof name === 'string' && name.length > 0 && name.length <= 20)
+  ) {
+    return 'resources must be a list of exactly 2 resource names'
+  }
+  const mode = args['mode']
+  if (mode !== 'obsolete' && mode !== 'destroy') return 'mode must be obsolete or destroy'
+  if (mode === 'obsolete') {
+    if (args['buildingPieceId'] !== undefined) return 'obsolete takes no buildingPieceId, only wonderPieceId'
+    if (!isId(args['wonderPieceId'])) return 'obsolete needs wonderPieceId: the ancient or medieval wonder to disable'
+    return { resources: resources as readonly string[], mode, wonderPieceId: args['wonderPieceId'] }
+  }
+  if (args['wonderPieceId'] !== undefined) return 'destroy takes no wonderPieceId, only buildingPieceId'
+  if (!isId(args['buildingPieceId'])) return 'destroy needs buildingPieceId: the building to remove'
+  return { resources: resources as readonly string[], mode, buildingPieceId: args['buildingPieceId'] }
+}
+
+function parseProductionBoost(action: string) {
+  return (args: Record<string, unknown>): ProductionBoostPayload | string => {
+    const extra = extraKeys(args, ['cityPieceId'])
+    if (extra.length > 0) return `${action} takes only cityPieceId, not ${extra.join(', ')}`
+    if (!isId(args['cityPieceId'])) return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+    return { cityPieceId: args['cityPieceId'] }
+  }
+}
+
+/** Horseback Riding names the player who gains 6 trade; Writing, Civil Service and Mass Media may add free text for what is cancelled. */
+function parseTargetPlayer(action: string, withNote: boolean) {
+  return (args: Record<string, unknown>): TargetPlayerPayload | string => {
+    const extra = extraKeys(args, withNote ? ['targetId', 'note'] : ['targetId'])
+    if (extra.length > 0) return `${action} takes only ${withNote ? 'targetId and note' : 'targetId'}, not ${extra.join(', ')}`
+    if (!isId(args['targetId'])) return 'targetId is required: a player id'
+    const note = args['note']
+    if (note === undefined) return { targetId: args['targetId'] }
+    if (typeof note !== 'string' || note.length > MAX_NOTE) return `note must be text of at most ${MAX_NOTE} characters`
+    // The note goes into a public log line: a line break or another control character would break the line, so runs of them become one space
+    const clean = note.replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim()
+    return clean === '' ? { targetId: args['targetId'] } : { targetId: args['targetId'], note: clean }
+  }
+}
+
+function parseMysticism(args: Record<string, unknown>): MysticismPayload | string {
+  const extra = extraKeys(args, ['targetId', 'source'])
+  if (extra.length > 0) return `mysticism takes only targetId and source, not ${extra.join(', ')}`
+  if (!isId(args['targetId'])) return 'targetId is required: a player id'
+  const source = args['source']
+  if (typeof source !== 'string' || source.length === 0 || source.length > 30) return 'source must be a short text'
+  return { targetId: args['targetId'], source }
+}
+
+function parseArenaUnit(args: Record<string, unknown>): ArenaUnitPayload | string {
+  const extra = extraKeys(args, ['arenaUnitId'])
+  if (extra.length > 0) return `metalworking takes only arenaUnitId, not ${extra.join(', ')}`
+  if (!isId(args['arenaUnitId'])) return 'arenaUnitId is required: 1 to 64 characters, letters, digits and . _ : -'
+  return { arenaUnitId: args['arenaUnitId'] }
+}
+
+function parseAtomicTheory(args: Record<string, unknown>): AtomicTheoryPayload | string {
+  const extra = extraKeys(args, ['mode', 'cityPieceId'])
+  if (extra.length > 0) return `atomicTheory takes only mode and cityPieceId, not ${extra.join(', ')}`
+  const mode = args['mode']
+  if (mode !== 'extraActions' && mode !== 'nuke') return 'mode must be extraActions or nuke'
+  if (mode === 'extraActions') return args['cityPieceId'] === undefined ? { mode } : 'extraActions takes no cityPieceId'
+  if (!isId(args['cityPieceId'])) return 'nuke needs cityPieceId: the city to destroy'
+  return { mode, cityPieceId: args['cityPieceId'] }
+}
+
+function parseMonarchy(args: Record<string, unknown>): MonarchyPayload | string {
+  const extra = extraKeys(args, ['mode', 'targetId', 'wonderPieceId'])
+  if (extra.length > 0) return `monarchy takes only mode, targetId and wonderPieceId, not ${extra.join(', ')}`
+  const mode = args['mode']
+  if (mode !== 'obsolete' && mode !== 'kill') return 'mode must be obsolete or kill'
+  if (mode === 'obsolete') {
+    if (args['targetId'] !== undefined) return 'obsolete takes no targetId, only wonderPieceId'
+    if (!isId(args['wonderPieceId'])) return 'obsolete needs wonderPieceId: the ancient wonder to disable'
+    return { mode, wonderPieceId: args['wonderPieceId'] }
+  }
+  if (args['wonderPieceId'] !== undefined) return 'kill takes no wonderPieceId, only targetId'
+  if (!isId(args['targetId'])) return 'kill needs targetId: the player whose hand loses a unit'
+  return { mode, targetId: args['targetId'] }
+}
+
 function wholeSquare(value: unknown, name: string): { column: number; row: number } | string {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return `${name} is required`
   const record = asRecord(value)
@@ -267,6 +392,22 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['playCard', parsePlayCard],
   ['communism', parseCommunism],
   ['steamPower', parseSteamPower],
+  ['combustion', parseCombustion],
+  ['gunpowder', parseGunpowder],
+  ['animalHusbandry', parseProductionBoost('animalHusbandry')],
+  ['construction', parseProductionBoost('construction')],
+  ['banking', parseProductionBoost('banking')],
+  ['plastics', parseProductionBoost('plastics')],
+  ['pottery', parseResources('pottery', 2)],
+  ['philosophy', parseResources('philosophy', 3)],
+  ['horsebackRiding', parseTargetPlayer('horsebackRiding', false)],
+  ['writing', parseTargetPlayer('writing', true)],
+  ['civilService', parseTargetPlayer('civilService', true)],
+  ['massMedia', parseTargetPlayer('massMedia', true)],
+  ['mysticism', parseMysticism],
+  ['monarchy', parseMonarchy],
+  ['metalworking', parseArenaUnit],
+  ['atomicTheory', parseAtomicTheory],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['gianniniBuild', parseGianniniBuild],
@@ -276,7 +417,7 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
 ])
 
 /** Whether `action` takes `args`. */
-export const takesArgs = (action: string): boolean => PARSERS.has(action)
+export const takesArgs = (action: string): boolean => PARSERS.has(action) || resourceCostOf(action) !== undefined
 
 /**
  * The payload of `action` from the body's `args`, or a sentence saying what is
@@ -284,7 +425,15 @@ export const takesArgs = (action: string): boolean => PARSERS.has(action)
  */
 export function parseActionArgs(action: string, raw: unknown): AssistedPayload | string {
   const parser = PARSERS.get(action)
-  if (parser === undefined) return `${action} takes no args`
+  const cost = resourceCostOf(action)
+  if (parser === undefined && cost === undefined) return `${action} takes no args`
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return 'args must be an object'
-  return parser(asRecord(raw))
+  const { payments, ...args } = asRecord(raw)
+  const checked = payments === undefined ? undefined : parseResourcePayments(payments, cost)
+  if (checked !== undefined && !checked.ok) return checked.error
+  const parsed = parser === undefined
+    ? Object.keys(args).length === 0 ? {} : 'args does not belong to this action'
+    : parser(args)
+  if (typeof parsed === 'string') return parsed
+  return checked === undefined ? parsed : { ...parsed, payments: checked.value }
 }

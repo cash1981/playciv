@@ -1095,6 +1095,14 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         effect.reserved?.historyId === entry.id
       )
     }
+    // Monarchy's obsolete disabled a wonder: only the vote on its line enables it again
+    if (effect.kind === 'monarchy' && effect.wonder?.historyId === entry.id) return true
+    // Gunpowder disabled a wonder or removed a building: only the vote puts it back
+    if (effect.kind === 'gunpowder' && (effect.wonder?.historyId === entry.id || effect.building?.historyId === entry.id)) return true
+    // A nuke removed the city and what stood around it: only the vote on its line puts them back
+    if (effect.kind === 'atomicTheory' && effect.mode === 'nuke' && effect.removed.some((removal) => removal.historyId === entry.id)) return true
+    // Philosophy put the Great Person marker in the player's area, as a culture advance does
+    if (effect.kind === 'philosophy' && effect.marker?.historyId === entry.id) return true
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
     // A harvest put one resource token in the player's area
@@ -1116,12 +1124,13 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       if (change.kind === 'place' && advance.marker?.pieceId === change.piece.id) return true
       if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
+    // Gunpowder pays several tokens, every other action one
+    const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (
       change.kind === 'remove' &&
-      'spent' in effect &&
-      effect.spent !== null &&
-      effect.spent.kind === 'piece' &&
-      effect.spent.piece.id === change.piece.id
+      spentTokens.some((token) =>
+        (token.kind === 'piece' ? token.piece.id : token.kind === 'card' ? undefined : token.tokenPiece?.id) === change.piece.id,
+      )
     )
   })
 }

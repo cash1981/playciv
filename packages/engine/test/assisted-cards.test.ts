@@ -97,6 +97,29 @@ describe('the registry and the tech map', () => {
       'rationalismI',
       'rationalismII',
       'steamPower',
+      // The unit techs (issue #327)
+      'ballistics',
+      'combustion',
+      'gunpowder',
+      'mathematics',
+      // The resource abilities of the other techs (issue #327, slice 2)
+      'animalHusbandry',
+      'banking',
+      'civilService',
+      'construction',
+      'education',
+      'horsebackRiding',
+      'massMedia',
+      'monarchy',
+      'mysticism',
+      'philosophy',
+      'plastics',
+      'pottery',
+      'writing',
+      // Batch 2: Metalworking, Atomic Theory, Bureaucracy
+      'atomicTheory',
+      'bureaucracy',
+      'metalworking',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -112,8 +135,29 @@ describe('the registry and the tech map', () => {
       'Metal Casting': 'metalCasting',
       Democracy: 'democracy',
       'Printing Press': 'printingPress',
+      Mathematics: 'mathematics',
+      Ballistics: 'ballistics',
+      Gunpowder: 'gunpowder',
+      Combustion: 'combustion',
+      'Animal Husbandry': 'animalHusbandry',
+      Construction: 'construction',
+      Banking: 'banking',
+      Plastics: 'plastics',
+      Pottery: 'pottery',
+      Philosophy: 'philosophy',
+      Education: 'education',
+      'Horseback Riding': 'horsebackRiding',
+      Mysticism: 'mysticism',
+      Writing: 'writing',
+      'Civil Service': 'civilService',
+      'Mass Media': 'massMedia',
+      Monarchy: 'monarchy',
+      Metalworking: 'metalworking',
+      'Atomic Theory': 'atomicTheory',
+      Bureaucracy: 'bureaucracy',
     })
-    expect(ASSISTED_TECH_ACTIONS.get('Writing')).toBeUndefined()
+    // Masonry has no resource ability
+    expect(ASSISTED_TECH_ACTIONS.get('Masonry')).toBeUndefined()
   })
 
   it('the tech table lists the same cards as the registry', () => {

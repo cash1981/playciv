@@ -22,6 +22,7 @@ import { columnLabel, isMapCell, mapTop, squareOf } from './board.js'
 import type { Board, BoardPiece } from './board.js'
 import { coinSourcesOf, totalCoins } from './coins.js'
 import { capitalOf, figuresOnMap, scoutDestinationsOf } from './sot.js'
+import { turnStatus } from './turn.js'
 import type { GameState, Playerhand } from './state.js'
 import { disasterAt, terrainAt } from './terrain.js'
 import { squareIconsOfCell } from './tile-icons.js'
@@ -90,7 +91,13 @@ export interface CityProduction {
    * p. 7): the next Build adds 2 production and uses it up. Not in `estimate`.
    */
   readonly caravan: boolean
-  /** The outskirts plus the applied modifiers. Never a complete count; see `notes`. */
+  /**
+   * The production the city was given for this turn by tech abilities (Animal Husbandry, Construction, Banking,
+   * Plastics), from the actions that are still in force, so an undo takes it off. 0 when none. It is in `estimate` and
+   * `withBuildingProgram`, and a build adds it to a number set by hand too.
+   */
+  readonly boost: number
+  /** The outskirts plus the applied modifiers and the boost. Never a complete count; see `notes`. */
   readonly estimate: number
   /**
    * What the city produces when it builds with the Building Program (Wisdom and
@@ -99,7 +106,7 @@ export interface CityProduction {
   readonly withBuildingProgram: number | null
   /** The number the players typed in, or `null`. */
   readonly override: number | null
-  /** The override when there is one, otherwise the estimate. */
+  /** The override plus the boost when there is an override, otherwise the estimate. */
   readonly effective: number
   /** What the estimate does not count, in plain sentences. Never empty. */
   readonly notes: readonly string[]
@@ -326,6 +333,28 @@ function modifiersOf(state: GameState, player: Playerhand): readonly CityModifie
 }
 
 /**
+ * What the tech abilities of this turn added to one city's production: the applied, not undone, Animal Husbandry,
+ * Construction, Banking and Plastics actions of the player that named the city. Derived from the action records, so
+ * the undo vote removes it exactly as it removes the Communism lock, and it ends with the turn.
+ */
+function productionBoostsOf(
+  state: GameState,
+  player: Playerhand,
+  cityPieceId: string,
+): readonly { readonly tech: string; readonly amount: number }[] {
+  const turn = turnStatus(state).currentTurn
+  return state.assistedActions.flatMap((record) =>
+    record.status === 'applied' &&
+    record.playerId === player.playerId &&
+    record.turnNumber === turn &&
+    record.effect.kind === 'productionBoost' &&
+    record.effect.cityPieceId === cityPieceId
+      ? [{ tech: record.effect.tech, amount: record.effect.amount }]
+      : [],
+  )
+}
+
+/**
  * One `CityProduction` per city piece of the player, in board order. Empty for
  * a player without a colour, who has no cities. A city's owner is the player
  * whose colour its piece has, as `cityCountOf` reads it.
@@ -512,7 +541,9 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     }
 
     const outskirtsTotal = detail.reduce((total, entry) => total + entry.amount, 0)
-    const estimate = outskirtsTotal + modifierTotal
+    const boosts = productionBoostsOf(state, player, piece.id)
+    const boost = boosts.reduce((total, entry) => total + entry.amount, 0)
+    const estimate = outskirtsTotal + modifierTotal + boost
     const buildingProgram = buildingProgramCells.some((marker) => centers.some((centre) => sameCell(centre, marker)))
     const override = piece.productionOverride ?? null
     const caravan = cityMarkerOf(board, piece, CARAVAN_ASSET_ID) !== undefined
@@ -587,13 +618,17 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       label: cityLabels.get(piece.id) ?? `${kindOf(piece)} ${squareOf(board, piece) ?? ''}`.trim(),
       outskirts: outskirtsTotal,
       outskirtsDetail: detail,
-      modifiers,
+      modifiers:
+        boosts.length === 0
+          ? modifiers
+          : [...modifiers, ...boosts.map((entry): CityModifier => ({ label: entry.tech, amount: entry.amount, applied: true, note: 'This turn only.' }))],
       buildingProgram,
       caravan,
+      boost,
       estimate,
-      withBuildingProgram: buildingProgram ? outskirtsTotal * 2 + modifierTotal : null,
+      withBuildingProgram: buildingProgram ? outskirtsTotal * 2 + modifierTotal + boost : null,
       override,
-      effective: override ?? estimate,
+      effective: override === null ? estimate : override + boost,
       notes,
       trade: { outskirts: tradeOutskirts, detail: tradeDetail, notes: tradeNotes },
     }

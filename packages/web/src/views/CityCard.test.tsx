@@ -31,6 +31,7 @@ function city(overrides: Partial<CityProduction> = {}): CityProduction {
     ],
     buildingProgram: false,
     caravan: false,
+    boost: 0,
     estimate: 9,
     withBuildingProgram: null,
     override: null,
@@ -105,6 +106,16 @@ describe('CityCard, the figure', () => {
     const dialog = screen.getByRole('dialog', { name: 'Capital D5: how the estimate is counted' })
     expect(within(dialog).getByText('Estimate: 9')).toBeTruthy()
     expect(screen.queryByText(/Estimated production/)).toBeNull()
+  })
+
+  it('says what a tech ability adds to a number set by hand, and shows it in the estimate otherwise', () => {
+    renderCards([city({ override: 4, effective: 7, boost: 3, estimate: 8 })])
+    expect(screen.getByText('Set by hand: 4')).toBeTruthy()
+    expect(screen.getByText(/plus 3 from a tech ability this turn/)).toBeTruthy()
+    cleanup()
+    renderCards([city({ boost: 3, estimate: 8 })])
+    expect(screen.getByText('Estimated production: 8')).toBeTruthy()
+    expect(screen.queryByText(/from a tech ability/)).toBeNull()
   })
 
   it('shows 0 typed by hand as a number, not as no override', () => {

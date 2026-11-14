@@ -18,4 +18,60 @@ export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = ne
   ['Printing Press', 'printingPress'],
   ['Communism', 'communism'],
   ['Steam Power', 'steamPower'],
+  ['Mathematics', 'mathematics'],
+  ['Ballistics', 'ballistics'],
+  ['Gunpowder', 'gunpowder'],
+  ['Combustion', 'combustion'],
+  ['Animal Husbandry', 'animalHusbandry'],
+  ['Construction', 'construction'],
+  ['Banking', 'banking'],
+  ['Plastics', 'plastics'],
+  ['Pottery', 'pottery'],
+  ['Philosophy', 'philosophy'],
+  ['Education', 'education'],
+  ['Horseback Riding', 'horsebackRiding'],
+  ['Mysticism', 'mysticism'],
+  ['Writing', 'writing'],
+  ['Civil Service', 'civilService'],
+  ['Mass Media', 'massMedia'],
+  ['Monarchy', 'monarchy'],
+  ['Metalworking', 'metalworking'],
+  ['Atomic Theory', 'atomicTheory'],
+  ['Bureaucracy', 'bureaucracy'],
+])
+
+/**
+ * What a tech action asks the player before it is sent (#327), so the web builds the right picker without knowing the
+ * rule: resource tokens to name, a city, another player (with free text for what is
+ * cancelled), an opponent and one of their coin counters, or Monarchy's mode. An action not listed is one press.
+ */
+export type TechPicker =
+  | { readonly kind: 'resources'; readonly count: number }
+  /** Gunpowder: two resources, then a wonder to obsolete or a building to destroy. */
+  | { readonly kind: 'gunpowder' }
+  | { readonly kind: 'city' }
+  | { readonly kind: 'player'; readonly noteLabel?: string }
+  | { readonly kind: 'coin' }
+  | { readonly kind: 'monarchy' }
+  /** One of the player's own living units in the arena (Metalworking). */
+  | { readonly kind: 'arenaUnit' }
+  /** Atomic Theory: extra city actions, or a nuke on a city of another player that is not their capital. */
+  | { readonly kind: 'atomic' }
+
+export const ASSISTED_TECH_PICKERS: ReadonlyMap<AssistedActionKind, TechPicker> = new Map<AssistedActionKind, TechPicker>([
+  ['gunpowder', { kind: 'gunpowder' }],
+  ['pottery', { kind: 'resources', count: 2 }],
+  ['philosophy', { kind: 'resources', count: 3 }],
+  ['animalHusbandry', { kind: 'city' }],
+  ['construction', { kind: 'city' }],
+  ['banking', { kind: 'city' }],
+  ['plastics', { kind: 'city' }],
+  ['horsebackRiding', { kind: 'player' }],
+  ['writing', { kind: 'player', noteLabel: 'City action (optional)' }],
+  ['civilService', { kind: 'player', noteLabel: 'Culture event (optional)' }],
+  ['massMedia', { kind: 'player', noteLabel: 'Resource ability (optional)' }],
+  ['mysticism', { kind: 'coin' }],
+  ['monarchy', { kind: 'monarchy' }],
+  ['metalworking', { kind: 'arenaUnit' }],
+  ['atomicTheory', { kind: 'atomic' }],
 ])

@@ -72,6 +72,22 @@ export function zhukovDealt(state: GameState, actionId: string): number {
   return entries.find((entry) => entry.actionId === actionId)?.dealt ?? 0
 }
 
+/** The wounds a tech's Iron ability deals "while involved in a battle", up to this many (card text, issue #327). */
+export const TECH_WOUNDS: Readonly<Record<string, number>> = { Mathematics: 3, Ballistics: 6 }
+
+/** The wounds the player has paid for with `tech` in this battle and not yet dealt. */
+export function techWoundsOwed(battle: Battle, playerId: string, tech: string): number {
+  return (battle.techWounds ?? [])
+    .filter((entry) => entry.playerId === playerId && entry.tech === tech)
+    .reduce((sum, entry) => sum + entry.total - entry.dealt, 0)
+}
+
+/** The wounds already dealt for the assisted action `actionId`, in the battle on now or the one set aside. */
+export function techWoundsDealt(state: GameState, actionId: string): number {
+  const entries = [...(state.battle?.techWounds ?? []), ...(state.endedBattle?.battle.techWounds ?? [])]
+  return entries.find((entry) => entry.actionId === actionId)?.dealt ?? 0
+}
+
 /**
  * Why the player cannot play a battle card now, or `undefined` when they can. Leonidas and Joan of Arc are for the
  * defender; Leonidas also needs fewer units played than the opponent, which is judged when it is played.

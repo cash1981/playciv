@@ -30,7 +30,7 @@ const SHEET_NOUN: Readonly<Partial<Record<SheetName, string>>> = {
 const typeName = (unit: UnitItem): string => `${unit.kind.charAt(0).toUpperCase()}${unit.kind.slice(1)}`
 
 /** A discarded unit in full, for the public log, so it is easy to keep track of: "Artillery 3.1 item number #54". */
-const discardedName = (unit: UnitItem): string => `${itemName(unit)} item number #${unit.itemNumber}`
+export const discardedName = (unit: UnitItem): string => `${itemName(unit)} item number #${unit.itemNumber}`
 
 /** A unit that was built, for the public log: the type and the item number, not the strength: "Infantry item number #61". */
 const builtName = (unit: UnitItem): string => `${typeName(unit)} item number #${unit.itemNumber}`

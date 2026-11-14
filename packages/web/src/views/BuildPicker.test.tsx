@@ -134,6 +134,7 @@ function options(overrides: Partial<CityBuildOptions> = {}): CityBuildOptions {
     production: 4,
     productionSource: 'estimate',
     caravan: false,
+    boost: 0,
     choices: [LIBRARY, HARBOR],
     unavailable: [
       { assetId: 'buildings/market', item: { kind: 'building', assetId: 'buildings/market' }, label: 'Market', reason: 'Needs the Currency tech.' },
@@ -152,6 +153,7 @@ function cityProduction(overrides: Partial<CityProduction> = {}): CityProduction
     modifiers: [],
     buildingProgram: false,
     caravan: false,
+    boost: 0,
     estimate: 4,
     withBuildingProgram: null,
     override: null,
@@ -239,6 +241,16 @@ describe('BuildPicker', () => {
   it('says a caravan is counted and that the build uses it up', () => {
     renderPicker(options({ production: 6, caravan: true }))
     expect(screen.getByText('Production 6, estimate, including 2 from the caravan, which this build uses up.')).toBeTruthy()
+  })
+
+  it('says what a tech ability added to the city this turn, with the caravan after it', () => {
+    renderPicker(options({ production: 8, boost: 3 }))
+    expect(screen.getByText('Production 8, estimate, including 3 from a tech ability this turn.')).toBeTruthy()
+    cleanup()
+    renderPicker(options({ production: 10, boost: 3, caravan: true }))
+    expect(
+      screen.getByText('Production 10, estimate, including 3 from a tech ability this turn and 2 from the caravan, which this build uses up.'),
+    ).toBeTruthy()
   })
 
   it('keeps the reasons for the other buildings in a popup behind Why not the others', () => {

@@ -27,6 +27,7 @@ import { createLogTexts, javaStringHashCode, uniqueItemNumber } from '../src/log
 import { unwrap } from '../src/result.js'
 import { findPlayer, toPlayerView, toPublicLog } from '../src/state.js'
 
+import { chivalryTurn, player, withCardInHand, withHutInHand, withPieceInArea, withVillageInHand } from './assisted-fixture.js'
 import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 describe('toPublicLog', () => {
@@ -45,6 +46,86 @@ describe('toPublicLog', () => {
 })
 
 describe('toPlayerView', () => {
+  it('only paid hut/village identities become public, never unrelated hand items or stored payment effects', () => {
+    const wheat = withHutInHand(chivalryTurn('Pottery'), 'Wheat')
+    const iron = withVillageInHand(wheat.state, 'Iron')
+    const secret = withHutInHand(iron.state, 'Wheat')
+    const hutIcon = withPieceInArea(secret.state, 'resources/hut')
+    const villageIcon = withPieceInArea(hutIcon.state, 'resources/village')
+    const state = villageIcon.state
+    const held = [wheat.hutId, iron.itemId, secret.hutId].map((id) => {
+      const item = player(state).items.find((candidate) => candidate.id === id)
+      if (item === undefined) throw new Error('missing fixture resource')
+      return item
+    })
+    for (const viewer of [KARANDRAS1, 'spectator']) {
+      const json = JSON.stringify(toPlayerView(state, viewer))
+      for (const item of held) {
+        expect(json).not.toContain(item.id)
+        expect(json).not.toContain(`item number #${item.itemNumber}`)
+      }
+    }
+    const paid = unwrap(performAssistedAction(state, {
+      playerId: CASH1981, action: 'pottery', requestId: 'paid-origins',
+      payload: {
+        resources: ['Wheat', 'Iron'],
+        payments: [{ resource: 'Wheat', kind: 'hut', id: wheat.hutId }, { resource: 'Iron', kind: 'village', id: iron.itemId }],
+      },
+    }))
+    const [paidWheat, paidIron, unspent] = held
+    if (paidWheat === undefined || paidIron === undefined || unspent === undefined) throw new Error('missing held resources')
+    for (const viewer of [KARANDRAS1, 'spectator']) {
+      const json = JSON.stringify(toPlayerView(paid, viewer))
+      expect(json).toContain(`Wheat (hut) item number #${paidWheat.itemNumber}`)
+      expect(json).toContain(`Iron (village) item number #${paidIron.itemNumber}`)
+      expect(json).not.toContain(`item number #${unspent.itemNumber}`)
+      for (const item of held) expect(json).not.toContain(item.id)
+      expect(json).not.toContain('"effect"')
+      expect(json).not.toContain('"tokenPiece"')
+    }
+  })
+
+  it('resource-payment options expose private card and hut IDs only through the owner availability', () => {
+    const hut = withHutInHand(firstCivGame(), 'Wheat')
+    const gift = withCardInHand(hut.state, 'A Generous Gift')
+    const state = gift.state
+    const mine = toPlayerView(state, CASH1981)
+    const payment = mine.you?.availableActions.find((action) => action.action === 'pottery')?.payment
+    expect(payment).toMatchObject({
+      cost: [null, null],
+      options: expect.arrayContaining([
+        { choice: { resource: 'Wheat', kind: 'hut', id: hut.hutId }, label: 'Wheat (hand)' },
+        { choice: { resource: 'Iron', kind: 'card', id: gift.itemId }, label: 'A Generous Gift (as Iron)' },
+      ]),
+    })
+    for (const viewer of [KARANDRAS1, 'spectator']) {
+      const view = toPlayerView(state, viewer)
+      const serialised = JSON.stringify(view)
+      expect(serialised).not.toContain(gift.itemId)
+      expect(serialised).not.toContain(hut.hutId)
+      expect(serialised).not.toContain('A Generous Gift')
+      expect(view.opponents.find((opponent) => opponent.playerId === CASH1981)).not.toHaveProperty('availableActions')
+    }
+
+    // The spent card's wording is public, but no choice/effect (nor an unspent hut ID) enters public records.
+    let ready = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Communism' }))
+    ready = unwrap(revealTech(ready, { playerId: CASH1981, techName: 'Communism' }))
+    ready = unwrap(markPhasesDone(ready, { playerId: CASH1981, turnNumber: 1, upToPhase: 'CM' }))
+    const paid = unwrap(performAssistedAction(ready, {
+      playerId: CASH1981, action: 'communism', requestId: 'private-payments',
+      payload: { square: { column: 3, row: 3 }, payments: [{ resource: 'Spy', kind: 'card', id: gift.itemId }] },
+    }))
+    for (const viewer of [KARANDRAS1, 'spectator']) {
+      const view = toPlayerView(paid, viewer)
+      expect(view.assistedActions[0]?.text).toContain('played A Generous Gift item number #')
+      expect(JSON.stringify(view)).not.toContain(gift.itemId)
+      expect(JSON.stringify(view)).not.toContain(hut.hutId)
+      expect(view.assistedActions[0]).not.toHaveProperty('payment')
+      expect(view.assistedActions[0]).not.toHaveProperty('payments')
+      expect(view.assistedActions[0]).not.toHaveProperty('effect')
+    }
+  })
+
   it('the owner sees their own hand in the clear', () => {
     let state = firstCivGame()
     for (const sheetName of ['CULTURE_1', 'HUTS', 'INFANTRY'] as const) {
