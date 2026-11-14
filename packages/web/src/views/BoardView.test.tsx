@@ -69,6 +69,29 @@ function setZoom(value: number | 'auto'): void {
   fireEvent.click(dialog.getByRole('button', { name: 'Close' }))
 }
 
+describe('BoardView area colours (issue #347)', () => {
+  it('fills a player area with the player colour and the Wonders area with the wonder accent', () => {
+    const area = { x: 0, y: 0, width: 100, height: 100 }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={2}
+        areas={[
+          { playerId: 'p1', username: 'Anna', color: 'Yellow', ...area },
+          { playerId: '__wonders__', username: 'Wonders', color: null, ...area },
+        ]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+    const [player, wonders] = Array.from(container.querySelectorAll<HTMLElement>('.board-area'))
+    expect(player?.style.background).toBe('yellow')
+    expect(wonders?.style.background).toBe('var(--wonder-accent)')
+    cleanup()
+  })
+})
+
 describe('BoardView zoom', () => {
   it('chooses the largest fitting step and caps automatic zoom at 100%', () => {
     expect(fittingBoardZoom(1000, 1200)).toBe(1)

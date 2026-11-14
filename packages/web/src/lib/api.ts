@@ -612,6 +612,8 @@ export const api = {
     post<CompactResultDto>('/api/admin/games/revisions/compact', gameId === undefined ? {} : { gameId }),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
+  searchPlayers: (query: string) =>
+    get<{ readonly username: string }[]>(`/api/players/search?q=${encodeURIComponent(query)}`),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
   lobbyChat: () => get<ChatMessageDto[]>('/api/chat'),
   sendLobbyChat: (message: string) => post<ChatMessageDto>('/api/chat', { message }),

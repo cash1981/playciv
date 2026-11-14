@@ -288,6 +288,8 @@ function newestFirst<T extends { readonly createdAt: string | null }>(entries: r
 /** A spectator has no account, so revision history needs a placeholder actor. */
 const SPECTATOR = { id: '', username: 'Spectator' }
 
+const PLAYER_SEARCH_LIMIT = 8
+
 export function registerGameRoutes(app: App, context: AppContext): void {
   const auth = authenticateWith(context)
   // Read-only routes accept an absent or non-member viewer (issue #81): the
@@ -307,6 +309,25 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     )
   })
 
+  /**
+   * Autocomplete for the invite field of a private game (issue #348). Signed-in only, at least one character,
+   * usernames only (never an email or id), at most `PLAYER_SEARCH_LIMIT` hits, and never the caller or a disabled
+   * account. Names that start with the query come before names that merely contain it.
+   */
+  app.get('/api/players/search', auth, async (c) => {
+    const query = (c.req.query('q') ?? '').trim().toLowerCase()
+    if (query === '') return c.json([])
+    const me = currentPlayer(c).id
+    const matches = (await context.repo.allPlayers())
+      .filter((player) => player.id !== me && player.disabled !== true)
+      .map((player) => ({ username: player.username, at: player.username.toLowerCase().indexOf(query) }))
+      .filter((entry) => entry.at >= 0)
+      .sort((a, b) => Number(a.at !== 0) - Number(b.at !== 0) || a.username.localeCompare(b.username))
+      .slice(0, PLAYER_SEARCH_LIMIT)
+      .map((entry) => ({ username: entry.username }))
+    return c.json(matches)
+  })
+
   /** Java: `GameResource.createGame` with `CreateNewGameDTO`. */
   app.post('/api/games', auth, async (c) => {
     const body = asRecord(await c.req.json().catch(() => ({})))
@@ -317,6 +338,10 @@ export function registerGameRoutes(app: App, context: AppContext): void {
 
     if (name === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'name is required')
+    }
+    // Fail closed: a malformed list must not quietly make a requested private game public.
+    if (invitedNames === null) {
+      return sendError(c, 400, 'BAD_REQUEST', 'invitedUsernames must be a list of usernames')
     }
     if (numOfPlayers < 2 || numOfPlayers > 5) {
       return sendError(c, 400, 'BAD_REQUEST', 'numOfPlayers must be between 2 and 5')
@@ -336,15 +361,13 @@ export function registerGameRoutes(app: App, context: AppContext): void {
         }
         if (account.id !== me.id && !invitees.includes(account.id)) invitees.push(account.id)
       }
-      if (invitees.length === 0) {
-        return sendError(c, 400, 'BAD_REQUEST', 'A private game needs at least one invited player')
-      }
-      if (invitees.length > numOfPlayers - 1) {
+      // Exactly one invitee per other seat: nobody else can join, so fewer would leave the game unable to start.
+      if (invitees.length !== numOfPlayers - 1) {
         return sendError(
           c,
           400,
           'BAD_REQUEST',
-          `A ${numOfPlayers}-player game has room for ${numOfPlayers - 1} invited players`,
+          `A ${numOfPlayers}-player private game needs ${numOfPlayers - 1} invited players`,
         )
       }
       invitedPlayerIds = [me.id, ...invitees]

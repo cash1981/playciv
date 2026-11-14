@@ -9,6 +9,7 @@ import { api } from '../lib/api.js'
 import type { ChatMessageDto, PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { GameList } from './GameList.js'
 import { HighscoreView } from './HighscoreView.js'
+import { InvitePicker } from './InvitePicker.js'
 import { LobbyChat } from './LobbyChat.js'
 
 interface Props {
@@ -24,7 +25,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
   const [numOfPlayers, setNumOfPlayers] = useState(4)
   const [color, setColor] = useState('Green')
   const [isPrivate, setIsPrivate] = useState(false)
-  const [invited, setInvited] = useState('')
+  const [invited, setInvited] = useState<readonly string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // Covers the write and the reload after it, which `request()` alone would not.
@@ -124,12 +125,11 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             onSubmit={(event) => {
               event.preventDefault()
               void run(async () => {
-                const invitees = invited.split(/[,\n]/).map((entry) => entry.trim()).filter((entry) => entry !== '')
                 const created = isPrivate
-                  ? await api.createGame(name, numOfPlayers, color, invitees)
+                  ? await api.createGame(name, numOfPlayers, color, invited)
                   : await api.createGame(name, numOfPlayers, color)
                 setName('')
-                setInvited('')
+                setInvited([])
                 onOpenGame(created.id)
               }).catch(() => undefined)
             }}
@@ -153,7 +153,12 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             <select
               aria-label="Number of players"
               value={numOfPlayers}
-              onChange={(event) => setNumOfPlayers(Number(event.target.value))}
+              onChange={(event) => {
+                const next = Number(event.target.value)
+                setNumOfPlayers(next)
+                // A private game has one invitee per other seat; drop any beyond the new count.
+                setInvited((current) => current.slice(0, next - 1))
+              }}
             >
               {[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} players</option>)}
             </select>
@@ -166,18 +171,12 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
               Private game
             </label>
             {isPrivate && (
-              <input
-                aria-label="Invited players"
-                value={invited}
-                onChange={(event) => setInvited(event.target.value)}
-                placeholder="Usernames to invite, comma separated"
-                required
-              />
+              <InvitePicker selected={invited} onChange={setInvited} max={numOfPlayers - 1} />
             )}
             <button
               className="primary"
               type="submit"
-              disabled={busy || name.trim() === '' || (isPrivate && invited.trim() === '')}
+              disabled={busy || name.trim() === '' || (isPrivate && invited.length !== numOfPlayers - 1)}
             >
               Create
             </button>

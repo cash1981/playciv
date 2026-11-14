@@ -12,6 +12,8 @@ const apiMocks = vi.hoisted(() => ({
   lobbyChat: vi.fn(async () => []),
   highscore: vi.fn(async () => ({ players: [] })),
   createGame: vi.fn(async () => ({ id: 'created' })),
+  searchPlayers: vi.fn(async (query: string) =>
+    ['anna', 'annika', 'bob'].filter((name) => name.includes(query)).map((username) => ({ username }))),
 }))
 
 vi.mock('../lib/api.js', () => ({ api: apiMocks }))
@@ -41,17 +43,45 @@ describe('LandingView', () => {
     await waitFor(() => expect(apiMocks.createGame).toHaveBeenCalledWith('My game', 4, 'Red'))
   })
 
-  it('creates a private game with the invited usernames (issue #348)', async () => {
+  it('creates a private game with invitees chosen from the autocomplete (issue #348)', async () => {
     render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
     fireEvent.change(screen.getByLabelText('Game name'), { target: { value: 'Secret' } })
-    expect(screen.queryByLabelText('Invited players')).toBeNull()
+    fireEvent.change(screen.getByLabelText('Number of players'), { target: { value: '3' } })
+    expect(screen.queryByLabelText('Invite player')).toBeNull()
     fireEvent.click(screen.getByLabelText('Private game'))
     expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText('Invited players'), { target: { value: 'anna, bob ,' } })
+
+    const input = screen.getByLabelText('Invite player')
+    fireEvent.change(input, { target: { value: 'ann' } })
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'annika' }))
+    expect(screen.getByRole('button', { name: 'Remove annika' })).toBeTruthy()
+
+    fireEvent.change(input, { target: { value: 'bo' } })
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'bob' }))
+
+    // Two of two seats are chosen, so the field closes. Removing a chip reopens it.
+    expect((input as HTMLInputElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove bob' }))
+    expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(true)
+
+    // A chosen name is not offered again.
+    fireEvent.change(input, { target: { value: 'ann' } })
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'anna' }))
+    expect(screen.queryByRole('option', { name: 'annika' })).toBeNull()
+
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() =>
-      expect(apiMocks.createGame).toHaveBeenCalledWith('Secret', 4, 'Green', ['anna', 'bob']),
+      expect(apiMocks.createGame).toHaveBeenCalledWith('Secret', 3, 'Green', ['annika', 'anna']),
     )
+  })
+
+  it('stops offering names once every invite seat is taken', async () => {
+    render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Number of players'), { target: { value: '2' } })
+    fireEvent.click(screen.getByLabelText('Private game'))
+    fireEvent.change(screen.getByLabelText('Invite player'), { target: { value: 'bo' } })
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'bob' }))
+    expect((screen.getByLabelText('Invite player') as HTMLInputElement).disabled).toBe(true)
   })
 
   it('keeps the global spinner busy through the reload after a write (issue #225)', async () => {

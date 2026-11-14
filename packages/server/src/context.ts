@@ -398,14 +398,18 @@ export function optionalString(
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
-/** A JSON array of strings; `undefined` when the key is absent or is not an array. */
+/**
+ * A JSON array of strings; `undefined` when the key is absent, `null` when it is present but is anything else (not an
+ * array, or an array with a non-string), so a caller can refuse it instead of treating it as "not given".
+ */
 export function optionalStringList(
   body: Record<string, unknown>,
   key: string,
-): string[] | undefined {
+): string[] | undefined | null {
+  if (!(key in body)) return undefined
   const value = body[key]
-  if (!Array.isArray(value)) return undefined
-  return value.filter((entry): entry is string => typeof entry === 'string')
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) return null
+  return value as string[]
 }
 
 export function optionalNumber(

@@ -1190,10 +1190,17 @@ configuration and migration instructions.
 ## Private games and board area colour (#347, #348)
 
 - A game created with `invitedUsernames` is private: `GameState.invitedPlayerIds` holds the creator and the invited
-  account ids (absent on a public game, so no migration). `joinGame` answers `NOT_INVITED` (403) to anyone else, and the
-  creator gets at most `numOfPlayers - 1` invitees, who must be existing, enabled accounts. Each invitee is mailed the
-  game link once, without the per-game hold.
+  account ids (absent on a public game, so no migration). `joinGame` answers `NOT_INVITED` (403) to anyone else, a
+  withdrawn player's seat included. The creator must name exactly `numOfPlayers - 1` distinct, existing, enabled
+  accounts other than themself, because nobody else can join and fewer would leave a game that never starts. A
+  malformed `invitedUsernames` is a 400, never a quietly public game. Each invitee is mailed the game link once,
+  without the per-game hold.
+- A seat freed by a withdrawal in a private game can only be retaken by an invited account that is not seated, in
+  practice the player who left. There is no way to change the invite list afterwards.
+- The invite field autocompletes from `GET /api/players/search?q=` (signed in; usernames only, caller and disabled
+  accounts left out, prefix matches first, at most 8).
 - A private game is left out of `/api/games` and `/api/public/games` for everyone who is neither invited nor seated.
-  Anyone holding the direct game link can still spectate it, as for any game; the invitation controls who may play.
+  Anyone holding the direct game link can still spectate it, as for any game, and a finished game still counts in the
+  highscore; the invitation controls who may play.
 - On the board, a player's area is filled with their colour (not only the border and the name tab), and the shared
   Wonders area with the wonder accent, in every theme.

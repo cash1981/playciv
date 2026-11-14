@@ -2404,3 +2404,58 @@ ul.history > li {
     min-width: 5.25rem;
   }
 }
+
+/* Invite picker for a private game (issue #348) */
+.invite-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.invite-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.2rem 0.15rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.invite-chip button {
+  padding: 0 0.35rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.invite-input {
+  position: relative;
+}
+
+.invite-suggestions {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 100%;
+  margin: 2px 0 0;
+  padding: 0.2rem 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.invite-suggestions li {
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+}
+
+.invite-suggestions li.active,
+.invite-suggestions li:hover {
+  background: var(--panel-2);
+}
