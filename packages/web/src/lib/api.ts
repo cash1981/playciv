@@ -275,6 +275,10 @@ export interface GameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private?: boolean
+  /** False for a private game the viewer is not invited to. Absent means they may. */
+  readonly mayJoin?: boolean
   readonly availableColors: readonly string[]
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
@@ -290,6 +294,10 @@ export interface PublicGameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  /** A private game (issue #348): only invited players can join. */
+  readonly private?: boolean
+  /** False for a private game the viewer is not invited to. Absent means they may. */
+  readonly mayJoin?: boolean
   readonly availableColors: readonly string[]
   readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
@@ -608,13 +616,25 @@ export const api = {
     post<CompactResultDto>('/api/admin/games/revisions/compact', gameId === undefined ? {} : { gameId }),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
+  searchPlayers: (query: string) =>
+    get<{ readonly username: string }[]>(`/api/players/search?q=${encodeURIComponent(query)}`),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
   lobbyChat: () => get<ChatMessageDto[]>('/api/chat'),
   sendLobbyChat: (message: string) => post<ChatMessageDto>('/api/chat', { message }),
 
   games: () => get<GameSummary[]>('/api/games'),
-  createGame: (name: string, numOfPlayers: number, color?: string) =>
-    post<GameSummary>('/api/games', { name, numOfPlayers, ...(color === undefined ? {} : { color }) }),
+  createGame: (
+    name: string,
+    numOfPlayers: number,
+    color?: string,
+    invitedUsernames?: readonly string[],
+  ) =>
+    post<GameSummary>('/api/games', {
+      name,
+      numOfPlayers,
+      ...(color === undefined ? {} : { color }),
+      ...(invitedUsernames === undefined ? {} : { invitedUsernames }),
+    }),
   /**
    * `background` marks an auto-refresh poll: the server must not count it as the
    * player opening the game, or an open tab would re-arm their game mail.

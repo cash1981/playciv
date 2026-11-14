@@ -1,6 +1,6 @@
 /** The public lobby: games, highscore and the read-only lobby chat. */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { PLAYER_COLORS } from '@civ/engine'
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -9,6 +9,7 @@ import { api } from '../lib/api.js'
 import type { ChatMessageDto, PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { GameList } from './GameList.js'
 import { HighscoreView } from './HighscoreView.js'
+import { InvitePicker } from './InvitePicker.js'
 import { LobbyChat } from './LobbyChat.js'
 
 interface Props {
@@ -23,25 +24,38 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
   const [name, setName] = useState('')
   const [numOfPlayers, setNumOfPlayers] = useState(4)
   const [color, setColor] = useState('Green')
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [invited, setInvited] = useState<readonly string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // Covers the write and the reload after it, which `request()` alone would not.
   useActivity(busy)
 
+  // The lobby list depends on who is looking (private games, issue #348). A response that was asked for as another
+  // viewer must not land after the viewer changed, e.g. on sign-out.
+  const viewerId = player?.id ?? null
+  const viewerRef = useRef(viewerId)
+  viewerRef.current = viewerId
+
   const reload = useCallback(async () => {
+    const askedAs = viewerRef.current
     try {
       const [nextGames, nextChat] = await Promise.all([api.publicGames(), api.lobbyChat()])
+      if (viewerRef.current !== askedAs) return
       setGames(nextGames)
       setChat(nextChat)
       setError(null)
     } catch (caught) {
+      if (viewerRef.current !== askedAs) return
       setError(errorMessage(caught))
     }
   }, [])
 
   useEffect(() => {
+    // Drop the previous viewer's rows at once, then fetch the new viewer's.
+    setGames([])
     void reload()
-  }, [reload])
+  }, [reload, viewerId])
 
   const run = useCallback(
     async (action: () => Promise<unknown>): Promise<void> => {
@@ -122,8 +136,11 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             onSubmit={(event) => {
               event.preventDefault()
               void run(async () => {
-                const created = await api.createGame(name, numOfPlayers, color)
+                const created = isPrivate
+                  ? await api.createGame(name, numOfPlayers, color, invited)
+                  : await api.createGame(name, numOfPlayers, color)
                 setName('')
+                setInvited([])
                 onOpenGame(created.id)
               }).catch(() => undefined)
             }}
@@ -147,11 +164,33 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             <select
               aria-label="Number of players"
               value={numOfPlayers}
-              onChange={(event) => setNumOfPlayers(Number(event.target.value))}
+              onChange={(event) => {
+                const next = Number(event.target.value)
+                setNumOfPlayers(next)
+                // A private game has one invitee per other seat; drop any beyond the new count.
+                setInvited((current) => current.slice(0, next - 1))
+              }}
             >
               {[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} players</option>)}
             </select>
-            <button className="primary" type="submit" disabled={busy || name.trim() === ''}>Create</button>
+            <label>
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(event) => setIsPrivate(event.target.checked)}
+              />{' '}
+              Private game
+            </label>
+            {isPrivate && (
+              <InvitePicker selected={invited} onChange={setInvited} max={numOfPlayers - 1} />
+            )}
+            <button
+              className="primary"
+              type="submit"
+              disabled={busy || name.trim() === '' || (isPrivate && invited.length !== numOfPlayers - 1)}
+            >
+              Create
+            </button>
           </form>
         </section>
       )}

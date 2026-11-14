@@ -1186,3 +1186,25 @@ configuration and migration instructions.
 - In development the web app imports the engine from `packages/engine/dist`;
   engine changes need `pnpm --filter @civ/engine build` (or `tsc --watch`) and a
   reload.
+
+## Private games and board area colour (#347, #348)
+
+- A game created with `invitedUsernames` is private: `GameState.invitedPlayerIds` holds the creator and the invited
+  account ids (absent on a public game, so no migration). `joinGame` answers `NOT_INVITED` (403) to anyone else, a
+  withdrawn player's seat included. The creator must name exactly `numOfPlayers - 1` distinct, existing, enabled
+  accounts other than themself, because nobody else can join and fewer would leave a game that never starts. A
+  malformed `invitedUsernames` is a 400, never a quietly public game. Each invitee is mailed the game link once,
+  without the per-game hold.
+- A seat freed by a withdrawal in a private game can only be retaken by an invited account that is not seated, in
+  practice the player who left. There is no way to change the invite list afterwards.
+- The invite field autocompletes from `GET /api/players/search?q=` (signed in; usernames only, caller and disabled
+  accounts left out, prefix matches first, at most 8).
+- A private game stays in `/api/games` and `/api/public/games` for everyone, so nobody wonders where it went; the
+  summary's `mayJoin` is false for a viewer who is not invited and the lobby then shows no Join button. Anyone holding
+  the direct game link can still spectate it, as for any game, and a finished game still counts in the highscore; the
+  invitation controls who may play.
+- On the board, a player's area is filled with their colour (not only the border and the name tab), and the shared
+  Wonders area with the wonder accent, in every theme.
+- The invite mail is not throttled: any signed-in account can mail any enabled account an invitation, and the game
+  name is the sender's text. The repo has no rate limiting anywhere and the mail carries the unsubscribe link; add a
+  per-sender limit if it is ever abused.
