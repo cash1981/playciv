@@ -1204,3 +1204,6 @@ configuration and migration instructions.
   highscore; the invitation controls who may play.
 - On the board, a player's area is filled with their colour (not only the border and the name tab), and the shared
   Wonders area with the wonder accent, in every theme.
+- The invite mail is not throttled: any signed-in account can mail any enabled account an invitation, and the game
+  name is the sender's text. The repo has no rate limiting anywhere and the mail carries the unsubscribe link; add a
+  per-sender limit if it is ever abused.

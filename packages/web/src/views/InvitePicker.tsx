@@ -79,7 +79,8 @@ export function InvitePicker({ selected, onChange, max }: Props): React.JSX.Elem
           role="combobox"
           aria-label="Invite player"
           aria-expanded={showList}
-          aria-controls={listId}
+          aria-controls={showList ? listId : undefined}
+          aria-activedescendant={showList ? `${listId}-${active}` : undefined}
           aria-autocomplete="list"
           autoComplete="off"
           value={text}
@@ -89,6 +90,8 @@ export function InvitePicker({ selected, onChange, max }: Props): React.JSX.Elem
           }
           onChange={(event) => {
             setText(event.target.value)
+            // The old suggestions belong to the old text: never let Enter or a click pick one of them.
+            setSuggestions([])
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
@@ -115,6 +118,7 @@ export function InvitePicker({ selected, onChange, max }: Props): React.JSX.Elem
             {suggestions.map((name, index) => (
               <li
                 key={name}
+                id={`${listId}-${index}`}
                 role="option"
                 aria-selected={index === active}
                 className={index === active ? 'active' : undefined}

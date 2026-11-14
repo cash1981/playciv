@@ -75,6 +75,27 @@ describe('LandingView', () => {
     )
   })
 
+  it('trims the invitees when the player count drops, and Enter chooses without submitting', async () => {
+    render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Game name'), { target: { value: 'Trim' } })
+    fireEvent.click(screen.getByLabelText('Private game'))
+    const input = screen.getByLabelText('Invite player')
+    for (const [query, name] of [['an', 'anna'], ['ann', 'annika'], ['bo', 'bob']] as const) {
+      fireEvent.change(input, { target: { value: query } })
+      await screen.findByRole('option', { name })
+      if (name === 'annika') fireEvent.keyDown(input, { key: 'ArrowDown' })
+      fireEvent.keyDown(input, { key: 'Enter' })
+    }
+    // Enter picked anna, then the highlighted annika, then bob; nothing was submitted.
+    expect(apiMocks.createGame).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Remove bob' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false)
+
+    fireEvent.change(screen.getByLabelText('Number of players'), { target: { value: '2' } })
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(1)
+    expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('stops offering names once every invite seat is taken', async () => {
     render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
     fireEvent.change(screen.getByLabelText('Number of players'), { target: { value: '2' } })
