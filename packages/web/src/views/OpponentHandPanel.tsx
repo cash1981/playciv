@@ -6,6 +6,13 @@ interface Props {
   readonly opponents: readonly OpaquePlayerhand[]
 }
 
+const UNIT_TYPE_LABELS: readonly { readonly key: 'infantry' | 'artillery' | 'mounted' | 'aircraft'; readonly label: string }[] = [
+  { key: 'infantry', label: 'Infantry' },
+  { key: 'artillery', label: 'Artillery' },
+  { key: 'mounted', label: 'Mounted' },
+  { key: 'aircraft', label: 'Aircraft' },
+]
+
 const CATEGORIES: readonly { readonly key: keyof PublicHandCounts; readonly label: string }[] = [
   { key: 'cultureCards', label: 'Culture cards' },
   { key: 'huts', label: 'Huts' },
@@ -25,7 +32,7 @@ export function OpponentHandPanel({ opponents }: Props): React.JSX.Element {
             if (count === 0) return null
             return (
               <div className="opponent-hand-category" key={key}>
-                <h4>{label} ({count})</h4>
+                <h4>{label} ({count}){key === 'units' && unitTypeSummary(opponent)}</h4>
                 <ul className="opponent-hand-cards" aria-label={label}>
                   {Array.from({ length: count }, (_, index) => (
                     <li className="opponent-hand-card" key={index} aria-label="Face-down card" />
@@ -39,4 +46,12 @@ export function OpponentHandPanel({ opponents }: Props): React.JSX.Element {
       ))}
     </CollapsiblePanel>
   )
+}
+
+function unitTypeSummary(opponent: OpaquePlayerhand): string {
+  const parts = UNIT_TYPE_LABELS.flatMap(({ key, label }) => {
+    const count = opponent.unitTypes?.[key] ?? 0
+    return count > 0 ? [`${count} ${label.toLowerCase()}`] : []
+  })
+  return parts.length > 0 ? `: ${parts.join(', ')}` : ''
 }

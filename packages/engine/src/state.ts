@@ -1372,6 +1372,8 @@ export interface OpaquePlayerhand {
   readonly numberOfItemsInHand: number
   /** Counts of the five public hand categories; no item data or order. */
   readonly publicHand: PublicHandCounts
+  /** How many of the hand's units are of each type; the unit type is on the card back, so it is public. */
+  readonly unitTypes: Readonly<Record<UnitType, number>>
   readonly numberOfTechsChosen: number
   readonly numberOfBarbarians: number
   readonly numberOfSocialPolicies: number
@@ -1428,6 +1430,12 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
       villages: player.items.filter((item) => item.kind === 'village').length,
       greatPersons: player.items.filter((item) => item.kind === 'greatperson').length,
       units: player.items.filter(isUnit).length,
+    },
+    unitTypes: {
+      infantry: player.items.filter((item) => item.kind === 'infantry').length,
+      artillery: player.items.filter((item) => item.kind === 'artillery').length,
+      mounted: player.items.filter((item) => item.kind === 'mounted').length,
+      aircraft: player.items.filter((item) => item.kind === 'aircraft').length,
     },
     numberOfTechsChosen: player.techsChosen.length,
     numberOfBarbarians: player.barbarians.length,
