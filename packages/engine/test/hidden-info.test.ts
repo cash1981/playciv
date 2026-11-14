@@ -95,6 +95,9 @@ describe('toPlayerView', () => {
     expect(opponent?.publicHand).toEqual(expected)
     expect(spectator?.publicHand).toEqual(expected)
     expect(opponent?.numberOfItemsInHand).toBe(11)
+    const expectedUnitTypes = { infantry: 1, artillery: 1, mounted: 1, aircraft: 1 }
+    expect(opponent?.unitTypes).toEqual(expectedUnitTypes)
+    expect(spectator?.unitTypes).toEqual(expectedUnitTypes)
 
     for (const projected of [opponent, spectator]) {
       const serialised = JSON.stringify(projected)
