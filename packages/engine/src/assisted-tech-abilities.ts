@@ -23,12 +23,13 @@ import {
   restoreDrawnCards,
   countLinesIn,
 } from './assisted-culture.js'
-import type { ArenaUnit, Battle } from './battle.js'
+import type { ArenaUnit } from './battle.js'
 import { playerSideOf } from './battle-cards.js'
 import { discardedName } from './gustavus.js'
 import { obsoletableWondersOf } from './obsolete-wonders.js'
 import type { ObsoletableWonder } from './obsolete-wonders.js'
 import { setWonderOwner } from './actions/board.js'
+import { refightWithAttack, undoRefight } from './actions/arena.js'
 import {
   ANY_RESOURCES,
   anyResourceName,
@@ -849,12 +850,11 @@ function arenaUnitIn(state: GameState, battleId: string, arenaUnitId: string): A
   return battle?.arena.find((unit) => unit.id === arenaUnitId)
 }
 
-/** Replaces one arena unit in the battle on now or the one set aside. */
-function withArenaUnit(state: GameState, battleId: string, unit: ArenaUnit): GameState {
-  const swap = (battle: Battle): Battle => ({ ...battle, arena: battle.arena.map((candidate) => (candidate.id === unit.id ? unit : candidate)) })
-  if (state.battle?.id === battleId) return { ...state, battle: swap(state.battle) }
+/** Replaces the whole arena of the battle on now or the one set aside. */
+function withBattleArena(state: GameState, battleId: string, arena: readonly ArenaUnit[]): GameState {
+  if (state.battle?.id === battleId) return { ...state, battle: { ...state.battle, arena } }
   if (state.endedBattle !== null && state.endedBattle.battle.id === battleId) {
-    return { ...state, endedBattle: { ...state.endedBattle, battle: swap(state.endedBattle.battle) } }
+    return { ...state, endedBattle: { ...state.endedBattle, battle: { ...state.endedBattle.battle, arena } } }
   }
   return state
 }
@@ -891,7 +891,10 @@ const metalworking = techAbility<'metalworking', ArenaUnit>({
     const after = unit.attack + METALWORKING_BONUS
     const battleId = state.battle?.id ?? ''
     const named = unit.announced === false ? 'a unit it placed' : `${revealAll(unit.unit)} ${itemNumberText(state.logSecret, player.username, unit.unit)}`
-    const next = withArenaUnit(state, battleId, { ...unit, attack: after })
+    // A round already fought on the unit's front is fought again with the new attack (an Infantry that now out-hits a
+    // Mounted it faces kills it first and takes nothing), so nobody has to correct the arena by hand
+    const { arena, refight } = refightWithAttack(state.battle?.arena ?? [], unit.id, after)
+    const next = withBattleArena(state, battleId, arena)
     return ok({
       state: next,
       // Not announced yet: the card is named in the player's own log, after the public line, and not in it
@@ -899,8 +902,8 @@ const metalworking = techAbility<'metalworking', ArenaUnit>({
         unit.announced === false
           ? [`Metalworking: ${revealAll(unit.unit)} ${itemNumberText(state.logSecret, player.username, unit.unit)} attack ${unit.attack} → ${after}`]
           : [],
-      said: `, adding ${METALWORKING_BONUS} to the attack of ${named} (${unit.attack} → ${after})`,
-      effect: { kind: 'metalworking', spent, battleId, arenaUnitId: unit.id, before: unit.attack, after },
+      said: `, adding ${METALWORKING_BONUS} to the attack of ${named} (${unit.attack} → ${after})${refight === null ? '' : ' and the face-off on its front was fought again with the new attack'}`,
+      effect: { kind: 'metalworking', spent, battleId, arenaUnitId: unit.id, before: unit.attack, after, ...(refight === null ? {} : { refight }) },
     })
   },
 
@@ -908,7 +911,12 @@ const metalworking = techAbility<'metalworking', ArenaUnit>({
     const unit = arenaUnitIn(state, effect.battleId, effect.arenaUnitId)
     if (unit === undefined) return err('The unit is no longer in the arena, so its attack cannot be taken back.')
     if (unit.attack !== effect.after) return err(`The attack of the unit was edited since (it is ${unit.attack}, not ${effect.after}), so it cannot be taken back. Correct it by hand.`)
-    return ok({ state: withArenaUnit(state, effect.battleId, { ...unit, attack: effect.before }), said: ` and the unit's attack went back from ${effect.after} to ${effect.before}` })
+    const battle = state.battle?.id === effect.battleId ? state.battle : state.endedBattle?.battle.id === effect.battleId ? state.endedBattle.battle : undefined
+    // What the fight again did to both units goes back first (each only while it still has what that round left it with), then the attack
+    const arena = (effect.refight === undefined ? (battle?.arena ?? []) : undoRefight(battle?.arena ?? [], effect.refight)).map((candidate) =>
+      candidate.id === unit.id ? { ...candidate, attack: effect.before } : candidate,
+    )
+    return ok({ state: withBattleArena(state, effect.battleId, arena), said: ` and the unit's attack went back from ${effect.after} to ${effect.before}${effect.refight === undefined ? '' : ', with the face-off on its front as it was before'}` })
   },
 })
 

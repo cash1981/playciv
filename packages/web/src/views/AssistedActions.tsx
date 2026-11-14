@@ -37,6 +37,7 @@ import type { AssistedActionKind, CombustionTarget, PendingRewardView, ResourceP
 import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import type { BuildFlow } from './buildFlow.js'
+import { ChoiceDialog } from './ChoiceDialog.js'
 import { endTurnState } from './EndTurn.js'
 import { HelpHint } from './HelpHint.js'
 import { useMapPicker } from './mapPick.js'
@@ -256,29 +257,39 @@ interface PickerFormProps {
   readonly picker: TechPicker | undefined
   readonly paymentLabels: readonly string[]
   readonly paymentResources: readonly string[]
+  /** The resource selectors, shown first in the popup when the ability pays resources. */
+  readonly paymentPicker: ReactNode
   readonly send: (args: Record<string, unknown>) => void
 }
 
+/** One way to use an ability that has more than one. Only the modes that can be carried out are offered. */
+interface ModeOption<M extends string> {
+  readonly value: M
+  readonly label: string
+}
+
 /**
- * The question a tech ability asks before it is sent: which resources to pay, which city, which other player (and,
- * for a cancel, what is cancelled as free text), which coin counter, or Monarchy's mode. It decides no rule: it sends
- * what was picked and the engine accepts or refuses it. Nothing is sent by opening it; only the submit button sends.
+ * The question a tech ability asks before it is sent, as a popup with OK and Cancel: which resources to pay, which
+ * city, which other player (and, for a cancel, what is cancelled as free text), which coin counter, or the mode of
+ * Monarchy, Gunpowder and Atomic Theory. A mode or target that cannot be used now is not offered. It decides no rule:
+ * it sends what was picked and the engine accepts or refuses it. Nothing is sent by opening it; only OK sends.
  */
-function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, paymentLabels, paymentResources, send }: PickerFormProps): React.JSX.Element {
+function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, paymentLabels, paymentResources, paymentPicker, send }: PickerFormProps): React.JSX.Element {
   const opponents = view.opponents ?? []
-  // The view is fetched again while the picker is open: what was picked may be gone (a city, a unit, a counter, a player).
-  // The selection is worked out here, so the option the list shows is the one that is sent and the one the button names
+  // The view is fetched again while the popup is open: what was picked may be gone (a city, a unit, a counter, a player).
+  // The selection is worked out here, so the option the list shows is the one that is sent and the one the summary names
   const radioName = useId()
   const stillThere = (ids: readonly string[], wanted: string): string => (ids.includes(wanted) ? wanted : (ids[0] ?? ''))
   const playerIds = opponents.map((opponent) => opponent.playerId)
-  const cancel = (
-    <button type="button" className="small" onClick={() => setPick(null)}>
-      Cancel
-    </button>
+  const popup = (okDisabled: boolean, onOk: () => void, content: ReactNode): React.JSX.Element => (
+    <ChoiceDialog title={label} okDisabled={!canSubmit || okDisabled} onOk={onOk} onCancel={() => setPick(null)}>
+      {paymentPicker}
+      {content}
+    </ChoiceDialog>
   )
-  const playerSelect = (value: string, onChange: (id: string) => void, hint?: (opponent: Opponent) => string) => (
+  const playerSelect = (list: readonly Opponent[], value: string, onChange: (id: string) => void, hint?: (opponent: Opponent) => string) => (
     <select aria-label="Player" value={value} onChange={(event) => onChange(event.target.value)}>
-      {opponents.map((opponent) => (
+      {list.map((opponent) => (
         <option key={opponent.playerId} value={opponent.playerId}>
           {opponent.username}
           {hint === undefined ? '' : ` (${hint(opponent)})`}
@@ -286,82 +297,91 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
       ))}
     </select>
   )
+  // Several modes are a radio group; a single one is just stated, since there is nothing to choose
+  const modeChoice = <M extends string>(modes: readonly ModeOption<M>[], mode: M | undefined, onChange: (mode: M) => void, chosenGone = false): ReactNode =>
+    modes.length < 2 && !(mode === undefined && modes.length === 1 && chosenGone) ? (
+      modes[0] === undefined ? null : <p>{modes[0].label}</p>
+    ) : (
+      <div className="assisted-any-pick" role="radiogroup" aria-label={`How to use ${label}`}>
+        {modes.map((option) => (
+          <label key={option.value} className="choice-option">
+            <input type="radio" name={radioName} checked={option.value === mode} onChange={() => onChange(option.value)} /> {option.label}
+          </label>
+        ))}
+      </div>
+    )
+  const paid = paymentLabels.length === 0 ? '' : ` (pay ${listOf(paymentLabels)})`
 
   if (pick.kind === 'payment' || (pick.kind === 'resources' && picker?.kind === 'resources')) {
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`Resources to pay for ${label}`}>
-        <button type="button" className="small" disabled={!canSubmit} onClick={() => send(pick.kind === 'resources' ? { resources: paymentResources } : {})}>
-          Pay {listOf(paymentLabels)}
-        </button>
-        {cancel}
-      </span>
-    )
+    return popup(false, () => send(pick.kind === 'resources' ? { resources: paymentResources } : {}), paymentLabels.length === 0 ? null : <p className="choice-summary">Pay {listOf(paymentLabels)}.</p>)
   }
 
   if (pick.kind === 'gunpowder') {
     const wonders = obsoletableWondersInView(view, ['Ancient', 'Medieval'])
     const buildings = destroyableBuildingsInView(view)
-    const obsolete = pick.mode === 'obsolete'
+    const modes: ModeOption<'obsolete' | 'destroy'>[] = []
+    if (wonders.length > 0) modes.push({ value: 'obsolete', label: 'Obsolete an ancient or medieval wonder' })
+    if (buildings.length > 0) modes.push({ value: 'destroy', label: 'Destroy a building' })
+    // A chosen mode that is gone is not swapped for another one: nothing is chosen and OK waits until the player picks again
+    const mode = modes.some((option) => option.value === pick.mode) ? pick.mode : undefined
     // The selections follow the view, as the other pickers do: what is gone is replaced by the first left, and with none nothing is chosen
     const wonderId = stillThere(wonders.map((wonder) => wonder.pieceId), pick.wonderPieceId)
     const buildingId = stillThere(buildings.map((building) => building.pieceId), pick.buildingPieceId)
     const wonder = wonders.find((candidate) => candidate.pieceId === wonderId)
     const building = buildings.find((candidate) => candidate.pieceId === buildingId)
-    const ready = obsolete ? wonder !== undefined : building !== undefined
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`${label}: resources, mode and target`}>
-        <label>
-          <input type="radio" name={radioName} checked={obsolete} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient or medieval wonder
-        </label>
-        <label>
-          <input type="radio" name={radioName} checked={!obsolete} onChange={() => setPick({ ...pick, mode: 'destroy' })} /> Destroy a building
-        </label>
-        {obsolete ? (
-          <>
-            <select aria-label="Wonder" value={wonderId} onChange={(event) => setPick({ ...pick, wonderPieceId: event.target.value })}>
-              {wonders.map((candidate) => (
-                <option key={candidate.pieceId} value={candidate.pieceId}>
-                  {candidate.label} ({candidate.ownerUsername})
-                </option>
-              ))}
-            </select>
-            {wonders.length === 0 && <span role="status" className="assisted-warning">No ancient or medieval wonder is owned by a player, so there is none to obsolete.</span>}
-          </>
-        ) : (
-          <>
-            <select aria-label="Building" value={buildingId} onChange={(event) => setPick({ ...pick, buildingPieceId: event.target.value })}>
-              {buildings.map((candidate) => (
-                <option key={candidate.pieceId} value={candidate.pieceId}>
-                  {candidate.label} on {candidate.square} ({candidate.ownerUsername === null ? 'no single owner' : `${candidate.ownerUsername}'s outskirts`})
-                </option>
-              ))}
-            </select>
-            {buildings.length === 0 && <span role="status" className="assisted-warning">No building stands on the map, so there is none to destroy.</span>}
-          </>
+    const obsolete = mode === 'obsolete'
+    return popup(
+      mode === undefined || (obsolete ? wonder === undefined : building === undefined),
+      () => send({ resources: paymentResources, ...(obsolete ? { mode: 'obsolete', wonderPieceId: wonderId } : { mode: 'destroy', buildingPieceId: buildingId }) }),
+      <>
+        {modeChoice(modes, mode, (next) => setPick({ ...pick, mode: next }), true)}
+        {obsolete && (
+          <select aria-label="Wonder" value={wonderId} onChange={(event) => setPick({ ...pick, wonderPieceId: event.target.value })}>
+            {wonders.map((candidate) => (
+              <option key={candidate.pieceId} value={candidate.pieceId}>
+                {candidate.label} ({candidate.ownerUsername})
+              </option>
+            ))}
+          </select>
         )}
-        <span className="muted">
-          {obsolete
-            ? 'The wonder is marked disabled on the owner list: its owner is cleared and the piece stays, crossed out.'
-            : 'The building is removed from the board. Only the undo vote puts it back.'}
-        </span>
-        <button
-          type="button"
-          className="small"
-          disabled={!canSubmit || !ready}
-          onClick={() => send({ resources: paymentResources, ...(obsolete ? { mode: 'obsolete', wonderPieceId: wonderId } : { mode: 'destroy', buildingPieceId: buildingId }) })}
-        >
-          {obsolete ? `Obsolete ${wonder?.label ?? 'a wonder'}` : `Destroy ${building === undefined ? 'a building' : `${building.label} on ${building.square}`}`} (pay {listOf(paymentLabels)})
-        </button>
-        {cancel}
-      </span>
+        {mode === 'destroy' && (
+          <select aria-label="Building" value={buildingId} onChange={(event) => setPick({ ...pick, buildingPieceId: event.target.value })}>
+            {buildings.map((candidate) => (
+              <option key={candidate.pieceId} value={candidate.pieceId}>
+                {candidate.label} on {candidate.square} ({candidate.ownerUsername === null ? 'no single owner' : `${candidate.ownerUsername}'s outskirts`})
+              </option>
+            ))}
+          </select>
+        )}
+        {mode === undefined && (
+          <p role="status" className="assisted-warning">
+            {modes.length === 0 ? `No ancient or medieval wonder is owned by a player and no building stands on the map, so there is nothing to use ${label} on.` : 'What you chose is no longer possible. Choose again.'}
+          </p>
+        )}
+        {mode !== undefined && (
+          <p className="muted">
+            {obsolete
+              ? 'The wonder is marked disabled on the owner list: its owner is cleared and the piece stays, crossed out.'
+              : 'The building is removed from the board. Only the undo vote puts it back.'}
+          </p>
+        )}
+        {mode !== undefined && (
+          <p className="choice-summary">
+            {obsolete ? `Obsolete ${wonder?.label ?? 'a wonder'}` : `Destroy ${building === undefined ? 'a building' : `${building.label} on ${building.square}`}`}
+            {paid}
+          </p>
+        )}
+      </>,
     )
   }
 
   if (pick.kind === 'city') {
     const cities = view.you?.cities ?? []
     const cityId = stillThere(cities.map((city) => city.pieceId), pick.cityPieceId)
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`City for ${label}`}>
+    return popup(
+      cityId === '',
+      () => send({ cityPieceId: cityId }),
+      <>
         <select aria-label="City" value={cityId} onChange={(event) => setPick({ kind: 'city', cityPieceId: event.target.value })}>
           {cities.map((city) => (
             <option key={city.pieceId} value={city.pieceId}>
@@ -369,12 +389,9 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
             </option>
           ))}
         </select>
-        <span className="muted">The production bonus lasts this turn.</span>
-        <button type="button" className="small" disabled={!canSubmit || cityId === ''} onClick={() => send({ cityPieceId: cityId })}>
-          Boost {cities.find((city) => city.pieceId === cityId)?.label ?? 'this city'}
-        </button>
-        {cancel}
-      </span>
+        <p className="muted">The production bonus lasts this turn.</p>
+        <p className="choice-summary">Boost {cities.find((city) => city.pieceId === cityId)?.label ?? 'this city'}</p>
+      </>,
     )
   }
 
@@ -382,9 +399,11 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
     const targetId = stillThere(playerIds, pick.targetId)
     const target = opponents.find((opponent) => opponent.playerId === targetId)
     const note = picker?.kind === 'player' ? picker.noteLabel : undefined
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`Player for ${label}`}>
-        {playerSelect(targetId, (id) => setPick({ ...pick, targetId: id }))}
+    return popup(
+      target === undefined,
+      () => send({ targetId, ...(pick.note.trim() === '' ? {} : { note: pick.note.trim() }) }),
+      <>
+        {playerSelect(opponents, targetId, (id) => setPick({ ...pick, targetId: id }))}
         {note !== undefined && (
           <input
             type="text"
@@ -395,16 +414,10 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
             onChange={(event) => setPick({ ...pick, note: event.target.value })}
           />
         )}
-        <button
-          type="button"
-          className="small"
-          disabled={!canSubmit || target === undefined}
-          onClick={() => send({ targetId, ...(pick.note.trim() === '' ? {} : { note: pick.note.trim() }) })}
-        >
+        <p className="choice-summary">
           Use {label} on {target?.username ?? 'a player'}
-        </button>
-        {cancel}
-      </span>
+        </p>
+      </>,
     )
   }
 
@@ -414,9 +427,12 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
     const counters = target === undefined ? [] : coinCountersOf(target)
     const sourceKey = stillThere(counters.map((counter) => counter.key), pick.source)
     const chosen = counters.find((counter) => counter.key === sourceKey)
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`Coin to discard with ${label}`}>
+    return popup(
+      chosen === undefined,
+      () => send({ targetId, source: sourceKey }),
+      <>
         {playerSelect(
+          opponents,
           targetId,
           (id) => {
             const next = opponents.find((opponent) => opponent.playerId === id)
@@ -431,17 +447,9 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
             </option>
           ))}
         </select>
-        {counters.length === 0 && <span role="status" className="assisted-warning">{target?.username ?? 'That player'} holds no coin token.</span>}
-        <button
-          type="button"
-          className="small"
-          disabled={!canSubmit || chosen === undefined}
-          onClick={() => send({ targetId, source: sourceKey })}
-        >
-          Discard a coin from {chosen?.label ?? 'a counter'}
-        </button>
-        {cancel}
-      </span>
+        {counters.length === 0 && <p role="status" className="assisted-warning">{target?.username ?? 'That player'} holds no coin token.</p>}
+        <p className="choice-summary">Discard a coin from {chosen?.label ?? 'a counter'}</p>
+      </>,
     )
   }
 
@@ -449,8 +457,10 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
     const units = ownArenaUnits(view)
     const unitId = stillThere(units.map((unit) => unit.id), pick.arenaUnitId)
     const chosen = units.find((unit) => unit.id === unitId)
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`Unit for ${label}`}>
+    return popup(
+      chosen === undefined,
+      () => send({ arenaUnitId: unitId }),
+      <>
         <select aria-label="Unit" value={unitId} onChange={(event) => setPick({ kind: 'arenaUnit', arenaUnitId: event.target.value })}>
           {units.map((unit) => (
             <option key={unit.id} value={unit.id}>
@@ -458,113 +468,101 @@ function TechPickerForm({ pick, setPick, view, label, canSubmit, picker, payment
             </option>
           ))}
         </select>
-        <span className="muted">Adds 3 to the attack shown on the unit.</span>
-        <button type="button" className="small" disabled={!canSubmit || chosen === undefined} onClick={() => send({ arenaUnitId: unitId })}>
-          Add 3 attack to {chosen === undefined ? 'a unit' : itemName(chosen.unit)}
-        </button>
-        {cancel}
-      </span>
+        <p className="muted">Adds 3 to the attack shown on the unit.</p>
+        <p className="choice-summary">Add 3 attack to {chosen === undefined ? 'a unit' : itemName(chosen.unit)}</p>
+      </>,
     )
   }
 
   if (pick.kind === 'atomic') {
     const targets = nukeTargetsInView(view)
-    const nuke = pick.mode === 'nuke'
+    const modes: ModeOption<'extraActions' | 'nuke'>[] = [{ value: 'extraActions', label: 'An extra action with each city (City Management)' }]
+    if (targets.length > 0) modes.push({ value: 'nuke', label: 'Nuke a city (Movement)' })
+    const nuke = pick.mode === 'nuke' && targets.length > 0
     // Never preselect the player's own city: the default is another player's city, and with only their own the player picks one
     const nukeId = targets.some((candidate) => candidate.pieceId === pick.cityPieceId)
       ? pick.cityPieceId
       : (targets.find((candidate) => !candidate.own)?.pieceId ?? '')
     const target = targets.find((candidate) => candidate.pieceId === nukeId)
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
-        <label>
-          <input type="radio" name={radioName} checked={!nuke} onChange={() => setPick({ ...pick, mode: 'extraActions' })} /> An extra action with each city (City Management)
-        </label>
-        <label>
-          <input type="radio" name={radioName} checked={nuke} onChange={() => setPick({ ...pick, mode: 'nuke' })} /> Nuke a city (Movement)
-        </label>
+    return popup(
+      nuke && target === undefined,
+      () => {
+        if (!nuke) return send({ mode: 'extraActions' })
+        if (target !== undefined && window.confirm(`Nuke ${target.label} of ${target.ownerUsername}${target.own ? ' (your own city)' : ''}? The city and everything in its outskirts is destroyed, whoever owns it.`)) {
+          send({ mode: 'nuke', cityPieceId: target.pieceId })
+        }
+      },
+      <>
+        {modeChoice(modes, nuke ? 'nuke' : 'extraActions', (next) => setPick({ ...pick, mode: next }))}
         {nuke && (
           <>
             <select aria-label="City to nuke" value={nukeId} onChange={(event) => setPick({ ...pick, cityPieceId: event.target.value })}>
-              {nukeId === '' && targets.length > 0 && <option value="">Choose a city</option>}
+              {nukeId === '' && <option value="">Choose a city</option>}
               {targets.map((candidate) => (
                 <option key={candidate.pieceId} value={candidate.pieceId}>
                   {candidate.label} of {candidate.ownerUsername}{candidate.own ? ' (yours)' : ''}
                 </option>
               ))}
             </select>
-            {targets.length === 0 && <span role="status" className="assisted-warning">No city that is not a capital stands on the map.</span>}
             {target !== undefined && (
-              <span className="muted">
+              <p className="muted">
                 Destroys the city{target.destroyed.length === 0 ? '' : ` with ${target.destroyed.map((item) => `${item.label}${item.square === null ? '' : ` (${item.square})`}`).join(', ')}`}. Only the undo vote brings it back.
-              </span>
+              </p>
             )}
           </>
         )}
-        <button
-          type="button"
-          className="small"
-          disabled={!canSubmit || (nuke && target === undefined)}
-          onClick={() => {
-            if (!nuke) return send({ mode: 'extraActions' })
-            if (target !== undefined && window.confirm(`Nuke ${target.label} of ${target.ownerUsername}${target.own ? ' (your own city)' : ''}? The city and everything in its outskirts is destroyed, whoever owns it.`)) {
-              send({ mode: 'nuke', cityPieceId: target.pieceId })
-            }
-          }}
-        >
-          {nuke ? `Nuke ${target?.label ?? 'a city'}` : 'Allow an extra action with each city'}
-        </button>
-        {cancel}
-      </span>
+        <p className="choice-summary">{nuke ? `Nuke ${target?.label ?? 'a city'}` : 'Allow an extra action with each city'}</p>
+      </>,
     )
   }
 
   if (pick.kind === 'monarchy') {
-    const targetId = stillThere(playerIds, pick.targetId)
-    const target = opponents.find((opponent) => opponent.playerId === targetId)
-    // No unit is killed while a battle is on (the game refuses it); the mode falls back to obsolete, which is not limited
-    const battleOn = view.battle != null
-    const kill = pick.mode === 'kill' && !battleOn
+    // Only what can be done now is offered: an ancient wonder a player owns to obsolete, an opponent holding a unit card to
+    // kill from. No unit is killed while a battle is on (the game refuses it)
     const wonders = obsoletableWondersInView(view)
-    // The selection follows the view: a wonder that is gone is replaced by the first one left, and with none nothing is chosen
+    const killTargets = view.battle != null ? [] : opponents.filter((opponent) => opponent.publicHand.units > 0)
+    const modes: ModeOption<'obsolete' | 'kill'>[] = []
+    if (wonders.length > 0) modes.push({ value: 'obsolete', label: 'Obsolete an ancient wonder' })
+    if (killTargets.length > 0) modes.push({ value: 'kill', label: 'Kill a random unit' })
+    // A chosen mode that is gone is not swapped for another one: nothing is chosen and OK waits until the player picks again
+    const mode = modes.some((option) => option.value === pick.mode) ? pick.mode : undefined
+    const kill = mode === 'kill'
+    const targetId = stillThere(killTargets.map((opponent) => opponent.playerId), pick.targetId)
+    const target = killTargets.find((opponent) => opponent.playerId === targetId)
+    // The selection follows the view: a wonder that is gone is replaced by the first one left
     const wonderId = stillThere(wonders.map((wonder) => wonder.pieceId), pick.wonderPieceId)
     const wonder = wonders.find((candidate) => candidate.pieceId === wonderId)
-    return (
-      <span className="assisted-any-pick" role="group" aria-label={`Mode for ${label}`}>
-        <label>
-          <input type="radio" name={radioName} checked={!kill} onChange={() => setPick({ ...pick, mode: 'obsolete' })} /> Obsolete an ancient wonder
-        </label>
-        <label>
-          <input type="radio" name={radioName} checked={kill} disabled={battleOn} onChange={() => setPick({ ...pick, mode: 'kill' })} /> Kill a random unit{battleOn ? ' (not while a battle is on)' : ''}
-        </label>
-        {!kill && (
-          <>
-            <select aria-label="Wonder" value={wonderId} onChange={(event) => setPick({ ...pick, wonderPieceId: event.target.value })}>
-              {wonders.map((candidate) => (
-                <option key={candidate.pieceId} value={candidate.pieceId}>
-                  {candidate.label} ({candidate.ownerUsername})
-                </option>
-              ))}
-            </select>
-            {wonders.length === 0 && <span role="status" className="assisted-warning">No ancient wonder is owned by a player, so there is none to obsolete.</span>}
-          </>
+    return popup(
+      mode === undefined || (kill ? target === undefined : wonder === undefined),
+      () => send(kill ? { mode: 'kill', targetId } : { mode: 'obsolete', wonderPieceId: wonderId }),
+      <>
+        {modeChoice(modes, mode, (next) => setPick({ ...pick, mode: next }), true)}
+        {mode === 'obsolete' && (
+          <select aria-label="Wonder" value={wonderId} onChange={(event) => setPick({ ...pick, wonderPieceId: event.target.value })}>
+            {wonders.map((candidate) => (
+              <option key={candidate.pieceId} value={candidate.pieceId}>
+                {candidate.label} ({candidate.ownerUsername})
+              </option>
+            ))}
+          </select>
         )}
-        {kill && playerSelect(targetId, (id) => setPick({ ...pick, targetId: id }), (opponent) => `${opponent.publicHand.units} units in hand`)}
-        <span className="muted">
-          {kill
-            ? 'A random unit card is taken from that player\'s hand and discarded. The game refuses if they hold none.'
-            : 'The wonder is marked disabled on the owner list: its owner is cleared and the piece stays, crossed out.'}
-        </span>
-        <button
-          type="button"
-          className="small"
-          disabled={!canSubmit || (kill ? target === undefined : wonder === undefined)}
-          onClick={() => send(kill ? { mode: 'kill', targetId } : { mode: 'obsolete', wonderPieceId: wonderId })}
-        >
-          {kill ? `Kill a unit of ${target?.username ?? 'a player'}` : `Obsolete ${wonder?.label ?? 'a wonder'}`}
-        </button>
-        {cancel}
-      </span>
+        {kill && playerSelect(killTargets, targetId, (id) => setPick({ ...pick, targetId: id }), (opponent) => `${opponent.publicHand.units} units in hand`)}
+        {mode === undefined && (
+          <p role="status" className="assisted-warning">
+            {modes.length === 0 ? `There is nothing to use ${label} on now.` : 'What you chose is no longer possible. Choose again.'}
+          </p>
+        )}
+        {mode !== undefined && (
+          <p className="muted">
+            {kill
+              ? 'A random unit card is taken from that player\'s hand and discarded.'
+              : 'The wonder is marked disabled on the owner list: its owner is cleared and the piece stays, crossed out.'}
+          </p>
+        )}
+        {mode !== undefined && (
+          <p className="choice-summary">{kill ? `Kill a unit of ${target?.username ?? 'a player'}` : `Obsolete ${wonder?.label ?? 'a wonder'}`}</p>
+        )}
+      </>,
     )
   }
 
@@ -638,10 +636,15 @@ export function AssistedActionButton({
   // Combustion: whether the army picker is open. The armies it offers are worked out from the current view on every render, so the
   // square and building a button names are what the engine will work out for that army when it is pressed
   const [armyPickOpen, setArmyPickOpen] = useState(false)
+  // The army chosen in that popup; the one shown is worked out from the current view
+  const [armyChoice, setArmyChoice] = useState('')
+  const armyRadioName = useId()
   if (view.you === null || state === undefined) return null
   const NO_ARMY_TARGET = 'None of your armies stands on a building of another player or outside every city, or on another player\'s walled city.'
   // The map in the projection carries every city and building; the owner of a building is read from the cities' outskirts
   const armyTargets: readonly CombustionTarget[] = armyPickOpen ? combustionTargets({ board: view.board, players: [] }, view.you) : []
+  // The army shown is the one sent: a choice that is gone after a refresh falls back to the first army left
+  const armyChosen = armyTargets.find((target) => target.pieceId === armyChoice) ?? armyTargets[0]
 
   const ready = state.status === 'ready'
   const used = state.status === 'used'
@@ -782,6 +785,7 @@ export function AssistedActionButton({
       return
     }
     setHint(null)
+    setArmyChoice('')
     setArmyPickOpen(true)
   }
 
@@ -836,11 +840,16 @@ export function AssistedActionButton({
         return
       case 'gunpowder': {
         const wonder = obsoletableWondersInView(view, ['Ancient', 'Medieval'])[0]
+        const building = destroyableBuildingsInView(view)[0]
+        if (wonder === undefined && building === undefined) {
+          setHint('No ancient or medieval wonder is owned by a player and no building stands on the map, so Gunpowder has nothing to act on.')
+          return
+        }
         setPick({
           kind: 'gunpowder',
           mode: wonder === undefined ? 'destroy' : 'obsolete',
           wonderPieceId: wonder?.pieceId ?? '',
-          buildingPieceId: destroyableBuildingsInView(view)[0]?.pieceId ?? '',
+          buildingPieceId: building?.pieceId ?? '',
         })
         return
       }
@@ -883,12 +892,23 @@ export function AssistedActionButton({
       case 'atomic': {
         // The mode of the phase the player has open, so a quick press is not refused
         const phase = endTurnState(view)
-        setPick({ kind: 'atomic', mode: phase?.kind === 'open' && phase.phase === 'MOVEMENT' ? 'nuke' : 'extraActions', cityPieceId: nukeTargetsInView(view).find((target) => !target.own)?.pieceId ?? '' })
+        const targets = nukeTargetsInView(view)
+        setPick({ kind: 'atomic', mode: phase?.kind === 'open' && phase.phase === 'MOVEMENT' && targets.length > 0 ? 'nuke' : 'extraActions', cityPieceId: targets.find((target) => !target.own)?.pieceId ?? '' })
         return
       }
       case 'monarchy': {
-        const target = opponents.find((opponent) => opponent.publicHand.units > 0)
-        setPick({ kind: 'monarchy', mode: 'obsolete', targetId: (target ?? opponents[0])?.playerId ?? '', wonderPieceId: obsoletableWondersInView(view)[0]?.pieceId ?? '' })
+        // Only a choice that can be carried out is offered; with none the player is told why and nothing opens
+        const wonder = obsoletableWondersInView(view)[0]
+        const target = view.battle != null ? undefined : opponents.find((opponent) => opponent.publicHand.units > 0)
+        if (wonder === undefined && target === undefined) {
+          setHint(
+            view.battle != null
+              ? 'No ancient wonder is owned by a player, and no unit is killed while a battle is on, so Monarchy has nothing to act on.'
+              : 'No ancient wonder is owned by a player and no opponent holds a unit card, so Monarchy has nothing to act on.',
+          )
+          return
+        }
+        setPick({ kind: 'monarchy', mode: wonder === undefined ? 'kill' : 'obsolete', targetId: target?.playerId ?? '', wonderPieceId: wonder?.pieceId ?? '' })
         return
       }
     }
@@ -973,21 +993,18 @@ export function AssistedActionButton({
           {hint}
         </span>
       )}
-      {(pick !== null || armyPickOpen) && payment !== undefined && (
-        <ResourcePaymentPicker payment={payment} selected={selectedPayments} onChange={setPaymentPick} />
-      )}
       {armyPickOpen && (
-        <span className="assisted-any-pick" role="group" aria-label="Army that uses Combustion">
-          {armyTargets.map((target) => (
-            <button key={target.pieceId} type="button" className="small" disabled={!canSubmit} onClick={() => burnWith(target)}>
-              Army on {squareLabel(target)}: destroy {target.subject}
-            </button>
-          ))}
-          {armyTargets.length === 0 && <span role="status" className="assisted-warning">{NO_ARMY_TARGET}</span>}
-          <button type="button" className="small" onClick={() => setArmyPickOpen(false)}>
-            Cancel
-          </button>
-        </span>
+        <ChoiceDialog title={state.label} okDisabled={!canSubmit || armyChosen === undefined} onOk={() => armyChosen !== undefined && burnWith(armyChosen)} onCancel={() => setArmyPickOpen(false)}>
+          {payment !== undefined && <ResourcePaymentPicker payment={payment} selected={selectedPayments} onChange={setPaymentPick} />}
+          <div className="assisted-any-pick" role="radiogroup" aria-label="Army that uses Combustion">
+            {armyTargets.map((target) => (
+              <label key={target.pieceId} className="choice-option">
+                <input type="radio" name={armyRadioName} checked={target.pieceId === armyChosen?.pieceId} onChange={() => setArmyChoice(target.pieceId)} /> Army on {squareLabel(target)}: destroy {target.subject}
+              </label>
+            ))}
+            {armyTargets.length === 0 && <p role="status" className="assisted-warning">{NO_ARMY_TARGET}</p>}
+          </div>
+        </ChoiceDialog>
       )}
       {pick !== null && (
         <TechPickerForm
@@ -999,6 +1016,7 @@ export function AssistedActionButton({
           picker={ASSISTED_TECH_PICKERS.get(action)}
           paymentLabels={selectedPayments.map((option) => option.label)}
           paymentResources={payments.map((choice) => choice.resource)}
+          paymentPicker={payment === undefined ? null : <ResourcePaymentPicker payment={payment} selected={selectedPayments} onChange={setPaymentPick} />}
           send={sendPick}
         />
       )}

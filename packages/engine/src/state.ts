@@ -42,7 +42,7 @@ import {
   turnStatus,
 } from './turn.js'
 import type { Undo } from './undo.js'
-import type { ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
+import type { ArenaRefight, ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import type { ResourcePaymentOption } from './assisted-resources.js'
@@ -1064,6 +1064,8 @@ export type TechAbilityEffect =
       readonly arenaUnitId: string
       readonly before: number
       readonly after: number
+      /** The face-off on the unit's front that the new attack made fight again, when there was one to fight again. */
+      readonly refight?: ArenaRefight
     }
   | {
       /** Atomic Theory, "extra action with each city": every city of the player may act once more this turn (`atomicExtraActionFor`). */

@@ -479,8 +479,14 @@ if that is lethal (attack >= opposing HP), takes no damage and the victim is
 flagged `killed`; otherwise both lose the other's attack. The opponent's
 *current* HP takes the damage, so earlier rounds persist. Rotating re-seeds the
 unit to its new tier and re-applies only its opponent's blows. Later rounds and
-corrections stay manual via the ATK/HP fields. Aircraft trump nothing. Tests:
-`arena.test.ts` "face-off on arrival", `ArenaUnitCard.test.tsx`.
+corrections stay manual via the ATK/HP fields. Taking an arrival back (return to hand, move) gives back the HP its round took, also
+when the kill flag was toggled by hand since (the toggle stays; any other HP edit stays too; human, 2026-11-14). Metalworking's +3 fights the round again (`refightWithAttack`): both units go back to what they had before the round and it is
+worked out with the new attack, so an Infantry that now out-hits the Mounted it faces kills it and keeps its HP; only while both still
+have what the round left them with. Its undo (`undoRefight`) puts the boosted pair back as the round fought without the boost left them: the arriving
+unit while it is still in the arena, its opponent only while it still faces it; otherwise only the attack goes back
+(human, 2026-11-14). Mathematics and Ballistics wounds
+kill a unit at 0 HP without a manual kill. Aircraft trump nothing. Tests:
+`arena.test.ts` "face-off on arrival", `assisted-metalworking.test.ts` (re-fight and its undo), `ArenaUnitCard.test.tsx`.
 
 Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`,
 `actions/undo.ts`, `state.ts`, arena tests and `undo-civ-reveal.test.ts`.
@@ -952,6 +958,13 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   takes that part back or refuses with a reason, then returns exactly what was paid. The web asks through one picker per
   kind (`ASSISTED_TECH_PICKERS` in `assisted-techs.ts`, a leaf table the web reads); the server parsers are strict and the
   engine decides legality.
+- **Choices are a popup** (human, 2026-11-14; `ChoiceDialog.tsx`): every ability that asks something (resource payment, city,
+  player, coin counter, unit, Combustion's army, and the modes of Monarchy, Gunpowder and Atomic Theory) opens one OK/Cancel
+  popup over the page, not an inline form. Escape and a click outside cancel, and nothing is sent until OK. Only a choice that
+  can be carried out is offered: Monarchy shows "Obsolete an ancient wonder" only when a player owns one, and "Kill a random
+  unit" only outside a battle and with an opponent who holds a unit card (those are the only opponents listed); Gunpowder and
+  Atomic Theory hide the obsolete/destroy and nuke modes the same way. A single mode is stated without a radio, and with no
+  valid choice at all the popup does not open and a hint says why.
 - **Production boosts** (Wheat, City Management; +3, +5, +7, +10): the player names one of their cities. The bonus is not
   stored on the city: `cityProductionsOf` sums the applied, not undone, records of this turn that name the city (like the
   Communism lock), so the undo vote removes it and it ends with the turn. It is in `boost`, `estimate`, the Building Program

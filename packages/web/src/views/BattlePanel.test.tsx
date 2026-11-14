@@ -697,7 +697,7 @@ describe('BattlePanel Metalworking', () => {
       expect.stringContaining('front 3'),
     ])
     fireEvent.change(getByLabelText('Unit'), { target: { value: 'a3' } })
-    fireEvent.click(getByRole('button', { name: /^Add 3 attack to / }))
+    fireEvent.click(getByRole('button', { name: 'OK' }))
     expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a3' }, false)
   })
 
@@ -710,7 +710,7 @@ describe('BattlePanel Metalworking', () => {
     // The unit a3 is killed; a1 is the only one left and must be what is shown and sent
     rerender(<BattlePanel gameId="game" busy={false} run={run} view={metalView('ready', [unit('a1', 'attacker', false, 0, 'me'), unit('a3', 'attacker', true, 2, 'me'), unit('d1', 'defender', false, 3, 'other')])} />)
     expect((getByLabelText('Unit') as HTMLSelectElement).value).toBe('a1')
-    fireEvent.click(getByRole('button', { name: /^Add 3 attack to / }))
+    fireEvent.click(getByRole('button', { name: 'OK' }))
     expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'metalworking', expect.any(String), 4, { arenaUnitId: 'a1' }, false)
   })
 
@@ -729,9 +729,9 @@ describe('BattlePanel Metalworking', () => {
     fireEvent.click(used.getByText('Battle'))
     fireEvent.click(used.getByText('Use Metalworking (Iron: +3 attack)'))
     expect(confirm).not.toHaveBeenCalled()
-    fireEvent.click(used.getByRole('button', { name: /^Add 3 attack to / }))
+    fireEvent.click(used.getByRole('button', { name: 'OK' }))
     expect(api.actionWithArgs).not.toHaveBeenCalled()
-    fireEvent.click(used.getByRole('button', { name: /^Add 3 attack to / }))
+    fireEvent.click(used.getByRole('button', { name: 'OK' }))
     expect(api.actionWithArgs).toHaveBeenCalledTimes(1)
     expect(vi.mocked(api.actionWithArgs).mock.calls[0]?.[5]).toBe(true)
     cleanup()

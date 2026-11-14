@@ -61,7 +61,8 @@ describe('shared resource-payment choices', () => {
     expect(screen.getAllByLabelText(/^Resource \d$/).map((select) => (select as HTMLSelectElement).value))
       .toEqual([paymentKey(card.choice), paymentKey(silk.choice)])
     choose(2, wheat)
-    fireEvent.click(screen.getByRole('button', { name: 'Pay A Generous Gift (as Iron) and Wheat (hand)' }))
+    expect(screen.getByText('Pay A Generous Gift (as Iron) and Wheat (hand).')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }))
     expect(send.mock.calls[0]?.[4]).toEqual({
       resources: ['Iron', 'Wheat'],
       payments: [card.choice, wheat.choice],
@@ -91,7 +92,8 @@ describe('shared resource-payment choices', () => {
 
     expect(within(screen.getByLabelText('Resource 2')).getAllByRole('option').map((option) => option.textContent))
       .toEqual(['Wheat (hand)', 'Iron (village in hand)'])
-    fireEvent.click(screen.getByRole('button', { name: 'Pay Wheat (hand) and Iron (village in hand)' }))
+    expect(screen.getByText('Pay Wheat (hand) and Iron (village in hand).')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }))
     expect(send.mock.calls[0]?.[4]).toEqual({
       resources: ['Wheat', 'Iron'],
       payments: [wheat.choice, village.choice],
@@ -108,7 +110,7 @@ describe('shared resource-payment choices', () => {
     expect(within(screen.getByLabelText('Resource 2')).queryByRole('option', { name: /Generous Gift/ })).toBeNull()
     expect(within(screen.getByLabelText('Resource 4')).getAllByRole('option').map((option) => option.textContent))
       .toEqual(['A Generous Gift (as Wheat)'])
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }))
     expect(send.mock.calls[0]?.[4]).toEqual({ payments: [
       token('Incense').choice, token('Iron').choice, token('Silk').choice, gift('Wheat').choice,
     ] })
@@ -126,13 +128,13 @@ describe('shared resource-payment choices', () => {
     choose(1, card)
     rerender(button(viewOf('pottery', { ...payment, options: [wheat, silk] })))
 
-    const pay = screen.getByRole('button', { name: /^Pay/ }) as HTMLButtonElement
+    const pay = screen.getByRole('button', { name: 'OK' }) as HTMLButtonElement
     expect(pay.disabled).toBe(true)
     fireEvent.click(pay)
     expect(send).not.toHaveBeenCalled()
     expect(screen.getByRole('status').textContent).toContain('payment is no longer available')
     choose(1, wheat)
-    fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }))
     expect(send.mock.calls[0]?.[4]).toEqual({ resources: ['Wheat', 'Silk'], payments: [wheat.choice, silk.choice] })
   })
 
@@ -147,7 +149,8 @@ describe('shared resource-payment choices', () => {
       fireEvent.click(screen.getByRole('button', { name: `Use ${action}` }))
       expect(send).not.toHaveBeenCalled()
       expect(automatic).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Pay Incense (hand)' }))
+      expect(screen.getByText('Pay Incense (hand).')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }))
       expect(send.mock.calls[0]?.[4]).toEqual({ payments: [option.choice] })
     },
   )
@@ -167,7 +170,8 @@ describe('shared resource-payment choices', () => {
       render(button(view, action))
       fireEvent.click(screen.getByRole('button', { name: `Use ${action}` }))
       choose(1, card)
-      fireEvent.click(screen.getByRole('button', { name: 'Boost Capital B2' }))
+      expect(screen.getByText('Boost Capital B2')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }))
       expect(send.mock.calls[0]?.[4]).toEqual({ cityPieceId: 'capital', payments: [card.choice] })
     },
   )

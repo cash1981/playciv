@@ -47,6 +47,13 @@ const chooseResource = (index: number, label: string) => {
 const resourceLabels = () => screen.getAllByLabelText(/^Resource \d$/)
   .map((select) => (select as HTMLSelectElement).selectedOptions[0]?.textContent)
 
+// The choice popup is portalled over the tech dialog, so it is always the last dialog on the page
+const popup = () => within(screen.getAllByRole('dialog').at(-1) as HTMLElement)
+const okButton = () => popup().getByRole('button', { name: 'OK' }) as HTMLButtonElement
+const ok = () => fireEvent.click(okButton())
+/** What OK will do, in words: the popup names the target it sends. */
+const summary = () => popup().getByText((_, element) => element?.classList.contains('choice-summary') === true).textContent
+
 const action = (kind: string, label: string, status: string, reason: string) => ({
   action: kind,
   label,
@@ -217,7 +224,8 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     expect(send).not.toHaveBeenCalled()
     chooseResource(1, 'Silk')
     chooseResource(2, 'Incense')
-    fireEvent.click(screen.getByRole('button', { name: /^Destroy Library on E5 \(pay Silk and Incense\)$/ }))
+    expect(summary()).toBe('Destroy Library on E5 (pay Silk and Incense)')
+    ok()
 
     expect(send).toHaveBeenCalledTimes(1)
     const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
@@ -250,13 +258,13 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     // Opening the picker asks nothing: the state can still change before the player submits
     expect(confirm).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    ok()
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(send).not.toHaveBeenCalled()
     // Declining keeps the picker open
     expect(screen.getByLabelText('Resource 1')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    ok()
     expect(confirm).toHaveBeenCalledTimes(2)
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[5]).toBe(true)
@@ -270,10 +278,10 @@ describe('the unit techs in the tech dialog (issue #327)', () => {
     const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
     fireEvent.click(await screen.findByText('Gunpowder'))
     fireEvent.click(screen.getByRole('button', { name: 'Use Gunpowder' }))
-    expect((screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement).disabled).toBe(false)
+    expect(okButton().disabled).toBe(false)
 
     rerender(<TechPanel gameId="game-1" busy={true} run={run} view={view} reloadCount={0} />)
-    const pay = screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement
+    const pay = okButton()
     expect(pay.disabled).toBe(true)
     fireEvent.click(pay)
     expect(send).not.toHaveBeenCalled()
@@ -320,13 +328,17 @@ describe('the Combustion army picker (issue #327)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
     expect(send).not.toHaveBeenCalled()
 
-    const entries = screen.getAllByRole('button', { name: /^Army on / })
+    const entries = screen.getAllByRole('radio')
     // The army on an empty square is not offered
-    expect(entries.map((entry) => entry.textContent)).toEqual([
+    expect(entries.map((entry) => entry.closest('label')?.textContent)).toEqual([
       expect.stringContaining('Granary'),
       expect.stringContaining('Market'),
     ])
+    // The first army is chosen when the popup opens, and nothing is sent by choosing
+    expect((entries[0] as HTMLInputElement).checked).toBe(true)
     fireEvent.click(entries[1] as HTMLElement)
+    expect(send).not.toHaveBeenCalled()
+    ok()
     expect(send).toHaveBeenCalledTimes(1)
     const [gameId, kind, , rev, args] = send.mock.calls[0] ?? []
     expect([gameId, kind, rev, args]).toEqual(['game-1', 'combustion', 7, { pieceId: 'a2' }])
@@ -344,13 +356,12 @@ describe('the Combustion army picker (issue #327)', () => {
     const { rerender } = render(<TechPanel gameId="game-1" busy={false} run={run} view={combustionView(before)} reloadCount={0} />)
     fireEvent.click(await screen.findByText('Combustion'))
     fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
-    expect(screen.getByRole('button', { name: /^Army on D4/ }).textContent).toContain('Granary')
+    expect(screen.getByLabelText(/^Army on D4/).closest('label')?.textContent).toContain('Granary')
 
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={combustionView(moved)} reloadCount={0} />)
-    const button = screen.getByRole('button', { name: /^Army on G7/ })
-    expect(button.textContent).toContain('Market')
-    expect(screen.queryByRole('button', { name: /^Army on D4/ })).toBeNull()
-    fireEvent.click(button)
+    expect(screen.getByLabelText(/^Army on G7/).closest('label')?.textContent).toContain('Market')
+    expect(screen.queryByLabelText(/^Army on D4/)).toBeNull()
+    ok()
     expect(send.mock.calls[0]?.[4]).toEqual({ pieceId: 'a1' })
   })
 
@@ -363,8 +374,9 @@ describe('the Combustion army picker (issue #327)', () => {
     fireEvent.click(await screen.findByText('Combustion'))
     fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={combustionView(away)} reloadCount={0} />)
-    expect(screen.queryByRole('button', { name: /^Army on / })).toBeNull()
-    expect(screen.getByRole('group', { name: 'Army that uses Combustion' }).textContent).toContain('None of your armies stands on')
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.getByRole('radiogroup', { name: 'Army that uses Combustion' }).textContent).toContain('None of your armies stands on')
+    expect(okButton().disabled).toBe(true)
     expect(send).not.toHaveBeenCalled()
   })
 
@@ -380,13 +392,13 @@ describe('the Combustion army picker (issue #327)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
     expect(confirm).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Army on / })[0] as HTMLElement)
+    ok()
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(send).not.toHaveBeenCalled()
     // Declining keeps the picker open
-    expect(screen.getAllByRole('button', { name: /^Army on / })).toHaveLength(2)
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Army on / })[0] as HTMLElement)
+    ok()
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[5]).toBe(true)
   })
@@ -400,7 +412,7 @@ describe('the Combustion army picker (issue #327)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Use Combustion/ }))
 
     rerender(<TechPanel gameId="game-1" busy={true} run={run} view={view} reloadCount={0} />)
-    const entry = screen.getAllByRole('button', { name: /^Army on / })[0] as HTMLButtonElement
+    const entry = okButton()
     expect(entry.disabled).toBe(true)
     fireEvent.click(entry)
     expect(send).not.toHaveBeenCalled()
@@ -476,20 +488,22 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(screen.getAllByLabelText(/^Resource \d$/)).toHaveLength(2)
       chooseResource(2, 'Silk')
       expect(pottery).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Pay Iron and Silk' }))
+      expect(summary()).toBe('Pay Iron and Silk.')
+      ok()
       expect(pottery.mock.calls.at(-1)?.slice(1, 5)).toEqual(['pottery', expect.any(String), 7, namedPayment('Iron', 'Silk')])
       cleanup()
 
       const philosophy = await open('Philosophy', 'philosophy')
       expect(screen.getAllByLabelText(/^Resource \d$/)).toHaveLength(3)
-      fireEvent.click(screen.getByRole('button', { name: 'Pay Iron, Wheat and Silk' }))
+      expect(summary()).toBe('Pay Iron, Wheat and Silk.')
+      ok()
       expect(philosophy.mock.calls.at(-1)?.[4]).toEqual(namedPayment('Iron', 'Wheat', 'Silk'))
     })
 
     it('does not invent a third payment when the player holds only two tokens', async () => {
       await open('Philosophy', 'philosophy', { items: [hut('Spy'), hut('Silk')] })
       expect(resourceLabels()).toEqual(['No available payment', 'No available payment', 'No available payment'])
-      expect((screen.getByRole('button', { name: /^Pay/ }) as HTMLButtonElement).disabled).toBe(true)
+      expect(okButton().disabled).toBe(true)
       expect(screen.queryByRole('option', { name: 'Iron' })).toBeNull()
     })
 
@@ -528,11 +542,11 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
       const send = await open('Pottery', 'pottery', { status: 'used' })
       expect(confirm).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+      ok()
       expect(confirm).toHaveBeenCalledTimes(1)
       expect(send).not.toHaveBeenCalled()
       expect(screen.getByLabelText('Resource 1')).toBeTruthy()
-      fireEvent.click(screen.getByRole('button', { name: /^Pay / }))
+      ok()
       expect(send).toHaveBeenCalledTimes(1)
       expect(send.mock.calls[0]?.[5]).toBe(true)
       expect(screen.queryByLabelText('Resource 1')).toBeNull()
@@ -546,7 +560,7 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       fireEvent.click(await screen.findByText('Philosophy'))
       fireEvent.click(screen.getByRole('button', { name: /^Use Philosophy/ }))
       rerender(<TechPanel gameId="game-1" busy={true} run={run} view={view} reloadCount={0} />)
-      const pay = screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement
+      const pay = okButton()
       expect(pay.disabled).toBe(true)
       fireEvent.click(pay)
       expect(send).not.toHaveBeenCalled()
@@ -566,7 +580,7 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       fireEvent.click(screen.getByRole('button', { name: /^Use Pottery/ }))
       // The button of a replayed revision is disabled; a picker that was already open must not send either
       rerender(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} historical={{ availableTechs: [] } as never} />)
-      const pay = screen.getByRole('button', { name: /^Pay / }) as HTMLButtonElement
+      const pay = okButton()
       expect(pay.disabled).toBe(true)
       fireEvent.click(pay)
       expect(send).not.toHaveBeenCalled()
@@ -579,7 +593,8 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Capital B2 (production 5)', 'City F6 (production 3)'])
       fireEvent.change(screen.getByLabelText('City'), { target: { value: 'c2' } })
       expect(send).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Boost City F6' }))
+      expect(summary()).toBe('Boost City F6')
+      ok()
       expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['animalHusbandry', expect.any(String), 7, { cityPieceId: 'c2' }])
     })
 
@@ -594,10 +609,10 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
       const send = await open('Construction', 'construction', { status: 'used' })
       expect(confirm).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: /^Boost / }))
+      ok()
       expect(send).not.toHaveBeenCalled()
       expect(screen.getByLabelText('City')).toBeTruthy()
-      fireEvent.click(screen.getByRole('button', { name: /^Boost / }))
+      ok()
       expect(send.mock.calls[0]?.[5]).toBe(true)
     })
   })
@@ -620,14 +635,16 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       fireEvent.change(screen.getByLabelText('City'), { target: { value: 'c2' } })
       show({ cities: [CITIES[0]!] })
       expect((screen.getByLabelText('City') as HTMLSelectElement).value).toBe('c1')
-      fireEvent.click(screen.getByRole('button', { name: 'Boost Capital B2' }))
+      expect(summary()).toBe('Boost Capital B2')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ cityPieceId: 'c1' })
     })
 
     it('the only city left is sendable though the picker opened on another', async () => {
       const { send, show } = await rerenderable('Banking', 'banking', {})
       show({ cities: [CITIES[1]!] })
-      fireEvent.click(screen.getByRole('button', { name: 'Boost City F6' }))
+      expect(summary()).toBe('Boost City F6')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ cityPieceId: 'c2' })
     })
 
@@ -636,7 +653,8 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       fireEvent.change(screen.getByLabelText('Coin counter'), { target: { value: 'pottery' } })
       show({ opponents: [rival('p2', 'Karandras1', 2, { sheet: 2 }), RIVALS[1]!] })
       expect((screen.getByLabelText('Coin counter') as HTMLSelectElement).value).toBe('sheet')
-      fireEvent.click(screen.getByRole('button', { name: 'Discard a coin from Sheet' }))
+      expect(summary()).toBe('Discard a coin from Sheet')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p2', source: 'sheet' })
     })
 
@@ -644,7 +662,8 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       const { send, show } = await rerenderable('Horseback Riding', 'horsebackRiding', {})
       fireEvent.change(screen.getByLabelText('Player'), { target: { value: 'p3' } })
       show({ opponents: [RIVALS[0]!] })
-      fireEvent.click(screen.getByRole('button', { name: 'Use Horseback Riding on Karandras1' }))
+      expect(summary()).toBe('Use Horseback Riding on Karandras1')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p2' })
     })
   })
@@ -655,19 +674,20 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Karandras1', 'Itchi'])
       expect(screen.queryByPlaceholderText(/optional/)).toBeNull()
       fireEvent.change(screen.getByLabelText('Player'), { target: { value: 'p3' } })
-      fireEvent.click(screen.getByRole('button', { name: 'Use Horseback Riding on Itchi' }))
+      expect(summary()).toBe('Use Horseback Riding on Itchi')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p3' })
     })
 
     it('Writing, Civil Service and Mass Media take free text for what is cancelled, and leave it out when empty', async () => {
       const send = await open('Writing', 'writing')
-      fireEvent.click(screen.getByRole('button', { name: 'Use Writing on Karandras1' }))
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p2' })
       cleanup()
 
       const second = await open('Civil Service', 'civilService')
       fireEvent.change(screen.getByLabelText('Culture event (optional)'), { target: { value: '  Sinbad ' } })
-      fireEvent.click(screen.getByRole('button', { name: 'Use Civil Service on Karandras1' }))
+      ok()
       expect(second.mock.calls.at(-1)?.[4]).toEqual({ targetId: 'p2', note: 'Sinbad' })
       cleanup()
 
@@ -691,15 +711,16 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       )
       expect(screen.queryByRole('option', { name: /Civil Service/ })).toBeNull()
       fireEvent.change(screen.getByLabelText('Coin counter'), { target: { value: 'pottery' } })
-      fireEvent.click(screen.getByRole('button', { name: 'Discard a coin from Pottery (I)' }))
+      expect(summary()).toBe('Discard a coin from Pottery (I)')
+      ok()
       expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['mysticism', expect.any(String), 7, { targetId: 'p2', source: 'pottery' }])
     })
 
     it('shows when the chosen opponent has no coin token, and cannot send', async () => {
       const send = await open('Mysticism', 'mysticism')
       fireEvent.change(screen.getByLabelText('Player'), { target: { value: 'p3' } })
-      expect(screen.getByRole('dialog').textContent).toContain('Itchi holds no coin token.')
-      const discard = screen.getByRole('button', { name: /^Discard a coin/ }) as HTMLButtonElement
+      expect(popup().getByRole('status').textContent).toContain('Itchi holds no coin token.')
+      const discard = okButton()
       expect(discard.disabled).toBe(true)
       fireEvent.click(discard)
       expect(send).not.toHaveBeenCalled()
@@ -724,25 +745,37 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       wonder('w5', 'wonders/oracle', 'The Oracle', 'p2', true),
     ]
 
-    it('obsolete lists the ancient wonders a player owns, not modern, unowned or disabled ones, and sends the chosen piece', async () => {
+    it('offers both choices when both can be done: obsolete lists the ancient wonders a player owns, not modern, unowned or disabled ones', async () => {
       const send = await open('Monarchy', 'monarchy', { pieces: WONDERS })
+      expect(screen.getAllByRole('radio').map((radio) => radio.closest('label')?.textContent?.trim())).toEqual(['Obsolete an ancient wonder', 'Kill a random unit'])
+      expect((screen.getByLabelText(/Obsolete an ancient wonder/) as HTMLInputElement).checked).toBe(true)
       expect(screen.queryByLabelText('Player')).toBeNull()
       expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['The Pyramids (Karandras1)', 'Stonehenge (cash1981)'])
       fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
       expect(send).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Obsolete Stonehenge' }))
+      expect(summary()).toBe('Obsolete Stonehenge')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete', wonderPieceId: 'w2' })
     })
 
-    it('with no wonder to obsolete nothing is chosen, the reason is shown and the button waits; the kill mode still works', async () => {
+    it('does not offer to obsolete a wonder when no ancient wonder is owned: only the kill choice is shown', async () => {
       const send = await open('Monarchy', 'monarchy', { pieces: [WONDERS[2]!, WONDERS[3]!] })
-      expect(screen.getByRole('group').textContent).toContain('No ancient wonder is owned by a player')
-      const obsolete = screen.getByRole('button', { name: /^Obsolete / }) as HTMLButtonElement
-      expect(obsolete.disabled).toBe(true)
-      fireEvent.click(obsolete)
+      expect(screen.queryByRole('radio')).toBeNull()
+      expect(screen.queryByLabelText('Wonder')).toBeNull()
+      expect(popup().queryByText(/Obsolete/)).toBeNull()
+      // Itchi holds no unit card, so there is nothing to kill there: only Karandras1 is offered
+      expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Karandras1 (2 units in hand)'])
+      expect(okButton().disabled).toBe(false)
+      expect(summary()).toBe('Kill a unit of Karandras1')
+      ok()
+      expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['monarchy', expect.any(String), 7, { mode: 'kill', targetId: 'p2' }])
+    })
+
+    it('opens nothing, and says why, when there is no wonder to obsolete and no unit to kill', async () => {
+      const send = await open('Monarchy', 'monarchy', { pieces: [WONDERS[2]!, WONDERS[3]!], opponents: [rival('p3', 'Itchi', 0, {})] })
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      expect(screen.getByRole('dialog').textContent).toContain('Monarchy has nothing to act on')
       expect(send).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByLabelText(/Kill a random unit/))
-      expect((screen.getByRole('button', { name: /^Kill a unit of/ }) as HTMLButtonElement).disabled).toBe(false)
     })
 
     it('the wonder that was picked is gone: the wonder shown is the wonder sent', async () => {
@@ -755,38 +788,71 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
       rerender(<TechPanel gameId="game-1" busy={false} run={run} view={abilityView('Monarchy', 'monarchy', { pieces: [WONDERS[0]!] })} reloadCount={0} />)
       expect((screen.getByLabelText('Wonder') as HTMLSelectElement).value).toBe('w1')
-      fireEvent.click(screen.getByRole('button', { name: 'Obsolete The Pyramids' }))
+      expect(summary()).toBe('Obsolete The Pyramids')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete', wonderPieceId: 'w1' })
     })
 
-    it('kill picks an opponent, shows how many units each holds in the open count, and sends the target', async () => {
+    it('kill picks an opponent who holds units, shows how many each holds in the open count, and sends the target', async () => {
       const send = await open('Monarchy', 'monarchy')
-      fireEvent.click(screen.getByLabelText(/Kill a random unit/))
-      expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Karandras1 (2 units in hand)', 'Itchi (0 units in hand)'])
-      // It starts on the player who holds units
+      // No wonder on the map: kill is the only choice
+      expect(screen.queryByRole('radio')).toBeNull()
+      expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Karandras1 (2 units in hand)'])
       expect((screen.getByLabelText('Player') as HTMLSelectElement).value).toBe('p2')
-      fireEvent.click(screen.getByRole('button', { name: 'Kill a unit of Karandras1' }))
+      expect(summary()).toBe('Kill a unit of Karandras1')
+      ok()
       expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['monarchy', expect.any(String), 7, { mode: 'kill', targetId: 'p2' }])
     })
 
-    it('cannot kill while a battle is on: the mode is disabled and falls back to obsolete', async () => {
+    it('does not offer to kill while a battle is on: only obsolete is shown', async () => {
       const view = { ...abilityView('Monarchy', 'monarchy', { pieces: WONDERS }), battle: { arena: [] } } as unknown as PlayerView
       const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
       vi.spyOn(api, 'availableTechs').mockResolvedValue([])
       render(<TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />)
       fireEvent.click(await screen.findByText('Monarchy'))
       fireEvent.click(screen.getByRole('button', { name: /^Use Monarchy/ }))
-      const kill = screen.getByLabelText(/Kill a random unit/) as HTMLInputElement
-      expect(kill.disabled).toBe(true)
-      expect(screen.getByRole('group').textContent).toContain('not while a battle is on')
-      fireEvent.click(screen.getByRole('button', { name: 'Obsolete The Pyramids' }))
+      expect(screen.queryByRole('radio')).toBeNull()
+      expect(popup().queryByText(/Kill/)).toBeNull()
+      expect(summary()).toBe('Obsolete The Pyramids')
+      ok()
       expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'obsolete', wonderPieceId: 'w1' })
     })
 
-    it('does not send anything by choosing a mode', async () => {
-      const send = await open('Monarchy', 'monarchy')
+    it('does not send anything by choosing a mode, and Cancel closes the popup without sending', async () => {
+      const send = await open('Monarchy', 'monarchy', { pieces: WONDERS })
       fireEvent.click(screen.getByLabelText(/Kill a random unit/))
+      expect(popup().getByLabelText('Player')).toBeTruthy()
+      expect(summary()).toBe('Kill a unit of Karandras1')
       fireEvent.click(screen.getByLabelText(/Obsolete an ancient wonder/))
+      expect(send).not.toHaveBeenCalled()
+      fireEvent.click(popup().getByRole('button', { name: 'Cancel' }))
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('a click on the backdrop cancels the popup and leaves the tech dialog open', async () => {
+      const send = await open('Monarchy', 'monarchy', { pieces: WONDERS })
+      const backdrop = screen.getAllByRole('dialog').at(-1)!.parentElement as HTMLElement
+      fireEvent.click(backdrop)
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('Shift+Tab from the checked radio wraps inside the popup and never reaches the tech dialog underneath', async () => {
+      await open('Monarchy', 'monarchy', { pieces: WONDERS })
+      const kill = screen.getByLabelText(/Kill a random unit/) as HTMLInputElement
+      fireEvent.click(kill)
+      kill.focus()
+      // A radio group is one tab stop, at the checked radio: that is the first stop of the popup, not the first radio in the markup
+      fireEvent.keyDown(kill, { key: 'Tab', shiftKey: true })
+      expect(document.activeElement).toBe(popup().getByRole('button', { name: 'OK' }))
+    })
+
+    it('Escape cancels the popup and leaves the tech dialog open', async () => {
+      const send = await open('Monarchy', 'monarchy', { pieces: WONDERS })
+      expect(screen.getAllByRole('dialog')).toHaveLength(2)
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
       expect(send).not.toHaveBeenCalled()
     })
   })
@@ -829,7 +895,8 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
   it('sends the extra action mode with no city', async () => {
     const send = await open(atomicView(MAP))
     expect(send).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Allow an extra action with each city' }))
+    expect(summary()).toBe('Allow an extra action with each city')
+    ok()
     expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['atomicTheory', expect.any(String), 7, { mode: 'extraActions' }])
   })
 
@@ -840,11 +907,12 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1', 'City B2 of cash1981 (yours)'])
     // The default is another player's city, never the player's own
     expect((screen.getByLabelText('City to nuke') as HTMLSelectElement).value).toBe('city')
-    expect(screen.getByRole('group').textContent).toContain('Destroys the city with Library (K10)')
-    fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
+    expect(popup().getByText(/Destroys the city/).textContent).toContain('Destroys the city with Library (K10)')
+    expect(summary()).toBe('Nuke City J10')
+    ok()
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(send).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
+    ok()
     expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'city' })
   })
 
@@ -854,7 +922,8 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     fireEvent.click(screen.getByLabelText(/Nuke a city/))
     expect((screen.getByLabelText('City to nuke') as HTMLSelectElement).value).toBe('city')
     fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'mine' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Nuke City B2' }))
+    expect(summary()).toBe('Nuke City B2')
+    ok()
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('(your own city)'))
     expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'mine' })
   })
@@ -865,34 +934,35 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     fireEvent.click(screen.getByLabelText(/Nuke a city/))
     expect((screen.getByLabelText('City to nuke') as HTMLSelectElement).value).toBe('')
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Choose a city', 'City B2 of cash1981 (yours)'])
-    const nuke = screen.getByRole('button', { name: /^Nuke / }) as HTMLButtonElement
+    const nuke = okButton()
     expect(nuke.disabled).toBe(true)
     fireEvent.click(nuke)
     expect(send).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'mine' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Nuke City B2' }))
+    expect(summary()).toBe('Nuke City B2')
+    ok()
     // A confirm still guards it
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'mine' })
   })
 
-  it('shows when there is no city to nuke, and cannot send', async () => {
+  it('does not offer a nuke when there is no city to nuke: only the extra action is shown', async () => {
     const send = await open(atomicView(MAP.filter((entry) => !['city', 'mine'].includes((entry as { id: string }).id))))
-    fireEvent.click(screen.getByLabelText(/Nuke a city/))
-    expect(screen.getByRole('group').textContent).toContain('No city that is not a capital')
-    const nuke = screen.getByRole('button', { name: /^Nuke / }) as HTMLButtonElement
-    expect(nuke.disabled).toBe(true)
-    fireEvent.click(nuke)
-    expect(send).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText(/Nuke a city/)).toBeNull()
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByLabelText('City to nuke')).toBeNull()
+    expect(summary()).toBe('Allow an extra action with each city')
+    ok()
+    expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'extraActions' })
   })
 
   it('asks about a repeat use when the player submits, and keeps the picker if declined', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     const send = await open(atomicView(MAP, 'used'))
     expect(confirm).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Allow an extra action with each city' }))
+    ok()
     expect(send).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Allow an extra action with each city' }))
+    ok()
     expect(send.mock.calls[0]?.[5]).toBe(true)
   })
 
@@ -918,7 +988,8 @@ describe('Atomic Theory and Bureaucracy in the tech dialog (issue #327, batch 2)
     fireEvent.change(screen.getByLabelText('City to nuke'), { target: { value: 'city2' } })
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={atomicView(MAP.filter((entry) => (entry as { id: string }).id !== 'mine'))} reloadCount={0} />)
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['City J10 of Karandras1'])
-    fireEvent.click(screen.getByRole('button', { name: 'Nuke City J10' }))
+    expect(summary()).toBe('Nuke City J10')
+    ok()
     expect(send.mock.calls[0]?.[4]).toEqual({ mode: 'nuke', cityPieceId: 'city' })
   })
 
@@ -984,7 +1055,7 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     ])
     fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
     expect(send).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    ok()
     expect(send.mock.calls[0]?.slice(1, 5)).toEqual(['gunpowder', expect.any(String), 7, { ...namedPayment('Iron', 'Wheat'), mode: 'obsolete', wonderPieceId: 'w2' }])
   })
 
@@ -996,22 +1067,34 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
       'Market on E5 (no single owner)',
     ])
     fireEvent.change(screen.getByLabelText('Building'), { target: { value: 'b2' } })
-    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    ok()
     expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'destroy', buildingPieceId: 'b2' })
   })
 
-  it('with nothing chosen in the mode the button waits and the reason is shown, and the other mode still works', async () => {
+  it('does not offer to obsolete a wonder when no ancient or medieval wonder is owned: only destroy is shown', async () => {
     const { send } = await open(viewWith(PIECES.filter((entry) => (entry as { category: string }).category !== 'wonder')))
-    // No wonder: it opens on destroy
-    expect((screen.getByLabelText(/Destroy a building/) as HTMLInputElement).checked).toBe(true)
-    fireEvent.click(screen.getByLabelText(/Obsolete an ancient or medieval wonder/))
-    expect(screen.getByRole('group', { name: 'Gunpowder: resources, mode and target' }).textContent).toContain('No ancient or medieval wonder is owned by a player')
-    const pay = screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement
-    expect(pay.disabled).toBe(true)
-    fireEvent.click(pay)
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByLabelText('Wonder')).toBeNull()
+    expect(popup().queryByText(/Obsolete/)).toBeNull()
+    expect(okButton().disabled).toBe(false)
+    ok()
+    expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'destroy', buildingPieceId: 'b1' })
+  })
+
+  it('does not offer to destroy a building when none stands on the map: only obsolete is shown', async () => {
+    const { send } = await open(viewWith(PIECES.filter((entry) => (entry as { category: string }).category !== 'building')))
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByLabelText('Building')).toBeNull()
+    expect(popup().queryByText(/Destroy/)).toBeNull()
+    ok()
+    expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'obsolete', wonderPieceId: 'w1' })
+  })
+
+  it('opens nothing, and says why, when there is neither a wonder to obsolete nor a building to destroy', async () => {
+    const { send } = await open(viewWith([]))
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('dialog').textContent).toContain('Gunpowder has nothing to act on')
     expect(send).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByLabelText(/Destroy a building/))
-    expect((screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('the wonder or building that was picked is gone: the one shown is the one sent', async () => {
@@ -1019,7 +1102,7 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     fireEvent.change(screen.getByLabelText('Wonder'), { target: { value: 'w2' } })
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { id: string }).id !== 'w2'))} reloadCount={0} />)
     expect((screen.getByLabelText('Wonder') as HTMLSelectElement).value).toBe('w1')
-    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    ok()
     expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'obsolete', wonderPieceId: 'w1' })
   })
 
@@ -1027,17 +1110,33 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     const { send, rerender } = await open(viewWith(PIECES))
     fireEvent.click(screen.getByLabelText(/Destroy a building/))
     fireEvent.change(screen.getByLabelText('Building'), { target: { value: 'b2' } })
-    expect(screen.getByRole('button', { name: 'Destroy Market on E5 (pay Iron and Wheat)' })).toBeTruthy()
+    expect(summary()).toBe('Destroy Market on E5 (pay Iron and Wheat)')
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { id: string }).id !== 'b2'))} reloadCount={0} />)
     expect((screen.getByLabelText('Building') as HTMLSelectElement).value).toBe('b1')
-    fireEvent.click(screen.getByRole('button', { name: 'Destroy Library on K10 (pay Iron and Wheat)' }))
+    expect(summary()).toBe('Destroy Library on K10 (pay Iron and Wheat)')
+    ok()
     expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'destroy', buildingPieceId: 'b1' })
+  })
+
+  it('a chosen mode that disappears is not swapped for another: nothing is chosen and OK waits', async () => {
+    const { send, rerender } = await open(viewWith(PIECES))
+    fireEvent.click(screen.getByLabelText(/Destroy a building/))
+    rerender(<TechPanel gameId="game-1" busy={false} run={run} view={viewWith(PIECES.filter((entry) => (entry as { category: string }).category !== 'building'))} reloadCount={0} />)
+    expect(okButton().disabled).toBe(true)
+    expect(popup().getByRole('status').textContent).toContain('no longer possible')
+    expect((screen.getByLabelText(/Obsolete an ancient or medieval wonder/) as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(okButton())
+    expect(send).not.toHaveBeenCalled()
+    // Choosing again works
+    fireEvent.click(screen.getByLabelText(/Obsolete an ancient or medieval wonder/))
+    expect(okButton().disabled).toBe(false)
   })
 
   it('names the wonder it will obsolete, and the group says what it holds', async () => {
     const { send } = await open(viewWith(PIECES))
-    expect(screen.getByRole('group', { name: 'Gunpowder: resources, mode and target' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Obsolete The Pyramids (pay Iron and Wheat)' }))
+    expect(screen.getByRole('dialog', { name: 'Gunpowder' })).toBeTruthy()
+    expect(summary()).toBe('Obsolete The Pyramids (pay Iron and Wheat)')
+    ok()
     expect(send.mock.calls[0]?.[4]).toEqual({ ...namedPayment('Iron', 'Wheat'), mode: 'obsolete', wonderPieceId: 'w1' })
   })
 
@@ -1046,13 +1145,13 @@ describe('Gunpowder obsolete or destroy in the tech dialog (issue #327)', () => 
     const used = viewWith(PIECES, 'used')
     const { send, rerender } = await open(used)
     expect(confirm).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    ok()
     expect(send).not.toHaveBeenCalled()
     expect(screen.getByLabelText('Wonder')).toBeTruthy()
     rerender(<TechPanel gameId="game-1" busy={true} run={run} view={used} reloadCount={0} />)
-    expect((screen.getByRole('button', { name: /\(pay / }) as HTMLButtonElement).disabled).toBe(true)
+    expect(okButton().disabled).toBe(true)
     rerender(<TechPanel gameId="game-1" busy={false} run={run} view={used} reloadCount={0} />)
-    fireEvent.click(screen.getByRole('button', { name: /\(pay / }))
+    ok()
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[5]).toBe(true)
   })

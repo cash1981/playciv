@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { initiateBattle, placeUnitInArena, setArenaUnitStat } from '../src/actions/arena.js'
+import { initiateBattle, moveArenaUnit, placeUnitInArena, returnArenaUnitToHand, setArenaUnitStat } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -173,5 +173,96 @@ describe('Metalworking (Iron, Battle: +3 attack on one of your own arena units)'
 
     const gone: GameState = { ...used, battle: null }
     expect(unwrapErr(tryVote(gone, 'req-1')).kind).toBe('ASSISTED_UNDO_BLOCKED')
+  })
+
+  describe('a round already fought on the unit\'s front', () => {
+    /** Karandras's Mounted 2.2 is placed first, then Cash's Infantry 1.3 in front of it: they lock, both at 1 HP... */
+    function faced(): GameState {
+      let state = firstCivGame()
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+      state = unwrap(draw(state, { playerId: KARANDRAS1, sheetName: 'MOUNTED', confirmedOutOfTurn: true }))
+      for (const playerId of [CASH1981, KARANDRAS1]) state = unwrap(drawUnitsForBattle(state, { playerId, numberOfDraws: 1 }))
+      state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+      const mounted = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+      const infantry = findPlayer(state, CASH1981)!.battlehand[0]!
+      state = unwrap(placeUnitInArena(state, { playerId: KARANDRAS1, unitId: mounted.id, side: 'defender', position: 0, attack: 2, health: 2 }))
+      state = unwrap(placeUnitInArena(state, { playerId: CASH1981, unitId: infantry.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
+      return withHutInHand(withTech(state, 'Metalworking'), 'Iron').state
+    }
+    const vitals = (state: GameState) => ({
+      infantry: mine(state).map((unit) => [unit.attack, unit.health, unit.killed]),
+      mounted: theirs(state).map((unit) => [unit.attack, unit.health, unit.killed]),
+    })
+
+    it('starts locked: both at 1 HP', () => {
+      expect(vitals(faced())).toEqual({ infantry: [[1, 1, false]], mounted: [[2, 1, false]] })
+    })
+
+    it('fights the round again with the new attack: the Infantry now out-hits the Mounted it trumps, kills it first and takes nothing', () => {
+      const state = faced()
+      const used = unwrap(press(state, { arenaUnitId: mine(state)[0]!.id }))
+      expect(vitals(used)).toEqual({ infantry: [[4, 3, false]], mounted: [[2, 0, true]] })
+      expect(used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain('fought again')
+    })
+
+    it('an undo by vote puts both units back where the first round left them', () => {
+      const state = faced()
+      const used = unwrap(press(state, { arenaUnitId: mine(state)[0]!.id }))
+      const undone = unwrap(tryVote(used, 'req-1'))
+      expect(vitals(undone)).toEqual({ infantry: [[1, 1, false]], mounted: [[2, 1, false]] })
+      expect(hasIron(undone)).toBe(true)
+    })
+
+    it('an undo after the boosted unit moved away does not re-apply the round that was taken back', () => {
+      const state = faced()
+      const used = unwrap(press(state, { arenaUnitId: mine(state)[0]!.id }))
+      const moved = unwrap(moveArenaUnit(used, { playerId: CASH1981, arenaUnitId: mine(used)[0]!.id, position: 1 }))
+      // Moving away took the round back: the Mounted is alive and unhurt, the Infantry unhurt on its new front
+      expect(vitals(moved)).toEqual({ infantry: [[4, 3, false]], mounted: [[2, 2, false]] })
+      const undone = unwrap(tryVote(moved, 'req-1'))
+      expect(vitals(undone)).toEqual({ infantry: [[1, 3, false]], mounted: [[2, 2, false]] })
+    })
+
+    it('an undo after the killed opponent was returned to hand does not wound the unit that is still there', () => {
+      const state = faced()
+      const used = unwrap(press(state, { arenaUnitId: mine(state)[0]!.id }))
+      const returned = unwrap(returnArenaUnitToHand(used, { playerId: KARANDRAS1, arenaUnitId: theirs(used)[0]!.id }))
+      const undone = unwrap(tryVote(returned, 'req-1'))
+      // As without the boost: the Infantry keeps the damage of the round it fought (the Mounted leaving does not take it back)
+      expect(vitals(undone)).toEqual({ infantry: [[1, 1, false]], mounted: [] })
+    })
+
+    it('an undo after the arriving Infantry was returned to hand, when the standing Mounted had been boosted, only takes the attack back', () => {
+      let state = faced()
+      state = withHutInHand(withTech(state, 'Metalworking', KARANDRAS1), 'Iron', KARANDRAS1).state
+      const used = unwrap(
+        performAssistedAction(state, { playerId: KARANDRAS1, action: 'metalworking', requestId: 'req-k', at: AT, payload: { arenaUnitId: theirs(state)[0]!.id } as never }),
+      )
+      const returned = unwrap(returnArenaUnitToHand(used, { playerId: CASH1981, arenaUnitId: mine(used)[0]!.id }))
+      expect(vitals(returned)).toEqual({ infantry: [], mounted: [[5, 2, false]] })
+      const entry = returned.log.find((candidate) => candidate.assistedActionId === 'req-k')!
+      let next = unwrap(initiateUndo(returned, { logId: entry.id, playerId: KARANDRAS1 }))
+      for (const playerId of [CASH1981, ITCHI]) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
+      next = unwrap(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+      expect(vitals(next)).toEqual({ infantry: [], mounted: [[2, 2, false]] })
+    })
+
+    it('leaves a unit alone whose HP was edited by hand after the round, changing only the attack', () => {
+      const state = faced()
+      const edited = unwrap(setArenaUnitStat(state, { playerId: CASH1981, arenaUnitId: mine(state)[0]!.id, key: 'health', value: 2 }))
+      const used = unwrap(press(edited, { arenaUnitId: mine(edited)[0]!.id }))
+      expect(vitals(used)).toEqual({ infantry: [[4, 2, false]], mounted: [[2, 1, false]] })
+    })
+
+    it('also fights the round again when the boosted unit is the one that was already standing there', () => {
+      // Karandras's Mounted gets the boost instead of Cash's Infantry: Mounted does not trump Infantry, so the lock holds with its new attack
+      let state = faced()
+      state = withHutInHand(withTech(state, 'Metalworking', KARANDRAS1), 'Iron', KARANDRAS1).state
+      const used = unwrap(
+        performAssistedAction(state, { playerId: KARANDRAS1, action: 'metalworking', requestId: 'req-k', at: AT, payload: { arenaUnitId: theirs(state)[0]!.id } as never }),
+      )
+      // Mounted 5 attack against Infantry 3 HP: the round is fought again from 2/2 and 1/3, both hit by the other's attack
+      expect(vitals(used)).toEqual({ infantry: [[1, 0, true]], mounted: [[5, 1, false]] })
+    })
   })
 })
