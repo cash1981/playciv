@@ -1153,11 +1153,6 @@ export interface AssistedActionRecord {
   readonly kingAtAction?: string | null
   /** Whether Dr. Martin Luther King was faceup and unblocked for the player when the action was taken. Private. */
   readonly kingFaceupAtAction?: boolean
-  /**
-   * The board history entries of the resources a cancelled resource ability still paid (they are spent again after the
-   * rewind). Only the cancellation can take them back, so the board Undo refuses them. Private.
-   */
-  readonly keptHistoryIds?: readonly string[]
   /** Exact saved revision before the action (not inferred from its last log line). */
   readonly beforeRevision?: number
   /** Actual submitted choices, private like the effect. */

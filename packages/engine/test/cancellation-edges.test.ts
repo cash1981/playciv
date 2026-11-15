@@ -184,7 +184,24 @@ describe('Bread and Circuses reads the owners as the card moved them', () => {
   })
 })
 
-describe('a retained resource cost is not refunded by the board Undo', () => {
+describe('a cost a cancellation spent is not refunded by the board Undo', () => {
+  it("the canceller's own Spy: the collected icon taken off the map stays off", () => {
+    const base = scene()
+    const writing = unwrap(revealTech(unwrap(chooseTech(base.state, { playerId: B, techName: 'Writing' })), { playerId: B, techName: 'Writing' }))
+    const spy = writing.items.find((item) => item.kind === 'hut' && item.name === 'Spy')
+    if (spy === undefined) throw new Error('no Spy hut in the fixture deck')
+    const held = { ...writing, items: writing.items.filter((item) => item.id !== spy.id),
+      players: writing.players.map((p) => p.playerId === B ? { ...p, items: [...p.items, { ...spy, hidden: true, ownerId: B }] } : p) }
+    const icon = withPieceInArea(held, 'resources/hut', B)
+    const current = devote(icon.state, base.capital, 'target')
+    const done = unwrap(command(current, icon.state, B, 'cancel', { logId: logOf(current, 'target'), tech: 'Writing', payment: { resource: 'Spy', kind: 'hut', id: spy.id } }))
+    // The Spy hut was spent, and the icon that showed it on the map went with it
+    expect(done.discardedItems.some((item) => item.id === spy.id)).toBe(true)
+    expect(done.board.pieces.some((p) => p.id === icon.piece.id)).toBe(false)
+    expect(unwrapErr(undoLastBoardChange(done, B))).toMatchObject({ kind: 'BOARD_UNDO_ASSISTED' })
+    expect(done.board.pieces.some((p) => p.id === icon.piece.id)).toBe(false)
+  })
+
   it('a Silk piece the cancelled ability paid stays off the map', () => {
     const tech = unwrap(revealTech(unwrap(chooseTech(firstCivGame(), { playerId: A, techName: 'Horseback Riding' })), { playerId: A, techName: 'Horseback Riding' }))
     const silk = withPieceInArea(tech, 'resources/silk', A)
@@ -192,8 +209,7 @@ describe('a retained resource cost is not refunded by the board Undo', () => {
     const current = unwrap(performAssistedAction(twain.state, { playerId: A, action: 'horsebackRiding', requestId: 'target', payload: { targetId: B } }))
     const done = unwrap(command(current, twain.state, B, 'cancel', { logId: logOf(current, 'target'), itemId: twain.itemId }))
     expect(done.board.pieces.some((p) => p.id === silk.piece.id)).toBe(false)
-    const record = done.assistedActions.find((r) => r.id === 'target')
-    expect(record?.keptHistoryIds).toHaveLength(1)
+    expect(done.cancellations?.events.at(-1)?.keptHistoryIds).toHaveLength(1)
     // The player's own Undo of the last board change would put the Silk back: refused
     expect(unwrapErr(undoLastBoardChange(done, A))).toMatchObject({ kind: 'BOARD_UNDO_ASSISTED' })
     expect(done.board.pieces.some((p) => p.id === silk.piece.id)).toBe(false)

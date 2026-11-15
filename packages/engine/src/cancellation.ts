@@ -42,6 +42,11 @@ export interface CancellationEvent {
   readonly targetLogId: string
   /** `rev` of the game just before this event: the saved state a counter rewinds to. */
   readonly priorRevision: number
+  /**
+   * The board history entries the event made after its rewind: a resource spent again (a cancelled ability's, the
+   * Spy of a tech). Only a counter takes them back, so the board Undo refuses them.
+   */
+  readonly keptHistoryIds?: readonly string[]
 }
 export interface CancellationHistory {
   readonly floorTurn: number
@@ -311,7 +316,6 @@ function spendReaction(state: GameState, ownerId: string, reaction: Reaction): R
  */
 function keepAbilityCost(state: GameState, record: AssistedActionRecord, spent: readonly SpentResource[]): Result<GameState, EngineError> {
   let next = state
-  const firstEntry = state.board.history.length
   for (const resource of spent) {
     // A Uranium spend made with Marie Curie's substitute is chosen as Uranium, as it was made
     const name = resource.curieSubstitute === undefined ? resource.resource : 'Uranium'
@@ -319,11 +323,6 @@ function keepAbilityCost(state: GameState, record: AssistedActionRecord, spent: 
     const paid = spendResource(next, record.playerId, name, undefined, false, choice)
     if (!paid.ok) return err(rejection('The resources that ability spent cannot be kept spent after the rewind. Nothing was changed.'))
     next = paid.value.state
-  }
-  // A piece taken off the map is a board change of the cancelled player: only the cancellation may take it back
-  const keptIds = next.board.history.slice(firstEntry).map((entry) => entry.id)
-  if (keptIds.length > 0) {
-    next = { ...next, assistedActions: next.assistedActions.map((r) => r.id === record.id ? { ...r, keptHistoryIds: keptIds } : r) }
   }
   // The use consumed the substitute Marie Curie had armed, which the rewind armed again
   if (spent.some((resource) => resource.curieSubstitute !== undefined)) {
@@ -362,10 +361,14 @@ export function applyCancellation(
   if (!state.active) return reject('A cancellation cannot be made in an inactive game.')
   const { logId } = input.command
   const latest = history.events.at(-1)
-  const finish = (next: GameState, event: CancellationEvent): Result<GameState, EngineError> => ok({ ...next, cancellations: {
-    ...history, sealedThrough: next.log.length, events: [...history.events, event],
+  // `firstEntry`: how many board history entries the rewound game had, so the event owns the ones made after it
+  const finish = (next: GameState, event: CancellationEvent, firstEntry: number): Result<GameState, EngineError> => {
+    const keptHistoryIds = next.board.history.slice(firstEntry).map((entry) => entry.id)
+    return ok({ ...next, cancellations: {
+    ...history, sealedThrough: next.log.length, events: [...history.events, keptHistoryIds.length === 0 ? event : { ...event, keptHistoryIds }],
     requests: [...history.requests, { id: input.requestId, playerId: input.playerId, fingerprint }],
   } })
+  }
   const eventOf = (reaction: Reaction, kind: CancellationEvent['kind'], targetLogId: string): CancellationEvent => ({
     id: input.requestId, kind, playerId: input.playerId, card: reaction.card,
     ...(reaction.tech === undefined ? {} : { tech: reaction.tech, ...(reaction.payment === undefined ? {} : { payment: reaction.payment }) }),
@@ -399,7 +402,7 @@ export function applyCancellation(
     return finish(eventLog(next, input.requestId, protect
       ? `${actor.username} revealed ${reaction.value.name}: the cancellation is undone and ${latest.tech === undefined ? latestName : 'the Spy'} stays in hand.`
       : `${actor.username} cancelled the cancellation (${text}) with ${reaction.value.name}${withSpy(said)}.`, input.playerId),
-    eventOf(reaction.value, protect ? 'protect' : 'counter', latest.logId))
+    eventOf(reaction.value, protect ? 'protect' : 'counter', latest.logId), rewound.board.history.length)
   }
 
   const record = state.assistedActions.find((r) => r.logId === logId)
@@ -427,7 +430,7 @@ export function applyCancellation(
   if (!paid.ok) return err(paid.error)
   const next = reshuffleChanged(paid.value.state, state)
   return finish(eventLog(next, input.requestId, `${actor.username} cancelled "${text}" with ${reaction.value.name}${withSpy(paid.value.said)}. Everything played after it is undone; orders and notes are kept.${ability === undefined ? '' : ' What the ability spent stays spent, and it counts as used this turn.'}`, input.playerId),
-    eventOf(reaction.value, 'cancel', record.logId))
+    eventOf(reaction.value, 'cancel', record.logId), rewound.board.history.length)
 }
 
 /** Whitelisted projection: only the viewer's own cards, with the public log lines each can act on. */

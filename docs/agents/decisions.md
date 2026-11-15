@@ -373,8 +373,9 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   extra city action is immune to cancellation; a Supply Drop action can be cancelled, and the cancelled action keeps
   using its Supply Drop (that play cannot be undone and gives no further action). Bread and Circuses reads the colours of
   the figure owners recorded when the card moved them (`cardMove.owners`), so a figure removed since changes nothing. The
-  board history entries of what a cancelled resource ability still paid are recorded (`keptHistoryIds`) and the board
-  Undo refuses them. A counter keeps what was written by the turn of the game it returns to (the saved game before the
+  board history entries a cancellation makes after its rewind (a cancelled ability's resources taken off the map again,
+  the collected icon of the canceller's Spy) are recorded on the event (`keptHistoryIds`) and the board Undo refuses
+  them. A counter keeps what was written by the turn of the game it returns to (the saved game before the
   cancellation), so orders of earlier turns are never reopened.
 - United Nations (human, 2026-11-14): culture events cannot target its owner against their will. The game cannot ask
   the owner, so playing a culture event that names an owner (a chosen target, or every other player), or that moves
