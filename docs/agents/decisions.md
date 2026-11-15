@@ -1499,6 +1499,23 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   their capital's outskirts, so the capital may build a figure on it wherever it
   lies, under the same stacking, water and blockade rules. Other cities and
   buildings and wonders still may not.
+- **Navy** (#354; human, 2026-11-15; rulings 186 to 189): "Each time you build an army with a city action, you may place that
+  unit in the outskirts of a city with a shipyard." With Navy revealed (a chosen but unrevealed Navy changes nothing), the
+  squares offered for an **army** (the `build` item `army`; a scout and every other item are not covered) are those of the
+  building city's own outskirts plus the legal squares in the outskirts of any of the player's own cities that has a Shipyard
+  piece in its outskirts (`shipyardCellsOf`; the building city itself included, which adds nothing new). The city that builds
+  still pays with its production and the build is its action; only the square may lie elsewhere. The squares follow the normal
+  army rules per square (stacking limit, centres, city-states not held, hut and village markers, enemy figure note), and
+  water only with a revealed Sailing, Steam Power or Flight: a Shipyard alone does not let an army stand on water. A
+  capital with a Shipyard counts its held city-states as part of its outskirts, so another city may build on one (rulings
+  39 and 188; `figureSquaresOf` for the shipyard city). Ruling 189 (an army may be placed where enemy figures stand, a battle
+  follows, except on the Shipyard square itself when an enemy figure stands on it) is a refusal of that square only when it
+  is reached through the other city; a square in the building city's own outskirts keeps the older rule, and the battle stays
+  manual. The `build` action needs no new field: it checks the target against the choice's `squares`, and the refusal reads
+  "... is not in the outskirts of that city or of one of your cities with a Shipyard." The web only shows `choice.squares`.
+  Open: a Military Dock (the upgraded form that replaces a Shipyard) does not count as a Shipyard, as the card and the rulings
+  name the Shipyard only (limitations.md). Source: `build-options.ts` (`figureCellsOf`); tests `tech-navy.test.ts`,
+  `BuildPicker.test.tsx`.
 - **Held city-states in the estimate** (W&W p. 9, human, hotfix): the capital's
   production and trade estimate counts each held city-state: its printed trade
   (cs1 3, cs5 1) and production (cs3 1, cs5 1). There is no base +1 trade per
