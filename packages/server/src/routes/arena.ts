@@ -18,6 +18,7 @@ import {
   rotateArenaUnit,
   setArenaUnitStat,
   sunTzuPass,
+  healUnits,
   techWound,
   zhukovWound,
   undoEndBattle,
@@ -339,6 +340,25 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       (state) => techWound(state, { playerId: player.id, tech, arenaUnitId, wounds }),
       clientRev,
     )
+  })
+
+  /**
+   * Animal Husbandry: heal some of the wounds its button owes on one of the player's own units.
+   * Body: `{ tech: 'Animal Husbandry', arenaUnitId: string, wounds: number, rev: number }`.
+   */
+  app.post('/api/games/:gameId/battle/arena/heal', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+    const arenaUnitId = requireString(body, 'arenaUnitId')
+    if (arenaUnitId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'arenaUnitId is required')
+    const tech = requireString(body, 'tech')
+    if (tech === undefined) return sendError(c, 400, 'BAD_REQUEST', 'tech is required')
+    const wounds = optionalNumber(body, 'wounds')
+    if (wounds === undefined) return sendError(c, 400, 'BAD_REQUEST', 'wounds is required')
+    const player = currentPlayer(c)
+
+    return applyToGame(context, c, gameId, (state) => healUnits(state, { playerId: player.id, tech, arenaUnitId, wounds }), clientRev)
   })
 
   /**

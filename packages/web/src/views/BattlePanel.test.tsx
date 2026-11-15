@@ -20,6 +20,7 @@ vi.mock('../lib/api.js', () => ({
     sunTzuPass: vi.fn(),
     zhukovWound: vi.fn(),
     techWound: vi.fn(),
+    healUnits: vi.fn(),
     performAction: vi.fn(),
     actionWithArgs: vi.fn(),
   },
@@ -814,5 +815,74 @@ describe('BattlePanel Metalworking', () => {
     const none = render(<BattlePanel gameId="game" busy={false} run={run} view={{ ...metalView(), you: { ...metalView().you, playerId: 'bystander' } } as unknown as PlayerView} />)
     fireEvent.click(none.getByText('Battle'))
     expect(none.queryByText(/Metalworking/)).toBeNull()
+  })
+})
+
+describe('BattlePanel Animal Husbandry and Biology heal', () => {
+  beforeEach(() => localStorage.clear())
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  // Level III infantry with the health of its card at that level: the unit "a1" has lost 2, "a2" is whole, the enemy "d1" has lost 2 too
+  const level3 = { ...infantry, health: 3 }
+  const unit = (id: string, side: 'attacker' | 'defender', health: number, killed = false) => ({
+    id, side, position: 0, unit: { ...level3, id: `card-${id}` }, attack: 1, health, placedBy: side === 'attacker' ? 'me' : 'other',
+    rotation: 0, killed, arrival: null,
+  })
+  const action = (kind: string, label: string, status: string) => ({
+    action: kind, label, phase: 'ANY', group: 'Battle', status, reason: `${label} is ${status}`, repeatable: true, techName: null, buttonText: `Use ${label}`,
+  })
+  const healView = (heals: object[], availableActions: object[], techs: string[] = ['Animal Husbandry', 'Biology']): PlayerView =>
+    ({
+      ...view,
+      you: { ...view.you, playerId: 'me', stats: { trade: 5 }, availableActions, techsChosen: techs.map((name) => ({ kind: 'tech', name, hidden: false })) },
+      battle: { ...view.battle, arena: [unit('a1', 'attacker', 1), unit('a2', 'attacker', 3), unit('d1', 'defender', 1), unit('d2', 'defender', 0, true)], heals },
+    }) as unknown as PlayerView
+
+  it('lists both heal buttons for a combatant with the techs revealed, and presses them through the assisted action', () => {
+    vi.mocked(api.performAction).mockResolvedValue(view)
+    const { getByText, getByRole } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={healView([], [action('animalHusbandryHeal', 'Animal Husbandry (heal)', 'ready'), action('biologyHeal', 'Biology (heal)', 'ready')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByRole('group', { name: 'Animal Husbandry heal' })).toBeTruthy()
+    fireEvent.click(getByText('Use Biology (heal)'))
+    expect(api.performAction).toHaveBeenCalledWith('game', 'biologyHeal', expect.any(String), 4)
+  })
+
+  it('offers only own wounded living units while wounds are owed, asks how many and sends the unit and the number', () => {
+    vi.mocked(api.healUnits).mockResolvedValue(view)
+    const owed = { playerId: 'me', tech: 'Animal Husbandry', total: 3, healed: 1, actionId: 'x' }
+    const { getByText, getByRole, getByLabelText, queryAllByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={healView([owed], [action('animalHusbandryHeal', 'Animal Husbandry (heal)', 'used')])} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByText(/Animal Husbandry: heal up to 2 wounds, choosing how many each of your units gets/)).toBeTruthy()
+    // The whole unit, the enemy units and the killed one are not offered
+    expect(queryAllByText(/^Heal /)).toHaveLength(1)
+    fireEvent.click(queryAllByText(/^Heal /)[0] as HTMLElement)
+    expect(api.healUnits).not.toHaveBeenCalled()
+    const select = getByLabelText('Wounds to heal') as HTMLSelectElement
+    // It has lost 2 and 2 are owed
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(['1', '2'])
+    fireEvent.change(select, { target: { value: '1' } })
+    expect(getByText('Heal 1 wound; 1 left to heal')).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: 'OK' }))
+    expect(api.healUnits).toHaveBeenCalledWith('game', 'Animal Husbandry', 'a1', 1, 4)
+  })
+
+  it('shows no heal row for a tech that is chosen but still hidden', () => {
+    const hidden = healView([], [action('biologyHeal', 'Biology (heal)', 'unavailable')], ['Biology'])
+    const { getByText, queryByRole } = render(<BattlePanel gameId="game" busy={false} run={run} view={hidden} />)
+    fireEvent.click(getByText('Battle'))
+    expect(queryByRole('group', { name: 'Biology heal' })).toBeNull()
+  })
+
+  it('shows nothing without the tech revealed or for a player outside the battle', () => {
+    const none = render(<BattlePanel gameId="game" busy={false} run={run} view={healView([], [], [])} />)
+    fireEvent.click(none.getByText('Battle'))
+    expect(none.queryByRole('group', { name: 'Biology heal' })).toBeNull()
   })
 })
