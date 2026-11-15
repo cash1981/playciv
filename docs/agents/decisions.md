@@ -673,6 +673,10 @@ the engine; the browser decides no rule.
   assumption the human has not confirmed). Undo moves the marker back, refunds and
   returns all drawn cards to the deck with a reshuffle; refused if a kept card left
   the hand.
+- **Space Flight** (human, 2026-11-15): revealing it for the first time writes one public line, "<player> has researched Space
+  Flight and reached space: a Tech victory" (`revealTech`), exactly as reaching the Culture Victory space only logs. The game
+  does not end and no winner is set, because a Military victory can still be won, also by another player in the same turn;
+  the players name the winner themselves when they end the game. Test: `space-flight.test.ts`.
 - **Card choice publicity (#304):** the public line names the cards not kept
   (already in the public discard pile); the kept card stays secret. Undo returns
   all drawn cards and reshuffles; the earlier public line stays.
