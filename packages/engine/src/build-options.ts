@@ -21,7 +21,8 @@
  */
 
 import { CARAVAN_PRODUCTION, cityLabelOf } from './disband.js'
-import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
+import { PHASE_REASON, engineeringSecondBuild, openCityManagementTurn } from './assisted-core.js'
+import type { EngineeringSecondBuild } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
 import { cityFootprintsOf, cityStateHolderColour, mapCellOf, pieceColorOf } from './blockade.js'
@@ -144,6 +145,11 @@ export interface CityBuildOptions {
   readonly caravan: boolean
   /** The production a tech ability gave this city for this turn only (Animal Husbandry, Construction, Banking, Plastics); `production` includes it. */
   readonly boost: number
+  /**
+   * Set when this would be Engineering's second build in the city: `production` is then what is left after the first
+   * build (`firstCost` off the `fullProduction` it had), `caravan` and `boost` are 0 and false, as the first build used them.
+   */
+  readonly engineering?: { readonly firstCost: number; readonly fullProduction: number }
   /** Empty unless `status` is `ready`. */
   readonly choices: readonly BuildChoice[]
   /** Empty unless `status` is `ready`. */
@@ -711,6 +717,8 @@ interface CityBuildProduction {
   readonly caravan: boolean
   /** Production a tech ability gave this city this turn (Animal Husbandry and the like), included in `value`. */
   readonly boost: number
+  /** Engineering's second build: `value` is what the first build left, not the city's production. */
+  readonly leftover?: boolean
 }
 
 /**
@@ -911,7 +919,7 @@ function paymentFor(
   if (tradeToPay <= player.stats.trade) return { tradeToPay }
   return {
     short:
-      `${costText} and ${city.label} has ${production.value} (${SOURCE_TEXT[production.source]}${production.caravan ? ', plus 2 from the caravan' : ''}${production.boost > 0 ? `, including ${production.boost} from a tech ability this turn` : ''}). ` +
+      `${costText} and ${city.label} has ${production.value} (${production.leftover === true ? 'what the first build left, splitting the production with Engineering' : SOURCE_TEXT[production.source]}${production.caravan ? ', plus 2 from the caravan' : ''}${production.boost > 0 ? `, including ${production.boost} from a tech ability this turn` : ''}). ` +
       `Covering the missing ${shortfall} takes ${tradeToPay} trade and you have ${player.stats.trade}. ` +
       'If the city makes more than that, set its production by hand on the city.',
   }
@@ -968,9 +976,14 @@ function optionsForCity(
   city: CityProduction,
   open: boolean,
   shared: SharedSupply,
+  split: EngineeringSecondBuild | undefined,
 ): CityBuildOptions {
-  const production = productionOf(city)
+  const whole = productionOf(city)
+  // Engineering's second build: the first build used the marker and the caravan and its own hammers do not count
+  const production: CityBuildProduction =
+    split === undefined ? whole : { value: split.remaining, source: whole.source, caravan: false, boost: 0, leftover: true }
   const base = {
+    ...(split === undefined ? {} : { engineering: { firstCost: split.firstCost, fullProduction: split.production } }),
     cityPieceId: city.pieceId,
     label: city.label,
     production: production.value,
@@ -1208,8 +1221,9 @@ function optionsForCity(
  * One entry per city of the player on the map, in board order. Empty for a
  * player without a colour or a city. The viewer's own view only: it reads
  * unrevealed techs to say what is "chosen but not revealed yet".
+ * `engineering` false leaves out Engineering's split (the player confirmed another city action, which takes the full production).
  */
-export function buildOptionsOf(state: GameState, player: Playerhand): readonly CityBuildOptions[] {
+export function buildOptionsOf(state: GameState, player: Playerhand, engineering = true): readonly CityBuildOptions[] {
   if (player.color === null) return []
   const footprints = cityFootprintsOf(state, player.color.toLowerCase())
   if (footprints.length === 0) return []
@@ -1220,6 +1234,6 @@ export function buildOptionsOf(state: GameState, player: Playerhand): readonly C
   const shared = sharedSupplyOf(state, player.color.toLowerCase())
   return footprints.flatMap((footprint) => {
     const city = productions.find((candidate) => candidate.pieceId === footprint.piece.id)
-    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared)]
+    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared, engineering ? engineeringSecondBuild(state, player, footprint.piece.id) : undefined)]
   })
 }

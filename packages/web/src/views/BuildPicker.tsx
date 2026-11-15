@@ -152,12 +152,22 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
       aria-label={`Build in ${city.label}`}
     >
       <h5 className="build-picker-title">Build in {city.label}</h5>
+      {city.engineering !== undefined && (
+        <p className="build-picker-production">
+          Engineering splits this city&rsquo;s production: the first build cost {city.engineering.firstCost} of{' '}
+          {city.engineering.fullProduction}, so {city.production} is left for this one. Anything more is paid in trade.
+        </p>
+      )}
       <p className="build-picker-production">
-        {city.productionSource === 'override'
+        {city.engineering !== undefined
+          ? `Production left: ${city.production}.`
+          : city.productionSource === 'override'
           ? `Production override: ${city.production}`
           : `Production ${city.production}, ${SOURCE_TEXT[city.productionSource]}`}
-        {city.boost > 0 ? `, including ${city.boost} from a tech ability this turn` : ''}
-        {city.caravan ? `${city.boost > 0 ? ' and' : ', including'} 2 from the caravan, which this build uses up.` : '.'}
+        {city.engineering !== undefined
+          ? ''
+          : (city.boost > 0 ? `, including ${city.boost} from a tech ability this turn` : '') +
+            (city.caravan ? `${city.boost > 0 ? ' and' : ', including'} 2 from the caravan, which this build uses up.` : '.')}
       </p>
 
       {/* Plain text: the bar above the board is the live region that announces these. */}
@@ -403,7 +413,9 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     if (isPressInFlight(key)) return
     // A yes given when the picker was opened stands; a city that has acted since is asked now
     const own = view.you?.cityActions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)
-    const acted = own?.extraAction === true ? [] : (own?.actedThisTurn ?? [])
+    // Engineering's second build in a city is the same action split: the options mark it and nothing is asked
+    const splitting = view.you?.buildOptions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.engineering !== undefined
+    const acted = own?.extraAction === true || splitting ? [] : (own?.actedThisTurn ?? [])
     const again = resolveAgain(plan.cityLabel, acted, flow.confirmedAgain)
     if (again === null) return
     let failure: unknown = null

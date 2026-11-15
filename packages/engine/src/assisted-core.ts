@@ -636,10 +636,83 @@ export function resourceAbilityOf(record: Pick<AssistedActionRecord, 'effect'>):
 function cityActionRecordsThisTurn(state: GameState, player: Playerhand, turn: number = turnStatus(state).currentTurn): readonly CityActionRecord[] {
   return state.assistedActions.flatMap((record) => {
     const action = cityActionOf(record)
+    // Engineering's second build shares the first build's action: it is not an action of its own
+    // Engineering's second build shares the first build's action: it is not an action of its own. Only a second build that Twain or
+    // Writing cancelled after its first build was undone is still the city's action of the turn, as the cancelled action is
+    const sharing = record.effect.kind === 'build' ? record.effect.engineering : undefined
+    if (sharing !== undefined && !(record.status === 'cancelled' && state.assistedActions.find((other) => other.id === sharing.firstRecordId)?.status !== 'applied')) return []
     if (action === undefined || record.status === 'undone' || record.status === 'superseded' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
     // A city action Mark Twain cancelled is still the city's action of the turn
     return [record.status === 'cancelled' ? { ...action, label: `${action.label} (cancelled by Mark Twain)` } : action]
   })
+}
+
+/** The usage key of Engineering: once per turn, written by the second build it splits the production for. */
+export const ENGINEERING_KEY = 'card:Engineering'
+
+/** What Engineering offers a city's second build this turn. */
+export interface EngineeringSecondBuild {
+  /** The record of the first build, which the second shares the production with. */
+  readonly firstRecordId: string
+  /** What the first build cost, and the production the city had for it. */
+  readonly firstCost: number
+  readonly production: number
+  /** What is left for the second build: the production less the first cost, never below 0. */
+  readonly remaining: number
+}
+
+/**
+ * Engineering (once per turn, "split the production to purchase two items"): the second build of a city whose only action
+ * this turn is one applied build that recorded its cost. Needs the tech revealed, an open City Management phase and the
+ * key unused. Derived from the records, so an undo or a cancellation brings it back.
+ */
+export function engineeringSecondBuild(state: GameState, player: Playerhand, cityPieceId: string): EngineeringSecondBuild | undefined {
+  if (techBlock(player, 'Engineering') !== undefined) return undefined
+  const turn = openCityManagementTurn(state, player)
+  if (turn === undefined || turn.usedActions.includes(ENGINEERING_KEY)) return undefined
+  const first = onlyBuildOf(state, player, cityPieceId)
+  if (first === undefined) return undefined
+  // Another allowance that covers the second build (Atomic Theory, the capital's extra action, an unused Lovelace or Supply Drop
+  // credit) wins: that build is a whole action with the city's full production and Engineering stays unused
+  if (extraCityActionFor(state, player, cityPieceId, CITY_ACTION_LABELS.build) !== undefined) return undefined
+  const { cost, production } = first.effect
+  return { firstRecordId: first.id, firstCost: cost, production, remaining: Math.max(0, production - cost) }
+}
+
+/**
+ * The city's only action of the turn, when it is one applied build that recorded its cost and production, else undefined.
+ * Engineering's own second builds do not count as actions.
+ */
+function onlyBuildOf(
+  state: GameState,
+  player: Playerhand,
+  cityPieceId: string,
+): (AssistedActionRecord & { readonly effect: { readonly kind: 'build'; readonly cost: number; readonly production: number } }) | undefined {
+  const current = turnStatus(state).currentTurn
+  const records = state.assistedActions.filter(
+    (record) =>
+      record.playerId === player.playerId &&
+      record.turnNumber === current &&
+      record.status !== 'undone' &&
+      record.status !== 'superseded' &&
+      !(record.effect.kind === 'build' && record.effect.engineering !== undefined) &&
+      cityActionOf(record)?.cityPieceId === cityPieceId,
+  )
+  const [first] = records
+  if (records.length !== 1 || first === undefined || first.status !== 'applied' || first.effect.kind !== 'build') return undefined
+  const { cost, production } = first.effect
+  if (cost === undefined || production === undefined) return undefined
+  return first as AssistedActionRecord & { readonly effect: { readonly kind: 'build'; readonly cost: number; readonly production: number } }
+}
+
+/**
+ * Whether Engineering is revealed and already used this turn although this city's only action is a build it could have split
+ * (the capital under Monarchy is refused for another reason): the refusal of a further build then says so.
+ */
+export function engineeringSpentFor(state: GameState, player: Playerhand, cityPieceId: string): boolean {
+  if (techBlock(player, 'Engineering') !== undefined) return false
+  if (openCityManagementTurn(state, player)?.usedActions.includes(ENGINEERING_KEY) !== true) return false
+  return onlyBuildOf(state, player, cityPieceId) !== undefined && !isMonarchyCapital(state, player, cityPieceId)
 }
 
 /**

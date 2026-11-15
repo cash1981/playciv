@@ -32,11 +32,14 @@ import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
   CITY_ACTION_LABELS,
+  ENGINEERING_KEY,
   PHASE_REASON,
   REPEAT_NOTE,
   cityActionOf,
   blocked,
   earlierCityActions,
+  engineeringSecondBuild,
+  engineeringSpentFor,
   freeTurnAction,
   lastLogId,
   extraCityActionFor,
@@ -679,6 +682,14 @@ function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType)
   })
 }
 
+/** The applied second build that shares this build's production through Engineering, if there is one. */
+const engineeringSecondOf = (state: GameState, record: AssistedActionRecord): AssistedActionRecord | undefined =>
+  state.assistedActions.find(
+    (other) => other.status === 'applied' && other.effect.kind === 'build' && other.effect.engineering?.firstRecordId === record.id,
+  )
+
+const ENGINEERING_BUILD_NOTE = ' (splitting the production with Engineering)'
+
 /**
  * A city builds a building, an army or scout figure, or a military unit.
  * Everything is decided from the fresh state: the options are recomputed for the
@@ -718,7 +729,8 @@ const build: AssistedActionDefinition = {
       return err(failed('That is not something that can be built.'))
     }
 
-    const city = buildOptionsOf(state, player).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+    // A confirmed repeat is another allowance that covers the build: it takes the city's full production, so Engineering does not split
+    const city = buildOptionsOf(state, player, context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
     if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
     if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
 
@@ -771,8 +783,26 @@ const build: AssistedActionDefinition = {
       )
     }
     // After everything that makes the build impossible, so that a refusal says what is wrong and the question only comes for a build that would go through
-    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.build ?? 'build')
-    if (again.refusal !== undefined) return err(rejected('build', again.refusal))
+    // Engineering: the second build of a city is the same action split, so it asks nothing; the options already hold what the first left
+    const split = city.engineering === undefined ? undefined : engineeringSecondBuild(state, player, city.cityPieceId)
+    const again =
+      split !== undefined
+        ? { refusal: undefined, note: ENGINEERING_BUILD_NOTE }
+        : earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.build ?? 'build')
+    if (again.refusal !== undefined) {
+      const spentEngineering = engineeringSpentFor(state, player, city.cityPieceId)
+      return err(
+        rejected(
+          'build',
+          spentEngineering ? { ...again.refusal, reason: `${again.refusal.reason} Engineering has already split the production this turn.` } : again.refusal,
+        ),
+      )
+    }
+    const sharing = {
+      cost: choice.cost,
+      production: city.production,
+      ...(split === undefined ? {} : { engineering: { firstRecordId: split.firstRecordId } }),
+    }
     const at = context.at === undefined ? {} : { at: context.at }
 
     // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
@@ -844,7 +874,11 @@ const build: AssistedActionDefinition = {
     })
     // Education: once per turn, a wonder adds a coin to the tech (max 4)
     const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
-    const paid = educated.state
+    // Engineering's use of the turn is written by its second build
+    const keyHolder = playerOf(educated.state, paying.playerId) ?? paying
+    const keyTurn = split === undefined ? undefined : openCityManagementTurn(state, player)
+    const paid =
+      keyTurn === undefined ? educated.state : useTurnAction(educated.state, keyHolder, keyTurn, ENGINEERING_KEY, keyHolder.stats)
     const educationCoin = educated.granted ?? undefined
     const where =
       made.kind === 'placed'
@@ -905,6 +939,7 @@ const build: AssistedActionDefinition = {
             sheetName: made.sheetName,
           },
           trade: choice.tradeToPay,
+          ...sharing,
           marker: removal,
           ...(caravan === undefined ? {} : { caravan }),
         },
@@ -921,6 +956,7 @@ const build: AssistedActionDefinition = {
           item: payload.item,
           walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
           trade: choice.tradeToPay,
+          ...sharing,
           marker: removal,
           ...(caravan === undefined ? {} : { caravan }),
         },
@@ -961,6 +997,7 @@ const build: AssistedActionDefinition = {
             ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
             : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
         trade: choice.tradeToPay,
+        ...sharing,
         marker: removal,
         ...(caravan === undefined ? {} : { caravan }),
         ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
@@ -992,6 +1029,7 @@ const build: AssistedActionDefinition = {
           ? ' and the caravan was put back'
           : ' (the caravan stays off: the city has another marker now)')
     const tradeText = effect.trade > 0 ? `, ${effect.trade} (${refunded.stats.trade}) trade returned` : ''
+    if (engineeringSecondOf(state, record) !== undefined) return err(refused('Engineering split this build\'s production with a second build in the same city. Undo the second build first.'))
     const freeUnit = militaryTraditionUndoBlock(state, record)
     if (freeUnit !== undefined) return err(refused(freeUnit))
 
@@ -1912,7 +1950,7 @@ export function performAssistedAction(
     turnNumber: status.currentTurn,
     // A reward can be chosen after City Management has closed, and an upgrade is done in whatever phase the tech was learned in; every other action needs it open
     phase: definition.phase === 'ANY' ? openPhaseOf(status, input.playerId) : definition.phase,
-    usageKey: definition.usageKey,
+    usageKey: effect.kind === 'build' && effect.engineering !== undefined ? ENGINEERING_KEY : definition.usageKey,
     at: input.at ?? null,
     logId: applied.value.logId,
     status: 'applied',
@@ -2097,6 +2135,8 @@ export function takeBackOpenBuild(
   }
   // Military Tradition gave a free unit for this army: the army is removed as any other, and the unit stays
   if (militaryTraditionUndoBlock(state, record) !== undefined) return undefined
+  // Engineering's second build stands on this one: it cannot go back alone, so the piece is removed as any other
+  if (engineeringSecondOf(state, record) !== undefined) return undefined
   const reversed = reverseAssistedAction(state, record.id, input.at, true)
   if (!reversed.ok) return reversed
 
