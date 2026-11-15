@@ -356,13 +356,16 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Spy is lost when a tech event is countered. Mass Media's own targets are the resource abilities below.
 - Resource abilities (human, 2026-11-15): every recorded ability of a tech that spent a resource (the production boosts,
   Pottery, Philosophy, Education, Horseback Riding, Mysticism, Gunpowder, Metalworking, Atomic Theory, Monarchy,
-  Communism, Mathematics and Ballistics, Steam Power, Ecology; `resourceAbilityOf` in `assisted-core.ts`) can be cancelled
+  Communism, Mathematics and Ballistics, Steam Power, Ecology, and the Incense cards Chivalry, Currency and Metal Casting;
+  `resourceAbilityOf` in `assisted-core.ts`) can be cancelled
   from the log: by another player's Twain, by Primetime TV and by Mass Media (a Spy). Writing, Civil Service, Jousting
   Tourney and Bread and Circuses cannot. An ability that costs nothing (healing, Bureaucracy) is not one. A cancelled
   ability keeps its cost, as a cancelled culture card stays discarded: the rewind gives its resources back and they
   are spent again (the same tokens or cards, a piece on the map removed again), and the tech counts as used this turn
   (Mass Media's printed text: "the resources spent to activate that ability are lost"). A counter of the cancellation
-  rewinds to the game before it, so the ability stands and nothing is spent twice. Not done: Mass Media's "your culture
+  rewinds to the game before it, so the ability stands and nothing is spent twice. A cancelled use keeps holding the
+  turn's usage key even if the first use of a confirmed repeat is undone later, and a Marie Curie substitute the use
+  consumed is not armed again. Not done: Mass Media's "your culture
   events cannot be canceled".
 - United Nations (human, 2026-11-14): culture events cannot target its owner against their will. The game cannot ask
   the owner, so playing a culture event that names an owner (a chosen target, or every other player), or that moves

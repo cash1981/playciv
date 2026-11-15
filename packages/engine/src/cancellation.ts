@@ -315,6 +315,10 @@ function keepAbilityCost(state: GameState, record: AssistedActionRecord, spent: 
     if (!paid.ok) return err(rejection('The resources that ability spent cannot be kept spent after the rewind. Nothing was changed.'))
     next = paid.value.state
   }
+  // The use consumed the substitute Marie Curie had armed, which the rewind armed again
+  if (spent.some((resource) => resource.curieSubstitute !== undefined)) {
+    next = { ...next, players: next.players.map((p) => p.playerId === record.playerId ? { ...p, curieSubstitute: null } : p) }
+  }
   const owner = playerOf(next, record.playerId)
   if (owner === undefined || record.usageKey === null) return ok(next)
   const turn = owner.playerTurns.find((t) => t.turnNumber === record.turnNumber) ?? createPlayerTurn(owner.username, record.turnNumber)

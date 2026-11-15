@@ -608,7 +608,8 @@ export function resourceAbilityOf(record: Pick<AssistedActionRecord, 'effect'>):
       case 'productionBoost': case 'pottery': case 'philosophy': case 'education': case 'horsebackRiding':
       case 'mysticism': case 'gunpowder': case 'metalworking': case 'atomicTheory': case 'bureaucracy': case 'monarchy':
         return effect.spent
-      case 'communism': case 'techWounds': case 'steamPower':
+      // Chivalry, Currency and Metal Casting: one Incense for culture
+      case 'communism': case 'techWounds': case 'steamPower': case 'chivalry': case 'currency': case 'metalCasting':
         return [effect.spent]
       case 'sotNote':
         return effect.spent === null ? [] : [effect.spent]

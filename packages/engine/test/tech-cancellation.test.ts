@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { placePiece } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
+import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, availableActionsFor, performAssistedAction } from '../src/assisted.js'
 import { resourceAbilityOf, useTurnAction } from '../src/assisted-core.js'
 import { currentTurnOf } from '../src/assisted-tech-abilities.js'
@@ -22,7 +23,7 @@ import { toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
 import { player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
-import { CASH1981 as A, KARANDRAS1 as B, ITCHI as C, firstCivGame } from './fixture.js'
+import { CASH1981 as A, CHUL as D, KARANDRAS1 as B, ITCHI as C, firstCivGame } from './fixture.js'
 
 const run = (state: GameState, baseline: GameState | undefined, playerId: string, requestId: string, cmd: CancellationCommand) =>
   applyCancellation(state, { playerId, requestId, command: cmd }, baseline)
@@ -241,6 +242,65 @@ describe('a resource ability can be cancelled', () => {
     expect(assistedAvailability(done, A, 'sot:ecology').status).toBe('used')
   })
 
+  it('Currency, Chivalry and Metal Casting (one Incense for culture) are resource abilities too', () => {
+    const base = scene()
+    const incense = withHutInHand(withTech(base.state, 'Currency', A), 'Incense', A)
+    const twain = withCardInHand(incense.state, 'Mark Twain', B)
+    const current = unwrap(performAssistedAction(twain.state, { playerId: A, action: 'currency', requestId: 'target', payload: {} }))
+    expect(player(current, A).stats.culture).toBeGreaterThan(player(twain.state, A).stats.culture)
+    const done = unwrap(run(current, twain.state, B, 't1', { logId: logOf(current, 'target'), itemId: twain.itemId }))
+    expect(player(done, A).stats.culture).toBe(player(twain.state, A).stats.culture)
+    expect(discarded(done, incense.hutId)).toBe(true)
+    expect(used(done, A, 'Currency')).toBe(true)
+    expect(assistedAvailability(done, A, 'currency').status).toBe('used')
+  })
+
+  it('loses a culture card that paid the resource too (A Gift from Afar as Silk)', () => {
+    const gift = withCardInHand(withTech(firstCivGame(), 'Horseback Riding', A), 'A Gift from Afar', A)
+    const twain = withCardInHand(gift.state, 'Mark Twain', B)
+    const ready = unwrap(markPhasesDone(twain.state, { playerId: A, turnNumber: 1, upToPhase: 'SOT' }))
+    const current = unwrap(performAssistedAction(ready, { playerId: A, action: 'horsebackRiding', requestId: 'target', payload: { targetId: B } }))
+    expect(discarded(current, gift.itemId)).toBe(true)
+    const done = unwrap(run(current, ready, B, 't1', { logId: logOf(current, 'target'), itemId: twain.itemId }))
+    expect(discarded(done, gift.itemId)).toBe(true)
+    expect(player(done, A).items.some((item) => item.id === gift.itemId)).toBe(false)
+    expect(trade(done, A)).toBe(trade(ready, A))
+    expect(used(done, A, 'Horseback Riding')).toBe(true)
+  })
+
+  it('Marie Curie: the substitute the cancelled use consumed is not armed again, even when a card paid it', () => {
+    const base = scene()
+    const princely = withCardInHand(withTech(base.state, 'Atomic Theory', A), 'A Princely Gift', A)
+    const armed = { ...princely.state, players: princely.state.players.map((p) => p.playerId === A ? { ...p, curieSubstitute: 'Silk' } : p) }
+    const twain = withCardInHand(armed, 'Mark Twain', B)
+    const current = unwrap(performAssistedAction(twain.state, { playerId: A, action: 'atomicTheory', requestId: 'target', payload: { mode: 'extraActions' } }))
+    expect(player(current, A).curieSubstitute).toBeNull()
+    expect(discarded(current, princely.itemId)).toBe(true)
+    const done = unwrap(run(current, twain.state, B, 't1', { logId: logOf(current, 'target'), itemId: twain.itemId }))
+    expect(player(done, A).curieSubstitute).toBeNull()
+    expect(discarded(done, princely.itemId)).toBe(true)
+    expect(used(done, A, 'Atomic Theory')).toBe(true)
+  })
+
+  it('a cancelled use keeps holding the turn\'s key when the first use of a confirmed repeat is undone', () => {
+    const base = scene()
+    let working = withTech(base.state, 'Pottery', A)
+    for (const name of ['Iron', 'Wheat', 'Silk', 'Incense']) working = withHutInHand(working, name, A).state
+    const twain = withCardInHand(working, 'Mark Twain', B)
+    const first = unwrap(performAssistedAction(twain.state, { playerId: A, action: 'pottery', requestId: 'first', payload: { resources: ['Iron', 'Wheat'] } }))
+    const second = unwrap(performAssistedAction(first, { playerId: A, action: 'pottery', requestId: 'second', confirmedRepeat: true, payload: { resources: ['Silk', 'Incense'] } }))
+    const cancelled = unwrap(run(second, first, B, 't1', { logId: logOf(second, 'second'), itemId: twain.itemId }))
+    expect(cancelled.assistedActions.map((r) => r.status)).toEqual(['applied', 'cancelled'])
+    // The first use is undone by the table's vote
+    const line = cancelled.log.find((entry) => entry.assistedActionId === 'first')
+    if (line === undefined) throw new Error('no line for the first use')
+    let voting = unwrap(initiateUndo(cancelled, { logId: line.id, playerId: A }))
+    for (const playerId of [B, C]) voting = unwrap(vote(voting, { logId: line.id, playerId, vote: true, at: '2026-11-15T12:00:00.000Z' }))
+    const undone = unwrap(vote(voting, { logId: line.id, playerId: D, vote: true, at: '2026-11-15T12:00:00.000Z' }))
+    expect(undone.assistedActions.map((r) => r.status)).toEqual(['undone', 'cancelled'])
+    expect(used(undone, A, 'Pottery')).toBe(true)
+  })
+
   it('keeps a Silk that was only a piece on the map spent too', () => {
     const piece = withPieceInArea(withTech(firstCivGame(), 'Horseback Riding', A), 'resources/silk', A)
     const ready = unwrap(markPhasesDone(piece.state, { playerId: A, turnNumber: 1, upToPhase: 'SOT' }))
@@ -321,6 +381,9 @@ describe('a resource ability can be cancelled', () => {
     expect(resourceAbilityOf({ effect: { kind: 'cancelAbility', tech: 'Writing', spent: [{ kind: 'hut', resource: 'Spy', itemId: 'x' }], targetId: 't', note: '' } })).toBeUndefined()
     expect(resourceAbilityOf({ effect: { kind: 'sotNote', subject: 'Ecology', spent: { kind: 'hut', resource: 'Wheat', itemId: 'w' } } })).toHaveLength(1)
     expect(resourceAbilityOf({ effect: { kind: 'techWounds', tech: 'Ballistics', wounds: 1, battleId: 'b', spent: { kind: 'hut', resource: 'Iron', itemId: 'i' } } })).toHaveLength(1)
+    for (const kind of ['chivalry', 'currency', 'metalCasting'] as const) {
+      expect(resourceAbilityOf({ effect: { kind, culture: 3, spent: { kind: 'hut', resource: 'Incense', itemId: 'i' } } })).toHaveLength(1)
+    }
   })
 
   it('is offered in the view of whoever may stop it, and Twain says why it is blocked for the owner', () => {

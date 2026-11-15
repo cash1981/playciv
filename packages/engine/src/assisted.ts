@@ -43,6 +43,7 @@ import {
   placeBack,
   playerOf,
   rejected,
+  resourceAbilityOf,
   techBlock,
   useTurnAction,
   usedReason,
@@ -1971,10 +1972,11 @@ export function reverseAssistedAction(
     ),
   }
   // A confirmed repeat shares the first use's key, so the key is freed only when no
-  // other applied record of this player and turn still holds it.
+  // other applied record of this player and turn still holds it. A resource ability that
+  // was cancelled still holds it: it counts as used this turn.
   const stillHeld = marked.assistedActions.some(
     (candidate) =>
-      candidate.status === 'applied' &&
+      (candidate.status === 'applied' || (candidate.status === 'cancelled' && resourceAbilityOf(candidate) !== undefined)) &&
       candidate.playerId === record.playerId &&
       candidate.turnNumber === record.turnNumber &&
       candidate.usageKey === record.usageKey,

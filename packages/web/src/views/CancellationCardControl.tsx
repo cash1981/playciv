@@ -30,6 +30,7 @@ export function CancellationCardControl({ view, busy, readOnly, itemId, name }: 
     <div className="play-card-row">
       <button type="button" className="small" aria-label={`Play ${name}`}
         disabled={busy || readOnly || !eligible}
+        title={eligible ? undefined : 'Nothing in the log can be cancelled with it right now.'}
         onClick={() => { startCancelPick({ itemId, name }); revealPanel('log') }}>Play</button>
       <HelpHint label={name}>
         {CANCEL_TEXT[name] ?? 'Cancel a culture event'}
