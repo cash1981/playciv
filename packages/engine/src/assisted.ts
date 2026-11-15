@@ -707,6 +707,10 @@ function resolveBuildItem(
   target: BuildTarget | undefined,
   failed: (reason: string) => EngineError,
 ): Result<ResolvedItem, EngineError> {
+  // A caller may send anything: a square is a column and a row, or nothing
+  if (target !== undefined && (typeof target !== 'object' || target === null || typeof target.column !== 'number' || typeof target.row !== 'number')) {
+    return err(failed('The square must be a column and a row.'))
+  }
   const label = buildItemName(item)
   const choice = city.choices.find((candidate) => sameBuildItem(candidate.item, item))
   if (choice === undefined) {
@@ -832,7 +836,9 @@ function confirmSecond(
     failed(`The second item cannot be built together with the first. ${reason}`),
   )
   if (!resolved.ok) return resolved
-  const taken = placedSquareOf(firstStep)
+  // Only a building or a wonder takes the square over: a figure (army, scout) shares it with what the second item replaces
+  const firstTakesSquare = firstStep.item.kind === 'building' || firstStep.item.kind === 'wonder'
+  const taken = firstTakesSquare ? placedSquareOf(firstStep) : undefined
   const square = resolved.value.square
   if (taken !== undefined && square?.replaces !== undefined && square.column === taken.column && square.row === taken.row) {
     return err(failed(`The second item would replace the first one on ${square.label}. Pick another square or another item.`))
@@ -2363,6 +2369,12 @@ export function takeBackOpenBuild(
   // hand): the whole build can then no longer be undone, so the piece is removed as any other
   const holder = playerOf(state, record.playerId)
   if (parts.some((part) => 'card' in part && holder?.items.some((item) => item.id === part.card.itemId) !== true)) {
+    return undefined
+  }
+  // Another player removed one piece of an Engineering build (or the city of its walls): the build cannot be undone as a whole
+  // any more, so the piece the owner removes now is removed as any other
+  const onBoard = (id: string): boolean => state.board.pieces.some((piece) => piece.id === id)
+  if (parts.some((part) => ('pieceId' in part && !onBoard(part.pieceId)) || ('walls' in part && !onBoard(part.walls.pieceId)))) {
     return undefined
   }
   // Military Tradition gave a free unit for this army: the army is removed as any other, and the unit stays

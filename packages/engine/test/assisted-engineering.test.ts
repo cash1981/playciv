@@ -267,6 +267,15 @@ describe('what Engineering allows', () => {
     expect(tryBuild(rich, WORKSHOP, A1, MARKET, B3).ok).toBe(true)
   })
 
+  it('a figure on a square does not stop the second item replacing a building on it', () => {
+    const rich = put(withOverride(ready(0, ['Engineering', 'Construction', 'Code of Laws', 'Currency', 'Writing', 'Masonry']), 30), CASH1981, 'buildings/library', 2, 1)
+    // The Market replaces the Library on C2 while the army stands there too, in either order of the two items
+    expect(tryBuild(rich, ARMY, C2, MARKET, C2).ok).toBe(true)
+    expect(tryBuild(rich, MARKET, C2, ARMY, C2).ok).toBe(true)
+    // Two buildings still cannot replace one another on the same square
+    expect(refusal(tryBuild(rich, MARKET, C2, LIBRARY, C2))).toMatch(/second item/)
+  })
+
   it('a unit is a hidden card: the public line names the type only', () => {
     const rich = withOverride(ready(), 30)
     const done = both(rich, INFANTRY, undefined, WORKSHOP, A1)
@@ -498,6 +507,16 @@ describe('by-hand removal of a piece of the build', () => {
   })
 })
 
+describe('removal of a piece when its partner is already gone', () => {
+  it('falls back to a plain removal when another player took the other piece off the board', () => {
+    const done = twoBuildings0()
+    const workshop = piecesOf(done, 'buildings/workshop')[0] as BoardPiece
+    const post = piecesOf(done, 'buildings/tradingpost')[0] as BoardPiece
+    const without = { ...done, board: { ...done.board, pieces: done.board.pieces.filter((piece) => piece.id !== post.id) } }
+    expect(takeBackOpenBuild(without, { playerId: CASH1981, pieceId: workshop.id, at: AT })).toBeUndefined()
+  })
+})
+
 function twoBuildings0(): GameState {
   return both(withOverride(ready(), 30), WORKSHOP, A1, TRADING_POST, A3)
 }
@@ -514,6 +533,28 @@ describe('direct calls with a bad second item', () => {
         payload: { ...payload(rich, WORKSHOP, A1), second } as unknown as BuildPayload,
       })
       expect(result.ok).toBe(false)
+    }
+  })
+
+  it('a null or odd square is an error, not an exception, for the second item and for the first', () => {
+    const rich = withOverride(ready(), 30)
+    for (const target of [null, 'A1', { column: 'x', row: 0 }, { column: 0 }, { column: 1.5, row: 0 }]) {
+      const second = performAssistedAction(rich, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-1',
+        at: AT,
+        payload: { ...payload(rich, WORKSHOP, A1), second: { item: ARMY, target } } as unknown as BuildPayload,
+      })
+      expect(second.ok).toBe(false)
+      const first = performAssistedAction(rich, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-2',
+        at: AT,
+        payload: { ...payload(rich, WORKSHOP, A1), target } as unknown as BuildPayload,
+      })
+      expect(first.ok).toBe(false)
     }
   })
 })
