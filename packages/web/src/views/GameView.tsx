@@ -1435,7 +1435,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   // The wound popup belongs to the battle it was opened in: it does not come back in a later battle or after End battle is undone
   const battleId = battle?.id ?? null
-  useEffect(() => { setWoundPick(null) }, [battleId])
+  useEffect(() => { setWoundPick(null); setHealPick(null) }, [battleId])
   useEffect(() => {
     if (selectedBattlePiece === null) return
     const stillAvailable = selectedBattlePiece.kind === 'hand'

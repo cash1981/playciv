@@ -873,6 +873,18 @@ describe('BattlePanel Animal Husbandry and Biology heal', () => {
     expect(api.healUnits).toHaveBeenCalledWith('game', 'Animal Husbandry', 'a1', 1, 4)
   })
 
+  it('closes an open heal dialog when the battle changes', () => {
+    const owed = { playerId: 'me', tech: 'Animal Husbandry', total: 3, healed: 0, actionId: 'x' }
+    const current = healView([owed], [action('animalHusbandryHeal', 'Animal Husbandry (heal)', 'used')])
+    const { getByText, queryByRole, rerender } = render(<BattlePanel gameId="game" busy={false} run={run} view={current} />)
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(getByText(/^Heal /))
+    expect(queryByRole('dialog', { name: 'Animal Husbandry: heal' })).toBeTruthy()
+    const another = { ...current, battle: { ...current.battle, id: 'another-battle' } } as unknown as PlayerView
+    rerender(<BattlePanel gameId="game" busy={false} run={run} view={another} />)
+    expect(queryByRole('dialog', { name: 'Animal Husbandry: heal' })).toBeNull()
+  })
+
   it('shows no heal row for a tech that is chosen but still hidden', () => {
     const hidden = healView([], [action('biologyHeal', 'Biology (heal)', 'unavailable')], ['Biology'])
     const { getByText, queryByRole } = render(<BattlePanel gameId="game" busy={false} run={run} view={hidden} />)
