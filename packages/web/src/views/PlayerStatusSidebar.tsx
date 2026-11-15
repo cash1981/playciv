@@ -32,6 +32,7 @@ import {
   leaderAssetId,
   splitMovement,
   techSpeedOf,
+  techStackingOf,
   totalCoins,
   tradeCeilingOf,
 } from '@civ/engine'
@@ -506,6 +507,15 @@ function PlayerBlock({
     ) : (
       stats.mvmt
     )
+  // The stacking limit the revealed techs give, when it is more than what is typed: shown as the value, with the tech named
+  const techStacking = techStackingOf(block.techs)
+  const techStackingShown = techStacking !== null && techStacking.limit > stats.stacking ? techStacking : null
+  const stackingShown: React.ReactNode =
+    techStackingShown !== null ? (
+      <span title={`${techStackingShown.tech} gives a stacking limit of ${techStackingShown.limit} (the typed value is ${stats.stacking})`}>{techStackingShown.limit}</span>
+    ) : (
+      stats.stacking
+    )
   const combatHandSize = stats.combatHandSize.trim()
   const [editing, setEditing] = useState<EditableStatKey | null>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
@@ -555,7 +565,8 @@ function PlayerBlock({
           // the editor changes the typed one
           label:
             `Edit ${block.username} ${EDIT_LABELS[key]}, currently ${String(stats[key]).trim() || 'empty'}` +
-            (key === 'mvmt' && techSpeedShown !== null ? `, shown as ${movementValue} because of ${techSpeedShown.tech}` : ''),
+            (key === 'mvmt' && techSpeedShown !== null ? `, shown as ${movementValue} because of ${techSpeedShown.tech}` : '') +
+            (key === 'stacking' && techStackingShown !== null ? `, shown as ${techStackingShown.limit} because of ${techStackingShown.tech}` : ''),
           open: active === key,
           disabled: busy,
           onPressStart: () => {
@@ -704,7 +715,7 @@ function PlayerBlock({
         {editorIn(['infantry', 'artillery', 'mounted'])}
       </ul>
       <ul className="pss-grid" aria-label="Modifiers">
-        <Stat name="Stacking" value={stats.stacking} control={edit('stacking')}>
+        <Stat name="Stacking" value={stackingShown} control={edit('stacking')}>
           <FileIcon file="stacking.png" label="Stacking" />
         </Stat>
         <Stat name="Culture hand size" value={stats.cultureHandSize}>

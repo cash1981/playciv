@@ -163,6 +163,26 @@ describe('PlayerStatusSidebar', () => {
     expect(within(block('Alice')).getByRole('img', { name: 'Movement' }).closest('li')?.textContent).toContain('5+2')
   })
 
+  it('shows the stacking limit a revealed tech gives as the Stacking value, when it is more than what is typed, and not a hidden tech', () => {
+    const base = makeView()
+    const view = {
+      ...base,
+      you: { ...base.you, stats: { ...DEFAULT_PLAYER_STATS, stacking: 2 }, techsChosen: [{ name: 'Masonry', hidden: false }, { name: 'Biology', hidden: true }] },
+      opponents: [{ ...base.opponents[0], stats: { ...DEFAULT_PLAYER_STATS, stacking: 2 }, revealedTechs: [{ name: 'Printing Press', hidden: false }] }],
+    } as unknown as PlayerView
+    render(<PlayerStatusSidebar {...READ_ONLY} view={view} />)
+    const stacking = (name: string) => within(block(name)).getByRole('img', { name: 'Stacking' }).closest('li')
+    // Alice: Masonry gives 3, the hidden Biology nothing. Bob: Printing Press gives 4
+    expect(stacking('Alice')?.textContent).toContain('3')
+    expect(stacking('Alice')?.querySelector('span[title]')?.getAttribute('title')).toContain('Masonry gives a stacking limit of 3')
+    expect(stacking('Bob')?.textContent).toContain('4')
+    cleanup()
+    // A typed value that is higher stays as typed
+    render(<PlayerStatusSidebar {...READ_ONLY} view={{ ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, stacking: 5 } } } as PlayerView} />)
+    expect(stacking('Alice')?.textContent).toContain('5')
+    expect(stacking('Alice')?.querySelector('span[title]')).toBeNull()
+  })
+
   it('an editor names both the typed Movement and the speed a revealed tech gives, and the editor changes the typed one', () => {
     const base = makeView()
     const view = {

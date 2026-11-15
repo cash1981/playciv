@@ -869,6 +869,12 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   nothing. Flight also flies over huts, villages and other players' figures (see Water and Huts below). Natural Religion, Henry Ford and Captain James Cook
   apply on top. The status sidebar shows the tech's speed as the Movement value (with the tech named in its tooltip) when it
   is more than what is typed. Tests: `movement.test.ts`, `PlayerStatusSidebar.test.tsx`.
+- **Tech stacking limit** (human, 2026-11-15): a revealed tech gives a stacking limit (Masonry 3, Printing Press 4, Biology 5,
+  Replacement Parts 6; `TECH_STACKING`, `techStackingOf` in `movement.ts`). The highest counts and they do not add up; a
+  hidden tech gives nothing. `stackingLimitOf` is the larger of the typed `stacking` stat and that limit, so a typed value that
+  is higher (a correction by hand) still wins, with Louis Pasteur's +1 on top. Every rule check reads `stackingLimitOf`, and
+  `PlayerView.you.stackingLimit` carries it to movement. The status sidebar shows the tech's limit as the Stacking value (tech
+  named in its tooltip) when it is more than what is typed. Tests: `tech-stacking.test.ts`, `PlayerStatusSidebar.test.tsx`.
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
   for an army outside Anarchy unless the expression already has a `+` term (older
   saves recorded `3+1`, which a scout does not get: it loses one point of it
