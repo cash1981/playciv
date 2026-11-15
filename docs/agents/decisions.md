@@ -367,6 +367,15 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   turn's usage key even if the first use of a confirmed repeat is undone later, and a Marie Curie substitute the use
   consumed is not armed again. Not done: Mass Media's "your culture
   events cannot be canceled".
+- Cancellation edge cases (review of #336, 2026-11-15): Dr. Martin Luther King protects a city action taken while he was
+  faceup and unblocked even if he has left the hand or been blockaded since (`kingFaceupAtAction` on the record; for an
+  older record, the saved game before it), because the rewind would bring him back with the action. Only Ada Lovelace's
+  extra city action is immune to cancellation; a Supply Drop action can be cancelled, and the cancelled action keeps
+  using its Supply Drop (that play cannot be undone and gives no further action). Bread and Circuses reads the colours of
+  the figure owners recorded when the card moved them (`cardMove.owners`), so a figure removed since changes nothing. The
+  board history entries of what a cancelled resource ability still paid are recorded (`keptHistoryIds`) and the board
+  Undo refuses them. A counter keeps what was written by the turn of the game it returns to (the saved game before the
+  cancellation), so orders of earlier turns are never reopened.
 - United Nations (human, 2026-11-14): culture events cannot target its owner against their will. The game cannot ask
   the owner, so playing a culture event that names an owner (a chosen target, or every other player), or that moves
   the figures of an owner (Disoriented, Lost, Out of Position), needs the player's confirmation that each owner

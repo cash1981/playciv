@@ -26,7 +26,7 @@
  */
 
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
-import { availableKingId } from './twain.js'
+import { availableKingId, holdsFaceupKing } from './twain.js'
 import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
@@ -1894,6 +1894,7 @@ export function performAssistedAction(
     cityAction === undefined ? undefined : extraCityActionFor(state, player, cityAction.cityPieceId, cityAction.label)?.creditId
   const record: AssistedActionRecord = {
     kingAtAction: availableKingId(state, player),
+    kingFaceupAtAction: holdsFaceupKing(state, player),
     beforeRevision: state.rev,
     selectedInputs: input.payload,
     id: input.requestId,

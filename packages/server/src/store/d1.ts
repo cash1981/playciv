@@ -583,6 +583,14 @@ export class D1Repository implements Repository {
     return rows.results.map(toGameRevisionMetadata)
   }
 
+  async hasGameRevision(gameId: string, revision: number): Promise<boolean> {
+    const row = await this.db
+      .prepare(`SELECT 1 AS ok FROM game_revision WHERE game_id = ? AND revision = ?`)
+      .bind(gameId, revision)
+      .first<OkRow>()
+    return row !== null
+  }
+
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
     const state = await this.readRevisionChain(gameId, revision)
     return state === undefined ? undefined : toGameRevision(state.row, state.state)

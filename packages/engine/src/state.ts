@@ -780,6 +780,8 @@ export type AssistedEffect =
       readonly cardMove?: {
         readonly card: string
         readonly kind: 'one' | 'group' | 'hannibal'
+        /** The colours (lowercase) of the owners of the figures that moved, as they stood: Bread and Circuses needs no piece left on the board. */
+        readonly owners?: readonly string[]
         readonly from: { readonly column: number; readonly row: number }
         readonly to: { readonly column: number; readonly row: number }
         readonly moves: readonly {
@@ -1149,6 +1151,13 @@ export interface DrawnWonder {
 export interface AssistedActionRecord {
   /** Available protection before the action, even if it was still hidden. Private. */
   readonly kingAtAction?: string | null
+  /** Whether Dr. Martin Luther King was faceup and unblocked for the player when the action was taken. Private. */
+  readonly kingFaceupAtAction?: boolean
+  /**
+   * The board history entries of the resources a cancelled resource ability still paid (they are spent again after the
+   * rewind). Only the cancellation can take them back, so the board Undo refuses them. Private.
+   */
+  readonly keptHistoryIds?: readonly string[]
   /** Exact saved revision before the action (not inferred from its last log line). */
   readonly beforeRevision?: number
   /** Actual submitted choices, private like the effect. */

@@ -1,5 +1,5 @@
 /** Twain's card-specific eligibility. The cancellation itself lives in cancellation.ts, never in a card play. */
-import { cityActionOf, resourceAbilityOf } from './assisted-core.js'
+import { LOVELACE_NAME, cityActionOf, resourceAbilityOf } from './assisted-core.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import type { AssistedActionRecord, GameState, Playerhand } from './state.js'
 import { turnStatus } from './turn.js'
@@ -16,7 +16,7 @@ export interface TwainTarget {
   readonly blocked: string | null
 }
 
-const holdsFaceupKing = (state: GameState, player: Playerhand): boolean =>
+export const holdsFaceupKing = (state: GameState, player: Playerhand): boolean =>
   player.items.some((item) => item.kind === 'greatperson' && item.name === KING_NAME && !item.hidden &&
     !player.pendingRewards.some((r) => r.candidateIds.includes(item.id))) &&
   !blockadedGreatPersonTypes(state, player).includes('Humanitarian')
@@ -35,8 +35,12 @@ export function cancellationRefusal(state: GameState, record: AssistedActionReco
   if (actor === undefined) return 'That player has left the game.'
   if (record.effect.kind === 'playCard' && record.effect.garcia !== undefined) return 'Jerry Garcia’s devotion cannot be canceled.'
   if (cityActionOf(record) !== undefined) {
-    if (record.lovelaceCreditId !== undefined) return 'An extra city action from Ada Lovelace cannot be canceled.'
-    if (holdsFaceupKing(state, actor) && (record.kingAtAction === undefined || record.kingAtAction === availableKingId(state, actor))) {
+    // Only Ada Lovelace's extra action is immune: the credit may also be one of Supply Drop's
+    const credit = record.lovelaceCreditId === undefined ? undefined : state.assistedActions.find((r) => r.id === record.lovelaceCreditId)
+    if (credit?.effect.kind === 'playCard' && credit.effect.name === LOVELACE_NAME) return 'An extra city action from Ada Lovelace cannot be canceled.'
+    // King protects the action when he is faceup now, or was when it was taken: the rewind would bring him back with it
+    if (record.kingFaceupAtAction === true ||
+        (holdsFaceupKing(state, actor) && (record.kingAtAction === undefined || record.kingAtAction === availableKingId(state, actor)))) {
       return `${actor.username}'s city actions cannot be canceled: Dr. Martin Luther King is faceup.`
     }
     return undefined

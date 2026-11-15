@@ -659,7 +659,8 @@ export const EXTRA_ACTION_CARD_NAMES: readonly string[] = EXTRA_ACTION_CARDS.map
  */
 function extraActionCredits(state: GameState, player: Playerhand, cityPieceId: string): readonly { readonly id: string; readonly name: string }[] {
   const turn = turnStatus(state).currentTurn
-  const used = new Set(state.assistedActions.flatMap((record) => (record.status === 'applied' && record.lovelaceCreditId !== undefined ? [record.lovelaceCreditId] : [])))
+  // A city action that Twain or Writing cancelled still counts as taken, and it used its credit
+  const used = new Set(state.assistedActions.flatMap((record) => ((record.status === 'applied' || record.status === 'cancelled') && record.lovelaceCreditId !== undefined ? [record.lovelaceCreditId] : [])))
   const isCapital = capitalOf(state, player)?.id === cityPieceId
   return EXTRA_ACTION_CARDS.filter((card) => card.capital || !isCapital).flatMap((card) =>
     state.assistedActions.flatMap((record) =>
@@ -740,7 +741,7 @@ export function cityActionCountsThisTurn(state: GameState, player: Playerhand, t
 
 /** Whether a city action still in force used this card play's credit. */
 export const lovelaceCreditWasUsed = (state: GameState, creditId: string): boolean =>
-  state.assistedActions.some((record) => record.status === 'applied' && record.lovelaceCreditId === creditId)
+  state.assistedActions.some((record) => (record.status === 'applied' || record.status === 'cancelled') && record.lovelaceCreditId === creditId)
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
 export const ATOMIC_ACTION_NOTE = ' (an extra city action from Atomic Theory)'

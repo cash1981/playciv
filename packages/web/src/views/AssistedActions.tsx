@@ -627,6 +627,9 @@ const listOf = (names: readonly string[]): string =>
  * is the override, the way the Draw button asks first when it is not your turn.
  */
 /** The techs that cancel with a Spy: their button picks the Spy, then the log's Cancel button picks what to cancel. */
+/** Whether the action is one of the techs that cancel from the log (Writing, Civil Service, Mass Media). */
+export const isCancelTechAction = (action: AssistedActionKind): boolean => TECH_CANCEL.has(action)
+
 const TECH_CANCEL: ReadonlyMap<AssistedActionKind, string> = new Map<AssistedActionKind, string>([
   ['writing', 'Writing'],
   ['civilService', 'Civil Service'],
@@ -847,6 +850,8 @@ export function AssistedActionButton({
       const spy = payments[0]
       if (spy === undefined) return
       setPick(null)
+      // A tech's detail dialog is closed first, or its backdrop would cover the log the Cancel buttons are in
+      onDone?.()
       startCancelPick({ name: cancelTech, tech: cancelTech, payment: spy })
       revealPanel('log')
       return

@@ -49,6 +49,10 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
   const isPlayer = useRef(true)
   isPlayer.current = view?.you !== null
   const cancelPick = useCancelPick()
+  // Cancel buttons are on the public tab only: starting a cancel brings the player there
+  useEffect(() => {
+    if (cancelPick !== null) setTab('public')
+  }, [cancelPick])
   // One request id per intent, so a retry after a lost response is the same cancellation
   const intent = useRef<{ key: string; id: string } | null>(null)
   const submitCancellation = (command: CancellationCommand): void => {

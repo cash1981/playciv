@@ -689,6 +689,8 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
         ok()
         expect(send).not.toHaveBeenCalled()
         expect(getCancelPick()).toMatchObject({ name: techName, tech: techName, payment: tokenChoice('Spy') })
+        // The tech's own dialog is closed, so its backdrop does not cover the log the Cancel buttons are in
+        expect(screen.queryByRole('dialog')).toBeNull()
         stopCancelPick()
         cleanup()
       }

@@ -1050,6 +1050,8 @@ export function flipPieceUnchecked(
 function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): boolean {
   const { change } = entry
   return state.assistedActions.some((record) => {
+    // What a cancelled resource ability still paid was taken off the map again after the rewind: a cancellation's, not the board Undo's
+    if (record.status === 'cancelled' && record.keptHistoryIds?.includes(entry.id) === true) return true
     if (record.status !== 'applied') return false
     const effect = record.effect
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.

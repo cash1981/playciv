@@ -442,11 +442,8 @@ describe('cancellation', () => {
     expect(toPlayerView(done, 'spectator').cancellations?.responseCards).toEqual([])
   })
 
-  it('retains intentional Garcia and Lovelace exclusions and faceup King protection', () => {
+  it('retains the intentional Garcia exclusion and faceup King protection (Ada Lovelace: cancellation-edges.test.ts)', () => {
     const { baseline, cityId, twainId } = cityScene()
-    const current = devote(baseline, cityId)
-    const lovelace = { ...current, assistedActions: current.assistedActions.map((r) => ({ ...r, lovelaceCreditId: 'extra-action' })) }
-    expect(command(lovelace, baseline, B, 'cancel', { logId: logOf(current, 'target'), itemId: twainId }).ok).toBe(false)
     const king = withCardInHand(baseline, 'Dr. Martin Luther King', A)
     const faceup = { ...king.state, players: king.state.players.map((p) => ({ ...p, items: p.items.map((i) => i.id === king.itemId ? { ...i, hidden: false } : i) })) }
     const protectedAction = devote(faceup, cityId)

@@ -283,10 +283,11 @@ export async function applyToGame(
 
   // Notes and other non-recorded writes make rev counters non-contiguous in history.
   // Capture the exact before-action revision rather than guessing from a primary log ID.
-  if (result.value.assistedActions.some((r) => !game.assistedActions.some((old) => old.id === r.id)) ||
+  const known = result.value.assistedActions === game.assistedActions ? undefined : new Set(game.assistedActions.map((old) => old.id))
+  if ((known !== undefined && result.value.assistedActions.some((r) => !known.has(r.id))) ||
       (result.value.cancellations?.events.length ?? 0) > (game.cancellations?.events.length ?? 0)) {
-    const existing = await context.repo.findGameRevision(gameId, game.rev)
-    if (existing === undefined) {
+    // Only whether the checkpoint is there: rebuilding its state would read a keyframe and its deltas on every action
+    if (!(await context.repo.hasGameRevision(gameId, game.rev))) {
       const baselineSaved = await context.repo.saveGameWithRevision(game,
         createGameRevision(game, game, currentPlayer(c), new Date().toISOString(), 'Before assisted action'),
         game.rev)

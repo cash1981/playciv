@@ -139,7 +139,10 @@ describe.each(storeImplementations)('delta revisions: %s', (_name, create) => {
     const live = startGame({ name: 'Baseline' })
     await fixture.repo.saveGame(live)
     const baseline = createGameRevision(undefined, live, ACTOR, '2026-10-02T00:00:00.000Z', 'History starts here')
+    expect(await fixture.repo.hasGameRevision(live.id, live.rev)).toBe(false)
     expect(await fixture.repo.ensureGameRevision(baseline, live.rev)).toBe(true)
+    expect(await fixture.repo.hasGameRevision(live.id, live.rev)).toBe(true)
+    expect(await fixture.repo.hasGameRevision(live.id, live.rev + 1)).toBe(false)
     expect(await fixture.rows(live.id)).toEqual([
       expect.objectContaining({ revision: live.rev, kind: 'full', baseRevision: live.rev }),
     ])

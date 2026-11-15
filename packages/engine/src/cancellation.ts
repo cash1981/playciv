@@ -17,7 +17,7 @@ import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import type { AssistedActionRecord, GameState, Playerhand, SpentResource } from './state.js'
 import { createPlayerTurn, publicTurn, publicTurnKey, turnStatus, TURN_PHASES } from './turn.js'
-import { KING_NAME, TWAIN_NAME, availableKingId, cancellationRefusal, twainTargetsOf } from './twain.js'
+import { KING_NAME, TWAIN_NAME, availableKingId, cancellationRefusal, holdsFaceupKing, twainTargetsOf } from './twain.js'
 
 export const CULTURE_CANCELLATIONS = ['Bread and Circuses', 'Jousting Tourney', 'Primetime TV'] as const
 export const isCancellationCard = (name: string): boolean =>
@@ -112,7 +112,11 @@ function canCancel(name: string, record: AssistedActionRecord, playerId: string,
   if (name === 'Bread and Circuses') {
     if (record.effect.targets.includes(playerId)) return true
     const color = state.players.find((p) => p.playerId === playerId)?.color?.toLowerCase()
-    return color !== undefined && record.effect.cardMove?.moves.some((move) => {
+    if (color === undefined) return false
+    // The owners as they stood when the card moved them; a record from before that was kept falls back to the board
+    const owners = record.effect.cardMove?.owners
+    if (owners !== undefined) return owners.includes(color)
+    return record.effect.cardMove?.moves.some((move) => {
       const piece = state.board.pieces.find((p) => p.id === move.pieceId)
       return piece !== undefined && pieceColorOf(piece) === color
     }) === true
@@ -307,6 +311,7 @@ function spendReaction(state: GameState, ownerId: string, reaction: Reaction): R
  */
 function keepAbilityCost(state: GameState, record: AssistedActionRecord, spent: readonly SpentResource[]): Result<GameState, EngineError> {
   let next = state
+  const firstEntry = state.board.history.length
   for (const resource of spent) {
     // A Uranium spend made with Marie Curie's substitute is chosen as Uranium, as it was made
     const name = resource.curieSubstitute === undefined ? resource.resource : 'Uranium'
@@ -314,6 +319,11 @@ function keepAbilityCost(state: GameState, record: AssistedActionRecord, spent: 
     const paid = spendResource(next, record.playerId, name, undefined, false, choice)
     if (!paid.ok) return err(rejection('The resources that ability spent cannot be kept spent after the rewind. Nothing was changed.'))
     next = paid.value.state
+  }
+  // A piece taken off the map is a board change of the cancelled player: only the cancellation may take it back
+  const keptIds = next.board.history.slice(firstEntry).map((entry) => entry.id)
+  if (keptIds.length > 0) {
+    next = { ...next, assistedActions: next.assistedActions.map((r) => r.id === record.id ? { ...r, keptHistoryIds: keptIds } : r) }
   }
   // The use consumed the substitute Marie Curie had armed, which the rewind armed again
   if (spent.some((resource) => resource.curieSubstitute !== undefined)) {
@@ -370,9 +380,9 @@ export function applyCancellation(
     if (!reaction.ok) return reject(reaction.error)
     if (!canCounter(reaction.value.name, latest, input.playerId, state)) return reject('The printed card text does not permit this target.')
     const protect = reaction.value.name === KING_NAME
-    const root = [...history.events].reverse().find((e) => e.kind === 'cancel')
-    const rootTurn = state.assistedActions.find((r) => r.logId === root?.targetLogId)?.turnNumber ?? history.floorTurn
-    const rewound = rewind(state, baseline, rootTurn, null)
+    // Back to the game as it was: its own turn is the boundary for what was written, not the turn of the action
+    // the earlier cancellation had rewound to, or orders of turns the game has long passed would be reopened
+    const rewound = rewind(state, baseline, turnStatus(baseline).currentTurn, null)
     // No reshuffle: the saved state is the game as it was, and nobody saw its deck orders
     let next = pay(rewound, [], protect ? new Set([reaction.value.card.id]) : undefined)
     let said = ''
@@ -396,7 +406,9 @@ export function applyCancellation(
   if (record === undefined || baseline === undefined || !validBaseline(state, baseline, record)) return reject('The exact game before that action is unavailable. Nothing was changed.')
   if (!sameRoster(baseline, state)) return reject('Player membership changed since this action. A table-agreed manual correction is required.')
   const actorBefore = baseline.players.find((p) => p.playerId === record.playerId)
-  const refusal = cancellationRefusal(state, { ...record, kingAtAction: actorBefore === undefined ? null : availableKingId(baseline, actorBefore) })
+  const refusal = cancellationRefusal(state, { ...record,
+    kingAtAction: actorBefore === undefined ? null : availableKingId(baseline, actorBefore),
+    kingFaceupAtAction: record.kingFaceupAtAction ?? (actorBefore !== undefined && holdsFaceupKing(baseline, actorBefore)) })
   if (refusal !== undefined) return reject(refusal)
   if (record.turnNumber < history.floorTurn) return reject(`That action is before cancellation was adopted (turn ${history.floorTurn}).`)
   if (state.log.findIndex((l) => l.id === record.logId) < history.sealedThrough) return reject('That action is before an earlier cancellation.')
@@ -423,10 +435,12 @@ export function cancellationView(state: GameState, viewerId: string) {
   const history = cancellationHistory(state)
   const latest = history.events.at(-1)
   const own = state.players.find((p) => p.playerId === viewerId)
-  const textOf = (logId: string): string => state.log.find((l) => l.id === logId)?.publicLog ?? ''
+  // One pass over the log: where each line lies and what it says, for every target of every card
+  const lines = new Map(state.log.map((entry, index) => [entry.id, { index, text: entry.publicLog }]))
+  const textOf = (logId: string): string => lines.get(logId)?.text ?? ''
   const recordTargets = (name: string) => state.assistedActions.filter((record) =>
     record.turnNumber >= history.floorTurn &&
-    state.log.findIndex((l) => l.id === record.logId) >= history.sealedThrough &&
+    (lines.get(record.logId)?.index ?? -1) >= history.sealedThrough &&
     cancellationRefusal(state, record) === undefined && canCancel(name, record, viewerId, state))
     .map((r) => ({ logId: r.logId, text: textOf(r.logId), blocked: null as string | null }))
   const counterTarget = (name: string) => latest !== undefined && canCounter(name, latest, viewerId, state)

@@ -49,7 +49,7 @@ import { levelOfMarker } from './assisted-sot.js'
 import { cultureCardsHeld, cultureHandSizeOf } from './culture-hand.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import { buildSquareRefusal, freeBuildingSquaresOf, squareCentre, squareLabel, unitSheetOf } from './build-options.js'
-import { cityFootprintsOf, mapCellOf } from './blockade.js'
+import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
 import { cityLabelOf } from './disband.js'
 import { cardMoveFigureChoices, cardMoveRuleOf, cardMoveSources } from './card-movement.js'
 import {
@@ -409,6 +409,16 @@ interface CardMoveResult {
     readonly movement: PieceMovement | null
     readonly historyId: string
   }[]
+}
+
+/** The colours (lowercase) of the owners of the pieces a card moved, read from the game before the move. */
+function moveOwners(state: GameState, moves: readonly { readonly pieceId: string }[]): readonly string[] {
+  const colours = moves.flatMap((move) => {
+    const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
+    const colour = piece === undefined ? undefined : pieceColorOf(piece)
+    return colour === undefined ? [] : [colour]
+  })
+  return [...new Set(colours)]
 }
 
 /** Moves a set of figures together for a culture card, keeping their offsets within the square. */
@@ -1051,7 +1061,7 @@ function automate(
       if (typeof moved === 'string') return err(moved)
       return ok({
         state: moved.state,
-        extra: { cardMove: { card: name, kind: 'hannibal', from, to, moves: moved.moves } },
+        extra: { cardMove: { card: name, kind: 'hannibal', owners: moveOwners(state, moved.moves), from, to, moves: moved.moves } },
         said: `, moved ${selected.length} ${selected.length === 1 ? 'figure' : 'figures'} from ${squareLabel(from)} to ${squareLabel(to)}`,
       })
     }
@@ -1094,7 +1104,7 @@ function automate(
       if (typeof moved === 'string') return err(moved)
       return ok({
         state: moved.state,
-        extra: { cardMove: { card: name, kind: 'one', from, to, moves: moved.moves } },
+        extra: { cardMove: { card: name, kind: 'one', owners: moveOwners(state, moved.moves), from, to, moves: moved.moves } },
         said: `, moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)}`,
       })
     }
@@ -1144,7 +1154,7 @@ function automate(
       if (typeof moved === 'string') return err(moved)
       return ok({
         state: moved.state,
-        extra: { cardMove: { card: name, kind: 'group', from, to, moves: moved.moves } },
+        extra: { cardMove: { card: name, kind: 'group', owners: moveOwners(state, moved.moves), from, to, moves: moved.moves } },
         said:
           `, moved ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} of ` +
           `${target.username} from ${squareLabel(from)} to ${squareLabel(to)}` +

@@ -135,6 +135,17 @@ describe('LogPanel cancel mode', () => {
     expect(getCancelPick()).toBeNull()
   })
 
+  it('brings the player to the public tab when the mode starts, so the Cancel buttons are there', async () => {
+    renderMode(twainView(targets))
+    await screen.findByText('Bob devoted a city')
+    fireEvent.click(screen.getByRole('button', { name: 'Private' }))
+    expect((screen.getByRole('button', { name: 'Public' }) as HTMLButtonElement).disabled).toBe(false)
+    act(() => startCancelPick({ itemId: 'twain', name: 'Mark Twain' }))
+    expect((screen.getByRole('button', { name: 'Public' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(await screen.findByText('Bob devoted a city')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /^Cancel:/ })).toHaveLength(1)
+  })
+
   it('cancels with a tech: the Cancel button sends the tech and the chosen Spy, not a card', async () => {
     const send = vi.spyOn(api, 'cancellation').mockResolvedValue({} as PlayerView)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
