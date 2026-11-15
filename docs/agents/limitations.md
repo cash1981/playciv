@@ -113,3 +113,5 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   by hand is not healed, and a unit whose card was not rotated to its level is capped at the lower figure. Units reinforced away
   are no longer in play and are not healed. A heal that was used cannot be undone after Animal Husbandry healed a wound or a
   healed unit's health was edited; correct it by hand.
+- Space Flight (#354): the Tech victory line is a separate log entry, so undoing the reveal by vote removes the tech but leaves the line, and revealing it again writes a second line. The game never ends by itself on it; the players name the winner.
+- Agriculture shows its button in every phase tab and also in the Start of Turn tab's own Metropolis section, so it can appear twice there.

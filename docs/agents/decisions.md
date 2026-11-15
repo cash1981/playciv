@@ -875,7 +875,7 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 - **Tech stacking limit** (human, 2026-11-15): a revealed tech gives a stacking limit (Masonry 3, Printing Press 4, Biology 5,
   Replacement Parts 6; `TECH_STACKING`, `techStackingOf` in `movement.ts`). The highest counts and they do not add up; a
   hidden tech gives nothing. `stackingLimitOf` is the larger of the typed `stacking` stat and that limit, so a typed value that
-  is higher (a correction by hand) still wins, with Louis Pasteur's +1 on top. Every rule check reads `stackingLimitOf`, and
+  is higher (a correction by hand) still wins, with Louis Pasteur's +1 on top. Every engine rule check reads `stackingLimitOf` (the web's group-move picker for another player's cards works out `max(typed, tech)` itself and leaves out Pasteur's +1, as before), and
   `PlayerView.you.stackingLimit` carries it to movement. The status sidebar shows the tech's limit as the Stacking value (tech
   named in its tooltip) when it is more than what is typed. Tests: `tech-stacking.test.ts`, `PlayerStatusSidebar.test.tsx`.
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
