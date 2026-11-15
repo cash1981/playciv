@@ -1742,6 +1742,7 @@ const upgradeBuildings: AssistedActionDefinition = {
 import { communism } from './assisted-communism.js'
 import { steamPower } from './assisted-steam-power.js'
 import { ballistics, mathematics } from './assisted-tech-wounds.js'
+import { animalHusbandryHeal, biologyHeal } from './assisted-tech-heal.js'
 import { gunpowder } from './assisted-gunpowder.js'
 import { combustion } from './assisted-combustion.js'
 import { TECH_ABILITY_ACTIONS } from './assisted-tech-abilities.js'
@@ -1758,6 +1759,8 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   steamPower,
   mathematics,
   ballistics,
+  animalHusbandryHeal,
+  biologyHeal,
   gunpowder,
   combustion,
   ...TECH_ABILITY_ACTIONS,

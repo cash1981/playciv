@@ -453,6 +453,9 @@ export type AssistedActionKind =
   | 'steamPower'
   // The unit techs of issue #327: Iron wounds in a battle, Gunpowder's Any 2 and Combustion's once-per-turn destruction
   | 'mathematics'
+  // Animal Husbandry and Biology heal units in a battle, once per battle (issue #354)
+  | 'animalHusbandryHeal'
+  | 'biologyHeal'
   | 'ballistics'
   | 'gunpowder'
   | 'combustion'
@@ -820,6 +823,17 @@ export type AssistedEffect =
       readonly spent: SpentResource
     }
   | TechAbilityEffect
+  | {
+      /**
+       * Animal Husbandry or Biology: the heal pressed in the battle (`Battle.heals`). Biology heals at once, so `units` lists what each
+       * unit had before and after, for the undo; Animal Husbandry owes `wounds` and lists none.
+       */
+      readonly kind: 'techHeal'
+      readonly tech: string
+      readonly battleId: string
+      readonly wounds: number
+      readonly units: readonly { readonly arenaUnitId: string; readonly before: number; readonly after: number }[]
+    }
   | {
       /** Combustion: the army that acted, the square it stands on and what is to be destroyed there, for the log and the undo line. */
       readonly kind: 'combustion'

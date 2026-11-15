@@ -103,6 +103,19 @@ describe('Mathematics through the routes', () => {
     return t
   }
 
+  it('refuses a heal that its button did not give, and one without a unit or a number', async () => {
+    const t = await battle()
+    const before = await view(t.gameId, t.starter)
+    const own = before.battle?.arena.find((unit) => unit.side === 'attacker')
+    if (own === undefined) throw new Error('no own unit')
+    const heal = `/api/games/${t.gameId}/battle/arena/heal`
+    // Nothing is owed: Animal Husbandry's button was not pressed (409), and a missing field is a 400
+    expect((await post(t.starter, heal, { tech: 'Animal Husbandry', arenaUnitId: own.id, wounds: 1 })).status).toBe(409)
+    expect((await post(t.starter, heal, { tech: 'Animal Husbandry', wounds: 1 })).status).toBe(400)
+    expect((await post(t.starter, heal, { arenaUnitId: own.id, wounds: 1 })).status).toBe(400)
+    expect((await post(t.starter, heal, { tech: 'Animal Husbandry', arenaUnitId: own.id })).status).toBe(400)
+  })
+
   it('refuses a wound that was not paid for, pays the Iron, then deals the wound and hides nothing private', async () => {
     const t = await battle()
     const before = await view(t.gameId, t.starter)

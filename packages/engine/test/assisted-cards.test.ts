@@ -102,6 +102,9 @@ describe('the registry and the tech map', () => {
       'combustion',
       'gunpowder',
       'mathematics',
+      // Animal Husbandry and Biology heal in a battle (issue #354)
+      'animalHusbandryHeal',
+      'biologyHeal',
       // The resource abilities of the other techs (issue #327, slice 2)
       'animalHusbandry',
       'banking',

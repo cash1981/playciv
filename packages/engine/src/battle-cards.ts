@@ -89,6 +89,26 @@ export function techWoundsDealt(state: GameState, actionId: string): number {
 }
 
 /**
+ * The healing techs and the wounds each heals once per battle (card text, issue #354): Animal Husbandry up to a total of 3,
+ * Biology all of them (`null`).
+ */
+export const HEAL_TECHS: Readonly<Record<string, number | null>> = { 'Animal Husbandry': 3, Biology: null }
+
+/** Whether the player has pressed `tech`'s heal in this battle: it works once per battle. */
+export const healUsed = (battle: Battle, playerId: string, tech: string): boolean =>
+  (battle.heals ?? []).some((entry) => entry.playerId === playerId && entry.tech === tech)
+
+/** The wounds the player has paid for with `tech` in this battle and not yet healed. */
+export const healOwed = (battle: Battle, playerId: string, tech: string): number =>
+  (battle.heals ?? []).filter((entry) => entry.playerId === playerId && entry.tech === tech).reduce((sum, entry) => sum + entry.total - entry.healed, 0)
+
+/** The wounds already healed for the assisted action `actionId`, in the battle on now or the one set aside. */
+export function healsDone(state: GameState, actionId: string): number {
+  const entries = [...(state.battle?.heals ?? []), ...(state.endedBattle?.battle.heals ?? [])]
+  return entries.find((entry) => entry.actionId === actionId)?.healed ?? 0
+}
+
+/**
  * Why the player cannot play a battle card now, or `undefined` when they can. Leonidas and Joan of Arc are for the
  * defender; Leonidas also needs fewer units played than the opponent, which is judged when it is played.
  */
