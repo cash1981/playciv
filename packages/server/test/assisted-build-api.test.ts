@@ -725,3 +725,107 @@ describe('wonders over HTTP', () => {
     expect(after.log).toHaveLength(built.log.length)
   })
 })
+
+describe('Engineering over HTTP: a second item in the same build', () => {
+  const TRADING_POST = 'buildings/tradingpost'
+  const A3 = { column: 0, row: 2 }
+  const withSecond = (table: Table, requestId: string, rev: number, second: unknown, rush?: boolean) => ({
+    ...buildBody(table, requestId, rev, LIBRARY, C2, rush),
+    second,
+  })
+  const secondPost = { item: { kind: 'building', assetId: TRADING_POST }, target: A3 }
+  const techs = ['Writing', 'Code of Laws', 'Engineering']
+
+  it('offers the second item only to the owner with Engineering revealed and unused', async () => {
+    const table = await buildTable('EngOffer', { techs })
+    const owner = await view(table.gameId, table.starter)
+    expect(owner.you?.buildOptions?.[0]).toMatchObject({ engineering: { perStep: 1 } })
+    const without = await buildTable('EngNone', { techs: ['Writing'] })
+    expect((await view(without.gameId, without.starter)).you?.buildOptions?.[0]).not.toHaveProperty('engineering')
+    // Nobody else learns that the starter holds the tech
+    const other = JSON.stringify(await view(table.gameId, table.other))
+    expect(other).not.toContain('"engineering"')
+  })
+
+  it('builds both with one request, one log line and the trade for the combined cost', async () => {
+    const table = await buildTable('EngBoth', { techs, trade: 21 })
+    const rev = (await view(table.gameId, table.starter)).rev
+    const response = await post(table.starter, `/api/games/${table.gameId}/actions`, withSecond(table, 'req-1', rev, secondPost, true))
+    expect(response.status).toBe(200)
+    const state = await stored(table)
+    expect(piecesOf(state, LIBRARY)).toHaveLength(1)
+    expect(piecesOf(state, TRADING_POST)).toHaveLength(1)
+    expect(tradeOf(state, table)).toBe(0)
+    expect(state.assistedActions).toHaveLength(1)
+    const after = await response.json<View>()
+    expect(after.you?.buildOptions?.[0]).not.toHaveProperty('engineering')
+    expect(state.log.at(-1)?.publicLog).toContain('a Library on square C2 and a Trading Post on square A3')
+  })
+
+  it('asks for the rush on the combined cost', async () => {
+    const table = await buildTable('EngRush', { techs, trade: 21 })
+    const rev = (await view(table.gameId, table.starter)).rev
+    const noRush = await post(table.starter, `/api/games/${table.gameId}/actions`, withSecond(table, 'req-1', rev, secondPost))
+    expect(noRush.status).toBe(400)
+    expect(JSON.stringify(await noRush.json())).toContain('Confirm paying 21 trade')
+    expect(piecesOf(await stored(table), LIBRARY)).toEqual([])
+  })
+
+  it('refuses a second use in the same turn with the reason, even when the city action is confirmed', async () => {
+    const table = await buildTable('EngTwice', { techs, trade: 100 })
+    const first = await post(table.starter, `/api/games/${table.gameId}/actions`, withSecond(table, 'req-1', (await view(table.gameId, table.starter)).rev, secondPost, true))
+    expect(first.status).toBe(200)
+    const rev = (await view(table.gameId, table.starter)).rev
+    const again = await post(table.starter, `/api/games/${table.gameId}/actions`, {
+      ...buildBody(table, 'req-2', rev, TRADING_POST, { column: 1, row: 2 }, true),
+      second: { item: { kind: 'army' }, target: { column: 1, row: 0 } },
+      confirmedRepeat: true,
+    })
+    expect(again.status).toBe(409)
+    expect(JSON.stringify(await again.json())).toContain('Engineering has already been used this turn')
+    expect(piecesOf(await stored(table), TRADING_POST)).toHaveLength(1)
+  })
+
+  it('without Engineering the second item is refused and nothing is built', async () => {
+    const table = await buildTable('EngMissing', { techs: ['Writing', 'Code of Laws'], trade: 21 })
+    const rev = (await view(table.gameId, table.starter)).rev
+    const response = await post(table.starter, `/api/games/${table.gameId}/actions`, withSecond(table, 'req-1', rev, secondPost, true))
+    expect(response.status).toBe(400)
+    expect(JSON.stringify(await response.json())).toContain('do not have Engineering')
+    const state = await stored(table)
+    expect(piecesOf(state, LIBRARY)).toEqual([])
+    expect(tradeOf(state, table)).toBe(21)
+  })
+
+  it('checks the shape of the second item', async () => {
+    const table = await buildTable('EngShape', { techs, trade: 21 })
+    const rev = (await view(table.gameId, table.starter)).rev
+    const refusedWith = async (second: unknown, requestId: string): Promise<void> => {
+      const response = await post(table.starter, `/api/games/${table.gameId}/actions`, withSecond(table, requestId, rev, second, true))
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
+    }
+    await refusedWith({ item: { kind: 'figure' }, target: A3 }, 'r1')
+    await refusedWith({ item: { kind: 'building', assetId: 'buildings/castle' }, target: A3 }, 'r2')
+    await refusedWith({ item: { kind: 'building', assetId: TRADING_POST } }, 'r3')
+    await refusedWith({ item: { kind: 'building', assetId: TRADING_POST }, target: { column: 64, row: 0 } }, 'r4')
+    await refusedWith({ item: { kind: 'unit', unitType: 'infantry' }, target: A3 }, 'r5')
+    await refusedWith({ item: { kind: 'army' }, target: A3, extra: 1 }, 'r6')
+    await refusedWith('army', 'r7')
+    expect(piecesOf(await stored(table), LIBRARY)).toEqual([])
+  })
+
+  it('one undo vote takes both back and frees Engineering', async () => {
+    const table = await buildTable('EngUndo', { techs, trade: 21 })
+    const rev = (await view(table.gameId, table.starter)).rev
+    expect((await post(table.starter, `/api/games/${table.gameId}/actions`, withSecond(table, 'req-1', rev, secondPost, true))).status).toBe(200)
+    const logId = (await view(table.gameId, table.other)).assistedActions[0]?.logId as string
+    expect((await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})).status).toBe(200)
+    const voted = await post(table.starter, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+    expect(voted.status).toBe(200)
+    const after = await voted.json<View>()
+    expect(after.board.pieces.some((piece) => piece.assetId === LIBRARY || piece.assetId === TRADING_POST)).toBe(false)
+    expect(after.you?.buildOptions?.[0]).toMatchObject({ engineering: { perStep: 1 } })
+    expect(tradeOf(await stored(table), table)).toBe(21)
+  })
+})

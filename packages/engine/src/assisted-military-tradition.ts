@@ -10,6 +10,7 @@
  * stands on it; the free unit's own undo goes first.
  */
 
+import { buildPartsOf } from './build-parts.js'
 import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
 import {
   PHASE_REASON,
@@ -52,10 +53,10 @@ const armyBuildsOf = (state: GameState, playerId: string, turnNumber: number): r
       record.status === 'applied' &&
       record.playerId === playerId &&
       record.turnNumber === turnNumber &&
-      effect.kind === 'build' &&
-      effect.item.kind === 'army' &&
-      'pieceId' in effect &&
-      state.board.pieces.some((piece) => piece.id === effect.pieceId)
+      // An Engineering build may hold two armies: either one is an army build
+      buildPartsOf(effect).some(
+        (part) => part.item.kind === 'army' && 'pieceId' in part && state.board.pieces.some((piece) => piece.id === part.pieceId),
+      )
     )
   })
 
@@ -65,7 +66,7 @@ const armyBuildsOf = (state: GameState, playerId: string, turnNumber: number): r
  * when nothing stands in the way.
  */
 export function militaryTraditionUndoBlock(state: GameState, record: AssistedActionRecord): string | undefined {
-  if (record.effect.kind !== 'build' || record.effect.item.kind !== 'army') return undefined
+  if (!buildPartsOf(record.effect).some((part) => part.item.kind === 'army')) return undefined
   const freeUnit = state.assistedActions.some(
     (candidate) =>
       candidate.status === 'applied' &&

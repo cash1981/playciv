@@ -22,7 +22,7 @@
 
 import { CARAVAN_PRODUCTION, cityLabelOf } from './disband.js'
 import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
-import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
+import { TRADE_PER_RUSH_STEP, UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
 import { cityFootprintsOf, cityStateHolderColour, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
@@ -69,7 +69,17 @@ interface BuildPayloadBase {
    * when the choice has `tradeToPay` above 0; with nothing to pay it changes nothing.
    */
   readonly rush?: boolean
+  /**
+   * Engineering: a second item the same city builds in the same city action, split from the same production
+   * (the human's decision of 2026-11-15). Absent for an ordinary build.
+   */
+  readonly second?: BuildSecond
 }
+
+/** The second item of an Engineering build: what to build and, for a building, wonder or figure, the square. */
+export type BuildSecond =
+  | { readonly item: PlacedBuildItem; readonly target: BuildTarget }
+  | { readonly item: SquarelessBuildItem; readonly target?: undefined }
 
 /**
  * What the `build` assisted action carries. A building or a figure needs the
@@ -144,6 +154,11 @@ export interface CityBuildOptions {
   readonly caravan: boolean
   /** The production a tech ability gave this city for this turn only (Animal Husbandry, Construction, Banking, Plastics); `production` includes it. */
   readonly boost: number
+  /**
+   * Engineering is revealed and unused this turn, so the build may carry a `second` item. Absent otherwise. `perStep` is
+   * the production a step of 3 trade covers (2 for the Americans, else 1), for the rush of the two items together.
+   */
+  readonly engineering?: { readonly perStep: number }
   /** Empty unless `status` is `ready`. */
   readonly choices: readonly BuildChoice[]
   /** Empty unless `status` is `ready`. */
@@ -154,8 +169,11 @@ export interface CityBuildOptions {
 // Rush
 // ---------------------------------------------------------------------------
 
-/** Base rules p. 15: every 3 trade lowers the shortfall by 1 production. */
-export const TRADE_PER_RUSH_STEP = 3
+// Defined in the leaf module build-item.ts; kept exported from here for its users
+export { TRADE_PER_RUSH_STEP }
+
+/** Engineering's key on the turn's `usedActions`, the same as the tech's other uses. */
+export const ENGINEERING_USAGE_KEY = 'card:Engineering'
 
 const AMERICANS = 'Americans'
 
@@ -968,6 +986,7 @@ function optionsForCity(
   city: CityProduction,
   open: boolean,
   shared: SharedSupply,
+  engineering: boolean,
 ): CityBuildOptions {
   const production = productionOf(city)
   const base = {
@@ -1201,7 +1220,14 @@ function optionsForCity(
     choices.push({ assetId, item, placement: 'none', label, cost, tradeToPay: payment.tradeToPay, squares: [] })
   }
 
-  return { ...base, status: 'ready', reason: 'Ready to build.', choices, unavailable }
+  return {
+    ...base,
+    status: 'ready',
+    reason: 'Ready to build.',
+    ...(engineering ? { engineering: { perStep: player.civilization?.name === AMERICANS ? 2 : 1 } } : {}),
+    choices,
+    unavailable,
+  }
 }
 
 /**
@@ -1215,11 +1241,16 @@ export function buildOptionsOf(state: GameState, player: Playerhand): readonly C
   if (footprints.length === 0) return []
 
   const productions = cityProductionsOf(state, player)
-  const open = openCityManagementTurn(state, player) !== undefined
+  const turn = openCityManagementTurn(state, player)
+  const open = turn !== undefined
+  const engineering =
+    turn !== undefined &&
+    player.techsChosen.some((tech) => tech.name === 'Engineering' && !tech.hidden) &&
+    !turn.usedActions.includes(ENGINEERING_USAGE_KEY)
   const scene = sceneOf(state)
   const shared = sharedSupplyOf(state, player.color.toLowerCase())
   return footprints.flatMap((footprint) => {
     const city = productions.find((candidate) => candidate.pieceId === footprint.piece.id)
-    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared)]
+    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared, engineering)]
   })
 }

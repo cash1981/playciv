@@ -57,6 +57,7 @@ import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
+import { buildPartsOf } from '../build-parts.js'
 import { findPlayer, hasUserAccess } from '../state.js'
 import { communismLocksOf } from '../communism.js'
 import { brandenburgForbiddenFor } from '../brandenburg.js'
@@ -1057,19 +1058,21 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
     // A unit placed nothing, so only a marker is on the board; City Walls only turned the city marker over.
     if (effect.kind === 'build') {
-      return (
-        ('historyId' in effect && effect.historyId === entry.id) ||
+      // Engineering's second item belongs to the same record
+      return buildPartsOf(effect).some(
+        (part) =>
+        ('historyId' in part && part.historyId === entry.id) ||
         // A wonder also became the player's: that entry belongs to the build too
-        ('wonder' in effect && effect.wonder?.ownerHistoryId === entry.id) ||
+        ('wonder' in part && part.wonder?.ownerHistoryId === entry.id) ||
         // and so did the wonder it drew into the market: its card is out of the deck
-        ('drawn' in effect && effect.drawn?.historyId === entry.id) ||
+        ('drawn' in part && part.drawn?.historyId === entry.id) ||
         // a building or wonder it replaced was taken off the board, a Great Person it replaced was put in the player's area, and the city marker City Walls turned over
-        ('replaced' in effect && effect.replaced?.historyId === entry.id) ||
-        ('reserved' in effect && effect.reserved?.historyId === entry.id) ||
-        ('walls' in effect && effect.walls.historyId === entry.id) ||
-        effect.marker?.historyId === entry.id ||
+        ('replaced' in part && part.replaced?.historyId === entry.id) ||
+        ('reserved' in part && part.reserved?.historyId === entry.id) ||
+        ('walls' in part && part.walls.historyId === entry.id) ||
+        part.marker?.historyId === entry.id ||
         // and the caravan it used up
-        effect.caravan?.historyId === entry.id
+        part.caravan?.historyId === entry.id
       )
     }
     // Khalid moved the start player marker: stepping that back alone would undo only half the card

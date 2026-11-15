@@ -7,6 +7,9 @@
  * browser bundle. Keep it that way.
  */
 
+/** Base rules p. 15: every 3 trade lowers a production shortfall by 1 (2 for the Americans). Here so the browser can count the rush of two items without the build machinery. */
+export const TRADE_PER_RUSH_STEP = 3
+
 /** The four kinds of military unit card. */
 export const UNIT_TYPES = ['infantry', 'artillery', 'mounted', 'aircraft'] as const
 export type UnitType = (typeof UNIT_TYPES)[number]

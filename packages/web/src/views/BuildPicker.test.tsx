@@ -1547,3 +1547,115 @@ describe('a second action of the same city this turn', () => {
     expect(send.mock.calls[0]?.[4]).toBe(true)
   })
 })
+
+describe('Engineering: second item', () => {
+  const withEngineering = (): CityBuildOptions =>
+    options({ engineering: { perStep: 1 }, choices: [LIBRARY, HARBOR, ARMY, INFANTRY] })
+  const section = (): HTMLElement => screen.getByRole('group', { name: 'Engineering: second item' })
+
+  it('shows no section without Engineering, and the single flow is untouched', () => {
+    render(<Harness initial={viewOf([options()])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    expect(screen.queryByRole('group', { name: 'Engineering: second item' })).toBeNull()
+    expect(bar().textContent).toContain('Build Library in Capital D5')
+  })
+
+  it('offers the other choices of the city, adds the costs and the trade once, and sends both with Confirm', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([withEngineering()])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    expect(bar().textContent).toContain('Cost 6')
+    fireEvent.change(within(section()).getByLabelText(/^Second item/), { target: { value: 'army' } })
+    // 6 + 4 = 10 against a production of 4: 6 missing, 18 trade
+    expect(bar().textContent).toContain('Build Library and Army figure in Capital D5')
+    expect(bar().textContent).toContain('Cost 6 + 4 = 10 against a production of 4')
+    expect(bar().textContent).toContain('Pays 18 trade')
+    fireEvent.change(within(section()).getByLabelText(/^Square for the second item/), { target: { value: '3,4' } })
+
+    // The tap on the first square completes the build; it is not sent by itself
+    fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Confirm and pay 18 trade' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      target: { column: 3, row: 4 },
+      rush: true,
+      second: { item: { kind: 'army' }, target: { column: 3, row: 4 } },
+    })
+  })
+
+  it('puts the second item into the real HTTP body, through the api layer', async () => {
+    const fetchMock = vi.fn(async () => ({ status: 200, statusText: '', ok: true, text: async () => '{}' }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Harness initial={viewOf([withEngineering()])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.change(within(section()).getByLabelText(/^Second item/), { target: { value: 'army' } })
+    fireEvent.change(within(section()).getByLabelText(/^Square for the second item/), { target: { value: '4,4' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: /^Confirm/ }))
+    await waitFor(() => expect(fetchMock.mock.calls.some((call) => String((call as unknown[])[0]).includes('/actions'))).toBe(true))
+    const call = fetchMock.mock.calls.find((c) => String((c as unknown[])[0]).includes('/actions')) as unknown as [string, { body: string }]
+    expect(JSON.parse(call[1].body)).toMatchObject({
+      action: 'build',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      second: { item: { kind: 'army' }, target: { column: 4, row: 4 } },
+    })
+  })
+
+  it('a unit as the second item has no square and Confirm waits only for the first square', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([withEngineering()])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.change(within(section()).getByLabelText(/^Second item/), { target: { value: 'unit:infantry' } })
+    expect(within(section()).queryByLabelText(/^Square for the second item/)).toBeNull()
+    expect(bar().textContent).toContain('and an infantry unit')
+    fireEvent.click(screen.getByRole('button', { name: 'Place Library on E5' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: /^Confirm/ }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toMatchObject({ second: { item: { kind: 'unit', unitType: 'infantry' } } })
+    expect(send.mock.calls[0]?.[3]).not.toHaveProperty('second.target')
+  })
+
+  it('choosing None goes back to a single item, which the tap sends at once', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([withEngineering()])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.change(within(section()).getByLabelText(/^Second item/), { target: { value: 'army' } })
+    fireEvent.change(within(section()).getByLabelText(/^Second item/), { target: { value: '' } })
+    expect(bar().textContent).not.toContain('against a production')
+    fireEvent.click(screen.getByRole('button', { name: 'Place Library on E5' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).not.toHaveProperty('second')
+  })
+
+  it('forgets a second square that is no longer legal and says so', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([withEngineering()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.change(within(section()).getByLabelText(/^Second item/), { target: { value: 'army' } })
+    fireEvent.change(within(section()).getByLabelText(/^Square for the second item/), { target: { value: '4,4' } })
+    const fewer = { ...ARMY, squares: [{ column: 3, row: 4, label: 'D5' }] }
+    act(() => handle.setView(viewOf([options({ engineering: { perStep: 1 }, choices: [LIBRARY, HARBOR, fewer, INFANTRY] })])))
+    expect(bar().textContent).toContain(SQUARE_GONE)
+    expect((within(section()).getByLabelText(/^Square for the second item/) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('drops the second item with a note when a refresh takes Engineering away', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([withEngineering()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.change(within(section()).getByLabelText(/^Second item/), { target: { value: 'army' } })
+    act(() => handle.setView(viewOf([options({ choices: [LIBRARY, HARBOR, ARMY, INFANTRY] })])))
+    expect(screen.queryByRole('group', { name: 'Engineering: second item' })).toBeNull()
+    expect(bar().textContent).toContain('Build Library in Capital D5')
+  })
+})

@@ -19,6 +19,7 @@ import type {
   BuildItem,
   BuildPayload,
   BuildSquare,
+  BuildSecond,
   BuildTarget,
   BuildUnavailable,
   CityActionOptions,
@@ -65,6 +66,7 @@ export type {
   BuildItem,
   BuildPayload,
   BuildSquare,
+  BuildSecond,
   BuildTarget,
   BuildUnavailable,
   CityActionOptions,
@@ -896,6 +898,7 @@ export const api = {
       item: payload.item,
       ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
+      ...(payload.second === undefined ? {} : { second: payload.second }),
     }),
   /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
   startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>
