@@ -14,11 +14,10 @@
  */
 
 import { removePiece } from './actions/board.js'
-import { blocked, placeBack, restoreSupplyBlock } from './assisted-core.js'
+import { blocked } from './assisted-core.js'
 import { disableWonder, enableWonder, techAbility } from './assisted-tech-abilities.js'
-import { destroyableBuildingsOf } from './destroy-buildings.js'
+import { destroyableBuildingsOf, restoreDestroyedBuilding } from './destroy-buildings.js'
 import type { DestroyableBuilding } from './destroy-buildings.js'
-import { cityCenterCells, mapCellOf } from './blockade.js'
 import { obsoletableWondersOf } from './obsolete-wonders.js'
 import type { ObsoletableWonder } from './obsolete-wonders.js'
 import { err, ok } from './result.js'
@@ -110,22 +109,7 @@ export const gunpowder = techAbility<'gunpowder', Plan>({
     }
     const building = effect.building
     if (building === undefined) return ok({ state, said: '; no building was recorded, so nothing is changed' })
-    if (state.board.pieces.some((piece) => piece.id === building.piece.id)) {
-      return err(`${building.label} is on the board again, so the destruction cannot be taken back.`)
-    }
-    // Another building, a wonder, a city or a city-state on the same square would be stacked on: a square holds one (other overlaps
-    // and the building supply are not checked, limitations.md)
-    const where = mapCellOf(state.board, building.piece)
-    const taken = where !== null && state.board.pieces.some((piece) => {
-      if (piece.category === 'city') return (cityCenterCells(state.board, piece) ?? []).some((cell) => cell.column === where.column && cell.row === where.row)
-      if (piece.category !== 'building' && piece.category !== 'wonder' && piece.category !== 'citystate') return false
-      const cell = mapCellOf(state.board, piece)
-      return cell !== null && cell.column === where.column && cell.row === where.row
-    })
-    if (taken) return err(`A building, wonder, city or city-state now stands on ${building.square}, so ${building.label} cannot be put back.`)
-    // The place it freed in the supply may have been used by another build since
-    const supply = restoreSupplyBlock(state, [building.piece])
-    if (supply !== undefined) return err(supply)
-    return ok({ state: placeBack(state, player, building.piece, at), said: ` and ${building.label} was put back on ${building.square}` })
+    const restored = restoreDestroyedBuilding(state, player, building, at)
+    return restored.ok ? ok({ state: restored.value, said: ` and ${building.label} was put back on ${building.square}` }) : err(restored.error)
   },
 })

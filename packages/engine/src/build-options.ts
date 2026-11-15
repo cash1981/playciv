@@ -823,6 +823,15 @@ export function walledAssetIdOf(cityAssetId: string): string | undefined {
   return digits === cityAssetId.length ? cityAssetId : `${cityAssetId.slice(0, digits)}walled${cityAssetId.slice(digits)}`
 }
 
+/**
+ * The asset id of a walled city marker's plain side (`cities/bluecitywalled2` to `cities/bluecity2`), the inverse of
+ * {@link walledAssetIdOf}, or `undefined` when the marker is not walled.
+ */
+export function unwalledAssetIdOf(cityAssetId: string): string | undefined {
+  const at = cityAssetId.indexOf('walled')
+  return at === -1 ? undefined : `${cityAssetId.slice(0, at)}${cityAssetId.slice(at + 'walled'.length)}`
+}
+
 /** Base rules p. 15 to 17: an army figure costs 4 production, a scout figure 6. */
 const FIGURE_COST = { army: 4, scout: 6 } as const
 

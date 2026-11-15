@@ -37,7 +37,7 @@ deployment reports do not establish present health.
   status icon size, status panel width and icons per row plus a Show labels switch (on by
   default), saved per browser. The sidebar can be minimised under the map.
 - Tech resource abilities (#327): every tech on the issue's checklist has an assisted button with undo. The parts
-  that stay manual (Combustion's removal, Bureaucracy's policy switch, Education's wonder coin) are in
+  that stay manual (Bureaucracy's policy switch, judging that an army ended its move for Combustion) are in
   limitations.md. Shared resource-payment selectors offer only usable held tokens
   and culture cards, with explicit card choice and no reuse across payment slots.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,

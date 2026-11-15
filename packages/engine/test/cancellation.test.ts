@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
+import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone, postOrder } from '../src/actions/turn.js'
 import { initiateUndo } from '../src/actions/undo.js'
 import { cityActionsTakenThisTurn, performAssistedAction, reverseAssistedAction } from '../src/assisted.js'
@@ -76,6 +77,39 @@ describe('cancellation', () => {
     expect(JSON.stringify(inactive)).toBe(before)
     const committed = { ...unwrap(cancel(current, baseline, ids[card] ?? '', B, 'committed')), active: false }
     expect(unwrap(cancel(committed, undefined, ids[card] ?? '', B, 'committed'))).toBe(committed)
+  })
+
+  describe('Mass Media: culture events cannot be canceled', () => {
+    const withMassMedia = (reveal: boolean) => {
+      const { baseline, ids } = cultureScene()
+      const chosen = unwrap(chooseTech(baseline, { playerId: A, techName: 'Mass Media' }))
+      const shielded = reveal ? unwrap(revealTech(chosen, { playerId: A, techName: 'Mass Media' })) : chosen
+      return { baseline: shielded, ids, current: act(shielded, A, ids['event'] ?? '', 'target') }
+    }
+
+    it.each(['twain', 'joust'])('refuses %s against the culture event of a player with Mass Media revealed, and changes nothing', (card) => {
+      const { baseline, current, ids } = withMassMedia(true)
+      const before = JSON.stringify(current)
+      const result = cancel(current, baseline, ids[card] ?? '')
+      expect(result).toMatchObject({ ok: false, error: { kind: 'ASSISTED_ACTION_REJECTED', reason: expect.stringContaining('Mass Media') } })
+      expect(JSON.stringify(current)).toBe(before)
+      expect(player(current, B).items.some((i) => i.id === ids[card])).toBe(true)
+    })
+
+    it('does not list the shielded event as a target', () => {
+      const targetsOf = (state: GameState, itemId: string) =>
+        toPlayerView(state, B).cancellations?.responseCards.find((card) => card.itemId === itemId)?.targets.map((target) => target.logId)
+      const open = cultureScene()
+      // Without Mass Media the event is listed for Jousting Tourney, so an empty list below is the shield and not a missing view
+      expect(targetsOf(open.current, open.ids['joust'] ?? '')).toEqual([logOf(open.current, 'target')])
+      const { current, ids } = withMassMedia(true)
+      expect(targetsOf(current, ids['joust'] ?? '')).toEqual([])
+    })
+
+    it('does not protect a hidden Mass Media', () => {
+      const { baseline, current, ids } = withMassMedia(false)
+      expect(cancel(current, baseline, ids['joust'] ?? '').ok).toBe(true)
+    })
   })
 
   it('cancels a city action at once: the action is rewound, Twain is spent and the event is logged', () => {

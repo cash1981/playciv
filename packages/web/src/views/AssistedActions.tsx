@@ -1058,6 +1058,11 @@ export function AssistedActionButton({
             ))}
             {armyTargets.length === 0 && <p role="status" className="assisted-warning">{NO_ARMY_TARGET}</p>}
           </div>
+          {armyChosen !== undefined && (
+            <p className="muted">
+              {armyChosen.walls ? 'The city marker is turned back to its unwalled side.' : 'The building is removed from the map.'} Only the undo vote brings it back.
+            </p>
+          )}
         </ChoiceDialog>
       )}
       {pick !== null && (

@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { placePiece, setWonderOwner, undoLastBoardChange } from '../src/actions/board.js'
+import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
@@ -543,5 +544,36 @@ describe('Captain James Cook doubles travel speed for the turn', () => {
       'card:Captain James Cook',
     )
     expect(after.items.some((card) => itemName(card) === 'Captain James Cook')).toBe(true)
+  })
+})
+
+describe('Mass Media: culture events cannot be canceled', () => {
+  const massMedia = (state: GameState, reveal: boolean): GameState => {
+    const chosen = unwrap(chooseTech(state, { playerId: KARANDRAS1, techName: 'Mass Media' }))
+    return reveal ? unwrap(revealTech(chosen, { playerId: KARANDRAS1, techName: 'Mass Media' })) : chosen
+  }
+
+  it.each(['Jousting Tourney', 'Bread and Circuses'])('refuses %s aimed at a player with Mass Media revealed, and keeps the card', (name) => {
+    const { state } = withCardInHand(startOfTurn(), name)
+    const itemId = cardOf(state, name).itemId
+    const shielded = massMedia(state, true)
+    const result = unwrapErr(play(shielded, 'req-1', itemId, { targets: [KARANDRAS1] }))
+    expect(result).toMatchObject({ kind: 'ASSISTED_ACTION_REJECTED' })
+    expect(JSON.stringify(result)).toContain('Mass Media')
+    expect(player(shielded).items.some((card) => card.id === itemId)).toBe(true)
+    // Another player's culture event can still be canceled
+    expect(unwrap(play(shielded, 'req-2', itemId, { targets: [ITCHI] })).log.at(-1)?.publicLog).toContain(name)
+  })
+
+  it('does not protect a player whose Mass Media is still hidden', () => {
+    const { state } = withCardInHand(startOfTurn(), 'Jousting Tourney')
+    const itemId = cardOf(state, 'Jousting Tourney').itemId
+    expect(unwrap(play(massMedia(state, false), 'req-1', itemId, { targets: [KARANDRAS1] })).log.at(-1)?.publicLog).toContain('Jousting Tourney')
+  })
+
+  it('leaves Primetime TV alone: it may cancel a resource ability, which Mass Media does not shield', () => {
+    const { state } = withCardInHand(tradeTurn(), 'Primetime TV')
+    const itemId = cardOf(state, 'Primetime TV').itemId
+    expect(unwrap(play(massMedia(state, true), 'req-1', itemId, { targets: [KARANDRAS1] })).log.at(-1)?.publicLog).toContain('Primetime TV')
   })
 })

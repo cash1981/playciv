@@ -3,9 +3,9 @@
  * building, destroy that building. If one of your armies attacks a city with walls, the walls are destroyed
  * before the battle."
  *
- * Only the army is worked out here: which of the player's armies stand on a building or on another player's
- * walled city (the player chooses which army acts). The engine does not trigger on a move and does not remove
- * the piece (`assisted-combustion.ts` logs the use; the player removes the building, or turns the city marker back to its unwalled side, by hand).
+ * Which of the player's armies stand on a building or on another player's walled city is worked out here (the player
+ * chooses which army acts). The engine does not trigger on a move: `assisted-combustion.ts` is the once-per-turn action
+ * that then removes the building, or turns the walled city marker back to its plain side.
  */
 
 import { cityCenterCells, mapCellOf, pieceCityOwnerColor, pieceColorOf } from './blockade.js'
@@ -25,6 +25,12 @@ const sameCell = (a: Cell, b: Cell): boolean => a.column === b.column && a.row =
 export interface CombustionTarget extends Cell {
   /** The army figure that acts. */
   readonly pieceId: string
+  /** The building piece to remove, or the walled city marker to turn back to its plain side. */
+  readonly targetPieceId: string
+  /** The building's name ("Granary"); the city's label for walls. */
+  readonly targetLabel: string
+  /** The square as the log names it, "D4". */
+  readonly square: string
   /** `true` for the walls of a walled city, `false` for a building. */
   readonly walls: boolean
   /** "the walls of the city on D4", "the Granary on D4". */
@@ -61,7 +67,7 @@ export function combustionTargetFor(
       cityCenterCells(board, candidate)?.some((centre) => sameCell(centre, cell)) === true,
   )
   if (walled !== undefined) {
-    return { ...cell, pieceId: piece.id, walls: true, subject: `the walls of ${walled.label} on ${squareLabel(cell)}` }
+    return { ...cell, pieceId: piece.id, targetPieceId: walled.id, targetLabel: walled.label, square: squareLabel(cell), walls: true, subject: `the walls of ${walled.label} on ${squareLabel(cell)}` }
   }
   const building = board.pieces.find((candidate) => {
     if (candidate.category !== 'building') return false
@@ -71,7 +77,7 @@ export function combustionTargetFor(
   })
   return building === undefined
     ? undefined
-    : { ...cell, pieceId: piece.id, walls: false, subject: `${building.label} on ${squareLabel(cell)}` }
+    : { ...cell, pieceId: piece.id, targetPieceId: building.id, targetLabel: building.label, square: squareLabel(cell), walls: false, subject: `${building.label} on ${squareLabel(cell)}` }
 }
 
 /** One entry for each army of `owner` that stands on something Combustion can destroy, in board order. */

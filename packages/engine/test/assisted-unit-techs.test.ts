@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, techWound } from '../src/actions/arena.js'
+import { endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, techWound, undoEndBattle } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
-import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
-import { SQUARE_SIZE, mapTop } from '../src/board.js'
+import { placePiece, setWonderOwner, undoLastBoardChange } from '../src/actions/board.js'
+import { SQUARE_SIZE, mapTop, wondersArea } from '../src/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -20,6 +20,7 @@ import { combustionTargets } from '../src/combustion.js'
 import { revealAll } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
+import { earnTechCoin } from '../src/tech-coins.js'
 import type { GameState } from '../src/state.js'
 
 import { player, resourcePattern, resourceText, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
@@ -598,32 +599,223 @@ describe('Combustion (once per turn, in Movement)', () => {
     expect(unwrap(burn(onBuilding(), armyOf(onBuilding(), 3, 3))).assistedActions).toHaveLength(1)
   })
 
-  it('logs the destruction of a building, once per turn, and says the removal is by hand', () => {
+  it('removes the building from the board, once per turn, and names it in the log', () => {
     const state = onBuilding()
     const army = armyOf(state, 3, 3)
     const used = unwrap(burn(state, army))
     expect(used.log.at(-1)?.publicLog).toContain('used Combustion: an army destroys')
-    expect(used.log.at(-1)?.publicLog).toContain('Remove the building from the map by hand')
-    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'combustion', walls: false, square: { column: 3, row: 3 } })
-    // The engine does not remove the building: that is manual
-    expect(used.board.pieces.some((piece) => piece.assetId === 'buildings/granary')).toBe(true)
+    expect(used.log.at(-1)?.publicLog).toContain('the building is removed from the map')
+    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'combustion', walls: false, square: { column: 3, row: 3 }, building: { historyId: used.board.history.at(-1)?.id } })
+    // The building is gone, the army stays
+    expect(used.board.pieces.some((piece) => piece.assetId === 'buildings/granary')).toBe(false)
+    expect(used.board.pieces.some((piece) => piece.id === army)).toBe(true)
     expect(assistedAvailability(used, CASH1981, 'combustion').status).toBe('used')
     expect(unwrapErr(burn(used, army, 'req-2')).kind).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrap(burn(used, army, 'req-2', true)).log.at(-1)?.publicLog).toContain('confirmed by the player')
   })
 
-  it('names the walls of a walled city an army attacks', () => {
+  it('a confirmed repeat needs another army on another building', () => {
+    const state = put(put(onBuilding(), CASH1981, 'buildings/granary', 6, 6), CASH1981, 'figures/redarmy', 6, 6)
+    const first = unwrap(burn(state, armyOf(state, 3, 3)))
+    const second = unwrap(burn(first, armyOf(first, 6, 6), 'req-2', true))
+    expect(second.log.at(-1)?.publicLog).toContain('confirmed by the player')
+    expect(second.board.pieces.some((piece) => piece.assetId === 'buildings/granary')).toBe(false)
+  })
+
+  it('turns the walls of a walled city an army attacks back to the plain side', () => {
     const state = onWalls()
     const used = unwrap(burn(state, armyOf(state, 5, 4)))
     expect(used.log.at(-1)?.publicLog).toContain('the walls of')
-    expect(used.log.at(-1)?.publicLog).toContain('unwalled side by hand')
+    expect(used.log.at(-1)?.publicLog).toContain('turned back to its unwalled side')
     expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'combustion', walls: true })
+    const city = used.board.pieces.find((piece) => piece.category === 'city' && piece.assetId.startsWith('cities/blue'))
+    expect(city?.assetId).toBe('cities/bluecity2')
+    expect(used.board.pieces.some((piece) => piece.assetId.includes('walled'))).toBe(false)
   })
 
-  it('an undo by vote frees the use for the turn', () => {
+  it('an undo by vote frees the use for the turn and puts the building back', () => {
     const state = onBuilding()
     const undone = voted(unwrap(burn(state, armyOf(state, 3, 3))), 'req-1')
     expect(assistedAvailability(undone, CASH1981, 'combustion').status).toBe('ready')
     expect(undone.log.at(-1)?.publicLog).toContain('Combustion was undone')
+    expect(undone.log.at(-1)?.publicLog).toContain('Granary was put back')
+    expect(undone.board.pieces.filter((piece) => piece.assetId === 'buildings/granary')).toHaveLength(1)
+  })
+
+  it('an undo by vote turns the walls back on', () => {
+    const state = onWalls()
+    const undone = voted(unwrap(burn(state, armyOf(state, 5, 4))), 'req-1')
+    expect(undone.board.pieces.some((piece) => piece.assetId === 'cities/bluecitywalled2')).toBe(true)
+    expect(undone.log.at(-1)?.publicLog).toContain('were put back')
+    expect(assistedAvailability(undone, CASH1981, 'combustion').status).toBe('ready')
+  })
+
+  it('refuses the undo vote while another building stands on the square, and keeps the use', () => {
+    const state = onBuilding()
+    const used = unwrap(burn(state, armyOf(state, 3, 3)))
+    const taken = put(used, CASH1981, 'buildings/library', 3, 3)
+    const entry = taken.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no log line')
+    let asked = unwrap(initiateUndo(taken, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) asked = unwrap(vote(asked, { logId: entry.id, playerId, vote: true, at: AT }))
+    const refused = unwrapErr(vote(asked, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    expect(refused).toMatchObject({ kind: 'ASSISTED_UNDO_BLOCKED' })
+    expect(JSON.stringify(refused)).toContain('cannot be put back')
+    expect(assistedAvailability(asked, CASH1981, 'combustion').status).toBe('used')
+  })
+
+  it('refuses the walls undo vote when the city marker is not on its plain side any more, and keeps the use', () => {
+    const state = onWalls()
+    const used = unwrap(burn(state, armyOf(state, 5, 4)))
+    const city = used.board.pieces.find((piece) => piece.assetId === 'cities/bluecity2')
+    if (city === undefined) throw new Error('no plain city')
+    // Another action walled it again by hand: its marker no longer stands as Combustion left it
+    const walled = { ...used, board: { ...used.board, pieces: used.board.pieces.map((piece) => (piece.id === city.id ? { ...piece, assetId: 'cities/bluecitywalled2' } : piece)) } }
+    const entry = walled.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no log line')
+    let asked = unwrap(initiateUndo(walled, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) asked = unwrap(vote(asked, { logId: entry.id, playerId, vote: true, at: AT }))
+    const refused = unwrapErr(vote(asked, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    expect(refused).toMatchObject({ kind: 'ASSISTED_UNDO_BLOCKED' })
+    expect(JSON.stringify(refused)).toContain('not on its plain side')
+    expect(assistedAvailability(asked, CASH1981, 'combustion').status).toBe('used')
+  })
+
+  it('refuses the walls undo vote when the city is gone', () => {
+    const state = onWalls()
+    const used = unwrap(burn(state, armyOf(state, 5, 4)))
+    const gone = { ...used, board: { ...used.board, pieces: used.board.pieces.filter((piece) => piece.assetId !== 'cities/bluecity2') } }
+    const entry = gone.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no log line')
+    let asked = unwrap(initiateUndo(gone, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI]) asked = unwrap(vote(asked, { logId: entry.id, playerId, vote: true, at: AT }))
+    const refused = unwrapErr(vote(asked, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    expect(refused).toMatchObject({ kind: 'ASSISTED_UNDO_BLOCKED' })
+    expect(JSON.stringify(refused)).toContain('no longer on the board')
+  })
+
+  it('the board Undo cannot take the removal back alone', () => {
+    const state = onBuilding()
+    const used = unwrap(burn(state, armyOf(state, 3, 3)))
+    expect(undoLastBoardChange(used, CASH1981)).toMatchObject({ ok: false })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Code of Laws
+// ---------------------------------------------------------------------------
+
+describe('Code of Laws: a coin for winning a battle, once per turn, max 4', () => {
+  const coins = (state: GameState, playerId = CASH1981): number => player(state, playerId).stats.coinSources.codeOfLaws
+  /** Cash has the tech revealed and has killed every enemy unit, so Cash wins. */
+  const cashWins = (): GameState => {
+    let state = withTech(fight(), 'Code of Laws')
+    for (const unit of enemyUnits(state)) state = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: unit.id }))
+    return state
+  }
+
+  it('adds a coin to the winner when the battle ends, and says so in the log', () => {
+    const ended = unwrap(endBattleAction(cashWins(), { playerId: CASH1981 }))
+    expect(coins(ended)).toBe(1)
+    // The winner's name appears once, as the author of the line
+    expect(ended.log.some((line) => line.publicLog === `${player(ended).username} gains a coin on Code of Laws for winning (1/4)`)).toBe(true)
+    expect(ended.endedBattle?.codeOfLawsCoin).toMatchObject({ playerId: CASH1981, tech: 'Code of Laws', source: 'codeOfLaws' })
+    expect(player(ended).playerTurns.at(-1)?.usedActions).toContain('coin:Code of Laws')
+  })
+
+  it('goes to the defender when the battle is a draw, and to nobody for the loser', () => {
+    // Equal totals: the defender wins the draw
+    const both = withTech(withTech(fight(), 'Code of Laws'), 'Code of Laws', KARANDRAS1)
+    const ended = unwrap(endBattleAction(both, { playerId: CASH1981 }))
+    expect(coins(ended, KARANDRAS1)).toBe(1)
+    expect(coins(ended)).toBe(0)
+    // Cash pressed End battle, but the line names the winner, once, and is theirs
+    const line = ended.log.find((entry) => (entry.publicLog ?? '').includes('gains a coin on Code of Laws'))
+    expect(line?.publicLog).toBe(`${player(ended, KARANDRAS1).username} gains a coin on Code of Laws for winning (1/4)`)
+    expect(line?.playerId).toBe(KARANDRAS1)
+    // The defender's own turn record carries the use, though it is not their turn
+    expect(player(ended, KARANDRAS1).playerTurns.at(-1)?.usedActions).toContain('coin:Code of Laws')
+  })
+
+  it('a battle the barbarians win earns the player who controls them nothing', () => {
+    // KARANDRAS1 is to Cash's left, so controls the barbarians; with no units on either side the draw goes to the defender
+    const state = unwrap(initiateBattle(withTech(firstCivGame(), 'Code of Laws', KARANDRAS1), { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    expect(state.battle?.defender).toEqual({ kind: 'barbarians', playerId: KARANDRAS1 })
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(coins(ended, KARANDRAS1)).toBe(0)
+    expect(ended.endedBattle?.codeOfLawsCoin).toBeUndefined()
+  })
+
+  it('a second won battle the same turn, through End battle again, adds no coin', () => {
+    const first = unwrap(endBattleAction(cashWins(), { playerId: CASH1981 }))
+    expect(coins(first)).toBe(1)
+    // The units are back in the hand: Cash takes one into a battle against the barbarians, which have none, and wins again
+    let again = unwrap(initiateBattle(first, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    const unit = findPlayer(again, CASH1981)?.battlehand[0]
+    if (unit === undefined) throw new Error('no unit in the battle hand')
+    again = unwrap(placeUnitInArena(again, { playerId: CASH1981, unitId: unit.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
+    const second = unwrap(endBattleAction(again, { playerId: CASH1981 }))
+    expect(second.endedBattle?.summary?.find((side) => side.side === 'attacker')?.label).toBe(player(second).username)
+    expect(coins(second)).toBe(1)
+    expect(second.endedBattle?.codeOfLawsCoin).toBeUndefined()
+  })
+
+  it('adds nothing with the tech hidden or missing, or at 4 coins', () => {
+    const hidden = (() => {
+      let state = withTech(fight(), 'Code of Laws', CASH1981, false)
+      for (const unit of enemyUnits(state)) state = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: unit.id }))
+      return state
+    })()
+    expect(coins(unwrap(endBattleAction(hidden, { playerId: CASH1981 })))).toBe(0)
+    const missing = (() => {
+      let state = fight()
+      for (const unit of enemyUnits(state)) state = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: unit.id }))
+      return state
+    })()
+    expect(coins(unwrap(endBattleAction(missing, { playerId: CASH1981 })))).toBe(0)
+    const full = {
+      ...cashWins(),
+      players: cashWins().players.map((p) =>
+        p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, coinSources: { ...p.stats.coinSources, codeOfLaws: 4 } } } : p,
+      ),
+    }
+    const ended = unwrap(endBattleAction(full, { playerId: CASH1981 }))
+    expect(coins(ended)).toBe(4)
+    expect(ended.endedBattle?.codeOfLawsCoin).toBeUndefined()
+  })
+
+  it('goes up to 6 for the owner of The Internet, as every tech counter does', () => {
+    const area = wondersArea(cashWins().board)
+    const placed = unwrap(placePiece(cashWins(), { playerId: CASH1981, assetId: 'wonders/internet', x: area.x + 20, y: area.y + 40 }))
+    const wonder = placed.board.pieces.at(-1)
+    if (wonder === undefined) throw new Error('The Internet should be on the board')
+    const owned = unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: wonder.id, ownerId: CASH1981 }))
+    const full = {
+      ...owned,
+      players: owned.players.map((p) =>
+        p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, coinSources: { ...p.stats.coinSources, codeOfLaws: 5 } } } : p,
+      ),
+    }
+    const ended = unwrap(endBattleAction(full, { playerId: CASH1981 }))
+    expect(coins(ended)).toBe(6)
+    expect(ended.log.some((line) => (line.publicLog ?? '').includes('(6/6)'))).toBe(true)
+  })
+
+  it('is once per turn: a second won battle the same turn adds no coin', () => {
+    const first = unwrap(endBattleAction(cashWins(), { playerId: CASH1981 }))
+    expect(coins(first)).toBe(1)
+    // The same turn, the same player wins again
+    const earned = earnTechCoin(first, CASH1981, 'Code of Laws')
+    expect(earned.granted).toBeNull()
+    expect(coins(earned.state)).toBe(1)
+  })
+
+  it('takes the coin off again when End battle is undone', () => {
+    const ended = unwrap(endBattleAction(cashWins(), { playerId: CASH1981 }))
+    const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(coins(undone)).toBe(0)
+    expect(player(undone).playerTurns.at(-1)?.usedActions ?? []).not.toContain('coin:Code of Laws')
+    expect(undone.log.at(-1)?.publicLog).toContain('takes the Code of Laws coin off')
+    // Ending it again earns the coin once more
+    expect(coins(unwrap(endBattleAction(undone, { playerId: CASH1981 })))).toBe(1)
   })
 })

@@ -339,6 +339,8 @@ describe('the Combustion army picker (issue #327)', () => {
     ])
     // The first army is chosen when the popup opens, and nothing is sent by choosing
     expect((entries[0] as HTMLInputElement).checked).toBe(true)
+    // The popup says the building really leaves the map, and that only the vote brings it back
+    expect(screen.getByText(/The building is removed from the map\. Only the undo vote brings it back\./)).toBeTruthy()
     fireEvent.click(entries[1] as HTMLElement)
     expect(send).not.toHaveBeenCalled()
     ok()

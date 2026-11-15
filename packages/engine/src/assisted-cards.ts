@@ -76,6 +76,7 @@ import {
   freeTurnAction,
   lastLogId,
   levelSheet,
+  massMediaShield,
   playerOf,
   rejected,
   useTurnAction,
@@ -135,6 +136,9 @@ function playableIn(
     now === null ? 'You have finished every phase of this turn.' : `You are in ${CARD_TIMING_TEXT[now]}.`
   return { status: 'wrong-phase', reason: `Played in ${timingsText(timings)}. ${where}` }
 }
+
+/** The cards that always cancel a culture event, and name whose; Primetime TV and Mark Twain may cancel something else, so they are not here. */
+const CULTURE_EVENT_CANCELS: ReadonlySet<string> = new Set(['Bread and Circuses', 'Jousting Tourney'])
 
 /**
  * The cards of the player's hand that can be played at some time, with whether each
@@ -1224,6 +1228,12 @@ export const playCard: AssistedActionDefinition = {
       const { min, max } = card.targets
       const wanted = min === max ? `${min}` : `${min} to ${max}`
       return err(rejected('playCard', blocked('unavailable', `${card.name} names ${wanted} other player${max === 1 ? '' : 's'}.`)))
+    }
+
+    // Mass Media: a culture event cannot be canceled, so a cancel aimed at its owner is refused
+    if (CULTURE_EVENT_CANCELS.has(card.name)) {
+      const shield = targets.map(massMediaShield).find((reason) => reason !== undefined)
+      if (shield !== undefined) return err(rejected('playCard', blocked('unavailable', shield)))
     }
 
     if (/^The Citizens are Revolting/.test(card.name)) {

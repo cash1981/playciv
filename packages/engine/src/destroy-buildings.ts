@@ -6,9 +6,13 @@
  * outside every outskirts, or in those of two colours, has none.
  */
 
-import { pieceCityOwnerColor, mapCellOf } from './blockade.js'
+import { cityCenterCells, pieceCityOwnerColor, mapCellOf } from './blockade.js'
+import { placeBack, restoreSupplyBlock } from './assisted-core.js'
 import { squareOf } from './board.js'
-import type { GameState } from './state.js'
+import type { BoardPiece } from './board.js'
+import { err, ok } from './result.js'
+import type { Result } from './result.js'
+import type { GameState, Playerhand } from './state.js'
 
 export interface DestroyableBuilding {
   readonly pieceId: string
@@ -37,4 +41,32 @@ export function destroyableBuildingsOf(
     const owner = colour === undefined ? undefined : owners.find((candidate) => candidate.color?.toLowerCase() === colour)
     return [{ pieceId: piece.id, label: piece.label, square: squareOf(state.board, piece) ?? '', ownerUsername: owner?.username ?? null }]
   })
+}
+
+/**
+ * Puts a building that an ability destroyed (Gunpowder, Combustion) back exactly as it stood. `Err` is a sentence for the player
+ * and nothing is changed: the piece is on the board again, another building, wonder, city or city-state now stands on its square
+ * (a square holds one; other overlaps are not checked, limitations.md), or the place it freed in the supply has been used by
+ * another build since.
+ */
+export function restoreDestroyedBuilding(
+  state: GameState,
+  player: Playerhand,
+  building: { readonly piece: BoardPiece; readonly label: string; readonly square: string },
+  at: string | null,
+): Result<GameState, string> {
+  if (state.board.pieces.some((piece) => piece.id === building.piece.id)) {
+    return err(`${building.label} is on the board again, so the destruction cannot be taken back.`)
+  }
+  const where = mapCellOf(state.board, building.piece)
+  const taken = where !== null && state.board.pieces.some((piece) => {
+    if (piece.category === 'city') return (cityCenterCells(state.board, piece) ?? []).some((cell) => cell.column === where.column && cell.row === where.row)
+    if (piece.category !== 'building' && piece.category !== 'wonder' && piece.category !== 'citystate') return false
+    const cell = mapCellOf(state.board, piece)
+    return cell !== null && cell.column === where.column && cell.row === where.row
+  })
+  if (taken) return err(`A building, wonder, city or city-state now stands on ${building.square}, so ${building.label} cannot be put back.`)
+  const supply = restoreSupplyBlock(state, [building.piece])
+  if (supply !== undefined) return err(supply)
+  return ok(placeBack(state, player, building.piece, at))
 }

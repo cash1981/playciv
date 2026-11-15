@@ -1,5 +1,5 @@
 /** Twain's card-specific eligibility. The cancellation itself lives in cancellation.ts, never in a card play. */
-import { LOVELACE_NAME, cityActionOf, resourceAbilityOf } from './assisted-core.js'
+import { LOVELACE_NAME, cityActionOf, massMediaShield, resourceAbilityOf } from './assisted-core.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import type { AssistedActionRecord, GameState, Playerhand } from './state.js'
 import { turnStatus } from './turn.js'
@@ -46,8 +46,11 @@ export function cancellationRefusal(state: GameState, record: AssistedActionReco
     return undefined
   }
   if (resourceAbilityOf(record) !== undefined) return undefined
-  return record.effect.kind === 'playCard' && record.effect.item.kind.startsWith('culture')
-    ? undefined : 'Only a city action, a culture event or a resource ability can be cancelled.'
+  if (record.effect.kind === 'playCard' && record.effect.item.kind.startsWith('culture')) {
+    // Mass Media: "Your culture events cannot be canceled, regardless of other game effects" (every card and tech that cancels one)
+    return massMediaShield(actor)
+  }
+  return 'Only a city action, a culture event or a resource ability can be cancelled.'
 }
 
 export function twainBlock(state: GameState, holder: Playerhand): string | undefined {

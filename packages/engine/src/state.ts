@@ -45,6 +45,7 @@ import {
 } from './turn.js'
 import type { Undo } from './undo.js'
 import type { ArenaRefight, ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
+import type { TechCoinGrant } from './tech-coins.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import type { ResourcePaymentOption } from './assisted-resources.js'
@@ -826,6 +827,10 @@ export type AssistedEffect =
       readonly square: { readonly column: number; readonly row: number }
       readonly walls: boolean
       readonly subject: string
+      /** A building that was removed from the board, exactly as it stood, with the history entry that removed it. Absent for walls. */
+      readonly building?: { readonly piece: BoardPiece; readonly label: string; readonly square: string; readonly historyId: string }
+      /** The walled city marker that was turned back to its plain side, and the history entry that turned it. Absent for a building. */
+      readonly unwalled?: { readonly pieceId: string; readonly from: PieceFace; readonly to: PieceFace; readonly historyId: string }
     }
   | {
       readonly kind: 'militaryTradition'
@@ -903,6 +908,8 @@ export type AssistedEffect =
       readonly wonderDiscount?: number
       /** Jim Henson took a wound marker for this wonder, so an undo takes it off again. */
       readonly hensonWound?: true
+      /** Education added a coin for this wonder (once per turn, max 4), so an undo takes it off again. */
+      readonly educationCoin?: TechCoinGrant
     }
   | {
       readonly kind: 'build'
@@ -1383,6 +1390,8 @@ export interface EndedBattle {
   readonly summary: readonly BattleSideSummary[] | null
   /** The fortification marker the end removed (Fame and Fortune p. 7), exactly as it stood, so an undo puts it back. */
   readonly fortification?: BoardPiece
+  /** The Code of Laws coin the winner earned for this battle, so an undo takes it off again. */
+  readonly codeOfLawsCoin?: TechCoinGrant
 }
 
 // ---------------------------------------------------------------------------
