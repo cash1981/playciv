@@ -7,7 +7,7 @@ const CANCEL_TEXT: Readonly<Record<string, string>> = {
   'Bread and Circuses': 'Cancel a culture event targeting you, one of your figures, or a square or building in one of your cities',
   'Jousting Tourney': 'Cancel any culture event',
   'Primetime TV': 'Cancel any culture event or resource ability',
-  'Mark Twain': 'Cancel a city action or a culture event',
+  'Mark Twain': 'Cancel a city action, a culture event or a resource ability of another player',
 }
 
 interface Props {
@@ -26,16 +26,18 @@ interface Props {
 export function CancellationCardControl({ view, busy, readOnly, itemId, name }: Props): React.JSX.Element {
   const choice = view.cancellations?.responseCards.find((c) => c.itemId === itemId)
   const eligible = choice?.targets.some((t) => t.blocked === null) === true
-  return <div className="play-card-control">
-    <HelpHint label={name}>
-      {CANCEL_TEXT[name] ?? 'Cancel a culture event'}
-      ; everything played after it is undone, for every player. Wait for the others before you play on.
-    </HelpHint>
-    <button type="button" className="small" aria-label={`Play ${name}`}
-      disabled={busy || readOnly || !eligible}
-      onClick={() => { startCancelPick({ itemId, name }); revealPanel('log') }}>Play</button>
-    <p className="muted">{eligible
-      ? 'Choose the log line to act on in the log.'
-      : 'Nothing in the log can be cancelled with it. Resource abilities and unrecorded targets need a table-agreed manual correction.'}</p>
+  return <div className="play-card">
+    <div className="play-card-row">
+      <button type="button" className="small" aria-label={`Play ${name}`}
+        disabled={busy || readOnly || !eligible}
+        onClick={() => { startCancelPick({ itemId, name }); revealPanel('log') }}>Play</button>
+      <HelpHint label={name}>
+        {CANCEL_TEXT[name] ?? 'Cancel a culture event'}
+        ; everything played after it is undone, for every player. Wait for the others before you play on.{' '}
+        {eligible
+          ? 'Choose the log line to act on in the log.'
+          : 'Nothing in the log can be cancelled with it right now.'}
+      </HelpHint>
+    </div>
   </div>
 }

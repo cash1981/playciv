@@ -72,7 +72,7 @@ A cancellation rewinds interleaved gameplay across phases and turns. Later
 actions remain as superseded history; notes and order versions are kept, with
 affected phases reopened and orders flagged for revision. A cancellation seals
 the log through itself, so a later rewind cannot refund the cards it spent.
-Missing exact history, roster changes, unrecorded resource abilities and
+Missing exact history, roster changes, abilities without a record and
 unstructured card targets require a table-agreed manual correction. Card
 eligibility is checked both before the original target and in the current hand.
 

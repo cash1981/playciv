@@ -4,7 +4,10 @@
  * on the log; nobody is asked to respond. Saved revisions are supplied by the server, never embedded in
  * state or views.
  */
-import { cityActionOf } from './assisted-core.js'
+import { cityActionOf, playerOf, resourceAbilityOf, techBlock, useTurnAction } from './assisted-core.js'
+import { currentTurnOf } from './assisted-tech-abilities.js'
+import { itemPaymentIds, spendResource } from './assisted-resources.js'
+import type { ResourcePaymentChoice } from './assisted-resources.js'
 import { shuffleSheetTwice } from './assisted-culture.js'
 import { blockadedGreatPersonTypes, pieceColorOf } from './blockade.js'
 import type { EngineError } from './errors.js'
@@ -12,7 +15,7 @@ import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
-import type { AssistedActionRecord, GameState, Playerhand } from './state.js'
+import type { AssistedActionRecord, GameState, Playerhand, SpentResource } from './state.js'
 import { createPlayerTurn, publicTurn, publicTurnKey, turnStatus, TURN_PHASES } from './turn.js'
 import { KING_NAME, TWAIN_NAME, availableKingId, cancellationRefusal, twainTargetsOf } from './twain.js'
 
@@ -29,6 +32,10 @@ export interface CancellationEvent {
   readonly kind: 'cancel' | 'counter' | 'protect'
   readonly playerId: string
   readonly card: Item
+  /** Set when a tech made the event (Writing, Civil Service, Mass Media): `card` is then the Spy that was spent. */
+  readonly tech?: string
+  /** The Spy payment of a tech event, spent again when the event is countered. */
+  readonly payment?: ResourcePaymentChoice
   /** The event's own log line, which a counter targets. */
   readonly logId: string
   /** The action's log line for `cancel`; the previous event's log line otherwise. */
@@ -48,15 +55,26 @@ export interface CancellationHistory {
 /** `logId` is an action's log line, or the latest event's log line to counter it. */
 export interface CancellationCommand {
   readonly logId: string
-  readonly itemId: string
+  /** A card of the player's hand, or... */
+  readonly itemId?: string
+  /** ...a tech that cancels with a Spy, paid with `payment`. */
+  readonly tech?: string
+  readonly payment?: ResourcePaymentChoice
 }
+
+/** The techs that cancel with a Spy: Writing a city action, Civil Service a culture event, Mass Media a resource ability. */
+export const TECH_CANCELS = ['Writing', 'Civil Service', 'Mass Media'] as const
+export const isTechCancel = (name: string): boolean => (TECH_CANCELS as readonly string[]).includes(name)
+const SPY = 'Spy'
+const techUsageKey = (tech: string): string => `card:${tech}`
 
 export const cancellationHistory = (state: GameState): CancellationHistory => state.cancellations ?? {
   floorTurn: turnStatus(state).currentTurn, sealedThrough: 0, events: [], requests: [],
 }
 
-const reject = (reason: string): Result<GameState, EngineError> =>
-  err({ kind: 'ASSISTED_ACTION_REJECTED', action: 'playCard', status: 'unavailable', reason })
+const rejection = (reason: string): EngineError =>
+  ({ kind: 'ASSISTED_ACTION_REJECTED', action: 'playCard', status: 'unavailable', reason })
+const reject = (reason: string): Result<GameState, EngineError> => err(rejection(reason))
 
 const eventLogId = (id: string): string => `cancellation:${id}`
 
@@ -77,11 +95,19 @@ export function availableReactionCard(state: GameState, playerId: string, itemId
   return card
 }
 
-/** A Bread and Circuses cancellation targets a card, not its owner. It cannot counter an event. */
-function canCancel(card: Item, record: AssistedActionRecord, playerId: string, state: GameState): boolean {
-  const name = itemName(card)
+/**
+ * What a reaction (a card or a tech, by name) may cancel among the recorded actions. Twain: another player's city
+ * action, culture event or resource ability. Writing: another player's city action. A culture event is stopped by
+ * Jousting Tourney, Primetime TV and Civil Service, and by Bread and Circuses when it is aimed at the canceller. A
+ * resource ability (an ability of a tech that spent a resource) is stopped by Primetime TV and Mass Media.
+ */
+function canCancel(name: string, record: AssistedActionRecord, playerId: string, state: GameState): boolean {
   if (name === KING_NAME) return false
+  const ability = resourceAbilityOf(record) !== undefined
+  if (name === 'Mass Media') return ability
   if (name === TWAIN_NAME) return record.playerId !== playerId
+  if (name === 'Writing') return record.playerId !== playerId && cityActionOf(record) !== undefined
+  if (name === 'Primetime TV' && ability) return true
   if (record.effect.kind !== 'playCard' || !record.effect.item.kind.startsWith('culture')) return false
   if (name === 'Bread and Circuses') {
     if (record.effect.targets.includes(playerId)) return true
@@ -91,21 +117,77 @@ function canCancel(card: Item, record: AssistedActionRecord, playerId: string, s
       return piece !== undefined && pieceColorOf(piece) === color
     }) === true
   }
-  return name === 'Jousting Tourney' || name === 'Primetime TV'
+  return name === 'Jousting Tourney' || name === 'Primetime TV' || name === 'Civil Service'
 }
 
 /**
- * Whether a card can undo the latest event. Twain counters another player's culture cancellation but can
- * not itself be culture-countered; King only protects his holder's city action from a cancellation.
+ * Whether a reaction can undo the latest event. An event of a culture card is a culture event: Jousting Tourney,
+ * Primetime TV, Civil Service and another player's Twain stop it. An event of a tech is a resource ability: Primetime
+ * TV, Mass Media and another player's Twain stop it. King only protects his holder's city action from a cancellation.
  */
-function canCounter(card: Item, event: CancellationEvent, playerId: string, state: GameState): boolean {
-  const name = itemName(card)
+function canCounter(name: string, event: CancellationEvent, playerId: string, state: GameState): boolean {
   if (name === KING_NAME) {
     const record = state.assistedActions.find((r) => r.logId === event.targetLogId)
     return event.kind === 'cancel' && record !== undefined && cityActionOf(record) !== undefined && record.playerId === playerId
   }
-  return event.kind !== 'protect' && event.card.kind.startsWith('culture') &&
-    (name === 'Jousting Tourney' || name === 'Primetime TV' || (name === TWAIN_NAME && event.playerId !== playerId))
+  if (event.kind === 'protect') return false
+  const twain = name === TWAIN_NAME && event.playerId !== playerId
+  if (event.tech !== undefined) return name === 'Primetime TV' || name === 'Mass Media' || twain
+  return event.card.kind.startsWith('culture') &&
+    (name === 'Jousting Tourney' || name === 'Primetime TV' || name === 'Civil Service' || twain)
+}
+
+/** What a player reacts with: a card from the hand, or a tech paid with the Spy they chose. */
+interface Reaction {
+  readonly name: string
+  readonly card: Item
+  readonly tech?: string
+  readonly payment?: ResourcePaymentChoice
+}
+const reactionOf = (event: CancellationEvent): Reaction => ({
+  name: event.tech ?? itemName(event.card), card: event.card,
+  ...(event.tech === undefined ? {} : { tech: event.tech }), ...(event.payment === undefined ? {} : { payment: event.payment }),
+})
+
+/** The Spy a tech event spends, by the player's own choice: a token or culture card that is an item (not a bare board piece). */
+function techPayment(state: GameState, playerId: string, payment: ResourcePaymentChoice | undefined): Result<Item, string> {
+  if (payment === undefined || payment.resource !== SPY) return err('Choose the Spy to pay with.')
+  if (payment.kind === 'piece') return err('A Spy that is only a piece on the board cannot be used here. Use a Spy token in your hand or a culture card that can be played as one.')
+  const held = playerOf(state, playerId)?.items.find((item) => item.id === payment.id)
+  if (held === undefined || !spendResource(state, playerId, SPY, undefined, false, payment).ok) return err('That Spy is not available.')
+  return ok(held)
+}
+
+/** The tech's own refusal: revealed, not used this turn, and a Spy to pay. `state` is a game the actor must hold it in. */
+function techRefusal(state: GameState, playerId: string, tech: string): string | undefined {
+  const player = playerOf(state, playerId)
+  if (player === undefined) return 'That player has left the game.'
+  const block = techBlock(player, tech)
+  if (block !== undefined) return block.reason
+  if (currentTurnOf(state, player).usedActions.includes(techUsageKey(tech))) return `${tech} has already been used this turn.`
+  return undefined
+}
+
+/**
+ * The reaction a command names, checked in the game now and in the saved game before the target: the same card
+ * (or the same revealed tech with the same Spy) must be there in both, because the cost is paid after the rewind.
+ */
+function reactionFrom(state: GameState, baseline: GameState, playerId: string, command: CancellationCommand): Result<Reaction, string> {
+  const unavailable = 'That card must be available both before the original action and now.'
+  if (command.tech !== undefined) {
+    if (command.itemId !== undefined || !isTechCancel(command.tech)) return err('Name a card or one of Writing, Civil Service and Mass Media.')
+    const refusal = techRefusal(state, playerId, command.tech) ?? techRefusal(baseline, playerId, command.tech)
+    if (refusal !== undefined) return err(refusal)
+    const now = techPayment(state, playerId, command.payment)
+    const before = techPayment(baseline, playerId, command.payment)
+    if (!now.ok || !before.ok) return err('That Spy must be in your hand, or a culture card that can be played as one, both before the original action and now.')
+    return ok({ name: command.tech, card: before.value, tech: command.tech, ...(command.payment === undefined ? {} : { payment: command.payment }) })
+  }
+  if (command.itemId === undefined || command.payment !== undefined) return err('Name a card or a tech.')
+  const card = availableReactionCard(state, playerId, command.itemId)
+  const historical = availableReactionCard(baseline, playerId, command.itemId)
+  if (card === undefined || historical === undefined || itemName(card) !== itemName(historical)) return err(unavailable)
+  return ok({ name: itemName(card), card })
 }
 
 function validBaseline(current: GameState, baseline: GameState, record: AssistedActionRecord): boolean {
@@ -204,6 +286,41 @@ function reshuffleChanged(state: GameState, before: GameState): GameState {
   return next
 }
 
+/**
+ * Pays a reaction on the rewound game: a card goes to the discard pile; a tech spends its Spy through the shared
+ * resource layer (a token off the board too) and is marked used for the turn.
+ */
+function spendReaction(state: GameState, ownerId: string, reaction: Reaction): Result<{ readonly state: GameState; readonly said: string }, EngineError> {
+  if (reaction.tech === undefined) return ok({ state: pay(state, [reaction.card]), said: '' })
+  const spent = spendResource(state, ownerId, SPY, undefined, false, reaction.payment)
+  const owner = playerOf(state, ownerId)
+  if (!spent.ok || owner === undefined) return err(rejection(`${reaction.tech} could not be paid with that Spy after the rewind. Nothing was changed.`))
+  const paying = playerOf(spent.value.state, ownerId) ?? owner
+  const used = useTurnAction(spent.value.state, paying, currentTurnOf(spent.value.state, paying), techUsageKey(reaction.tech), paying.stats)
+  return ok({ state: used, said: spent.value.said })
+}
+
+/**
+ * A cancelled resource ability keeps what it cost: the rewind gave its resources back, so they are spent again (the
+ * exact tokens or cards it paid), and the tech counts as used this turn, as a cancelled culture card stays discarded and a
+ * cancelled city action stays the city's action of the turn. Only the effect is undone.
+ */
+function keepAbilityCost(state: GameState, record: AssistedActionRecord, spent: readonly SpentResource[]): Result<GameState, EngineError> {
+  let next = state
+  for (const resource of spent) {
+    // A Uranium spend made with Marie Curie's substitute is chosen as Uranium, as it was made
+    const name = resource.curieSubstitute === undefined ? resource.resource : 'Uranium'
+    const choice: ResourcePaymentChoice = { resource: name, kind: resource.kind, id: resource.kind === 'piece' ? resource.piece.id : resource.itemId }
+    const paid = spendResource(next, record.playerId, name, undefined, false, choice)
+    if (!paid.ok) return err(rejection('The resources that ability spent cannot be kept spent after the rewind. Nothing was changed.'))
+    next = paid.value.state
+  }
+  const owner = playerOf(next, record.playerId)
+  if (owner === undefined || record.usageKey === null) return ok(next)
+  const turn = owner.playerTurns.find((t) => t.turnNumber === record.turnNumber) ?? createPlayerTurn(owner.username, record.turnNumber)
+  return ok(useTurnAction(next, owner, turn, record.usageKey, owner.stats))
+}
+
 export interface CancellationInput {
   readonly playerId: string
   readonly requestId: string
@@ -229,32 +346,46 @@ export function applyCancellation(
   if (actor === undefined) return err({ kind: 'NO_ACCESS', playerId: input.playerId })
   if (input.requestId.trim() === '') return reject('A request id is required.')
   if (!state.active) return reject('A cancellation cannot be made in an inactive game.')
-  const { logId, itemId } = input.command
+  const { logId } = input.command
   const latest = history.events.at(-1)
   const finish = (next: GameState, event: CancellationEvent): Result<GameState, EngineError> => ok({ ...next, cancellations: {
     ...history, sealedThrough: next.log.length, events: [...history.events, event],
     requests: [...history.requests, { id: input.requestId, playerId: input.playerId, fingerprint }],
   } })
-  const unavailable = 'That card must be available both before the original action and now.'
+  const eventOf = (reaction: Reaction, kind: CancellationEvent['kind'], targetLogId: string): CancellationEvent => ({
+    id: input.requestId, kind, playerId: input.playerId, card: reaction.card,
+    ...(reaction.tech === undefined ? {} : { tech: reaction.tech, ...(reaction.payment === undefined ? {} : { payment: reaction.payment }) }),
+    logId: eventLogId(input.requestId), targetLogId, priorRevision: state.rev,
+  })
+  const withSpy = (said: string): string => said === '' ? '' : ` (${said})`
 
   if (latest !== undefined && logId === latest.logId) {
     if (baseline === undefined || !validEventBaseline(state, baseline, latest)) return reject('The exact game before that cancellation is unavailable. Nothing was changed.')
     if (!sameRoster(baseline, state)) return reject('Player membership changed since this cancellation. A table-agreed manual correction is required.')
-    const card = availableReactionCard(state, input.playerId, itemId)
-    const historicalCard = availableReactionCard(baseline, input.playerId, itemId)
-    if (card === undefined || historicalCard === undefined || itemName(card) !== itemName(historicalCard)) return reject(unavailable)
-    if (!canCounter(card, latest, input.playerId, state)) return reject('The printed card text does not permit this target.')
-    const protect = itemName(card) === KING_NAME
+    const reaction = reactionFrom(state, baseline, input.playerId, input.command)
+    if (!reaction.ok) return reject(reaction.error)
+    if (!canCounter(reaction.value.name, latest, input.playerId, state)) return reject('The printed card text does not permit this target.')
+    const protect = reaction.value.name === KING_NAME
     const root = [...history.events].reverse().find((e) => e.kind === 'cancel')
     const rootTurn = state.assistedActions.find((r) => r.logId === root?.targetLogId)?.turnNumber ?? history.floorTurn
     const rewound = rewind(state, baseline, rootTurn, null)
     // No reshuffle: the saved state is the game as it was, and nobody saw its deck orders
-    const next = pay(rewound, protect ? [] : [latest.card, card], protect ? new Set([card.id]) : undefined)
+    let next = pay(rewound, [], protect ? new Set([reaction.value.card.id]) : undefined)
+    let said = ''
+    if (!protect) {
+      const first = spendReaction(next, latest.playerId, reactionOf(latest))
+      if (!first.ok) return err(first.error)
+      const second = spendReaction(first.value.state, input.playerId, reaction.value)
+      if (!second.ok) return err(second.error)
+      next = second.value.state
+      said = second.value.said
+    }
     const text = state.log.find((l) => l.id === latest.logId)?.publicLog ?? ''
+    const latestName = reactionOf(latest).name
     return finish(eventLog(next, input.requestId, protect
-      ? `${actor.username} revealed ${itemName(card)}: the cancellation is undone and ${itemName(latest.card)} stays in hand.`
-      : `${actor.username} cancelled the cancellation (${text}) with ${itemName(card)}.`, input.playerId),
-    { id: input.requestId, kind: protect ? 'protect' : 'counter', playerId: input.playerId, card, logId: eventLogId(input.requestId), targetLogId: latest.logId, priorRevision: state.rev })
+      ? `${actor.username} revealed ${reaction.value.name}: the cancellation is undone and ${latest.tech === undefined ? latestName : 'the Spy'} stays in hand.`
+      : `${actor.username} cancelled the cancellation (${text}) with ${reaction.value.name}${withSpy(said)}.`, input.playerId),
+    eventOf(reaction.value, protect ? 'protect' : 'counter', latest.logId))
   }
 
   const record = state.assistedActions.find((r) => r.logId === logId)
@@ -265,16 +396,22 @@ export function applyCancellation(
   if (refusal !== undefined) return reject(refusal)
   if (record.turnNumber < history.floorTurn) return reject(`That action is before cancellation was adopted (turn ${history.floorTurn}).`)
   if (state.log.findIndex((l) => l.id === record.logId) < history.sealedThrough) return reject('That action is before an earlier cancellation.')
-  const card = availableReactionCard(state, input.playerId, itemId)
-  const historicalCard = availableReactionCard(baseline, input.playerId, itemId)
-  if (card === undefined || historicalCard === undefined || itemName(card) !== itemName(historicalCard)) return reject(unavailable)
-  if (!canCancel(card, record, input.playerId, baseline)) return reject('The printed card text does not permit this target.')
+  const reaction = reactionFrom(state, baseline, input.playerId, input.command)
+  if (!reaction.ok) return reject(reaction.error)
+  if (!canCancel(reaction.value.name, record, input.playerId, baseline)) return reject('The printed card text does not permit this target.')
 
   const text = state.log.find((l) => l.id === record.logId)?.publicLog ?? ''
-  const costs = [card, ...(cityActionOf(record) === undefined && record.effect.kind === 'playCard' ? [record.effect.item] : [])]
-  const next = reshuffleChanged(pay(rewind(state, baseline, record.turnNumber, record), costs), state)
-  return finish(eventLog(next, input.requestId, `${actor.username} cancelled "${text}" with ${itemName(card)}. Everything played after it is undone; orders and notes are kept.`, input.playerId),
-    { id: input.requestId, kind: 'cancel', playerId: input.playerId, card, logId: eventLogId(input.requestId), targetLogId: record.logId, priorRevision: state.rev })
+  const rewound = rewind(state, baseline, record.turnNumber, record)
+  // The culture event that was cancelled is spent too; a cancelled city action is not a card
+  const spentEvent = cityActionOf(record) === undefined && record.effect.kind === 'playCard' ? [record.effect.item] : []
+  const ability = resourceAbilityOf(record)
+  const kept = ability === undefined ? ok(pay(rewound, spentEvent)) : keepAbilityCost(pay(rewound, spentEvent), record, ability)
+  if (!kept.ok) return err(kept.error)
+  const paid = spendReaction(kept.value, input.playerId, reaction.value)
+  if (!paid.ok) return err(paid.error)
+  const next = reshuffleChanged(paid.value.state, state)
+  return finish(eventLog(next, input.requestId, `${actor.username} cancelled "${text}" with ${reaction.value.name}${withSpy(paid.value.said)}. Everything played after it is undone; orders and notes are kept.${ability === undefined ? '' : ' What the ability spent stays spent, and it counts as used this turn.'}`, input.playerId),
+    eventOf(reaction.value, 'cancel', record.logId))
 }
 
 /** Whitelisted projection: only the viewer's own cards, with the public log lines each can act on. */
@@ -283,6 +420,13 @@ export function cancellationView(state: GameState, viewerId: string) {
   const latest = history.events.at(-1)
   const own = state.players.find((p) => p.playerId === viewerId)
   const textOf = (logId: string): string => state.log.find((l) => l.id === logId)?.publicLog ?? ''
+  const recordTargets = (name: string) => state.assistedActions.filter((record) =>
+    record.turnNumber >= history.floorTurn &&
+    state.log.findIndex((l) => l.id === record.logId) >= history.sealedThrough &&
+    cancellationRefusal(state, record) === undefined && canCancel(name, record, viewerId, state))
+    .map((r) => ({ logId: r.logId, text: textOf(r.logId), blocked: null as string | null }))
+  const counterTarget = (name: string) => latest !== undefined && canCounter(name, latest, viewerId, state)
+    ? [{ logId: latest.logId, text: textOf(latest.logId), blocked: null as string | null }] : []
   return {
     // Historical availability is checked against the saved revision on submission.
     responseCards: own === undefined ? [] : own.items.filter((i) =>
@@ -292,14 +436,14 @@ export function cancellationView(state: GameState, viewerId: string) {
         targets: [
           ...(itemName(i) === KING_NAME ? [] : itemName(i) === TWAIN_NAME
             ? twainTargetsOf(state, own).map((t) => ({ logId: t.logId, text: t.text, blocked: t.blocked }))
-            : state.assistedActions.filter((record) =>
-              record.turnNumber >= history.floorTurn &&
-              state.log.findIndex((l) => l.id === record.logId) >= history.sealedThrough &&
-              cancellationRefusal(state, record) === undefined && canCancel(i, record, viewerId, state))
-              .map((r) => ({ logId: r.logId, text: textOf(r.logId), blocked: null as string | null }))),
-          ...(latest !== undefined && canCounter(i, latest, viewerId, state)
-            ? [{ logId: latest.logId, text: textOf(latest.logId), blocked: null as string | null }] : []),
+            : recordTargets(itemName(i))),
+          ...counterTarget(itemName(i)),
         ] })),
+    // The techs that cancel with a Spy: listed when revealed, unused this turn and a Spy in the hand can pay. Which Spy is the
+    // player's choice; `spies` are the ids of those that still can, so a pick that has gone stale is seen.
+    techCancels: own === undefined ? [] : TECH_CANCELS.filter((tech) =>
+      techRefusal(state, viewerId, tech) === undefined && itemPaymentIds(state, viewerId, SPY).length > 0)
+      .map((tech) => ({ tech, spies: itemPaymentIds(state, viewerId, SPY), targets: [...recordTargets(tech), ...counterTarget(tech)] })),
   }
 }
 export type CancellationView = ReturnType<typeof cancellationView>

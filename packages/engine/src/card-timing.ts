@@ -294,6 +294,8 @@ export interface PlayableCard {
   readonly targets: CardTargets
   readonly prompt: string
   readonly resources: readonly string[]
+  /** Culture events only: the other players who own the United Nations, whose agreement the player must have to name them. */
+  readonly unitedNations?: readonly string[]
   /** What the game does for the card when it is played, or null when it only logs it. */
   readonly automatic: string | null
   /**

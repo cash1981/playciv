@@ -34,6 +34,19 @@ describe('cancellation card control', () => {
   it('is disabled, with the reason, when nothing can be cancelled', () => {
     render(<CancellationCardControl view={view([{ logId: 'log', text: 'Own action', blocked: 'Your own action' }])} busy={false} itemId="twain" name="Mark Twain" />)
     expect((screen.getByRole('button', { name: 'Play Mark Twain' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText(/Nothing in the log can be cancelled/)).toBeTruthy()
+    // The reason is in the ? button, not on the card
+    expect(screen.queryByText(/Nothing in the log can be cancelled/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Mark Twain' }))
+    expect(screen.getByText(/Nothing in the log can be cancelled with it right now/)).toBeTruthy()
+  })
+
+  it('has the ? after Play, and the help, not the card, says to choose the log line', () => {
+    render(<CancellationCardControl view={view([{ logId: 'log', text: 'Alice devoted a city', blocked: null }])} busy={false} itemId="twain" name="Mark Twain" />)
+    const buttons = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))
+    expect(buttons).toEqual(['Play Mark Twain', 'Help: Mark Twain'])
+    expect(screen.queryByText(/Choose the log line to act on in the log/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Mark Twain' }))
+    expect(screen.getByText(/Cancel a city action, a culture event or a resource ability of another player/)).toBeTruthy()
+    expect(screen.getByText(/Choose the log line to act on in the log\./)).toBeTruthy()
   })
 })

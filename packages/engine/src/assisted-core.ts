@@ -28,6 +28,7 @@ import type {
   InvestmentCard,
   Playerhand,
   PlayerStats,
+  SpentResource,
 } from './state.js'
 import { capitalOf } from './sot.js'
 import { publicTurn, publicTurnKey, sameTurn, turnStatus } from './turn.js'
@@ -216,6 +217,8 @@ export interface CardSquare {
 export interface PlayCardPayload {
   readonly itemId: string
   readonly targets: readonly string[]
+  /** The owners of the United Nations among the targets whom the player has asked and who agreed to a culture event against them. */
+  readonly consents?: readonly string[]
   readonly resource?: string
   /** Mother Teresa: the coin counter to give from. */
   readonly coinSource?: string
@@ -410,6 +413,8 @@ export type AssistedActionDefinition = {
    * repeatable: it is never `used`, and each press needs its own `requestId`.
    */
   readonly usageKey: string | null
+  /** Only a token or card in the hand can pay it: a bare piece in the player area is not offered (the cancelling techs, which keep the paid item). */
+  readonly itemPaymentsOnly?: boolean
   /**
    * The phase tab the action belongs to, and that must be open to press it. `'ANY'`
    * is for an action that is not bound to one phase (it works whenever the tech or
@@ -589,6 +594,29 @@ export function cityActionOf(record: Pick<AssistedActionRecord, 'kind' | 'effect
   const label = CITY_ACTION_LABELS[record.kind]
   if (label === undefined || !('cityPieceId' in effect) || effect.cityPieceId === null) return undefined
   return { cityPieceId: effect.cityPieceId, label }
+}
+
+/**
+ * What a tech's resource ability paid, when the record is one: every ability of a tech that spends a resource token or
+ * a culture card played as one. An ability that costs nothing (Bureaucracy, healing) is not a resource ability, and
+ * neither is the legacy note of Writing, Civil Service or Mass Media (those cancel from the log now).
+ */
+export function resourceAbilityOf(record: Pick<AssistedActionRecord, 'effect'>): readonly SpentResource[] | undefined {
+  const effect = record.effect
+  const paid = ((): readonly SpentResource[] => {
+    switch (effect.kind) {
+      case 'productionBoost': case 'pottery': case 'philosophy': case 'education': case 'horsebackRiding':
+      case 'mysticism': case 'gunpowder': case 'metalworking': case 'atomicTheory': case 'bureaucracy': case 'monarchy':
+        return effect.spent
+      case 'communism': case 'techWounds': case 'steamPower':
+        return [effect.spent]
+      case 'sotNote':
+        return effect.spent === null ? [] : [effect.spent]
+      default:
+        return []
+    }
+  })()
+  return paid.length === 0 ? undefined : paid
 }
 
 /** The player's city actions of the current turn that have not been undone, oldest first. */

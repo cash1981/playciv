@@ -135,6 +135,31 @@ describe('LogPanel cancel mode', () => {
     expect(getCancelPick()).toBeNull()
   })
 
+  it('cancels with a tech: the Cancel button sends the tech and the chosen Spy, not a card', async () => {
+    const send = vi.spyOn(api, 'cancellation').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const spy = { resource: 'Spy', kind: 'hut', id: 'spy-1' } as const
+    renderMode(({ id: 'game-1', rev: 12, you: { playerId: 'a' }, cancellations: { responseCards: [], techCancels: [{ tech: 'Writing', targets }] } }) as unknown as PlayerView)
+    await screen.findByText('Bob devoted a city')
+    act(() => startCancelPick({ name: 'Writing', tech: 'Writing', payment: spy }))
+    expect(screen.getByText(/Cancel with Writing/)).toBeTruthy()
+    const buttons = screen.getAllByRole('button', { name: /^Cancel:/ })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0] as HTMLElement)
+    await waitFor(() => expect(send).toHaveBeenCalledWith(
+      'game-1', { logId: 'a', tech: 'Writing', payment: spy }, 12, expect.any(String),
+    ))
+    expect(getCancelPick()).toBeNull()
+  })
+
+  it('ends the tech mode when the tech can no longer be used (used this turn, or no Spy left)', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderMode(({ id: 'game-1', rev: 12, you: { playerId: 'a' }, cancellations: { responseCards: [], techCancels: [] } }) as unknown as PlayerView)
+    await screen.findByText('Bob devoted a city')
+    act(() => startCancelPick({ name: 'Writing', tech: 'Writing', payment: { resource: 'Spy', kind: 'hut', id: 'spy-1' } }))
+    await waitFor(() => expect(getCancelPick()).toBeNull())
+  })
+
   it('does nothing when the player declines the confirmation', async () => {
     const send = vi.spyOn(api, 'cancellation').mockResolvedValue({} as PlayerView)
     vi.spyOn(window, 'confirm').mockReturnValue(false)

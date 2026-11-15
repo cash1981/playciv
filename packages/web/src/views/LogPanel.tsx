@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { errorMessage } from '../App.js'
 import { trackActivity } from '../lib/activity.js'
 import { KING_NAME } from '@civ/engine'
+import type { CancellationCommand } from '@civ/engine'
 
 import { stopCancelPick, useCancelPick } from '../lib/cancelPick.js'
 import { api } from '../lib/api.js'
@@ -50,21 +51,30 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
   const cancelPick = useCancelPick()
   // One request id per intent, so a retry after a lost response is the same cancellation
   const intent = useRef<{ key: string; id: string } | null>(null)
-  const submitCancellation = (logId: string, itemId: string): void => {
-    const key = `${logId}/${itemId}`
+  const submitCancellation = (command: CancellationCommand): void => {
+    const key = `${command.logId}/${command.itemId ?? `${command.tech ?? ''}:${command.payment?.id ?? ''}`}`
     if (intent.current?.key !== key) intent.current = { key, id: crypto.randomUUID() }
     const id = intent.current.id
-    void run(() => api.cancellation(gameId, { logId, itemId }, view?.rev ?? 0, id))
+    void run(() => api.cancellation(gameId, command, view?.rev ?? 0, id))
   }
+  const commandFor = (logId: string, pick: NonNullable<typeof cancelPick>): CancellationCommand =>
+    pick.tech !== undefined && pick.payment !== undefined
+      ? { logId, tech: pick.tech, payment: pick.payment }
+      : { logId, itemId: pick.itemId ?? '' }
 
-  // The eligible log lines of the card that started the cancel mode: only these can be picked
-  const choice = view?.cancellations?.responseCards.find((card) => card.itemId === cancelPick?.itemId)
+  // The eligible log lines of the card or tech that started the cancel mode: only these can be picked
+  const choice = cancelPick?.tech !== undefined
+    ? view?.cancellations?.techCancels.find((entry) => entry.tech === cancelPick.tech)
+    : view?.cancellations?.responseCards.find((card) => card.itemId === cancelPick?.itemId)
   const cancellable = new Set(choice?.targets.filter((target) => target.blocked === null).map((target) => target.logId))
   // King needs no mode: a cancellation of his holder's city action carries a Protect button of its own
   const kingFor = (logId: string) => view?.cancellations?.responseCards.find((card) =>
     card.name === KING_NAME && card.targets.some((target) => target.logId === logId && target.blocked === null))
   // The mode ends when the card is gone (played, discarded or blockaded)
-  const modeOver = cancelPick !== null && choice === undefined
+  // A tech's pick also ends when the Spy it chose can no longer pay: Cancel would be refused
+  const staleSpy = cancelPick?.tech !== undefined && choice !== undefined && 'spies' in choice &&
+    !choice.spies.includes(cancelPick.payment?.id ?? '')
+  const modeOver = cancelPick !== null && (choice === undefined || staleSpy)
   useEffect(() => {
     if (modeOver) stopCancelPick()
   }, [modeOver])
@@ -167,7 +177,7 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
                 onClick={() => {
                   if (!window.confirm(`Cancel with ${cancelPick.name}: "${entry.message}"? It takes effect at once.`)) return
                   stopCancelPick()
-                  submitCancellation(entry.id, cancelPick.itemId)
+                  submitCancellation(commandFor(entry.id, cancelPick))
                 }}
               >
                 Cancel
@@ -181,7 +191,7 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
                 onClick={() => {
                   const king = kingFor(entry.id)
                   if (king === undefined || !window.confirm(`Protect with ${king.name}: "${entry.message}"? It takes effect at once.`)) return
-                  submitCancellation(entry.id, king.itemId)
+                  submitCancellation({ logId: entry.id, itemId: king.itemId })
                 }}
               >
                 Protect

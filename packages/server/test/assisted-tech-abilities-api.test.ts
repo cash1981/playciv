@@ -499,28 +499,17 @@ describe('the Spy abilities through args', () => {
     expect((await view(t.gameId, t.other)).you?.stats.coinSources['sheet']).toBe(1)
   })
 
-  it('Writing, Civil Service and Mass Media take a player and an optional short note', async () => {
+  it('Writing, Civil Service and Mass Media are no actions: the cancel is made from the log, so nothing is spent or logged', async () => {
     const t = await table('wr', 'Civil Service', [])
-    const spyNumber = await giveHut(t.gameId, t.starterId, 'Spy')
-    const before = await view(t.gameId, t.starter)
-    expect(entryOf(before, 'civilService')).toMatchObject({ status: 'ready' })
-    for (const args of [{}, { targetId: 7 }, { targetId: t.otherId, note: 7 }, { targetId: t.otherId, note: 'x'.repeat(81) }, { targetId: t.otherId, extra: 1 }]) {
-      expect((await post(t.starter, actions(t.gameId), { action: 'civilService', requestId: 'req-bad', rev: before.rev, args })).status).toBe(400)
-    }
-    const paid = await post(t.starter, actions(t.gameId), { action: 'civilService', requestId: 'req-1', rev: before.rev, args: { targetId: t.otherId, note: 'Sinbad' } })
-    expect(paid.status).toBe(200)
-    expect((await paid.json<View>()).assistedActions[0]?.text).toMatch(new RegExp(`used Civil Service: spent 1 Spy \\(hut\\) item number #${spyNumber}, cancelling a culture event of .* \\(Sinbad\\)`))
-  })
-
-  it('a note with line breaks and control characters is flattened to one line in the public log', async () => {
-    const t = await table('note', 'Writing', [])
     await giveHut(t.gameId, t.starterId, 'Spy')
     const before = await view(t.gameId, t.starter)
-    const paid = await post(t.starter, actions(t.gameId), { action: 'writing', requestId: 'req-1', rev: before.rev, args: { targetId: t.otherId, note: 'Build\nin\r\n  Capital\u0000!' } })
-    expect(paid.status).toBe(200)
-    const text = (await paid.json<View>()).assistedActions[0]?.text ?? ''
-    expect(text).toContain('(Build in Capital !)')
-    expect(text).not.toMatch(/[\u0000-\u001f]/)
+    expect(entryOf(before, 'civilService')).toMatchObject({ status: 'ready' })
+    const pressed = await post(t.starter, actions(t.gameId), { action: 'civilService', requestId: 'req-1', rev: before.rev, args: { targetId: t.otherId, note: 'Sinbad' } })
+    expect(pressed.status).toBe(400)
+    expect(JSON.stringify(await pressed.json())).toContain('Use the Cancel button next to a culture event in the log')
+    const state = await repo.findGame(t.gameId)
+    expect(state?.assistedActions).toHaveLength(0)
+    expect(state?.players.find((player) => player.playerId === t.starterId)?.items.some((item) => item.kind === 'hut' && item.name === 'Spy')).toBe(true)
   })
 
   it('Monarchy: obsolete takes a wonder, kill takes a target and is refused when the opponent has no unit card', async () => {

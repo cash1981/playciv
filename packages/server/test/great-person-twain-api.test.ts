@@ -8,7 +8,7 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { SQUARE_SIZE, mapTop, placePiece, slotOrigin, unwrap } from '@civ/engine'
+import { SQUARE_SIZE, chooseTech, mapTop, placePiece, revealTech, slotOrigin, unwrap } from '@civ/engine'
 
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
@@ -165,6 +165,85 @@ describe('cancellation over HTTP', () => {
     // The same request again, on the old revision: answered, nothing saved
     expect((await cancelWith(t.other, t, request)).status).toBe(200)
     expect((await repo.findGame(t.gameId))?.rev).toBe(after?.rev)
+  })
+
+  it('cancels with Writing and a Spy: the same rewind, the Spy is spent, and a bad payment is refused', async () => {
+    const t = await table('Writing')
+    let state = await repo.findGame(t.gameId)
+    if (state === undefined) throw new Error('game missing')
+    const hut = state.items.find((item) => item.kind === 'hut' && item.name === 'Spy')
+    if (hut === undefined) throw new Error('no Spy hut in the fixture')
+    state = unwrap(revealTech(unwrap(chooseTech(state, { playerId: t.otherId, techName: 'Writing' })), { playerId: t.otherId, techName: 'Writing' }))
+    state = {
+      ...state,
+      items: state.items.filter((item) => item.id !== hut.id),
+      players: state.players.map((player) => player.playerId === t.otherId
+        ? { ...player, items: [...player.items, { ...hut, hidden: true, ownerId: t.otherId }] } : player),
+    }
+    await repo.saveGame(state)
+    // A saved revision with the tech and the Spy in it, so the history before the action holds them
+    expect((await post(t.other, `/api/games/${t.gameId}/note`, { note: 'ready' })).status).toBe(200)
+    expect((await startProgram(t, 'sp-1')).status).toBe(200)
+    const logId = await logIdOf(t, 'sp-1')
+    const rev = (await view(t.gameId, t.other)).rev
+    const spy = { resource: 'Spy', kind: 'hut', id: hut.id }
+
+    // The route refuses a card and a tech together, a payment that is not a Spy and a missing Spy
+    expect((await cancelWith(t.other, t, { logId, itemId: t.twainId, tech: 'Writing', payment: spy, rev, requestId: 'bad-1' })).status).toBe(400)
+    expect((await cancelWith(t.other, t, { logId, tech: 'Writing', payment: { ...spy, resource: 'Iron' }, rev, requestId: 'bad-2' })).status).toBe(400)
+    expect((await cancelWith(t.other, t, { logId, tech: 'Writing', rev, requestId: 'bad-3' })).status).toBe(400)
+    expect((await cancelWith(t.other, t, { logId, tech: 'Writing', payment: { ...spy, id: 'nope' }, rev, requestId: 'bad-4' })).status).toBe(400)
+
+    const response = await cancelWith(t.other, t, { logId, tech: 'Writing', payment: spy, rev, requestId: 'writing' })
+    const answer = response.status === 200 ? '' : JSON.stringify(await response.json())
+    expect([response.status, answer]).toEqual([200, ''])
+    const after = await repo.findGame(t.gameId)
+    expect(after?.board.pieces.some((piece) => piece.assetId === 'markers/Building Program')).toBe(false)
+    expect(after?.assistedActions.map((record) => record.status)).toEqual(['cancelled'])
+    expect(after?.discardedItems.some((item) => item.id === hut.id)).toBe(true)
+    // Twain was not spent: the cancel used the tech
+    expect(after?.players.find((player) => player.playerId === t.otherId)?.items.some((item) => item.id === t.twainId)).toBe(true)
+    expect(after?.cancellations?.events).toMatchObject([{ kind: 'cancel', tech: 'Writing', payment: spy }])
+    // The same request again answers the same and saves nothing
+    expect((await cancelWith(t.other, t, { logId, tech: 'Writing', payment: spy, rev, requestId: 'writing' })).status).toBe(200)
+    expect((await repo.findGame(t.gameId))?.rev).toBe(after?.rev)
+  })
+
+  it("cancels a resource ability with Twain: Pottery's coin is gone, its resources stay spent and the tech is used up", async () => {
+    const t = await table('Pottery')
+    let state = await repo.findGame(t.gameId)
+    if (state === undefined) throw new Error('game missing')
+    const huts = ['Iron', 'Wheat'].map((name) => state?.items.find((item) => item.kind === 'hut' && item.name === name))
+    if (huts.some((hut) => hut === undefined)) throw new Error('no Iron or Wheat hut in the fixture')
+    const given = huts.flatMap((hut) => hut === undefined ? [] : [hut])
+    state = unwrap(revealTech(unwrap(chooseTech(state, { playerId: t.starterId, techName: 'Pottery' })), { playerId: t.starterId, techName: 'Pottery' }))
+    state = {
+      ...state,
+      items: state.items.filter((item) => !given.some((hut) => hut.id === item.id)),
+      players: state.players.map((player) => player.playerId === t.starterId
+        ? { ...player, items: [...player.items, ...given.map((hut) => ({ ...hut, hidden: true, ownerId: t.starterId }))] } : player),
+    }
+    await repo.saveGame(state)
+    expect((await post(t.starter, `/api/games/${t.gameId}/note`, { note: 'ready' })).status).toBe(200)
+    const used = await post(t.starter, `/api/games/${t.gameId}/actions`, {
+      action: 'pottery', requestId: 'pot-1', rev: (await view(t.gameId, t.starter)).rev, args: { resources: ['Iron', 'Wheat'] },
+    })
+    expect([used.status, used.status === 200 ? '' : JSON.stringify(await used.json())]).toEqual([200, ''])
+    const starterOf = (game: Awaited<ReturnType<typeof repo.findGame>>) => game?.players.find((player) => player.playerId === t.starterId)
+    expect(starterOf(await repo.findGame(t.gameId))?.stats.coinSources.pottery).toBe(1)
+
+    const logId = await logIdOf(t, 'pot-1')
+    const rev = (await view(t.gameId, t.other)).rev
+    const response = await cancelWith(t.other, t, { logId, itemId: t.twainId, rev, requestId: 'cancel-pottery' })
+    const answer = response.status === 200 ? '' : JSON.stringify(await response.json())
+    expect([response.status, answer]).toEqual([200, ''])
+    const after = await repo.findGame(t.gameId)
+    expect(starterOf(after)?.stats.coinSources.pottery).toBe(0)
+    expect(given.every((hut) => after?.discardedItems.some((item) => item.id === hut.id) === true)).toBe(true)
+    expect(starterOf(after)?.items.some((item) => given.some((hut) => hut.id === item.id))).toBe(false)
+    expect(starterOf(after)?.playerTurns.some((turn) => turn.usedActions.includes('card:Pottery'))).toBe(true)
+    expect(after?.assistedActions.map((record) => record.status)).toEqual(['cancelled'])
+    expect(after?.log.at(-1)?.publicLog).toContain('stays spent')
   })
 
   it('keeps the game running: nothing pauses, and what was written before the rewind is kept', async () => {

@@ -1,5 +1,5 @@
 /** Twain's card-specific eligibility. The cancellation itself lives in cancellation.ts, never in a card play. */
-import { cityActionOf } from './assisted-core.js'
+import { cityActionOf, resourceAbilityOf } from './assisted-core.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import type { AssistedActionRecord, GameState, Playerhand } from './state.js'
 import { turnStatus } from './turn.js'
@@ -11,7 +11,7 @@ export interface TwainTarget {
   readonly logId: string
   readonly playerId: string
   readonly username: string
-  readonly kind: 'city' | 'culture'
+  readonly kind: 'city' | 'culture' | 'ability'
   readonly text: string
   readonly blocked: string | null
 }
@@ -41,8 +41,9 @@ export function cancellationRefusal(state: GameState, record: AssistedActionReco
     }
     return undefined
   }
+  if (resourceAbilityOf(record) !== undefined) return undefined
   return record.effect.kind === 'playCard' && record.effect.item.kind.startsWith('culture')
-    ? undefined : 'Only a city action or a culture event can be cancelled.'
+    ? undefined : 'Only a city action, a culture event or a resource ability can be cancelled.'
 }
 
 export function twainBlock(state: GameState, holder: Playerhand): string | undefined {
@@ -62,7 +63,8 @@ export function twainTargetsOf(state: GameState, holder: Playerhand): readonly T
   return state.assistedActions.flatMap((record): readonly TwainTarget[] => {
     if (record.status !== 'applied' || record.turnNumber < (state.cancellations?.floorTurn ?? turnStatus(state).currentTurn)) return []
     const city = cityActionOf(record) !== undefined
-    if (!city && !(record.effect.kind === 'playCard' && record.effect.item.kind.startsWith('culture'))) return []
+    const ability = resourceAbilityOf(record) !== undefined
+    if (!city && !ability && !(record.effect.kind === 'playCard' && record.effect.item.kind.startsWith('culture'))) return []
     const index = logIndices.get(record.logId) ?? -1
     const entry = state.log[index]
     const actor = state.players.find((p) => p.playerId === record.playerId)
@@ -71,7 +73,7 @@ export function twainTargetsOf(state: GameState, holder: Playerhand): readonly T
       : cancellationRefusal(state, record) ??
         (index < (state.cancellations?.sealedThrough ?? 0) ? 'That action is before an earlier cancellation.' : null)
     return [{ logId: record.logId, playerId: actor.playerId, username: actor.username,
-      kind: city ? 'city' : 'culture', text: entry.publicLog, blocked }]
+      kind: city ? 'city' : ability ? 'ability' : 'culture', text: entry.publicLog, blocked }]
   })
 }
 

@@ -36,6 +36,8 @@ import {
 import type { AssistedActionKind, CombustionTarget, PendingRewardView, ResourcePaymentChoice, TechPicker, TurnPhase } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
+import { startCancelPick } from '../lib/cancelPick.js'
+import { revealPanel } from '../lib/reveal.js'
 import type { PlayerView } from '../lib/api.js'
 import type { BuildFlow } from './buildFlow.js'
 import { ChoiceDialog } from './ChoiceDialog.js'
@@ -624,6 +626,13 @@ const listOf = (names: readonly string[]): string =>
  * Some Great Persons and culture cards allow it and are not built, so the player
  * is the override, the way the Draw button asks first when it is not your turn.
  */
+/** The techs that cancel with a Spy: their button picks the Spy, then the log's Cancel button picks what to cancel. */
+const TECH_CANCEL: ReadonlyMap<AssistedActionKind, string> = new Map<AssistedActionKind, string>([
+  ['writing', 'Writing'],
+  ['civilService', 'Civil Service'],
+  ['massMedia', 'Mass Media'],
+])
+
 export const usedAgainQuestion = (label: string): string =>
   `You have already used ${label} this turn. The rules allow it once per turn. Use it again?`
 
@@ -682,7 +691,7 @@ export function AssistedActionButton({
   // A used action is pressable only when its rule allows the player to confirm
   // another use; a strict-once policy or wonder stays disabled. A projection
   // without the flag predates it and keeps the old repeat behaviour.
-  const pressable = ready || skip !== undefined || (used && state.repeatable !== false)
+  const pressable = ready || skip !== undefined || (used && state.repeatable !== false && !TECH_CANCEL.has(action))
   const shownReason = !ready && skip !== undefined ? skip.reason : state.reason
   const shownStatus = !ready && skip !== undefined ? 'ready' : state.status
   const warning = ready ? state.warning : skip?.warning
@@ -833,6 +842,15 @@ export function AssistedActionButton({
   // opened, and declining keeps the picker open
   const sendPick = (args: Record<string, unknown>): void => {
     if (!canSubmit) return
+    const cancelTech = TECH_CANCEL.get(action)
+    if (cancelTech !== undefined) {
+      const spy = payments[0]
+      if (spy === undefined) return
+      setPick(null)
+      startCancelPick({ name: cancelTech, tech: cancelTech, payment: spy })
+      revealPanel('log')
+      return
+    }
     if (action === 'communism' || action === 'steamPower') {
       setPick(null)
       if (action === 'communism') void pressCommunism(payments)
@@ -943,6 +961,10 @@ export function AssistedActionButton({
 
   const press = (): void => {
     setPaymentPick(payment === undefined ? [] : resourcePaymentSelection(payment).map((option) => option.choice))
+    if (TECH_CANCEL.has(action) && payment !== undefined) {
+      setPick({ kind: 'payment' })
+      return
+    }
     const picker = ASSISTED_TECH_PICKERS.get(action)
     if (picker !== undefined) {
       openPicker(picker)

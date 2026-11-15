@@ -1785,7 +1785,11 @@ export function availableActionsFor(state: GameState, playerId: string): readonl
     ...(definition.buttonText === undefined ? {} : { buttonText: definition.buttonText }),
     ...(definition.techName === null ? {} : { techName: definition.techName }),
     ...(definition.cost === undefined ? {} : {
-      payment: { cost: definition.cost, options: resourcePaymentOptions(state, playerId, definition.cost) },
+      payment: {
+        cost: definition.cost,
+        options: resourcePaymentOptions(state, playerId, definition.cost)
+          .filter((option) => definition.itemPaymentsOnly !== true || option.choice.kind !== 'piece'),
+      },
     }),
     repeatable: definition.strictOnce !== true,
     ...definition.availability(state, playerId),

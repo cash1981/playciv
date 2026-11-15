@@ -342,8 +342,33 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   chat, notes and orders are never blocked. Twain targets another player's city action or culture event;
   Jousting Tourney and Primetime TV target culture events; Bread and Circuses requires actual targeting of its
   holder or a recorded moved figure of theirs (targeting a cancellation card does not target its owner).
-  Unstructured square/building targets and resource abilities remain manual. Printed texts are in
+  Unstructured square/building targets remain manual (resource abilities: see "Resource abilities" below). Printed texts are in
   `gamedata-faf-waw.json`; no local rulebooks were available.
+- Tech cancellations (human, 2026-11-14): Writing (a city action), Civil Service (a culture event) and Mass Media (a
+  resource ability) cancel like Twain but pay with a Spy instead of a card: a token in the hand or a culture card that
+  can be played as one (A Gift from Afar), chosen by the player; a Spy that is only a board piece is refused. The tech
+  must be revealed, unused this turn and the Spy held both before the target and now (the cost is paid after the
+  rewind). They are made from the log (`POST /cancellations` with `tech` and `payment`), never as an assisted action.
+  Who stops what: a culture event by Jousting Tourney, Primetime TV, Civil Service, Twain and Bread and Circuses (when
+  it is aimed at the holder); a city action by Twain and Writing; the event of a culture card (a culture event) by
+  Jousting Tourney, Primetime TV, Civil Service and another player's Twain; the event of a tech (a resource ability)
+  by Primetime TV, Mass Media and another player's Twain. A counter spends the cancelled event's Spy again, so the
+  Spy is lost when a tech event is countered. Mass Media's own targets are the resource abilities below.
+- Resource abilities (human, 2026-11-15): every recorded ability of a tech that spent a resource (the production boosts,
+  Pottery, Philosophy, Education, Horseback Riding, Mysticism, Gunpowder, Metalworking, Atomic Theory, Monarchy,
+  Communism, Mathematics and Ballistics, Steam Power, Ecology; `resourceAbilityOf` in `assisted-core.ts`) can be cancelled
+  from the log: by another player's Twain, by Primetime TV and by Mass Media (a Spy). Writing, Civil Service, Jousting
+  Tourney and Bread and Circuses cannot. An ability that costs nothing (healing, Bureaucracy) is not one. A cancelled
+  ability keeps its cost, as a cancelled culture card stays discarded: the rewind gives its resources back and they
+  are spent again (the same tokens or cards, a piece on the map removed again), and the tech counts as used this turn
+  (Mass Media's printed text: "the resources spent to activate that ability are lost"). A counter of the cancellation
+  rewinds to the game before it, so the ability stands and nothing is spent twice. Not done: Mass Media's "your culture
+  events cannot be canceled".
+- United Nations (human, 2026-11-14): culture events cannot target its owner against their will. The game cannot ask
+  the owner, so playing a culture event that names an owner (a chosen target, or every other player), or that moves
+  the figures of an owner (Disoriented, Lost, Out of Position), needs the player's confirmation that each owner
+  agreed (`consents`); the log says "with the agreement of X (United Nations)".
+  A blockaded wonder protects nobody. An in-game approval request is not built.
 - Counters act on the latest event only, by an event of their own, and rewind to the saved state before it:
   Jousting Tourney and Primetime TV counter a culture cancellation, Twain counters another player's culture
   cancellation (it cannot itself be culture-countered), and King is protection: he undoes a cancellation of his
