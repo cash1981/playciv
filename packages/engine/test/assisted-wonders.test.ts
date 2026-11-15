@@ -804,6 +804,29 @@ describe('replacing a wonder or a building with a wonder (base rules p. 17)', ()
   })
 })
 
+describe('Education with Engineering: the second build is a wonder', () => {
+  it('writes both the Engineering key and the Education coin key, so a later wonder earns no second coin', () => {
+    const start = ready({ techs: ['Engineering', 'Education', 'Currency'], production: 30 })
+    const market = (buildOptionsOf(start, me(start))[0] as CityBuildOptions).choices.find((choice) => choice.assetId === 'buildings/market')
+    const square = market?.squares.find((candidate) => !(candidate.column === C2.column && candidate.row === C2.row))
+    if (square === undefined) throw new Error('no square for the Market')
+    const first = unwrap(
+      performAssistedAction(start, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-1',
+        at: AT,
+        payload: { cityPieceId: cityOf(start).id, item: { kind: 'building', assetId: 'buildings/market' }, target: { column: square.column, row: square.row } },
+      }),
+    )
+    const both = build(first, COLOSSUS, C2, 'req-2')
+    const used = me(both).playerTurns.at(-1)?.usedActions ?? []
+    expect(used).toContain('card:Engineering')
+    expect(used).toContain('coin:Education')
+    expect(me(both).stats.coinSources.education).toBe(1)
+  })
+})
+
 describe('Education: a coin for a wonder, once per turn, max 4', () => {
   const coins = (state: GameState): number => me(state).stats.coinSources.education
   const withEducationCoins = (state: GameState, education: number): GameState => ({

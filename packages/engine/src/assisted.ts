@@ -876,7 +876,8 @@ const build: AssistedActionDefinition = {
     const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
     // Engineering's use of the turn is written by its second build
     const keyHolder = playerOf(educated.state, paying.playerId) ?? paying
-    const keyTurn = split === undefined ? undefined : openCityManagementTurn(state, player)
+    // Read from the state with Education's coin already in it, so the coin's own key on the turn is not written over
+    const keyTurn = split === undefined ? undefined : openCityManagementTurn(educated.state, keyHolder)
     const paid =
       keyTurn === undefined ? educated.state : useTurnAction(educated.state, keyHolder, keyTurn, ENGINEERING_KEY, keyHolder.stats)
     const educationCoin = educated.granted ?? undefined

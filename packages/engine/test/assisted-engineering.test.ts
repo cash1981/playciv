@@ -237,6 +237,14 @@ describe('Engineering: cancelling a city action with Writing', () => {
     expect(options(undone).engineering).toBeUndefined()
   })
 
+  it('a new build beside a cancelled second whose first was undone is the second action: no split is offered', () => {
+    const undone = unwrap(undoByVote(scene().cancel('b2'), 'b1'))
+    const again = unwrap(tryBuild(undone, LIBRARY, 'b3', undefined, true))
+    expect(cityActionsTakenThisTurn(again, playerOf(again, A), cityOf(again).id)).toHaveLength(2)
+    expect(options(again).engineering).toBeUndefined()
+    expect(usedKey(again)).toBe(false)
+  })
+
   it('taking back only the second leaves the first and frees Engineering', () => {
     const done = scene().cancel('b2')
     expect(done.board.pieces.some((piece) => piece.assetId === LIBRARY)).toBe(true)

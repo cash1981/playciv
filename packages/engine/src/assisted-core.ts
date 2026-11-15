@@ -698,6 +698,10 @@ function onlyBuildOf(
       cityActionOf(record)?.cityPieceId === cityPieceId,
   )
   const [first] = records
+  // Counted the way the city's actions are counted: a split second build that was cancelled after its first was undone still is
+  // an action of the city, so a new build beside it is a second action and Engineering does not apply
+  const counted = cityActionRecordsThisTurn(state, player, current).filter((action) => action.cityPieceId === cityPieceId)
+  if (counted.length > 1) return undefined
   if (records.length !== 1 || first === undefined || first.status !== 'applied' || first.effect.kind !== 'build') return undefined
   const { cost, production } = first.effect
   if (cost === undefined || production === undefined) return undefined
