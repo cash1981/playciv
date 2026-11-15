@@ -774,8 +774,7 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   village adjacent (Zulu may, then explore it); no enemy figure adjacent; no city
   closer than three squares, diagonals included, anyone's; no relic adjacent; a
   city-state on the square is destroyed for 3 culture, one adjacent forbids it.
-  Romans advance one space free. Growing a capital into a metropolis only scrolls
-  to the map (human).
+  Romans advance one space free. Agriculture grows the capital by its own button (see Tech resource abilities).
 - **Scouts send squares** (human): a scout sends its square to one city for the
   turn, to the capital when not sent. The square counts for that city's
   production and trade, and its culture/resource icons are offered only to that
@@ -1221,11 +1220,33 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   revealed (`actions/player.ts`), so there is nothing to permit. The action is a once-per-turn logged note in the open Research
   phase, costs nothing, and the switch itself stays manual in the social policy panel. The 1 coin is the existing flat-coin
   handling on reveal (`coinOnReveal`, tested).
+- **Agriculture** (#354; human, 2026-11-15, replacing the old hint that only pointed at the map): "Immediately grow your
+  capital into a metropolis" is an assisted action with no payment and `phase: 'ANY'` (the card says "immediately", and ruling
+  128 lets it happen in another player's Start of Turn), listed under Cities. The player taps one of the highlighted squares
+  next to the capital (the web uses the map picker, as Communism does); the tapped square names the side, `direction` north,
+  west, east or south. The engine then turns the capital piece over to the metropolis piece (`flipPieceUnchecked`, one board
+  history entry; the same piece id, so every record naming the capital, a Building Program marker on its square and a scout
+  assignment survive). A walled capital becomes the walled metropolis (`redcapitalwalled2` to `redmetropoliswalled2`), a plain
+  one the plain metropolis. The marker lies on the capital's square and the neighbouring one, one pixel towards the capital so
+  the capital's square stays the anchor centre and the city keeps its name ("Metropolis D4"); north and south turn it 90
+  degrees. "Once per game" is derived, not counted: the capital marker is gone afterwards (`capitalOf` falls back to the
+  metropolis, which only a capital grows into), so the button reads "Your capital is already a metropolis." Legality is
+  `metropolis.ts` (`metropolisGrowthsOf`), from the rulings 116 to 128 and the founding rules: the new square is land and all
+  eight squares around it are on the map and revealed; no village, no hut (the Zulu may, ruling 108) and no city-state in the
+  new outskirts or on the new square, and no other city centre within three squares of it (ruling 118); no enemy figure on the
+  new square (ruling 120), while enemy figures in the outskirts do not matter (121). A relic in the new outskirts stops it as it
+  stops a new city: the rulings do not list relics (limitations.md). The undo vote turns the marker back exactly as it stood,
+  walls included, refused when the metropolis is gone, shows another face (walls built since) or was moved, or when a city
+  action was taken with it since (a build in the new outskirts); the board Undo cannot take the turning over alone and cannot
+  walk back past the vote (`undoFloor`). The web works the legal squares out from the public board (the same function), the
+  engine decides again on the press, and the reason lists what stops each of the four sides when none is legal. Not carried out,
+  so such a side is not offered: a friendly figure on the new square (ruling 122 moves it) and a building, wonder or Great
+  Person on it (125 to 127 overbuild it); the player clears the square first, as before founding a city.
 
-Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-resources.ts` (`spendEachResource`), `city-production.ts`
+Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-agriculture.ts`, `metropolis.ts`, `assisted-resources.ts` (`spendEachResource`), `city-production.ts`
 (`boost`), `build-options.ts`, `actions/player.ts` (`revealTech`), `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
 `web/src/views/AssistedActions.tsx` (`TechPickerForm`); tests `assisted-tech-abilities`, `assisted-tech-abilities-api`,
-`TechPanelAssisted.test.tsx`.
+`TechPanelAssisted.test.tsx`; Agriculture: `assisted-agriculture.test.ts`, `assisted-agriculture-api.test.ts`, `SotPanel.test.tsx`.
 
 ### Tech in the Research tab
 

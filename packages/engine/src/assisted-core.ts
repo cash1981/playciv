@@ -329,6 +329,11 @@ export interface AtomicTheoryPayload {
   readonly cityPieceId?: string
 }
 
+/** What Agriculture carries: the side of the capital the second city square lies on. */
+export interface AgriculturePayload {
+  readonly direction: 'north' | 'west' | 'east' | 'south'
+}
+
 /** What `steamPower` carries: the square whose figures move, and the water square they move to. */
 export interface SteamPowerPayload {
   readonly from: CardSquare
@@ -373,6 +378,7 @@ export type AssistedPayload = (
   | MonarchyPayload
   | ArenaUnitPayload
   | AtomicTheoryPayload
+  | AgriculturePayload
   | SteamPowerPayload
   | FeudalismHarvestPayload
   | FoundCityPayload

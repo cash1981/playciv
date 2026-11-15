@@ -22,8 +22,10 @@ import {
   combustionTargets,
   fellOnArrival,
   findCoinSource,
+  growableCapital,
   isMapCell,
   itemName,
+  metropolisGrowthsOf,
   nukeTargetsOf,
   obsoletableWondersOf,
   destroyableBuildingsOf,
@@ -809,6 +811,43 @@ export function AssistedActionButton({
     })
   }
 
+  // Agriculture: the squares the capital can grow onto are highlighted on the map, one per legal side, and the square tapped names the side.
+  // The legal ones are worked out from the public board here, as the engine does when the press arrives (which decides again)
+  const pressAgriculture = async (): Promise<void> => {
+    if (mapPicker === null || view.you === null) return
+    const you = view.you
+    const scene = { board: view.board, players: [] }
+    const capital = growableCapital(scene, you)
+    const legal = capital === undefined ? [] : metropolisGrowthsOf(scene, you, capital).filter((growth) => growth.ok)
+    if (legal.length === 0) {
+      setHint(state.reason)
+      return
+    }
+    setHint(null)
+    onBeforePress?.()
+    const picked = await mapPicker.begin({
+      title: 'the side your capital grows on',
+      cells: legal.map((growth) => ({ ...growth.cell, label: growth.square })),
+      describeCell: (cell) => {
+        const growth = legal.find((candidate) => candidate.cell.column === cell.column && candidate.cell.row === cell.row)
+        return `Grow your capital ${growth?.direction ?? ''} onto ${cell.label}`
+      },
+    })
+    if (picked === null) return
+    const growth = legal.find((candidate) => candidate.cell.column === picked.column && candidate.cell.row === picked.row)
+    if (growth === undefined) return
+    const key = `${gameId}:${playerId}:agriculture:${growth.direction}`
+    if (inFlight.has(key)) return
+    void pressOnce(
+      key,
+      run,
+      (requestId) => api.actionWithArgs(gameId, 'agriculture', requestId, rev, { direction: growth.direction }, used),
+      view,
+    ).then((done) => {
+      if (done) onDone?.()
+    })
+  }
+
   // The two pickers submit later than the button that opened them, so they carry the button's own guard
   // (busy, read-only, still pressable), and a repeat use is confirmed when they submit, against the state then
   const canSubmit = !busy && !readOnly && pressable && payable
@@ -989,6 +1028,10 @@ export function AssistedActionButton({
       else void pressSteamPower()
       return
     }
+    if (action === 'agriculture') {
+      void pressAgriculture()
+      return
+    }
     if (payment !== undefined) {
       setPick({ kind: 'payment' })
       return
@@ -1024,7 +1067,7 @@ export function AssistedActionButton({
       <button
         type="button"
         className={className}
-        disabled={busy || readOnly || !pressable || ((action === 'communism' || action === 'steamPower') && mapPicker === null)}
+        disabled={busy || readOnly || !pressable || ((action === 'communism' || action === 'steamPower' || action === 'agriculture') && mapPicker === null)}
         title={shownReason}
         onClick={press}
       >

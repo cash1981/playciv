@@ -128,6 +128,11 @@ export interface TechAbility<K extends EffectKind, Plan> {
   /** The heading it is listed under; "Resource abilities" when absent. */
   readonly group?: string
   readonly payment: Payment
+  /**
+   * Answers with the `block` reason before the "used this turn" one. For an action that cannot be repeated because its subject
+   * is gone (Agriculture's capital marker), so it does not show up as a used button that asks for a confirmed repeat.
+   */
+  readonly blockBeforeUsed?: true
   /** Refusals that do not depend on what the player chose; used by the availability and checked again on apply. */
   block?(state: GameState, player: Playerhand): BlockedAvailability | undefined
   /** A word of caution for a button that is ready (part of what the ability cannot do now); shown with the payment's own warning. */
@@ -253,8 +258,9 @@ export function techAbility<K extends EffectKind, Plan>(spec: TechAbility<K, Pla
       if (tech !== undefined) return tech
       const turn = turnFor(state, player, spec.phase)
       if (turn === undefined) return blocked('wrong-phase', phaseReason(spec.phase))
-      if (turn.usedActions.includes(usageKey)) return blocked('used', usedReason(spec.techName))
       const stopped = spec.block?.(state, player)
+      if (stopped !== undefined && spec.blockBeforeUsed === true) return stopped
+      if (turn.usedActions.includes(usageKey)) return blocked('used', usedReason(spec.techName))
       if (stopped !== undefined) return stopped
       const payable = paymentAvailability(state, playerId, spec.payment)
       const caution = payable.status === 'ready' ? spec.warn?.(state, player) : undefined

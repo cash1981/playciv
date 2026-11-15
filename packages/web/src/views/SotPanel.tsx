@@ -13,7 +13,7 @@ import type { Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
-import { pressOnce } from './AssistedActions.js'
+import { AssistedActionButton, pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { HelpHint } from './HelpHint.js'
 import { goToPanel } from './PhaseSummary.js'
@@ -57,7 +57,7 @@ export function StartOfTurnChoices({ gameId, view, busy, readOnly, run }: Props)
       <Invest {...common} />
       <GianniniBuild {...common} />
       <ScoutsAndCities {...common} />
-      <MetropolisHint view={view} />
+      <MetropolisGrowth gameId={gameId} view={view} busy={common.busy} run={run} />
     </>
   )
 }
@@ -651,10 +651,11 @@ function FoundHere({
 }
 
 /**
- * Agriculture grows the capital into a metropolis on the map, which the game does not do
- * for the player (the human, 2026-10-23): a pointer to the board is all it gives.
+ * Agriculture grows the capital into a metropolis (issue #354): the button highlights the sides the capital can grow on, on the
+ * map, and the square tapped names the side. It lists whatever stops a side when none is legal. It is not tied to the Start of
+ * Turn (the card says "immediately"): the same button is in every phase tab; here it is next to the other Start of Turn choices.
  */
-function MetropolisHint({ view }: { readonly view: PlayerView }): React.JSX.Element | null {
+function MetropolisGrowth({ gameId, view, busy, run }: Pick<ChoiceProps, 'gameId' | 'view' | 'busy' | 'run'>): React.JSX.Element | null {
   const you = view.you
   if (you === null) return null
   const agriculture = (you.techsChosen ?? []).some((tech) => tech.name === 'Agriculture' && !tech.hidden)
@@ -663,15 +664,7 @@ function MetropolisHint({ view }: { readonly view: PlayerView }): React.JSX.Elem
   return (
     <section className="phase-group sot-metropolis" aria-label="Metropolis">
       <h3 className="phase-group-title">Grow your capital into a metropolis</h3>
-      <div className="assisted-action">
-        <button type="button" className="small" onClick={() => goToPanel('board')}>
-          Go to the map
-        </button>
-        <HelpHint label="Metropolis">
-          You have Agriculture, so your capital grows into a metropolis when it can: on the capital&apos;s square and one
-          square next to it, with no enemy figure there and its outskirts on the map. Do it on the map.
-        </HelpHint>
-      </div>
+      <AssistedActionButton action="agriculture" gameId={gameId} view={view} busy={busy} readOnly={false} run={run} reasonPlacement="inline" />
     </section>
   )
 }

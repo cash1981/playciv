@@ -23,6 +23,7 @@ export * from './brandenburg.js'
 export * from './communism.js'
 export * from './combustion.js'
 export * from './atomic-theory.js'
+export * from './metropolis.js'
 export * from './obsolete-wonders.js'
 export * from './destroy-buildings.js'
 export * from './tile-icons.js'
@@ -77,6 +78,7 @@ export type {
   BlockedAvailability,
   ArenaUnitPayload,
   AtomicTheoryPayload,
+  AgriculturePayload,
   AssignScoutPayload,
   ChooseRewardPayload,
   CombustionPayload,

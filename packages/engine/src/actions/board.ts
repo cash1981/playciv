@@ -1003,22 +1003,37 @@ export function removePieceAsSystem(state: GameState, pieceId: string): GameStat
  */
 export function flipPieceUnchecked(
   state: GameState,
-  input: { readonly playerId: string; readonly pieceId: string; readonly assetId: string; readonly at?: string },
+  input: {
+    readonly playerId: string
+    readonly pieceId: string
+    readonly assetId: string
+    readonly at?: string
+    /**
+     * Where the new face's centre is, when it is not the old face's (a capital grown into a metropolis lies on two squares, so its
+     * centre moves half a square). Left out, the centre is kept.
+     */
+    readonly centre?: { readonly x: number; readonly y: number }
+    /** Turns the piece too (a metropolis that grows north or south lies on its side). Left out, the rotation is kept. */
+    readonly rotation?: Rotation
+  },
 ): GameState | undefined {
   const piece = state.board.pieces.find((candidate) => candidate.id === input.pieceId)
   const asset = findBoardAsset(input.assetId)
   if (piece === undefined || asset === undefined) return undefined
+  const centre = input.centre ?? { x: piece.x + piece.width / 2, y: piece.y + piece.height / 2 }
   const to = {
     assetId: asset.id,
     path: asset.path,
     label: asset.label,
     // The two faces differ by a few pixels, so the centre is kept: the marker stays on its squares
-    x: piece.x + piece.width / 2 - asset.width / 2,
-    y: piece.y + piece.height / 2 - asset.height / 2,
+    x: centre.x - asset.width / 2,
+    y: centre.y - asset.height / 2,
     width: asset.width,
     height: asset.height,
+    ...(input.rotation === undefined ? {} : { rotation: input.rotation }),
   }
-  const change: BoardChange = { kind: 'flip', pieceId: piece.id, from: faceOf(piece), to }
+  const from = input.rotation === undefined ? faceOf(piece) : { ...faceOf(piece), rotation: piece.rotation }
+  const change: BoardChange = { kind: 'flip', pieceId: piece.id, from, to }
   return record(input, {
     state,
     pieces: applyChange(state.board.pieces, change),
@@ -1105,6 +1120,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'combustion' && (effect.building?.historyId === entry.id || effect.unwalled?.historyId === entry.id)) return true
     // A nuke removed the city and what stood around it: only the vote on its line puts them back
     if (effect.kind === 'atomicTheory' && effect.mode === 'nuke' && effect.removed.some((removal) => removal.historyId === entry.id)) return true
+    // Agriculture turned the capital marker over to the metropolis: only the vote on its line turns it back
+    if (effect.kind === 'agriculture' && effect.historyId === entry.id) return true
     // Philosophy put the Great Person marker in the player's area, as a culture advance does
     if (effect.kind === 'philosophy' && effect.marker?.historyId === entry.id) return true
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip

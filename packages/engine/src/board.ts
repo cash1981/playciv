@@ -363,6 +363,8 @@ export interface PieceFace {
   readonly y: number
   readonly width: number
   readonly height: number
+  /** Set when the turn-over also turns the piece (a capital grown into a vertical metropolis); absent keeps the rotation. */
+  readonly rotation?: Rotation
 }
 
 /** The face a piece shows now. */
