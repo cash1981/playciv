@@ -86,7 +86,6 @@ const GRANARY: UpgradeFamilyOption = {
 const flow: BuildFlow = {
   pickerCityId: null,
   plan: null,
-  second: null,
   note: null,
   message: null,
   confirmedAgain: false,
@@ -94,8 +93,6 @@ const flow: BuildFlow = {
   closePicker: () => undefined,
   start: () => undefined,
   pick: () => undefined,
-  chooseSecond: () => undefined,
-  pickSecond: () => undefined,
   clear: () => undefined,
   refused: () => undefined,
 }

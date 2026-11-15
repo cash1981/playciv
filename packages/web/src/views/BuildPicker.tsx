@@ -19,12 +19,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
-import type { BuildChoice, BuildPayload, BuildSecond, CityBuildOptions, PlayerView } from '../lib/api.js'
+import type { BuildChoice, BuildPayload, CityBuildOptions, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
-import { combinedTrade, itemKeyOf } from './buildFlow.js'
+import { itemKeyOf } from './buildFlow.js'
 import { resolveAgain } from './CityGather.js'
-import type { BuildFlow, BuildPlan, SecondPlan } from './buildFlow.js'
+import type { BuildFlow, BuildPlan } from './buildFlow.js'
 import type { Run } from './GameView.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
 import './BuildPicker.css'
@@ -356,79 +356,6 @@ interface PlanBarProps {
   readonly run: Run
 }
 
-/** "an infantry unit", "the Colossus", "a Library": how the bar names an item. */
-function nameInBar(item: BuildChoice['item'], label: string): string {
-  return item.kind === 'unit' ? unitNameOf(item.unitType) : item.kind === 'wonder' ? label.replace(/^The /, 'the ') : label
-}
-
-interface EngineeringProps {
-  readonly view: PlayerView
-  readonly plan: BuildPlan
-  readonly second: SecondPlan | null
-  readonly flow: BuildFlow
-  readonly disabled: boolean
-}
-
-/**
- * Engineering (once per turn): a second item from the same city's choices, built with the first in one city action.
- * Shown only while the engine says Engineering is revealed and unused. The choices and squares are the engine's; the two
- * costs are added against the production once, and the server checks it all again.
- */
-function EngineeringSection({ view, plan, second, flow, disabled }: EngineeringProps): React.JSX.Element {
-  const city = view.you?.buildOptions.find((candidate) => candidate.cityPieceId === plan.cityPieceId)
-  const choices = (city?.choices ?? []).filter(
-    (choice) => !(choice.item.kind === 'wonder' && plan.item.kind === 'wonder'),
-  )
-  const chosen = second === null ? '' : itemKeyOf(second.item)
-  return (
-    <fieldset className="build-bar-engineering" disabled={disabled}>
-      <legend>Engineering: second item</legend>
-      <p className="muted">
-        Split the city&rsquo;s production to build two items in one city action, once per turn. Choose the second item
-        before the square of the first.
-      </p>
-      <label>
-        Second item{' '}
-        <select
-          value={chosen}
-          onChange={(event) => {
-            const picked = choices.find((choice) => itemKeyOf(choice.item) === event.target.value)
-            flow.chooseSecond(picked ?? null)
-          }}
-        >
-          <option value="">None, build one item</option>
-          {choices.map((choice) => (
-            <option key={choice.assetId} value={itemKeyOf(choice.item)}>
-              {choice.label} (cost {choice.cost})
-            </option>
-          ))}
-        </select>
-      </label>
-      {second !== null && second.placement === 'square' && (
-        <label>
-          Square for the second item{' '}
-          <select
-            value={second.target === null ? '' : `${second.target.column},${second.target.row}`}
-            onChange={(event) => {
-              flow.pickSecond(
-                second.squares.find((square) => `${square.column},${square.row}` === event.target.value) ?? null,
-              )
-            }}
-          >
-            <option value="">Pick a square</option>
-            {second.squares.map((square) => (
-              <option key={`${square.column},${square.row}`} value={`${square.column},${square.row}`}>
-                {square.label}
-                {square.note === undefined ? '' : ` (${square.note})`}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-    </fieldset>
-  )
-}
-
 function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState(false)
@@ -443,48 +370,34 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   }, [])
 
   const target = plan.target
-  // Engineering: a second item from the same production; the trade is counted once on the two costs together
-  const second = flow.second
-  const tradeToPay = combinedTrade(plan, second)
-  const rush = tradeToPay > 0
+  const rush = plan.tradeToPay > 0
   const placed = plan.placement === 'square'
-  const secondPlaced = second !== null && second.placement === 'square'
   // A unit and City Walls have no square to wait for: Confirm is ready at once.
-  const ready = (!placed || target !== null) && (!secondPlaced || second.target !== null)
+  const ready = !placed || target !== null
   // What goes on the map (a building, a wonder, a figure) is placed by the tap on its
   // square, with no Confirm: it can be moved, and removing it before the turn ends takes
   // the whole build back. The exception is a square the engine has a note for (an enemy
   // figure stands there, so the outcome is settled by hand, or the item replaces a building,
   // wonder or Great Person of the player's): its note is read first, and Confirm builds.
   // A unit and City Walls have no square, so they keep Confirm.
-  // With a second item the square of the first only completes the build, so Confirm sends both.
-  const immediate = placed && target?.note === undefined && second === null
+  const immediate = placed && target?.note === undefined
 
   function confirm(): void {
     if (!ready || sending) return
     const item = plan.item
     const rushPart = rush ? { rush: true as const } : {}
-    let secondPart: { readonly second?: BuildSecond } = {}
-    if (second !== null) {
-      const secondItem = second.item
-      if (secondItem.kind === 'unit' || secondItem.kind === 'walls') secondPart = { second: { item: secondItem } }
-      else if (second.target !== null) {
-        secondPart = { second: { item: secondItem, target: { column: second.target.column, row: second.target.row } } }
-      } else return
-    }
     let payload: BuildPayload
     if (item.kind === 'unit' || item.kind === 'walls') {
-      payload = { cityPieceId: plan.cityPieceId, item, ...rushPart, ...secondPart }
+      payload = { cityPieceId: plan.cityPieceId, item, ...rushPart }
     } else if (target !== null) {
-      payload = { cityPieceId: plan.cityPieceId, item, target: { column: target.column, row: target.row }, ...rushPart, ...secondPart }
+      payload = { cityPieceId: plan.cityPieceId, item, target: { column: target.column, row: target.row }, ...rushPart }
     } else {
       return
     }
     // The key says which press this is: the same item and square (a unit and City Walls have none)
     // while the outcome is unknown reuses the request id, another is a new press.
     const where = target === null ? 'card' : `${target.column},${target.row}`
-    const withSecond = second === null ? '' : `+${itemKeyOf(second.item)}:${second.target === null ? 'card' : `${second.target.column},${second.target.row}`}`
-    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}${withSecond}`
+    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}`
     // The same press is already on its way (this bar was closed and opened again):
     // its outcome is not known yet, so this click says nothing and sends nothing.
     if (isPressInFlight(key)) return
@@ -542,33 +455,12 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   return (
     <div ref={ref} className="build-bar" role="group" aria-label="Build" tabIndex={-1}>
       <p className="build-bar-title">
-        <strong>
-          Build {nameInBar(plan.item, plan.label)}
-          {second !== null && <> and {nameInBar(second.item, second.label)}</>}
-        </strong>{' '}
-        in {plan.cityLabel}
+        <strong>Build {plan.item.kind === 'unit' ? unitNameOf(plan.item.unitType) : plan.item.kind === 'wonder' ? plan.label.replace(/^The /, 'the ') : plan.label}</strong> in {plan.cityLabel}
       </p>
-      {plan.perStep !== undefined && (
-        <EngineeringSection
-          view={view}
-          plan={plan}
-          second={second}
-          flow={flow}
-          disabled={busy || sending}
-        />
-      )}
       <p className="build-bar-facts">
-        {second === null ? (
-          <>
-            Cost {plan.cost}
-            {plan.costNote !== undefined && <> ({plan.costNote})</>}
-          </>
-        ) : (
-          <>
-            Cost {plan.cost} + {second.cost} = {plan.cost + second.cost} against a production of {plan.production}
-          </>
-        )}
-        {rush && <>. Pays {tradeToPay} trade</>}.{' '}
+        Cost {plan.cost}
+        {plan.costNote !== undefined && <> ({plan.costNote})</>}
+        {rush && <>. Pays {plan.tradeToPay} trade</>}.{' '}
         {!placed ? (
           plan.item.kind === 'walls' ? (
             <>The city marker is turned over to its walled side, nothing else is placed on the map.</>
@@ -603,7 +495,7 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
             disabled={busy || sending || !ready}
             onClick={confirm}
           >
-            {rush ? `Confirm and pay ${tradeToPay} trade` : 'Confirm'}
+            {rush ? `Confirm and pay ${plan.tradeToPay} trade` : 'Confirm'}
           </button>
         )}
         <button type="button" className="small" onClick={flow.clear}>

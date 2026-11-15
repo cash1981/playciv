@@ -7,7 +7,6 @@ import type {
   AssistedPayload,
   BuildItem,
   BuildPayload,
-  BuildSecond,
   DevoteToTheArtsPayload,
   GameState,
   Government,
@@ -91,7 +90,7 @@ import { parseActionArgs, takesArgs } from './assisted-args.js'
 /** What a client may use as a `requestId`: 1 to 64 characters of a small safe set. */
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/
 
-const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush', 'second'] as const
+const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush'] as const
 
 /** The highest map column or row a request may name; the largest board has 16 squares a side, so this is generous. */
 const MAX_BUILD_COORDINATE = 63
@@ -117,32 +116,7 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
     return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
   }
-  const first = parseBuildItem(body['item'], body['target'], 'item', 'target')
-  if (typeof first === 'string') return first
-  const rush = body['rush']
-  if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
-  const optionalRush = rush === undefined ? {} : { rush }
-  // Engineering's second item: the same shape as the first, in its own object
-  let optionalSecond: { readonly second?: BuildSecond } = {}
-  if (body['second'] !== undefined) {
-    const record = asRecord(body['second'])
-    const stray = Object.keys(record).filter((key) => key !== 'item' && key !== 'target')
-    if (stray.length > 0) return `second takes only item and target, not ${stray.join(', ')}`
-    const second = parseBuildItem(record['item'], record['target'], 'second.item', 'second.target')
-    if (typeof second === 'string') return second
-    optionalSecond = { second }
-  }
-  return { cityPieceId, ...first, ...optionalRush, ...optionalSecond } as BuildPayload
-}
-
-/** One build item with its square, as the first and the second item of a `build` carry them: the shape is checked, the legality is the engine's. */
-function parseBuildItem(
-  rawItem: unknown,
-  rawTarget: unknown,
-  itemName: string,
-  targetName: string,
-): BuildSecond | string {
-  const item = asRecord(rawItem)
+  const item = asRecord(body['item'])
   const keys = Object.keys(item)
   const hasOnly = (...allowed: readonly string[]): boolean =>
     keys.length === allowed.length && allowed.every((key) => keys.includes(key))
@@ -167,30 +141,34 @@ function parseBuildItem(
   }
   if (parsed === undefined) {
     return (
-      `${itemName} must be { kind: "building", assetId } with the asset id of a building that can be built, ` +
+      `item must be { kind: "building", assetId } with the asset id of a building that can be built, ` +
       `{ kind: "wonder", assetId } with the asset id of a wonder, ` +
       `{ kind: "army" }, { kind: "scout" }, { kind: "walls" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
     )
   }
+  const rush = body['rush']
+  if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
+  const optionalRush = rush === undefined ? {} : { rush }
+
   if (parsed.kind === 'unit') {
     // A unit is a card in the hand: there is no square to name
-    if (rawTarget !== undefined) return 'a unit has no target: it is a card, not placed on a square'
-    return { item: parsed }
+    if (body['target'] !== undefined) return 'a unit has no target: it is a card, not placed on a square'
+    return { cityPieceId, item: parsed, ...optionalRush }
   }
   if (parsed.kind === 'walls') {
     // City Walls turn the city marker over: there is no square to name either
-    if (rawTarget !== undefined) return 'City Walls have no target: they turn the city marker over'
-    return { item: parsed }
+    if (body['target'] !== undefined) return 'City Walls have no target: they turn the city marker over'
+    return { cityPieceId, item: parsed, ...optionalRush }
   }
-  const target = asRecord(rawTarget)
+  const target = asRecord(body['target'])
   const column = target['column']
   const row = target['row']
   const whole = (value: unknown): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_BUILD_COORDINATE
   if (!whole(column) || !whole(row)) {
-    return `${targetName} must be { column, row }, whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
+    return `target must be { column, row }, whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
   }
-  return { item: parsed, target: { column, row } }
+  return { cityPieceId, item: parsed, target: { column, row }, ...optionalRush }
 }
 
 /**
@@ -1068,7 +1046,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         c,
         400,
         'BAD_REQUEST',
-        'cityPieceId, item, target, rush and second only belong to build, and cityPieceId also to startBuildingProgram, devoteToTheArts and harvest',
+        'cityPieceId, item, target and rush only belong to build, and cityPieceId also to startBuildingProgram, devoteToTheArts and harvest',
       )
     } else if (body['family'] !== undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'family only belongs to upgradeBuildings')

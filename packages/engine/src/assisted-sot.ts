@@ -11,7 +11,6 @@
  * table entry and not a copy of the code.
  */
 
-import { buildPartsOf } from './build-parts.js'
 import { placeUnchecked, removePiece } from './actions/board.js'
 import {
   REPEAT_NOTE,
@@ -1208,7 +1207,7 @@ const gianniniBuild: AssistedActionDefinition = {
       const holder = state.assistedActions.find(
         (other) =>
           other.status === 'applied' &&
-          (buildPartsOf(other.effect).some((part) => 'replaced' in part && part.replaced?.piece.id === effect.pieceId) ||
+          ((other.effect.kind === 'build' && 'replaced' in other.effect && other.effect.replaced?.piece.id === effect.pieceId) ||
             (other.effect.kind === 'gianniniBuild' && other.effect.replaced?.piece.id === effect.pieceId) ||
             (other.effect.kind === 'upgradeBuildings' && other.effect.flipped.some((flip) => flip.from.id === effect.pieceId))),
       )

@@ -25,9 +25,7 @@
  * `openCityManagementTurn` back.
  */
 
-import { buildPartsOf } from './build-parts.js'
 import { earnTechCoin, returnTechCoin } from './tech-coins.js'
-import type { TechCoinGrant } from './tech-coins.js'
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
 import { availableKingId, holdsFaceupKing } from './twain.js'
 import { drawWonderToBoard } from './actions/draw.js'
@@ -73,7 +71,6 @@ import type {
   AssistedPayload,
   DevoteToTheArtsPayload,
   HarvestPayload,
-  Reversed,
   StartBuildingProgramPayload,
   UpgradeBuildingsPayload,
 } from './assisted-core.js'
@@ -89,21 +86,19 @@ import {
 } from './board.js'
 import type { Board, BoardPiece, PieceFace } from './board.js'
 import { sameBuildItem } from './build-item.js'
-import type { BuildItem, PlacedBuildItem, UnitType } from './build-item.js'
+import type { PlacedBuildItem, UnitType } from './build-item.js'
 import {
   buildItemName,
   buildOptionsOf,
-  ENGINEERING_USAGE_KEY,
   buildSquareRefusal,
   figureAssetIdOf,
   marketWondersOf,
-  rushTradeCost,
   squareCentre,
   squareLabel,
   unitSheetOf,
   walledAssetIdOf,
 } from './build-options.js'
-import type { BuildChoice, BuildPayload, BuildSecond, BuildSquare, BuildTarget, CityBuildOptions } from './build-options.js'
+import type { BuildPayload, BuildSquare } from './build-options.js'
 import {
   buildingProgramMarkerOf,
   cityActionsOf,
@@ -133,7 +128,6 @@ import type {
   AssistedActionRecord,
   AssistedEffect,
   AvailableAction,
-  BuildEffectOne,
   CultureCardKind,
   DrawnWonder,
   GameLogEntry,
@@ -685,572 +679,6 @@ function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType)
   })
 }
 
-const ENGINEERING = 'Engineering'
-const BUILD_KINDS: readonly string[] = ['building', 'wonder', 'army', 'scout', 'unit', 'walls']
-
-/** One item of a build as asked for and checked against the city's options: what, the choice that lists it and its square. */
-interface ResolvedItem {
-  readonly item: BuildItem
-  readonly choice: BuildChoice
-  readonly square: BuildSquare | undefined
-}
-
-/**
- * The choice and the square a request names, from the city's options, or a refusal in a sentence. A square is picked
- * for a building, a wonder or a figure and for nothing else.
- */
-function resolveBuildItem(
-  state: GameState,
-  player: Playerhand,
-  city: CityBuildOptions,
-  item: BuildItem,
-  target: BuildTarget | undefined,
-  failed: (reason: string) => EngineError,
-): Result<ResolvedItem, EngineError> {
-  const label = buildItemName(item)
-  const choice = city.choices.find((candidate) => sameBuildItem(candidate.item, item))
-  if (choice === undefined) {
-    const why = city.unavailable.find((candidate) => sameBuildItem(candidate.item, item))
-    return err(
-      failed(
-        why === undefined
-          ? item.kind === 'building'
-            ? `${item.assetId} is not a building that can be built.`
-            : item.kind === 'wonder'
-              ? `${label} is not a wonder that can be built: it is not in the market.`
-              : item.kind === 'walls'
-                ? 'City Walls cannot be built.'
-                : `A ${label} cannot be built.`
-          : `${why.label} cannot be built in ${city.label} now. ${why.reason}`,
-      ),
-    )
-  }
-  if (item.kind === 'unit' || item.kind === 'walls') {
-    if (target !== undefined) {
-      return err(
-        failed(
-          item.kind === 'unit'
-            ? `${choice.label} is a card and has no square. Send no square.`
-            : `${choice.label} turn the city marker over and have no square. Send no square.`,
-        ),
-      )
-    }
-    return ok({ item, choice, square: undefined })
-  }
-  if (target === undefined) return err(failed('Pick one of the highlighted squares.'))
-  const square = choice.squares.find((candidate) => candidate.column === target.column && candidate.row === target.row)
-  if (square === undefined) {
-    const why = buildSquareRefusal(state, player, city.cityPieceId, item, target)
-    return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
-  }
-  return ok({ item, choice, square })
-}
-
-/** The second item of an Engineering build, the production the two share and the trade that covers what it lacks. */
-interface EngineeringPlan {
-  readonly second: ResolvedItem & { readonly target: BuildTarget | undefined }
-  readonly tradeToPay: number
-}
-
-/**
- * Engineering (card text: once per turn, when spending production from a city, split it to purchase two items instead
- * of one). Everything that is known before anything is placed: the tech is revealed and unused this turn (a confirmed
- * repeat does not lift it, rulings 166), the second item is legal in the city as it stands now (the production is
- * simultaneous, so what the first item does to the board cannot make it legal), it is not a second wonder (a city holds one), and the
- * two costs together are covered by the city's production and trade. The extra hammers an item gives are never
- * counted: the production is the city's as it was before the build.
- */
-function planEngineering(
-  state: GameState,
-  player: Playerhand,
-  city: CityBuildOptions,
-  second: BuildSecond,
-  first: ResolvedItem,
-  failed: (reason: string) => EngineError,
-): Result<EngineeringPlan, EngineError> {
-  // The server checks the shape; the engine is also called with whatever a caller sent
-  const shape = second as unknown
-  const secondItem = typeof shape === 'object' && shape !== null ? (shape as { item?: { kind?: unknown } }).item : undefined
-  if (typeof secondItem !== 'object' || secondItem === null || !BUILD_KINDS.includes(String(secondItem.kind))) {
-    return err(failed('The second item is not something that can be built.'))
-  }
-  const tech = techBlock(player, ENGINEERING)
-  if (tech !== undefined) return err(rejected('build', tech))
-  const turn = openCityManagementTurn(state, player)
-  if (turn === undefined) return err(rejected('build', blocked('wrong-phase', PHASE_REASON)))
-  if (turn.usedActions.includes(ENGINEERING_USAGE_KEY)) {
-    return err(rejected('build', blocked('used', 'Engineering has already been used this turn. It cannot be used twice in a turn, whatever gives an extra city action.')))
-  }
-  if (first.item.kind === 'wonder' && second.item.kind === 'wonder') {
-    return err(failed('A city holds one wonder, so two wonders cannot be built together.'))
-  }
-  const resolved = resolveBuildItem(state, player, city, second.item, second.target, failed)
-  if (!resolved.ok) return resolved
-  const cost = first.choice.cost + resolved.value.choice.cost
-  const shortfall = Math.max(0, cost - city.production)
-  const tradeToPay = rushTradeCost(shortfall, player.civilization?.name)
-  if (tradeToPay > player.stats.trade) {
-    return err(
-      failed(
-        `${first.choice.label} and ${resolved.value.choice.label} cost ${cost} together and ${city.label} has ${city.production}. ` +
-          `Covering the missing ${shortfall} takes ${tradeToPay} trade and you have ${player.stats.trade}. ` +
-          'Extra production the first item gives does not count for the second: the production is split at once.',
-      ),
-    )
-  }
-  return ok({ second: { ...resolved.value, target: second.target }, tradeToPay })
-}
-
-/** Where a step's item went, for the line that names two: walls say what they turned over in brackets, so the next item does not read as part of it. */
-const whereOf = (step: BuildStep): string =>
-  step.made.kind === 'walls' ? ' (turning the city marker over to its walled side)' : step.where
-
-/** The first item's piece, when it stands on a square: where the second item must not replace it. */
-function placedSquareOf(step: BuildStep): BuildSquare | undefined {
-  return step.made.kind === 'placed' ? step.square : undefined
-}
-
-/**
- * The second item of an Engineering build in the game as the first item left it, once more with every question but the
- * money (the trade is paid once, for both): a square the first item took, a supply it used up or a limit it reached are
- * refused here. A second item may not replace the first.
- */
-function confirmSecond(
-  state: GameState,
-  holder: Playerhand,
-  cityPieceId: string,
-  item: BuildItem,
-  target: BuildTarget | undefined,
-  firstStep: BuildStep,
-  failed: (reason: string) => EngineError,
-): Result<ResolvedItem, EngineError> {
-  const rich: Playerhand = { ...holder, stats: { ...holder.stats, trade: holder.stats.trade + 1_000_000 } }
-  const city = buildOptionsOf(withPlayerHand(state, rich), rich).find((candidate) => candidate.cityPieceId === cityPieceId)
-  if (city === undefined) return err(failed('That city is no longer on the map.'))
-  if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
-  const resolved = resolveBuildItem(state, holder, city, item, target, (reason) =>
-    failed(`The second item cannot be built together with the first. ${reason}`),
-  )
-  if (!resolved.ok) return resolved
-  const taken = placedSquareOf(firstStep)
-  const square = resolved.value.square
-  if (taken !== undefined && square?.replaces !== undefined && square.column === taken.column && square.row === taken.row) {
-    return err(failed(`The second item would replace the first one on ${square.label}. Pick another square or another item.`))
-  }
-  return resolved
-}
-
-/** One item of a build, done and paid but not yet logged: the state is what the next step starts from. */
-interface BuildStep {
-  readonly state: GameState
-  readonly item: BuildItem
-  readonly label: string
-  /** "a Library", "the Colossus": how the line names it. */
-  readonly what: string
-  /** " on square D4" and what it replaces; empty for a card or walls (walls say what they turned over). */
-  readonly where: string
-  /** What Jim Henson and Education added to the line. */
-  readonly extras: string
-  readonly made: Made
-  readonly square: BuildSquare | undefined
-  readonly replaced: { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean } | undefined
-  readonly removal: { readonly piece: BoardPiece; readonly historyId: string } | null
-  readonly caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
-  readonly trade: number
-  readonly wonderDiscount: number
-  readonly hensonWound: boolean
-  readonly educationCoin: TechCoinGrant | undefined
-  readonly historyIds: readonly (string | undefined)[]
-}
-
-/**
- * Puts one item on the board or in the hand and pays for it: the trade, the Building Program marker and the caravan
- * (when `markers` is set: the first item of an Engineering build uses them, the second does not), Michelangelo's
- * discount, Jim Henson's wound and Education's coin. `trade` is what this step pays; an Engineering build pays the
- * whole of it in the first step and nothing in the second. Nothing is logged here.
- */
-function buildStep(
-  state: GameState,
-  player: Playerhand,
-  city: CityBuildOptions,
-  resolved: ResolvedItem,
-  pay: { readonly trade: number; readonly markers: boolean },
-  at: { readonly at?: string },
-  failed: (reason: string) => EngineError,
-): Result<BuildStep, EngineError> {
-  const { item, square } = resolved
-  const label = buildItemName(item)
-
-  // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
-  const footprint = ownCityFootprint(state, player, city.cityPieceId)
-  const marker = footprint === undefined || !pay.markers ? undefined : buildingProgramMarkerOf(state, footprint)
-
-  // The one step that differs: a piece on a square, or a card in the hand
-  let made: Made
-  let replaced: { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean } | undefined
-  if (item.kind === 'unit') {
-    const drawn = drawBuiltUnit(state, player, item.unitType)
-    if (!drawn.ok) return err(failed(drawn.error))
-    made = drawn.value
-  } else if (item.kind === 'walls') {
-    const flipped = flipToWalls(state, player, city.cityPieceId, at)
-    if (!flipped.ok) return err(failed(flipped.error))
-    made = flipped.value
-  } else {
-    if (square === undefined) return err(failed('Pick one of the highlighted squares.'))
-    // A building or wonder of the player's own on the square is taken off first, then the new piece goes on the empty square
-    let base = state
-    if (square.replaces !== undefined) {
-      const cleared = removeReplaced(state, player, square, at)
-      if (!cleared.ok) return err(failed(cleared.error))
-      base = cleared.value.state
-      replaced = { piece: cleared.value.piece, historyId: cleared.value.historyId, reserved: cleared.value.reserved }
-    }
-    const placed = placeBuilt(base, player, item, square, at)
-    if (!placed.ok) return err(failed(placed.error))
-    made = placed.value
-  }
-
-  let board = made.state
-  let removal: { readonly piece: BoardPiece; readonly historyId: string } | null = null
-  if (marker !== undefined) {
-    const removed = removePiece(made.state, { playerId: player.playerId, pieceId: marker.id, ...at })
-    const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
-    if (!removed.ok || removedEntry === undefined) {
-      return err(failed('The Building Program marker could not be taken off the board.'))
-    }
-    board = removed.value
-    removal = { piece: marker, historyId: removedEntry.id }
-  }
-  // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
-  let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
-  const caravanPiece =
-    pay.markers && city.caravan && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
-  if (caravanPiece !== undefined) {
-    const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
-    const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
-    if (!removed.ok || removedEntry === undefined) {
-      return err(failed('The caravan could not be taken off the board.'))
-    }
-    board = removed.value
-    caravan = { piece: caravanPiece, historyId: removedEntry.id }
-  }
-
-  const paying = playerOf(board, player.playerId) ?? player
-  // Michelangelo's discount is one-shot and is used up by this wonder build.
-  const wonderDiscount = item.kind === 'wonder' ? paying.wonderDiscount : 0
-  // Jim Henson, while faceup, takes a wound marker for every wonder built
-  const hensonWound = item.kind === 'wonder' && activeGreatPerson(board, paying, 'Jim Henson')
-  const paidFor = withPlayerHand(board, {
-    ...paying,
-    wonderDiscount: paying.wonderDiscount - wonderDiscount,
-    ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
-    stats: { ...paying.stats, trade: paying.stats.trade - pay.trade },
-  })
-  // Education: once per turn, a wonder adds a coin to the tech (max 4)
-  const educated = item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
-  const educationCoin = educated.granted ?? undefined
-  const where =
-    made.kind === 'placed'
-      ? ` on square ${made.square.label}` +
-        (replaced === undefined ? '' : replacingText(square?.replaces)) +
-        (item.kind === 'army' && square?.note !== undefined
-          ? ' (an enemy figure is there, so the outcome is to be settled by hand)'
-          : '')
-      : made.kind === 'walls'
-        ? ', turning the city marker over to its walled side'
-        : ''
-  const extras =
-    (hensonWound ? ', and Jim Henson took a wound marker' : '') +
-    (educationCoin === undefined
-      ? ''
-      : `, and Education gained a coin (${(playerOf(educated.state, paying.playerId) ?? paying).stats.coinSources.education}/${educationCoin.capacity})`)
-  return ok({
-    state: educated.state,
-    item,
-    label,
-    what: item.kind === 'wonder' ? label.replace(/^The /, 'the ') : item.kind === 'walls' ? label : withArticle(label),
-    where,
-    extras,
-    made,
-    square,
-    replaced,
-    removal,
-    caravan,
-    trade: pay.trade,
-    wonderDiscount,
-    hensonWound,
-    educationCoin,
-    historyIds: [
-      made.kind === 'placed' ? made.historyId : undefined,
-      made.kind === 'placed' ? made.wonder?.ownerHistoryId : undefined,
-      made.kind === 'walls' ? made.historyId : undefined,
-      replaced?.historyId,
-      removal?.historyId,
-      caravan?.historyId,
-    ],
-  })
-}
-
-/**
- * The effect a step records, once its line is written and its history entries are counted in. A wonder leaves the
- * market, so the next one is drawn into it (base rules p. 17), from the era the deck is at; the draw's own line
- * follows the build's, and its entry is counted in.
- */
-function finishStep(
-  counted: GameState,
-  player: Playerhand,
-  cityPieceId: string,
-  step: BuildStep,
-  failed: (reason: string) => EngineError,
-): Result<{ readonly state: GameState; readonly effect: BuildEffectOne }, EngineError> {
-  const { made, item } = step
-  const shared = { cityPieceId, trade: step.trade, marker: step.removal, ...(step.caravan === undefined ? {} : { caravan: step.caravan }) }
-  if (made.kind === 'card') {
-    if (item.kind !== 'unit') return err(failed('That is not a unit.'))
-    return ok({
-      state: counted,
-      effect: { kind: 'build', item, card: { itemId: made.card.id, sheetName: made.sheetName }, ...shared },
-    })
-  }
-  if (made.kind === 'walls') {
-    if (item.kind !== 'walls') return err(failed('That is not City Walls.'))
-    return ok({
-      state: counted,
-      effect: {
-        kind: 'build',
-        item,
-        walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
-        ...shared,
-      },
-    })
-  }
-  if (item.kind === 'unit' || item.kind === 'walls') return err(failed('That is not put on a square.'))
-
-  let refilled = counted
-  let drawn: DrawnWonder | undefined
-  if (item.kind === 'wonder') {
-    const sheet = nextWonderSheet(counted)
-    const card = sheet === undefined ? undefined : counted.items.find((candidate) => candidate.sheetName === sheet)
-    const refill = sheet === undefined || card === undefined ? undefined : drawWonderToBoard(counted, player.playerId, sheet, 'system')
-    const entry = refill?.ok ? refill.value.board.history.at(-1) : undefined
-    if (refill?.ok && card !== undefined && entry !== undefined && entry.change.kind === 'place') {
-      refilled = countLinesIn(refill.value, [entry.id])
-      drawn = { item: card, pieceId: entry.change.piece.id, historyId: entry.id }
-    }
-  }
-  const { replaced } = step
-  return ok({
-    state: refilled,
-    effect: {
-      kind: 'build',
-      item,
-      square: made.square,
-      pieceId: made.piece.id,
-      position: { x: made.piece.x, y: made.piece.y },
-      historyId: made.historyId,
-      ...(made.wonder === undefined ? {} : { wonder: made.wonder }),
-      ...(drawn === undefined ? {} : { drawn }),
-      ...(replaced === undefined
-        ? {}
-        : replaced.reserved
-          ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
-          : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
-      ...shared,
-      ...(step.wonderDiscount === 0 ? {} : { wonderDiscount: step.wonderDiscount }),
-      ...(step.hensonWound ? { hensonWound: true as const } : {}),
-      ...(step.educationCoin === undefined ? {} : { educationCoin: step.educationCoin }),
-    },
-  })
-}
-
-/** Takes one item of a build back: the whole of an ordinary build, or one of the two items of an Engineering build. */
-function reverseBuildItem(
-  state: GameState,
-  player: Playerhand,
-  record: AssistedActionRecord,
-  at: string | null,
-  pieceMayHaveMoved: boolean,
-): Result<Reversed, EngineError> {
-  const effect = record.effect
-  if (effect.kind !== 'build') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-  const refused = (reason: string): EngineError => ({
-    kind: 'ASSISTED_UNDO_BLOCKED',
-    logId: record.logId,
-    reason,
-  })
-  const label = buildItemName(effect.item)
-  const refunded: Playerhand = {
-    ...player,
-    stats: { ...player.stats, trade: player.stats.trade + effect.trade },
-  }
-  const markerText =
-    (effect.marker === null ? '' : ' and the Building Program marker was put back') +
-    (effect.caravan === undefined
-      ? ''
-      : cityMarkerMayReturn(state.board, effect.caravan.piece)
-        ? ' and the caravan was put back'
-        : ' (the caravan stays off: the city has another marker now)')
-  const tradeText = effect.trade > 0 ? `, ${effect.trade} (${refunded.stats.trade}) trade returned` : ''
-  const freeUnit = militaryTraditionUndoBlock(state, record)
-  if (freeUnit !== undefined) return err(refused(freeUnit))
-
-  if ('card' in effect) {
-    // Everything is checked before anything is changed, so a refusal leaves the game as it was.
-    const found = player.items.find((candidate) => candidate.id === effect.card.itemId)
-    if (found === undefined) {
-      return err(refused(`The ${label} card is no longer in your hand, so the build cannot be undone.`))
-    }
-    // The card goes back in its deck and that deck alone is shuffled again, as an item undo does,
-    // so nobody knows which card comes next. The other decks keep their order.
-    const withoutCard: Playerhand = { ...refunded, items: refunded.items.filter((candidate) => candidate.id !== found.id) }
-    const returned: GameState = {
-      ...withPlayerHand(state, withoutCard),
-      items: [...state.items, { ...found, hidden: true, ownerId: null }],
-    }
-    const restored = shuffleSheetTwice(returned, effect.card.sheetName)
-    const withMarker =
-      markersBack(restored, refunded, effect, at)
-    return ok({
-      state: withMarker,
-      text:
-        `${player.username}'s ${label} was undone: the card was put back in the deck` +
-        tradeText +
-        markerText,
-    })
-  }
-
-  if ('walls' in effect) {
-    // The city marker is turned back to its unwalled side, the same piece; a refusal leaves the game as it was
-    const city = state.board.pieces.find((candidate) => candidate.id === effect.walls.pieceId)
-    if (city === undefined) return err(refused('The city is no longer on the board, so the City Walls cannot be undone.'))
-    if (city.assetId !== effect.walls.to.assetId) {
-      return err(refused('The city marker is not on its walled side any more, so the City Walls cannot be undone.'))
-    }
-    const flipped = flipPieceUnchecked(withPlayerHand(state, refunded), {
-      playerId: record.playerId,
-      pieceId: city.id,
-      assetId: effect.walls.from.assetId,
-      ...(at === null ? {} : { at }),
-    })
-    if (flipped === undefined) return err(refused('The city marker could not be turned back.'))
-    const withMarker = markersBack(flipped, refunded, effect, at)
-    return ok({
-      state: withMarker,
-      text:
-        `${player.username}'s City Walls were undone: the city marker was turned back to its unwalled side` +
-        tradeText +
-        markerText,
-    })
-  }
-
-  // Everything is checked before anything is changed, so a refusal leaves the game as it was.
-  const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
-  // A wonder's name already is a name ("The Colossus"): "The Library" and "The army", but not "The The Colossus"
-  const subject = effect.item.kind === 'wonder' ? label : `The ${label}`
-  if (piece === undefined) {
-    return err(refused(`${subject} is no longer on the board, so the build cannot be undone.`))
-  }
-  const cell = mapCellOf(state.board, piece)
-  if (!pieceMayHaveMoved && (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row)) {
-    return err(refused(`${subject} has left ${effect.square.label}. Move it back first.`))
-  }
-
-  const reservedBlock = reservedUndoBlock(state, record.playerId, effect)
-  if (reservedBlock !== undefined) return err(refused(reservedBlock))
-
-  // A wonder goes back to the market where it stood, and nobody owns it any more. The wonder
-  // the build drew into the market goes back in its deck first, if it is still there to take.
-  if (effect.wonder !== undefined) {
-    const stamp = at === null ? {} : { at }
-    const drawn = effect.drawn
-    const gone = drawnWonderGone(state, drawn)
-    if (gone !== undefined) {
-      return err(
-        refused(`${itemName(gone.item)} was drawn into the market after this build and is no longer there, so the build cannot be undone.`),
-      )
-    }
-    let base = withPlayerHand(state, refunded)
-    if (drawn !== undefined) {
-      const cleared = removePiece(base, { playerId: record.playerId, pieceId: drawn.pieceId, ...stamp })
-      if (!cleared.ok) return err(refused(`${itemName(drawn.item)} could not be taken out of the market.`))
-      base = wonderBackInDeck(cleared.value, drawn.item)
-    }
-    const unowned = setWonderOwner(base, {
-      playerId: record.playerId,
-      pieceId: effect.pieceId,
-      ownerId: null,
-      ...stamp,
-    })
-    // Where it stood, unless another wonder has been drawn into that spot since: then the next free one
-    const spot = marketSpotTaken(base.board, effect.pieceId, effect.wonder.from)
-      ? nextFreeSlot(
-          base.board,
-          wondersArea(base.board),
-          base.board.pieces.filter((candidate) => candidate.id !== effect.pieceId),
-          effect.wonder.from,
-        )
-      : [effect.wonder.from.x, effect.wonder.from.y] as const
-    const returned = unowned.ok
-      ? movePieceUnchecked(unowned.value, {
-          playerId: record.playerId,
-          pieceId: effect.pieceId,
-          x: spot[0],
-          y: spot[1],
-          snap: false,
-          ...stamp,
-        })
-      : undefined
-    if (returned === undefined) return err(refused(`${subject} could not be put back in the market.`))
-    // What the wonder replaced stands again, exactly as it was, and then the Building Program marker
-    const withOld = putReplacedBack(returned, refunded, effect, at)
-    const withMarker = markersBack(withOld, refunded, effect, at)
-    const restoredPlayer = playerOf(withMarker, record.playerId) ?? refunded
-    const handBack = withPlayerHand(withMarker, {
-      ...restoredPlayer,
-      wonderDiscount: restoredPlayer.wonderDiscount + (effect.wonderDiscount ?? 0),
-      hensonWounds: Math.max(0, restoredPlayer.hensonWounds - (effect.hensonWound === true ? 1 : 0)),
-    })
-    // Education's coin for this wonder goes back with it, and the turn's use is free again
-    const restored = effect.educationCoin === undefined ? handBack : returnTechCoin(handBack, effect.educationCoin)
-    return ok({
-      state: restored,
-      text:
-        `${player.username}'s ${label.replace(/^The /, '')} on ${effect.square.label} was undone: the wonder was put back in the market` +
-        (drawn === undefined ? '' : ` and ${itemName(drawn.item)} went back in the deck`) +
-        replacedText(effect) +
-        tradeText +
-        markerText,
-    })
-  }
-
-  const removed = removePiece(withPlayerHand(state, refunded), {
-    playerId: record.playerId,
-    pieceId: effect.pieceId,
-    ...(at === null ? {} : { at }),
-  })
-  if (!removed.ok) return err(refused(`The ${label} could not be taken off the board.`))
-  const withOld = putReplacedBack(removed.value, refunded, effect, at)
-  const raw = markersBack(withOld, refunded, effect, at)
-  const restoredPlayer = playerOf(raw, record.playerId) ?? refunded
-  const restored =
-    effect.wonderDiscount === undefined
-      ? raw
-      : withPlayerHand(raw, {
-          ...restoredPlayer,
-          wonderDiscount: restoredPlayer.wonderDiscount + effect.wonderDiscount,
-        })
-
-  return ok({
-    state: restored,
-    text:
-      `${player.username}'s ${label} on ${effect.square.label} was undone: the ${effect.item.kind === 'building' ? 'building' : 'figure'} was removed` +
-      replacedText(effect) +
-      tradeText +
-      markerText,
-  })
-}
-
 /**
  * A city builds a building, an army or scout figure, or a military unit.
  * Everything is decided from the fresh state: the options are recomputed for the
@@ -1294,24 +722,51 @@ const build: AssistedActionDefinition = {
     if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
     if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
 
-    const first = resolveBuildItem(state, player, city, item, payload.target, failed)
-    if (!first.ok) return first
-    const { choice } = first.value
-
-    // Engineering: a second item from the same production, checked before the question about trade
-    let engineering: EngineeringPlan | undefined
-    if (payload.second !== undefined) {
-      const planned = planEngineering(state, player, city, payload.second, first.value, failed)
-      if (!planned.ok) return planned
-      engineering = planned.value
-    }
-    const tradeToPay = engineering === undefined ? choice.tradeToPay : engineering.tradeToPay
-    if (tradeToPay > 0 && payload.rush !== true) {
+    const label = buildItemName(item)
+    const choice = city.choices.find((candidate) => sameBuildItem(candidate.item, item))
+    if (choice === undefined) {
+      const why = city.unavailable.find((candidate) => sameBuildItem(candidate.item, item))
       return err(
         failed(
-          engineering === undefined
-            ? `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${tradeToPay} trade to build it.`
-            : `${choice.label} and ${engineering.second.choice.label} cost ${choice.cost + engineering.second.choice.cost} together and ${city.label} has ${city.production}. Confirm paying ${tradeToPay} trade to build them.`,
+          why === undefined
+            ? item.kind === 'building'
+              ? `${item.assetId} is not a building that can be built.`
+              : item.kind === 'wonder'
+                ? `${label} is not a wonder that can be built: it is not in the market.`
+                : item.kind === 'walls'
+                  ? 'City Walls cannot be built.'
+                  : `A ${label} cannot be built.`
+            : `${why.label} cannot be built in ${city.label} now. ${why.reason}`,
+        ),
+      )
+    }
+
+    // A square is chosen for a building or a figure and for nothing else
+    let square: BuildSquare | undefined
+    const itemKind = payload.item.kind
+    if (itemKind === 'unit' || itemKind === 'walls') {
+      if (payload.target !== undefined) {
+        return err(
+          failed(
+            itemKind === 'unit'
+              ? `${choice.label} is a card and has no square. Send no square.`
+              : `${choice.label} turn the city marker over and have no square. Send no square.`,
+          ),
+        )
+      }
+    } else {
+      const target = payload.target
+      if (target === undefined) return err(failed('Pick one of the highlighted squares.'))
+      square = choice.squares.find((candidate) => candidate.column === target.column && candidate.row === target.row)
+      if (square === undefined) {
+        const why = buildSquareRefusal(state, player, city.cityPieceId, payload.item, target)
+        return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
+      }
+    }
+    if (choice.tradeToPay > 0 && payload.rush !== true) {
+      return err(
+        failed(
+          `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${choice.tradeToPay} trade to build it.`,
         ),
       )
     }
@@ -1320,40 +775,97 @@ const build: AssistedActionDefinition = {
     if (again.refusal !== undefined) return err(rejected('build', again.refusal))
     const at = context.at === undefined ? {} : { at: context.at }
 
-    const stepOne = buildStep(state, player, city, first.value, { trade: tradeToPay, markers: true }, at, failed)
-    if (!stepOne.ok) return stepOne
-    let steps: readonly BuildStep[] = [stepOne.value]
-    let after = stepOne.value.state
-    let engineeringTurn: number | undefined
-    if (engineering !== undefined) {
-      // The second item is checked in the game as the first left it, with every legality question but the money
-      const holder = playerOf(after, player.playerId) ?? player
-      const refit = confirmSecond(after, holder, city.cityPieceId, engineering.second.item, engineering.second.target, stepOne.value, failed)
-      if (!refit.ok) return refit
-      const stepTwo = buildStep(after, holder, city, refit.value, { trade: 0, markers: false }, at, failed)
-      if (!stepTwo.ok) return stepTwo
-      steps = [stepOne.value, stepTwo.value]
-      after = stepTwo.value.state
-      const turn = openCityManagementTurn(after, playerOf(after, player.playerId) ?? player)
-      const owner = playerOf(after, player.playerId)
-      if (turn === undefined || owner === undefined) return err(rejected('build', blocked('wrong-phase', PHASE_REASON)))
-      after = useTurnAction(after, owner, turn, ENGINEERING_USAGE_KEY, owner.stats)
-      engineeringTurn = turn.turnNumber
+    // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
+    const footprint = ownCityFootprint(state, player, city.cityPieceId)
+    const marker = footprint === undefined ? undefined : buildingProgramMarkerOf(state, footprint)
+
+    // The one step that differs: a piece on a square, or a card in the hand
+    let made: Made
+    let replaced: { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean } | undefined
+    if (payload.item.kind === 'unit') {
+      const drawn = drawBuiltUnit(state, player, payload.item.unitType)
+      if (!drawn.ok) return err(failed(drawn.error))
+      made = drawn.value
+    } else if (payload.item.kind === 'walls') {
+      const flipped = flipToWalls(state, player, city.cityPieceId, at)
+      if (!flipped.ok) return err(failed(flipped.error))
+      made = flipped.value
+    } else {
+      if (square === undefined) return err(failed('Pick one of the highlighted squares.'))
+      // A building or wonder of the player's own on the square is taken off first, then the new piece goes on the empty square
+      let base = state
+      if (square.replaces !== undefined) {
+        const cleared = removeReplaced(state, player, square, at)
+        if (!cleared.ok) return err(failed(cleared.error))
+        base = cleared.value.state
+        replaced = { piece: cleared.value.piece, historyId: cleared.value.historyId, reserved: cleared.value.reserved }
+      }
+      const placed = placeBuilt(base, player, payload.item, square, at)
+      if (!placed.ok) return err(failed(placed.error))
+      made = placed.value
     }
 
-    const [one, two] = steps as readonly [BuildStep, BuildStep | undefined]
-    const paying = playerOf(state, player.playerId) ?? player
-    const logged = appendLog(after, {
+    let board = made.state
+    let removal: { readonly piece: BoardPiece; readonly historyId: string } | null = null
+    if (marker !== undefined) {
+      const removed = removePiece(made.state, { playerId: player.playerId, pieceId: marker.id, ...at })
+      const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
+      if (!removed.ok || removedEntry === undefined) {
+        return err(failed('The Building Program marker could not be taken off the board.'))
+      }
+      board = removed.value
+      removal = { piece: marker, historyId: removedEntry.id }
+    }
+    // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
+    let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
+    const caravanPiece =
+      city.caravan && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
+    if (caravanPiece !== undefined) {
+      const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
+      const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
+      if (!removed.ok || removedEntry === undefined) {
+        return err(failed('The caravan could not be taken off the board.'))
+      }
+      board = removed.value
+      caravan = { piece: caravanPiece, historyId: removedEntry.id }
+    }
+
+    const paying = playerOf(board, player.playerId) ?? player
+    // Michelangelo's discount is one-shot and is used up by this wonder build.
+    const wonderDiscount =
+      payload.item.kind === 'wonder' ? paying.wonderDiscount : 0
+    // Jim Henson, while faceup, takes a wound marker for every wonder built
+    const hensonWound = payload.item.kind === 'wonder' && activeGreatPerson(board, paying, 'Jim Henson')
+    const paidFor = withPlayerHand(board, {
+      ...paying,
+      wonderDiscount: paying.wonderDiscount - wonderDiscount,
+      ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
+      stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
+    })
+    // Education: once per turn, a wonder adds a coin to the tech (max 4)
+    const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
+    const paid = educated.state
+    const educationCoin = educated.granted ?? undefined
+    const where =
+      made.kind === 'placed'
+        ? ` on square ${made.square.label}` +
+          (replaced === undefined ? '' : replacingText(square?.replaces)) +
+          (payload.item.kind === 'army' && square?.note !== undefined
+            ? ' (an enemy figure is there, so the outcome is to be settled by hand)'
+            : '')
+        : made.kind === 'walls'
+          ? ', turning the city marker over to its walled side'
+          : ''
+    const logged = appendLog(paid, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        (two === undefined
-          ? `${player.username} built ${one.what} in ${city.label}${one.where}`
-          : `${player.username} built ${one.what}${whereOf(one)} and ${two.what}${whereOf(two)} in ${city.label}, splitting the production with Engineering`) +
-        (tradeToPay > 0 ? `, paying ${tradeToPay} (${paying.stats.trade - tradeToPay}) trade for the missing production` : '') +
-        (one.removal === null ? '' : ', using up the Building Program marker') +
-        (one.caravan === undefined ? '' : ', using up the caravan (+2 production)') +
-        steps.map((step) => step.extras).join('') +
+        `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
+        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} (${paying.stats.trade - choice.tradeToPay}) trade for the missing production` : '') +
+        (removal === null ? '' : ', using up the Building Program marker') +
+        (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
+        (hensonWound ? ', and Jim Henson took a wound marker' : '') +
+        (educationCoin === undefined ? '' : `, and Education gained a coin (${(playerOf(paid, paying.playerId) ?? paying).stats.coinSources.education}/${educationCoin.capacity})`) +
         again.note,
       privateLog: '',
       createdAt: context.at ?? null,
@@ -1361,34 +873,100 @@ const build: AssistedActionDefinition = {
     })
     const logId = lastLogId(logged)
     // The card is named in a private line only, as the Great Person draw does; the public line has the type
-    let withPrivate = logged
-    for (const step of steps) {
-      if (step.made.kind !== 'card') continue
-      withPrivate = appendLog(withPrivate, {
-        username: player.username,
-        playerId: player.playerId,
-        privateLog: `${player.username} drew ${itemName(step.made.card)} (${SHEET_LABEL[step.made.sheetName]}) for ${withArticle(step.label)} built in ${city.label}`,
-        createdAt: context.at ?? null,
+    const withPrivate =
+      made.kind === 'card'
+        ? appendLog(logged, {
+            username: player.username,
+            playerId: player.playerId,
+            privateLog: `${player.username} drew ${itemName(made.card)} (${SHEET_LABEL[made.sheetName]}) for ${withArticle(label)} built in ${city.label}`,
+            createdAt: context.at ?? null,
+          })
+        : logged
+    // The board changes were recorded before the line existed: count it in, as the culture advance does
+    const counted = countLinesIn(withPrivate, [
+      made.kind === 'placed' ? made.historyId : undefined,
+      made.kind === 'placed' ? made.wonder?.ownerHistoryId : undefined,
+      made.kind === 'walls' ? made.historyId : undefined,
+      replaced?.historyId,
+      removal?.historyId,
+      caravan?.historyId,
+    ])
+
+    if (made.kind === 'card') {
+      if (payload.item.kind !== 'unit') return err(failed('That is not a unit.'))
+      return ok({
+        state: counted,
+        effect: {
+          kind: 'build',
+          cityPieceId: city.cityPieceId,
+          item: payload.item,
+          card: {
+            itemId: made.card.id,
+            sheetName: made.sheetName,
+          },
+          trade: choice.tradeToPay,
+          marker: removal,
+          ...(caravan === undefined ? {} : { caravan }),
+        },
+        logId,
       })
     }
-    // The board changes were recorded before the line existed: count it in, as the culture advance does
-    let counted = countLinesIn(withPrivate, steps.flatMap((step) => step.historyIds))
-
-    const effects: BuildEffectOne[] = []
-    for (const step of steps) {
-      const finished = finishStep(counted, player, city.cityPieceId, step, failed)
-      if (!finished.ok) return finished
-      counted = finished.value.state
-      effects.push(finished.value.effect)
+    if (made.kind === 'walls') {
+      if (payload.item.kind !== 'walls') return err(failed('That is not City Walls.'))
+      return ok({
+        state: counted,
+        effect: {
+          kind: 'build',
+          cityPieceId: city.cityPieceId,
+          item: payload.item,
+          walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
+          trade: choice.tradeToPay,
+          marker: removal,
+          ...(caravan === undefined ? {} : { caravan }),
+        },
+        logId,
+      })
     }
-    const [effectOne, effectTwo] = effects as [BuildEffectOne, BuildEffectOne | undefined]
-    if (effectOne === undefined) return err(failed('Nothing was built.'))
+    if (payload.item.kind === 'unit' || payload.item.kind === 'walls') return err(failed('That is not put on a square.'))
+
+    // A wonder leaves the market, so the next one is drawn into it (base rules p. 17), from the
+    // era the deck is at; the draw's own line follows the build's, and its entry is counted in
+    let refilled = counted
+    let drawn: DrawnWonder | undefined
+    if (payload.item.kind === 'wonder') {
+      const sheet = nextWonderSheet(counted)
+      const card = sheet === undefined ? undefined : counted.items.find((item) => item.sheetName === sheet)
+      const refill = sheet === undefined || card === undefined ? undefined : drawWonderToBoard(counted, player.playerId, sheet, 'system')
+      const entry = refill?.ok ? refill.value.board.history.at(-1) : undefined
+      if (refill?.ok && card !== undefined && entry !== undefined && entry.change.kind === 'place') {
+        refilled = countLinesIn(refill.value, [entry.id])
+        drawn = { item: card, pieceId: entry.change.piece.id, historyId: entry.id }
+      }
+    }
     return ok({
-      state: counted,
-      effect:
-        effectTwo === undefined || engineeringTurn === undefined
-          ? effectOne
-          : { ...effectOne, engineering: { turnNumber: engineeringTurn, second: effectTwo } },
+      state: refilled,
+      effect: {
+        kind: 'build',
+        cityPieceId: city.cityPieceId,
+        item: payload.item,
+        square: made.square,
+        pieceId: made.piece.id,
+        position: { x: made.piece.x, y: made.piece.y },
+        historyId: made.historyId,
+        ...(made.wonder === undefined ? {} : { wonder: made.wonder }),
+        ...(drawn === undefined ? {} : { drawn }),
+        ...(replaced === undefined
+          ? {}
+          : replaced.reserved
+            ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
+            : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
+        trade: choice.tradeToPay,
+        marker: removal,
+        ...(caravan === undefined ? {} : { caravan }),
+        ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
+        ...(hensonWound ? { hensonWound: true as const } : {}),
+        ...(educationCoin === undefined ? {} : { educationCoin }),
+      },
       logId,
     })
   },
@@ -1396,21 +974,180 @@ const build: AssistedActionDefinition = {
   reverse(state, player, record, at, pieceMayHaveMoved = false) {
     const effect = record.effect
     if (effect.kind !== 'build') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-    const { engineering, ...single } = effect
-    if (engineering === undefined) return reverseBuildItem(state, player, record, at, pieceMayHaveMoved)
-    // One city action, so one undo: the second item first, then the first, which holds the whole trade and the
-    // markers; Engineering is free again (ruling 165). Nothing is changed unless both can be taken back.
-    const secondRecord: AssistedActionRecord = { ...record, effect: engineering.second }
-    const second = reverseBuildItem(state, player, secondRecord, at, pieceMayHaveMoved)
-    if (!second.ok) return second
-    const holder = playerOf(second.value.state, player.playerId) ?? player
-    const firstRecord: AssistedActionRecord = { ...record, effect: single as BuildEffectOne }
-    const first = reverseBuildItem(second.value.state, holder, firstRecord, at, pieceMayHaveMoved)
-    if (!first.ok) return first
-    const owner = playerOf(first.value.state, player.playerId) ?? holder
+    const refused = (reason: string): EngineError => ({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      logId: record.logId,
+      reason,
+    })
+    const label = buildItemName(effect.item)
+    const refunded: Playerhand = {
+      ...player,
+      stats: { ...player.stats, trade: player.stats.trade + effect.trade },
+    }
+    const markerText =
+      (effect.marker === null ? '' : ' and the Building Program marker was put back') +
+      (effect.caravan === undefined
+        ? ''
+        : cityMarkerMayReturn(state.board, effect.caravan.piece)
+          ? ' and the caravan was put back'
+          : ' (the caravan stays off: the city has another marker now)')
+    const tradeText = effect.trade > 0 ? `, ${effect.trade} (${refunded.stats.trade}) trade returned` : ''
+    const freeUnit = militaryTraditionUndoBlock(state, record)
+    if (freeUnit !== undefined) return err(refused(freeUnit))
+
+    if ('card' in effect) {
+      // Everything is checked before anything is changed, so a refusal leaves the game as it was.
+      const found = player.items.find((candidate) => candidate.id === effect.card.itemId)
+      if (found === undefined) {
+        return err(refused(`The ${label} card is no longer in your hand, so the build cannot be undone.`))
+      }
+      // The card goes back in its deck and that deck alone is shuffled again, as an item undo does,
+      // so nobody knows which card comes next. The other decks keep their order.
+      const withoutCard: Playerhand = { ...refunded, items: refunded.items.filter((candidate) => candidate.id !== found.id) }
+      const returned: GameState = {
+        ...withPlayerHand(state, withoutCard),
+        items: [...state.items, { ...found, hidden: true, ownerId: null }],
+      }
+      const restored = shuffleSheetTwice(returned, effect.card.sheetName)
+      const withMarker =
+        markersBack(restored, refunded, effect, at)
+      return ok({
+        state: withMarker,
+        text:
+          `${player.username}'s ${label} was undone: the card was put back in the deck` +
+          tradeText +
+          markerText,
+      })
+    }
+
+    if ('walls' in effect) {
+      // The city marker is turned back to its unwalled side, the same piece; a refusal leaves the game as it was
+      const city = state.board.pieces.find((candidate) => candidate.id === effect.walls.pieceId)
+      if (city === undefined) return err(refused('The city is no longer on the board, so the City Walls cannot be undone.'))
+      if (city.assetId !== effect.walls.to.assetId) {
+        return err(refused('The city marker is not on its walled side any more, so the City Walls cannot be undone.'))
+      }
+      const flipped = flipPieceUnchecked(withPlayerHand(state, refunded), {
+        playerId: record.playerId,
+        pieceId: city.id,
+        assetId: effect.walls.from.assetId,
+        ...(at === null ? {} : { at }),
+      })
+      if (flipped === undefined) return err(refused('The city marker could not be turned back.'))
+      const withMarker = markersBack(flipped, refunded, effect, at)
+      return ok({
+        state: withMarker,
+        text:
+          `${player.username}'s City Walls were undone: the city marker was turned back to its unwalled side` +
+          tradeText +
+          markerText,
+      })
+    }
+
+    // Everything is checked before anything is changed, so a refusal leaves the game as it was.
+    const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
+    // A wonder's name already is a name ("The Colossus"): "The Library" and "The army", but not "The The Colossus"
+    const subject = effect.item.kind === 'wonder' ? label : `The ${label}`
+    if (piece === undefined) {
+      return err(refused(`${subject} is no longer on the board, so the build cannot be undone.`))
+    }
+    const cell = mapCellOf(state.board, piece)
+    if (!pieceMayHaveMoved && (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row)) {
+      return err(refused(`${subject} has left ${effect.square.label}. Move it back first.`))
+    }
+
+    const reservedBlock = reservedUndoBlock(state, record.playerId, effect)
+    if (reservedBlock !== undefined) return err(refused(reservedBlock))
+
+    // A wonder goes back to the market where it stood, and nobody owns it any more. The wonder
+    // the build drew into the market goes back in its deck first, if it is still there to take.
+    if (effect.wonder !== undefined) {
+      const stamp = at === null ? {} : { at }
+      const drawn = effect.drawn
+      const gone = drawnWonderGone(state, drawn)
+      if (gone !== undefined) {
+        return err(
+          refused(`${itemName(gone.item)} was drawn into the market after this build and is no longer there, so the build cannot be undone.`),
+        )
+      }
+      let base = withPlayerHand(state, refunded)
+      if (drawn !== undefined) {
+        const cleared = removePiece(base, { playerId: record.playerId, pieceId: drawn.pieceId, ...stamp })
+        if (!cleared.ok) return err(refused(`${itemName(drawn.item)} could not be taken out of the market.`))
+        base = wonderBackInDeck(cleared.value, drawn.item)
+      }
+      const unowned = setWonderOwner(base, {
+        playerId: record.playerId,
+        pieceId: effect.pieceId,
+        ownerId: null,
+        ...stamp,
+      })
+      // Where it stood, unless another wonder has been drawn into that spot since: then the next free one
+      const spot = marketSpotTaken(base.board, effect.pieceId, effect.wonder.from)
+        ? nextFreeSlot(
+            base.board,
+            wondersArea(base.board),
+            base.board.pieces.filter((candidate) => candidate.id !== effect.pieceId),
+            effect.wonder.from,
+          )
+        : [effect.wonder.from.x, effect.wonder.from.y] as const
+      const returned = unowned.ok
+        ? movePieceUnchecked(unowned.value, {
+            playerId: record.playerId,
+            pieceId: effect.pieceId,
+            x: spot[0],
+            y: spot[1],
+            snap: false,
+            ...stamp,
+          })
+        : undefined
+      if (returned === undefined) return err(refused(`${subject} could not be put back in the market.`))
+      // What the wonder replaced stands again, exactly as it was, and then the Building Program marker
+      const withOld = putReplacedBack(returned, refunded, effect, at)
+      const withMarker = markersBack(withOld, refunded, effect, at)
+      const restoredPlayer = playerOf(withMarker, record.playerId) ?? refunded
+      const handBack = withPlayerHand(withMarker, {
+        ...restoredPlayer,
+        wonderDiscount: restoredPlayer.wonderDiscount + (effect.wonderDiscount ?? 0),
+        hensonWounds: Math.max(0, restoredPlayer.hensonWounds - (effect.hensonWound === true ? 1 : 0)),
+      })
+      // Education's coin for this wonder goes back with it, and the turn's use is free again
+      const restored = effect.educationCoin === undefined ? handBack : returnTechCoin(handBack, effect.educationCoin)
+      return ok({
+        state: restored,
+        text:
+          `${player.username}'s ${label.replace(/^The /, '')} on ${effect.square.label} was undone: the wonder was put back in the market` +
+          (drawn === undefined ? '' : ` and ${itemName(drawn.item)} went back in the deck`) +
+          replacedText(effect) +
+          tradeText +
+          markerText,
+      })
+    }
+
+    const removed = removePiece(withPlayerHand(state, refunded), {
+      playerId: record.playerId,
+      pieceId: effect.pieceId,
+      ...(at === null ? {} : { at }),
+    })
+    if (!removed.ok) return err(refused(`The ${label} could not be taken off the board.`))
+    const withOld = putReplacedBack(removed.value, refunded, effect, at)
+    const raw = markersBack(withOld, refunded, effect, at)
+    const restoredPlayer = playerOf(raw, record.playerId) ?? refunded
+    const restored =
+      effect.wonderDiscount === undefined
+        ? raw
+        : withPlayerHand(raw, {
+            ...restoredPlayer,
+            wonderDiscount: restoredPlayer.wonderDiscount + effect.wonderDiscount,
+          })
+
     return ok({
-      state: freeTurnAction(first.value.state, owner, engineering.turnNumber, ENGINEERING_USAGE_KEY),
-      text: `${second.value.text}; ${first.value.text}; Engineering can be used again`,
+      state: restored,
+      text:
+        `${player.username}'s ${label} on ${effect.square.label} was undone: the ${effect.item.kind === 'building' ? 'building' : 'figure'} was removed` +
+        replacedText(effect) +
+        tradeText +
+        markerText,
     })
   },
 }
@@ -2283,7 +2020,7 @@ export function reverseAssistedAction(
   // A wonder build that put its drawn card back in the deck: the board Undo must not bring the
   // drawn piece back while its card is in the deck, or the next draw would make a second one
   const effect = record.effect
-  if (buildPartsOf(effect).some((part) => 'drawn' in part && part.drawn !== undefined)) {
+  if (effect.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined) {
     return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
   }
   // Galileo's (and Cousteau's, and Giannini's free building's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
@@ -2316,7 +2053,7 @@ function openBuildOf(state: GameState, playerId: string, pieceId: string): Assis
     if (record.status !== 'applied' || record.playerId !== playerId) return false
     const effect = record.effect
     const placedHere =
-      buildPartsOf(effect).some((part) => 'pieceId' in part && part.pieceId === pieceId) ||
+      (effect.kind === 'build' && 'pieceId' in effect && effect.pieceId === pieceId) ||
       (effect.kind === 'startBuildingProgram' && effect.pieceId === pieceId)
     if (!placedHere) return false
     // Only the turn that is being played: a phase unmarked in an older turn does not reopen its builds
@@ -2350,19 +2087,12 @@ export function takeBackOpenBuild(
   if (record === undefined) return undefined
   // The wonder drawn after this one has been taken, so this one cannot go back with it: the
   // piece is removed as any other, which is what the player asked for
-  const parts = buildPartsOf(record.effect)
-  if (parts.some((part) => 'drawn' in part && drawnWonderGone(state, part.drawn) !== undefined)) {
+  if (record.effect.kind === 'build' && 'drawn' in record.effect && drawnWonderGone(state, record.effect.drawn) !== undefined) {
     return undefined
   }
   // A Great Person this build held in reserve has been placed somewhere else since, so it cannot go back
   // with the build: the piece is removed as any other, which is what the player asked for
-  if (parts.some((part) => 'reserved' in part && reservedUndoBlock(state, record.playerId, part) !== undefined)) {
-    return undefined
-  }
-  // A unit card of an Engineering build can leave the hand while City Management is open (discarded, traded or played by
-  // hand): the whole build can then no longer be undone, so the piece is removed as any other
-  const holder = playerOf(state, record.playerId)
-  if (parts.some((part) => 'card' in part && holder?.items.some((item) => item.id === part.card.itemId) !== true)) {
+  if (record.effect.kind === 'build' && 'reserved' in record.effect && reservedUndoBlock(state, record.playerId, record.effect) !== undefined) {
     return undefined
   }
   // Military Tradition gave a free unit for this army: the army is removed as any other, and the unit stays

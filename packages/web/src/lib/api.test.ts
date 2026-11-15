@@ -241,37 +241,6 @@ describe('api timeline and admin calls (issue #215)', () => {
     })
   })
 
-  it('posts the second item of an Engineering build in the body, and nothing when there is none', async () => {
-    const both = respondWith(200, '{}')
-    await api.build('g1', 'req-1', 9, {
-      cityPieceId: 'city-1',
-      item: { kind: 'building', assetId: 'buildings/library' },
-      target: { column: 3, row: 4 },
-      rush: true,
-      second: { item: { kind: 'army' }, target: { column: 4, row: 4 } },
-    })
-    expect(lastCall(both).body).toEqual({
-      action: 'build',
-      requestId: 'req-1',
-      rev: 9,
-      cityPieceId: 'city-1',
-      item: { kind: 'building', assetId: 'buildings/library' },
-      target: { column: 3, row: 4 },
-      rush: true,
-      second: { item: { kind: 'army' }, target: { column: 4, row: 4 } },
-    })
-    const unit = respondWith(200, '{}')
-    await api.build('g1', 'req-2', 9, {
-      cityPieceId: 'city-1',
-      item: { kind: 'walls' },
-      second: { item: { kind: 'unit', unitType: 'infantry' } },
-    })
-    expect(lastCall(unit).body).toMatchObject({ second: { item: { kind: 'unit', unitType: 'infantry' } } })
-    const single = respondWith(200, '{}')
-    await api.build('g1', 'req-3', 9, { cityPieceId: 'city-1', item: { kind: 'walls' } })
-    expect(lastCall(single).body).not.toHaveProperty('second')
-  })
-
   it('posts a build with the city, the item, the square and rush only when it is set', async () => {
     const plain = respondWith(200, '{}')
     await api.build('g1', 'req-1', 9, {

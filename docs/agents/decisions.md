@@ -1448,25 +1448,6 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   hand; the public line names only the type and no item line is written. Undo
   returns it and reshuffles that unit deck so the next card is unknown (human); a
   build-undo-build may draw differently, accepted.
-- **Engineering** (#354; human 2026-11-15; rulings 80, 164-168): once per turn a city may split its production to
-  buy two items in one city action. The `build` payload takes an optional `second` item (with its own square where the
-  item has one). One assisted record, one city action, one undo vote: the effect holds the first item with an
-  `engineering: { turnNumber, second }` part, and the undo takes the second item back first, then the first, and frees
-  `card:Engineering`. A cancel (Mark Twain, Writing) rewinds the log to before the action, so both items go and
-  Engineering is free again (ruling 165). Any two build items are allowed, each with its normal legality check, but
-  not two wonders (a city holds one wonder, so the second would replace the first), not a second item that would replace the first, and not City Walls on top of walls. The
-  production is simultaneous: the costs are added and set against the city's production as it was before the build
-  (Building Program marker, caravan and boosts counted once, and used up with the first item), so the extra hammers
-  a Workshop or similar gives never count for the other item (ruling 80). The shortfall is paid with trade through
-  one rush confirmation, counted once on the combined cost, and the whole trade is recorded on the first item.
-  The second item is checked twice: against the city's choices before anything is placed, and again as the first
-  item left the board (a taken square or an exhausted supply is refused). A building is refused with an army when
-  the building's only legal square is blockaded, since a blockaded square is never legal for a building (ruling 168);
-  two armies may go on a blockaded square and the battle is settled by hand (ruling 167). The key is not lifted by a
-  confirmed repeat (ruling 166); a second use is refused with the reason, also when another record wrote the key.
-  The projection marks a city with `engineering: { perStep }` only for the owner while the tech is revealed and unused.
-  Effects of old single builds are unchanged. Tests `assisted-engineering.test.ts`, `assisted-build-api.test.ts`,
-  `BuildPicker.test.tsx`.
 - **Start a Building Program** (W&W p. 7): free city action in open City
   Management, one marker per city (either metropolis centre counts), placed on the
   anchor centre. Its undo is refused while the marker is used.
@@ -1482,7 +1463,7 @@ It covers buildings, wonders, figures (placed) and military units (private card)
 
 Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`,
 `wonder-data.ts`, `assisted.ts` (`build`, `startBuildingProgram`,
-`upgradeBuildings`, `takeBackOpenBuild`), `build-parts.ts`, `actions/board.ts`,
+`upgradeBuildings`, `takeBackOpenBuild`), `actions/board.ts`,
 `server/src/routes/board.ts`, `web/src/views/BuildPicker.tsx`, `CityActions.tsx`,
 `buildFlow.ts`; tests `assisted-build*`, `assisted-wonders`, `assisted-walls`,
 `great-person-replace`, `BuildPicker.test.tsx`.

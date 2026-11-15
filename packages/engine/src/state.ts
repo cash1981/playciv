@@ -558,102 +558,6 @@ export interface CultureAdvanceEffect {
   readonly marker?: GreatPersonMarker | null
 }
 
-export type BuildPlacedEffect = {
-  readonly kind: 'build'
-  readonly cityPieceId: string
-  /** What was built: a building, a wonder or a figure, which stands on the map. */
-  readonly item: PlacedBuildItem
-  /** The map square, as numbers from the map's top left corner, and the label the log used. */
-  readonly square: { readonly column: number; readonly row: number; readonly label: string }
-  /** The piece that was placed, where it went and the board history entry that placed it. */
-  readonly pieceId: string
-  readonly position: { readonly x: number; readonly y: number }
-  readonly historyId: string
-  /**
-   * A wonder is not placed but moved out of the market: where it stood there, and the
-   * board history entry that made the player its owner. Absent for a building and a figure.
-   */
-  readonly wonder?: { readonly from: { readonly x: number; readonly y: number }; readonly ownerHistoryId: string }
-  /**
-   * A wonder only: the wonder the build drew into the market to replace it, so an undo can put it
-   * back in the deck. The card, the piece that was placed and the board history entry that placed it.
-   * Absent when no wonder was left to draw. Server side only, like every effect.
-   */
-  readonly drawn?: DrawnWonder
-  /**
-   * The building or wonder this one replaced (base rules p. 17): exactly as it stood, and the
-   * board history entry that removed it, so an undo puts the same piece back. Absent when the
-   * square was empty.
-   */
-  readonly replaced?: { readonly piece: BoardPiece; readonly historyId: string }
-  /**
-   * The Great Person this build replaced (base rules p. 18): held in reserve, which is moved to the
-   * player's area, and the board history entry that moved it. The piece as it stood, so an undo
-   * moves it back to its square. Absent when none was replaced.
-   */
-  readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string }
-  /** The trade paid for the missing production; 0 when the city's production was enough. */
-  readonly trade: number
-  /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
-  readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
-  /** The caravan the build used up (Fame and Fortune p. 7), as `marker` is kept. Absent without one. */
-  readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
-  /** Production taken off by Michelangelo, so an undo arms it again. */
-  readonly wonderDiscount?: number
-  /** Jim Henson took a wound marker for this wonder, so an undo takes it off again. */
-  readonly hensonWound?: true
-  /** Education added a coin for this wonder (once per turn, max 4), so an undo takes it off again. */
-  readonly educationCoin?: TechCoinGrant
-}
-
-export type BuildCardEffect = {
-  readonly kind: 'build'
-  readonly cityPieceId: string
-  /** A military unit: no square and no piece, only a card in the hand. */
-  readonly item: UnitBuildItem
-  /**
-   * The card that was drawn and its deck. An undo puts the card back in that deck
-   * and shuffles the deck again. Server side only, like every effect: never
-   * projected.
-   */
-  readonly card: {
-    readonly itemId: string
-    readonly sheetName: SheetName
-  }
-  readonly trade: number
-  readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
-  readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
-}
-
-export type BuildWallsEffect = {
-  readonly kind: 'build'
-  readonly cityPieceId: string
-  /** City Walls: no square and no new piece, the city marker is turned over to its walled side. */
-  readonly item: WallsBuildItem
-  /** The city marker (the same piece before and after), how it looked before and after, and the board history entry that turned it over. */
-  readonly walls: {
-    readonly pieceId: string
-    readonly from: PieceFace
-    readonly to: PieceFace
-    readonly historyId: string
-  }
-  readonly trade: number
-  readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
-  readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
-}
-
-/** What one item of a build did: the effect of a single build. */
-export type BuildEffectOne = BuildPlacedEffect | BuildCardEffect | BuildWallsEffect
-
-/**
- * Engineering (once per turn): the second item the same city action built, which one undo takes back first, and the turn
- * whose `card:Engineering` use the undo frees. The first item's `trade` is the whole trade the two cost; the second's is 0.
- */
-export interface EngineeringBuild {
-  readonly turnNumber: number
-  readonly second: BuildEffectOne
-}
-
 /** What an action changed, enough to reverse it. Server side only, never in a view. */
 export type AssistedEffect =
   | { readonly kind: CultureCardKind; readonly culture: number; readonly spent: SpentResource }
@@ -960,7 +864,87 @@ export type AssistedEffect =
       /** The card kept, or `null` when no candidate was left in the hand and the choice was only dropped. */
       readonly itemId: string | null
     }
-  | (BuildEffectOne & { readonly engineering?: EngineeringBuild })
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** What was built: a building, a wonder or a figure, which stands on the map. */
+      readonly item: PlacedBuildItem
+      /** The map square, as numbers from the map's top left corner, and the label the log used. */
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      /** The piece that was placed, where it went and the board history entry that placed it. */
+      readonly pieceId: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+      /**
+       * A wonder is not placed but moved out of the market: where it stood there, and the
+       * board history entry that made the player its owner. Absent for a building and a figure.
+       */
+      readonly wonder?: { readonly from: { readonly x: number; readonly y: number }; readonly ownerHistoryId: string }
+      /**
+       * A wonder only: the wonder the build drew into the market to replace it, so an undo can put it
+       * back in the deck. The card, the piece that was placed and the board history entry that placed it.
+       * Absent when no wonder was left to draw. Server side only, like every effect.
+       */
+      readonly drawn?: DrawnWonder
+      /**
+       * The building or wonder this one replaced (base rules p. 17): exactly as it stood, and the
+       * board history entry that removed it, so an undo puts the same piece back. Absent when the
+       * square was empty.
+       */
+      readonly replaced?: { readonly piece: BoardPiece; readonly historyId: string }
+      /**
+       * The Great Person this build replaced (base rules p. 18): held in reserve, which is moved to the
+       * player's area, and the board history entry that moved it. The piece as it stood, so an undo
+       * moves it back to its square. Absent when none was replaced.
+       */
+      readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string }
+      /** The trade paid for the missing production; 0 when the city's production was enough. */
+      readonly trade: number
+      /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+      /** The caravan the build used up (Fame and Fortune p. 7), as `marker` is kept. Absent without one. */
+      readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
+      /** Production taken off by Michelangelo, so an undo arms it again. */
+      readonly wonderDiscount?: number
+      /** Jim Henson took a wound marker for this wonder, so an undo takes it off again. */
+      readonly hensonWound?: true
+      /** Education added a coin for this wonder (once per turn, max 4), so an undo takes it off again. */
+      readonly educationCoin?: TechCoinGrant
+    }
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** A military unit: no square and no piece, only a card in the hand. */
+      readonly item: UnitBuildItem
+      /**
+       * The card that was drawn and its deck. An undo puts the card back in that deck
+       * and shuffles the deck again. Server side only, like every effect: never
+       * projected.
+       */
+      readonly card: {
+        readonly itemId: string
+        readonly sheetName: SheetName
+      }
+      readonly trade: number
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+      readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
+    }
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** City Walls: no square and no new piece, the city marker is turned over to its walled side. */
+      readonly item: WallsBuildItem
+      /** The city marker (the same piece before and after), how it looked before and after, and the board history entry that turned it over. */
+      readonly walls: {
+        readonly pieceId: string
+        readonly from: PieceFace
+        readonly to: PieceFace
+        readonly historyId: string
+      }
+      readonly trade: number
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+      readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
+    }
   | {
       readonly kind: 'startBuildingProgram'
       readonly cityPieceId: string
