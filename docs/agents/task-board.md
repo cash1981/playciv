@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### tech-cancellations
-
-- **Owner:** orchestrator (Claude)
-- **Branch:** `feat/great-person-twain`
-- **Brief:** `docs/agents/tasks/tech-cancellations.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/cancellation.ts`, `united-nations.ts`, `assisted-tech-abilities.ts`, `assisted-cards.ts`, `assisted-core.ts`, `assisted-resources.ts`, `assisted.ts`, `card-timing.ts`, `packages/server/src/routes/cancellation.ts`, `assisted-args.ts`, `packages/web/src/views/LogPanel.tsx`, `AssistedActions.tsx`, `PlayableCards.tsx`, `packages/web/src/lib/cancelPick.ts`, their tests, and `docs/agents/decisions.md`, `limitations.md`, `state.md`
-- **Notes:** Writing, Civil Service and Mass Media become real cancellations; United Nations consent on culture events.
+_None._
 
 ## Format
 
