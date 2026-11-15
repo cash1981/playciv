@@ -29,6 +29,18 @@ function ToastItem({ toast }: { readonly toast: Toast }): React.JSX.Element {
       onBlur={() => setHeld(false)}
     >
       <span className="toast-text">{toast.text}</span>
+      {toast.action !== undefined && (
+        <button
+          type="button"
+          className="toast-action"
+          onClick={() => {
+            toast.action?.onClick()
+            dismissToast(toast.id)
+          }}
+        >
+          {toast.action.label}
+        </button>
+      )}
       <button
         type="button"
         className="toast-close"
@@ -43,7 +55,7 @@ function ToastItem({ toast }: { readonly toast: Toast }): React.JSX.Element {
 
 /**
  * The two live regions stay mounted when there is nothing to say: a polite one for
- * the successes and an assertive one for the failures. A screen reader announces
+ * the successes and reminders and an assertive one for the failures. A screen reader announces
  * text that arrives in a region it already knows, but often not a region that
  * appears with its text in it.
  */
@@ -53,7 +65,7 @@ export function ToastRegion(): React.JSX.Element {
     <div className="toast-region" role="region" aria-label="Notifications">
       <div className="toast-live" role="status">
         {toasts
-          .filter((toast) => toast.kind === 'ok')
+          .filter((toast) => toast.kind !== 'error')
           .map((toast) => (
             <ToastItem key={toast.id} toast={toast} />
           ))}

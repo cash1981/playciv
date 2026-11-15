@@ -33,6 +33,8 @@ import {
 import type { CardTiming, PlayableCard, TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
+import { isCancellationCard } from '@civ/engine'
+import { CancellationCardControl } from './CancellationCardControl.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
@@ -80,6 +82,8 @@ export function PlayCardControl({
 }: ControlProps): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [chosen, setChosen] = useState<readonly string[]>([])
+  // The United Nations owners the player has asked and who agreed to a culture event against them
+  const [agreed, setAgreed] = useState<readonly string[]>([])
   const [resource, setResource] = useState('')
   const [coinSource, setCoinSource] = useState('')
   const [substitute, setSubstitute] = useState('')
@@ -221,6 +225,15 @@ export function PlayCardControl({
               : { owner: groupHoldersAt(from)[0] ?? viewer, stackingLimit: groupHoldersAt(from)[0]?.stats.stacking ?? 1 },
           )
   const moveDestinationCells = moveFrom === null ? [] : destinationCellsFor(moveFrom)
+  // A culture event cannot name the owner of the United Nations against their will: the player confirms each owner agreed
+  // A figure-moving event names no player but moves the figures of whoever stands on the chosen square
+  const unitedNationsFor = (source: { readonly column: number; readonly row: number } | null): readonly string[] => {
+    const movedFrom = cardMove?.kind === 'group' && source !== null ? groupHoldersAt(source).map((holder) => holder.playerId) : []
+    return (card.unitedNations ?? []).filter((id) => card.targets.kind === 'allOthers' || effective.includes(id) || movedFrom.includes(id))
+  }
+  const unitedNations = unitedNationsFor(moveFrom)
+  // `baseValid` is read by the send of a pick made in an older render, so it must not depend on the stored square: the
+  // agreement is checked for the square that is sent (`sendPlay`) and for the Confirm button (`valid`)
   const baseValid =
     effective.length >= min &&
     effective.length <= max &&
@@ -230,7 +243,7 @@ export function PlayCardControl({
     convertValid &&
     (tesla === null || chosenTesla !== '') &&
     harborsValid
-  const valid = baseValid
+  const valid = baseValid && unitedNations.every((id) => agreed.includes(id))
   const disabled = busy || readOnly
 
   const resetMove = (): void => {
@@ -261,8 +274,15 @@ export function PlayCardControl({
     if (!baseValid) return
     if (isMapMove && (from === null || to === null)) return
     if (cardMove?.kind === 'one' && figureId === null) return
+    // The square passed in is the one sent, not the render's `moveFrom`: a pick made in this render has not been stored yet
+    const needed = unitedNationsFor(from)
+    const consents = needed.filter((id) => agreed.includes(id))
+    if (consents.length !== needed.length) {
+      setMoveHint('Ask the owner of the United Nations and tick that they agreed, then choose the destination square again.')
+      return
+    }
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${chosenTesla}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${[...consents].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${chosenTesla}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -270,6 +290,7 @@ export function PlayCardControl({
         api.actionWithArgs(gameId, 'playCard', requestId, view.rev, {
           itemId: card.itemId,
           targets: card.targets.kind === 'players' ? effective : [],
+          ...(consents.length === 0 ? {} : { consents }),
           ...(needsResource ? { resource } : {}),
           ...(needsCoin ? { coinSource } : {}),
           ...(needsSubstitute ? { substitute } : {}),
@@ -292,6 +313,7 @@ export function PlayCardControl({
     ).then((succeeded) => {
       if (succeeded) {
         resetMove()
+        setAgreed([])
         setOpen(false)
       }
     })
@@ -307,6 +329,12 @@ export function PlayCardControl({
     figureId: string | null = moveFigureId,
   ): Promise<void> => {
     if (mapPicker === null) return
+    const waiting = unitedNationsFor(from).filter((id) => !agreed.includes(id))
+    if (waiting.length > 0) {
+      const names = waiting.map((id) => others.find((opponent) => opponent.playerId === id)?.username ?? 'The owner').join(', ')
+      setMoveHint(`${names} owns the United Nations. Ask, and tick that they agreed, before you choose the destination square.`)
+      return
+    }
     const cells = destinationCellsFor(from)
     if (cells.length === 0) {
       setMoveHint(
@@ -398,6 +426,13 @@ export function PlayCardControl({
     setMoveFrom(from)
     setMoveTo(null)
     setMoveHint(null)
+    // The owner of the United Nations must have agreed before the destination is asked: the checkbox shows now
+    const unasked = unitedNationsFor(from).filter((id) => !agreed.includes(id))
+    if (unasked.length > 0) {
+      const names = unasked.map((id) => others.find((opponent) => opponent.playerId === id)?.username ?? 'The owner').join(', ')
+      setMoveHint(`${names} owns the United Nations. Ask, tick that they agreed, then choose the destination square.`)
+      return
+    }
     if (cardMove?.kind === 'one') {
       const choices = cardMoveFigureChoices(view.board, viewer, from, turnNumber)
       if (choices.length === 0) {
@@ -447,7 +482,12 @@ export function PlayCardControl({
   const closeForm = (): void => {
     mapPicker?.cancel()
     resetMove()
+    setAgreed([])
     setOpen(false)
+  }
+
+  if (isCancellationCard(card.name)) {
+    return <CancellationCardControl view={view} busy={busy} readOnly={readOnly} itemId={card.itemId} name={card.name} />
   }
 
   return (
@@ -500,13 +540,35 @@ export function PlayCardControl({
                 {min === max
                   ? `Choose ${min}.`
                   : min === 0
-                    ? `Choose up to ${max}, or nobody.`
+                    ? max === 1
+                      ? 'Choose one, or nobody.'
+                      : `Choose up to ${max}, or nobody.`
                     : `Choose ${min} to ${max}.`}
               </p>
             </fieldset>
           )}
           {card.targets.kind === 'allOthers' && (
             <p className="play-card-all">This card names every other player.</p>
+          )}
+          {unitedNations.length > 0 && (
+            <fieldset className="play-card-targets">
+              <legend>United Nations</legend>
+              <p className="muted">Culture events cannot target the owner of the United Nations against their will. Ask them first.</p>
+              {unitedNations.map((id) => {
+                const owner = others.find((opponent) => opponent.playerId === id)
+                return (
+                  <label key={id} className="play-card-target">
+                    <input
+                      type="checkbox"
+                      checked={agreed.includes(id)}
+                      disabled={disabled}
+                      onChange={() => setAgreed(agreed.includes(id) ? agreed.filter((other) => other !== id) : [...agreed, id])}
+                    />{' '}
+                    {owner?.username ?? 'The owner'} has agreed
+                  </label>
+                )
+              })}
+            </fieldset>
           )}
           {isMapMove && (
             <fieldset className="play-card-targets">
@@ -539,8 +601,8 @@ export function PlayCardControl({
                 </button>
                 <span>{moveFrom === null ? 'No source chosen' : squareLabel(moveFrom)}</span>
               </div>
-              {moveHint !== null && moveSourceCells.length === 0 && (
-                <p className="muted">{moveHint}</p>
+              {moveHint !== null && (
+                <p role="status" className="muted">{moveHint}</p>
               )}
               {moveHint === null && moveSourceCells.length === 0 && (
                 <p className="muted">

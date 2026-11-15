@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { bringToFront, placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
+import { bringToFront, placePiece, setWonderOwner, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
@@ -288,6 +288,25 @@ describe('group cards', () => {
     expect(figuresIn(played, 4, 7)).toHaveLength(2)
     expect(figuresIn(played, 4, 4)).toHaveLength(0)
     for (const figure of figuresIn(played, 4, 7)) expect(figure.movement).toBeUndefined()
+  })
+
+  it('asks for the agreement of a United Nations owner whose figures it moves, and says so in the log', () => {
+    const { state, itemId } = withCardInHand(cmTurn(), 'Lost')
+    const base = place(place(state, 'figures/bluearmy', 4, 4, KARANDRAS1), 'figures/bluearmy', 4, 4, KARANDRAS1)
+    const un = unwrap(placePiece(base, { playerId: KARANDRAS1, assetId: 'wonders/unitednations', x: 40, y: 700 }))
+    const piece = un.board.pieces.at(-1)
+    if (piece === undefined || piece.assetId !== 'wonders/unitednations') throw new Error('the wonder was not placed')
+    const owned = unwrap(setWonderOwner(un, { playerId: KARANDRAS1, pieceId: piece.id, ownerId: KARANDRAS1 }))
+    const from = { column: 4, row: 4 }
+    const to = { column: 4, row: 7 }
+    expect(JSON.stringify(unwrapErr(play(owned, itemId, 'Lost', from, to)))).toContain('United Nations')
+    expect(figuresIn(owned, 4, 4)).toHaveLength(2)
+    const agreed = unwrap(performAssistedAction(owned, {
+      playerId: CASH1981, action: 'playCard', requestId: 'req-un', at: AT,
+      payload: { itemId, targets: [], from, to, consents: [KARANDRAS1] },
+    }))
+    expect(figuresIn(agreed, 4, 7)).toHaveLength(2)
+    expect(agreed.log.at(-1)?.publicLog).toContain('with the agreement of Karandras1 (United Nations)')
   })
 
   it('refuses a source with figures of two other players, and ignores the acting player’s own figure', () => {

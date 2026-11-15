@@ -10,16 +10,23 @@
 
 import { useSyncExternalStore } from 'react'
 
-export type ToastKind = 'ok' | 'error'
+export type ToastKind = 'ok' | 'error' | 'notice'
+
+/** A link-like button in a toast, for a reminder that points at somewhere on the page. */
+export interface ToastAction {
+  readonly label: string
+  readonly onClick: () => void
+}
 
 export interface Toast {
   readonly id: number
   readonly kind: ToastKind
   readonly text: string
+  readonly action?: ToastAction | undefined
 }
 
 /** How long a toast stays, when nothing is holding it. */
-export const TOAST_MS: Readonly<Record<ToastKind, number>> = { ok: 7000, error: 8000 }
+export const TOAST_MS: Readonly<Record<ToastKind, number>> = { ok: 7000, error: 8000, notice: 20000 }
 
 /** At most this many at once; the oldest goes first, so a burst cannot cover the page. */
 export const MAX_TOASTS = 4
@@ -36,17 +43,17 @@ function emit(): void {
  * Shows a toast and returns its id. The same text again refreshes the one on screen
  * instead of stacking a second copy.
  */
-export function showToast(kind: ToastKind, text: string): number {
+export function showToast(kind: ToastKind, text: string, action?: ToastAction): number {
   const message = text.trim()
   if (message === '') return -1
   const same = toasts.find((toast) => toast.kind === kind && toast.text === message)
   if (same !== undefined) {
     // A new object with the same id restarts its timer in the region.
-    toasts = toasts.map((toast) => (toast === same ? { ...same } : toast))
+    toasts = toasts.map((toast) => (toast === same ? { ...same, action } : toast))
     emit()
     return same.id
   }
-  const toast: Toast = { id: nextId++, kind, text: message }
+  const toast: Toast = { id: nextId++, kind, text: message, ...(action === undefined ? {} : { action }) }
   toasts = [...toasts, toast].slice(-MAX_TOASTS)
   emit()
   return toast.id

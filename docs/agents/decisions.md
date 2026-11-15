@@ -337,6 +337,88 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   Person counting) and a tech already moved by hand is not offered. The public line says only that a tech was placed
   one level lower, as the tech may be hidden; the player's own log names it. Undo puts the tech back in its row and
   is refused when the tech has been moved again or removed.
+- Cancellation (#301, #336; human, 2026-11-05) takes effect at once, as an event in `cancellation.ts`. There is
+  no dispute, response window, pass or pause: players are trusted to wait for each other (human). Gameplay,
+  chat, notes and orders are never blocked. Twain targets another player's city action or culture event;
+  Jousting Tourney and Primetime TV target culture events; Bread and Circuses requires actual targeting of its
+  holder or a recorded moved figure of theirs (targeting a cancellation card does not target its owner).
+  Unstructured square/building targets remain manual (resource abilities: see "Resource abilities" below). Printed texts are in
+  `gamedata-faf-waw.json`; no local rulebooks were available.
+- Tech cancellations (human, 2026-11-14): Writing (a city action), Civil Service (a culture event) and Mass Media (a
+  resource ability) cancel like Twain but pay with a Spy instead of a card: a token in the hand or a culture card that
+  can be played as one (A Gift from Afar), chosen by the player; a Spy that is only a board piece is refused. The tech
+  must be revealed, unused this turn and the Spy held both before the target and now (the cost is paid after the
+  rewind). They are made from the log (`POST /cancellations` with `tech` and `payment`), never as an assisted action.
+  Who stops what: a culture event by Jousting Tourney, Primetime TV, Civil Service, Twain and Bread and Circuses (when
+  it is aimed at the holder); a city action by Twain and Writing; the event of a culture card (a culture event) by
+  Jousting Tourney, Primetime TV, Civil Service and another player's Twain; the event of a tech (a resource ability)
+  by Primetime TV, Mass Media and another player's Twain. A counter spends the cancelled event's Spy again, so the
+  Spy is lost when a tech event is countered. Mass Media's own targets are the resource abilities below.
+- Resource abilities (human, 2026-11-15): every recorded ability of a tech that spent a resource (the production boosts,
+  Pottery, Philosophy, Education, Horseback Riding, Mysticism, Gunpowder, Metalworking, Atomic Theory, Monarchy,
+  Communism, Mathematics and Ballistics, Steam Power, Ecology, and the Incense cards Chivalry, Currency and Metal Casting;
+  `resourceAbilityOf` in `assisted-core.ts`) can be cancelled
+  from the log: by another player's Twain, by Primetime TV and by Mass Media (a Spy). Writing, Civil Service, Jousting
+  Tourney and Bread and Circuses cannot. An ability that costs nothing (healing, Bureaucracy) is not one. A cancelled
+  ability keeps its cost, as a cancelled culture card stays discarded: the rewind gives its resources back and they
+  are spent again (the same tokens or cards, a piece on the map removed again), and the tech counts as used this turn
+  (Mass Media's printed text: "the resources spent to activate that ability are lost"). A counter of the cancellation
+  rewinds to the game before it, so the ability stands and nothing is spent twice. A cancelled use keeps holding the
+  turn's usage key even if the first use of a confirmed repeat is undone later, and a Marie Curie substitute the use
+  consumed is not armed again. **Mass Media's "your culture
+  events cannot be canceled"** (human text "regardless of other game effects") is enforced in `cancellationRefusal`
+  (`twain.ts`): the event of a culture card of a player who has Mass Media revealed is refused as a target for every
+  canceller (Twain, Jousting Tourney, Primetime TV, Civil Service, Bread and Circuses), in the cancel list and on submit,
+  with nothing paid. A hidden Mass Media does not shield (it is private and not in play). It does not shield a city
+  action or a resource ability. Tests: `cancellation.test.ts`.
+- Cancellation edge cases (review of #336, 2026-11-15): Dr. Martin Luther King protects a city action taken while he was
+  faceup and unblocked even if he has left the hand or been blockaded since (`kingFaceupAtAction` on the record; for an
+  older record, the saved game before it), because the rewind would bring him back with the action. Only Ada Lovelace's
+  extra city action is immune to cancellation; a Supply Drop action can be cancelled, and the cancelled action keeps
+  using its Supply Drop (that play cannot be undone and gives no further action). Bread and Circuses reads the colours of
+  the figure owners recorded when the card moved them (`cardMove.owners`), so a figure removed since changes nothing. The
+  board history entries a cancellation makes after its rewind (a cancelled ability's resources taken off the map again,
+  the collected icon of the canceller's Spy) are recorded on the event (`keptHistoryIds`) and the board Undo refuses
+  them. A counter keeps what was written by the turn of the game it returns to (the saved game before the
+  cancellation), so orders of earlier turns are never reopened.
+- United Nations (human, 2026-11-14): culture events cannot target its owner against their will. The game cannot ask
+  the owner, so playing a culture event that names an owner (a chosen target, or every other player), or that moves
+  the figures of an owner (Disoriented, Lost, Out of Position), needs the player's confirmation that each owner
+  agreed (`consents`); the log says "with the agreement of X (United Nations)".
+  A blockaded wonder protects nobody. An in-game approval request is not built.
+- Counters act on the latest event only, by an event of their own, and rewind to the saved state before it:
+  Jousting Tourney and Primetime TV counter a culture cancellation, Twain counters another player's culture
+  cancellation (it cannot itself be culture-countered), and King is protection: he undoes a cancellation of his
+  holder's city action, is revealed (public) and **keeps Twain in hand**, as the human chose. Garcia's devotion
+  and Lovelace's extra city actions retain their printed exclusions; a faceup King makes his holder's city
+  actions uncancellable. Every card played is spent exactly once, except Twain when King protects.
+- Cards are checked against the saved baseline and the live hand (reward candidates, blockade, ownership). Inactive
+  games cannot take a cancellation, including from admin participants; committed-request retries are idempotent.
+  Spectators are read-only, including game chat; existing admin chat moderation remains available.
+- A cancellation restores the exact before-action revision, keeps the cancelled city's action spent (or discards
+  the target culture event), spends the cards played and reshuffles changed decks once (a counter reshuffles
+  nothing: the saved state is the game as it was). Later gameplay is shown in the log as "Undone:", never deleted
+  history. Current notes and order text/versions survive. Turns before the rollback target retain their
+  baseline completion/revision flags, even when their historical orders were edited. From the target turn
+  onward, restored phase flags reopen affected work, including revised orders in baseline-completed phases.
+- Eligibility starts at the turn where cancellation was adopted (`floorTurn`), and every event seals the log
+  through itself (`sealedThrough`) so a later rewind cannot refund its cards. There is no explicit history
+  confirmation (human). Older corrections and roster changes require table agreement. A save from the time
+  of disputes loses its `cases` and `acknowledgements` when loaded; an open dispute is dropped.
+- The log carries the buttons (human). Playing Twain, Jousting Tourney, Primetime TV or Bread and Circuses
+  scrolls to the log and starts a cancel mode; only the lines the card can act on (an action, or the latest
+  cancellation for a counter) get a red Cancel button, after a confirmation, and the mode ends after one use,
+  on Stop or when the card is gone. King needs no mode: his holder sees Protect on the latest cancellation of
+  their city action. There is no cancellation panel.
+- Undo votes: a player with an undo waiting gets a notice on every page load (once per load, players only) that
+  links to the vote; the vote box and the Yes button are green. Voting rules are unchanged.
+- State stores revision references, not recursive snapshots. Exact baselines are captured even after
+  note-only revision gaps; these checkpoints add fallback metadata, not repeated old log IDs or
+  public/private descriptions. A primary action log is not assumed to be the first line of its revision.
+  Legacy targets are adopted only with an exact preceding revision. Missing history fails atomically.
+  Idempotence fingerprints and actual selected inputs stay private; projections whitelist the viewer's own
+  cancellation cards with the public log lines each can act on. Targets carry labels and blocking reasons,
+  not log suffixes. An event stores the revision before it (`priorRevision`), never a snapshot.
 - Zheng He (human, #301) writes one private line for each hut or village piece on a map
   square (square and name) and for each hut or village item another player holds. The
   pieces on the map are anonymous and a draw takes the top card, so the look fixes the
@@ -1043,13 +1125,9 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   act at different paces and nothing is blocked anyway (human, 2026-11-13); Mass Media says the resources of the
   cancelled ability are lost): the Spy is paid, the other player and free text for what is cancelled are logged. The game
   has no pending action, so it never blocks the cancelled thing: the other player undoes it with the vote or corrects it by
-  hand, and the line says so. **Mass Media's shield** (human text "Your culture events cannot be canceled, regardless of
-  other game effects"; `massMediaShield`): what always cancels a culture event is refused, with nothing spent, when it is
-  aimed at a player who has Mass Media revealed: Civil Service's Spy, and the Jousting Tourney and Bread and Circuses cards
-  (the player they name). A hidden Mass Media does not shield (it is private and not in play). Not enforced: Primetime TV and
-  Mark Twain, because their card text lets them cancel something else as well (a resource ability, a city action) and the
-  play does not say which; Writing and Mass Media's own Spy cancel a city action and a resource ability, which it does
-  not shield. Regression tests: `assisted-tech-abilities.test.ts` and `assisted-play-card.test.ts`.
+  hand, and the line says so (the real cancel is made from the log now, see "Cancellation" above, where Mass Media's shield
+  for culture events is enforced). The legacy `playCard` of Jousting Tourney and Bread and Circuses, which only logs the
+  card, also refuses a player named who has Mass Media revealed (`massMediaShield`, `assisted-play-card.test.ts`).
 - **Monarchy** (Silk, City Management): `obsolete` takes a `wonderPieceId` and marks that wonder disabled on the owner list (human,
   2026-11-13), through the same board change and history entry as the hand-made disable (`setWonderOwner` with `disable: true`,
   #306): the owner is cleared, the piece stays and is drawn crossed out, its culture token is unaffected. Eligible: an ANCIENT

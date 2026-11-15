@@ -28,7 +28,7 @@ import type { TechItem } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, PlayerView } from '../lib/api.js'
-import { AssistedActionButton } from './AssistedActions.js'
+import { AssistedActionButton, isCancelTechAction } from './AssistedActions.js'
 import { TechTree } from './TechTree.js'
 import type { TechTreePlacement, TechTreeTech } from './TechTree.js'
 import { ItemCard, itemImageUrl } from './ItemCard.js'
@@ -258,6 +258,14 @@ export function TechPanel({
                 reasonPlacement="inline"
                 onBeforePress={
                   assistedAction === 'communism' || assistedAction === 'steamPower'
+                    ? () => {
+                        setDetailTech(null)
+                        setDetailCanRemove(false)
+                      }
+                    : undefined
+                }
+                onDone={
+                  isCancelTechAction(assistedAction)
                     ? () => {
                         setDetailTech(null)
                         setDetailCanRemove(false)

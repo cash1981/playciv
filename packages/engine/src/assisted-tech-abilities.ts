@@ -35,6 +35,7 @@ import {
   anyResourceName,
   anyResourcesAvailability,
   eachResourceAvailability,
+  itemPaymentIds,
   missingEachText,
   joinList,
   resourceAvailability,
@@ -53,7 +54,6 @@ import {
   grantUndoBlock,
   lastLogId,
   openCityManagementTurn,
-  massMediaShield,
   playerOf,
   rejected,
   techBlock,
@@ -682,13 +682,11 @@ interface CancelSpec {
   readonly what: string
   /** A rule that goes with it ("the resources spent on it are lost"), or `''`. */
   readonly rule: string
-  /** It cancels a culture event, which a player with Mass Media is shielded from. */
-  readonly culture?: true
 }
 
 const CANCELS: readonly CancelSpec[] = [
   { kind: 'writing', techName: 'Writing', phase: 'ANY', what: 'a city action', rule: '' },
-  { kind: 'civilService', techName: 'Civil Service', phase: 'ANY', what: 'a culture event', rule: '', culture: true },
+  { kind: 'civilService', techName: 'Civil Service', phase: 'ANY', what: 'a culture event', rule: '' },
   { kind: 'massMedia', techName: 'Mass Media', phase: 'ANY', what: 'a resource ability', rule: ', and the resources spent on it are lost' },
 ]
 
@@ -699,7 +697,7 @@ const MAX_NOTE = 80
  * the other player takes it back with the undo vote, or corrects it. The line says so.
  */
 function cancelAbility(spec: CancelSpec): AssistedActionDefinition {
-  return techAbility<'cancelAbility', { readonly target: Playerhand; readonly note: string }>({
+  const definition = techAbility<'cancelAbility', { readonly target: Playerhand; readonly note: string }>({
     kind: spec.kind,
     techName: spec.techName,
     effectKind: 'cancelAbility',
@@ -710,8 +708,6 @@ function cancelAbility(spec: CancelSpec): AssistedActionDefinition {
     plan(state, player, payload) {
       const target = otherPlayer(state, player, payload)
       if (!target.ok) return target
-      const shield = spec.culture === true ? massMediaShield(target.value) : undefined
-      if (shield !== undefined) return err(shield)
       const note = payload['note']
       if (note !== undefined && (typeof note !== 'string' || note.length > MAX_NOTE)) return err(`The note must be text of at most ${MAX_NOTE} characters.`)
       // Control characters would break the public line; runs of them become one space (the route does the same)
@@ -732,6 +728,22 @@ function cancelAbility(spec: CancelSpec): AssistedActionDefinition {
       return ok({ state, said: `; ${spec.what} that was cancelled is not brought back by the game` })
     },
   })
+  // The cancel itself is made from the log (`cancellation.ts`): it rewinds the game to before the target. This button only
+  // shows the Spy to pay with and starts that mode; pressing it as an action would log a cancel that stops nothing.
+  return {
+    ...definition,
+    itemPaymentsOnly: true,
+    strictOnce: true,
+    availability(state, playerId) {
+      const base = definition.availability(state, playerId)
+      if (base.status === 'used') return { ...base, reason: `${spec.techName} has already been used this turn.` }
+      if (base.status === 'ready' && itemPaymentIds(state, playerId, 'Spy').length === 0) {
+        return blocked('needs-resource', 'A Spy that is only a piece in your player area cannot cancel: use a Spy token in your hand, or a culture card that can be played as one.')
+      }
+      return base
+    },
+    apply: () => err(rejected(spec.kind, blocked('unavailable', `Use the Cancel button next to ${spec.what} in the log: ${spec.techName} rewinds the game to before it.`))),
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -199,9 +199,14 @@ describe('D1Repository', () => {
     expect(await repo.ensureGameRevision(baseline, 0)).toBe(false)
 
     await repo.saveGame(game)
+    expect(await repo.hasGameRevision(game.id, 0)).toBe(false)
     expect(await repo.ensureGameRevision(baseline, 0)).toBe(true)
     expect(await repo.ensureGameRevision(baseline, 0)).toBe(true)
     expect(await repo.listGameRevisions(game.id)).toHaveLength(1)
+    // Whether a revision is stored, without rebuilding it
+    expect(await repo.hasGameRevision(game.id, 0)).toBe(true)
+    expect(await repo.hasGameRevision(game.id, 1)).toBe(false)
+    expect(await repo.hasGameRevision('another-game', 0)).toBe(false)
 
     expect(await repo.ensureGameRevision(baseline, 3)).toBe(false)
   })

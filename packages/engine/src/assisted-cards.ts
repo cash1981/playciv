@@ -28,9 +28,10 @@ import {
   extraCityActionFor,
   lovelaceCreditWasUsed,
 } from './assisted-core.js'
-import { capitalOf, investableCoinsOf } from './sot.js'
+import { capitalOf, investableCoinsOf, isImmuneToAnarchy } from './sot.js'
 import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
+import { unitedNationsHolders } from './united-nations.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import {
@@ -48,7 +49,7 @@ import { levelOfMarker } from './assisted-sot.js'
 import { cultureCardsHeld, cultureHandSizeOf } from './culture-hand.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import { buildSquareRefusal, freeBuildingSquaresOf, squareCentre, squareLabel, unitSheetOf } from './build-options.js'
-import { cityFootprintsOf, mapCellOf } from './blockade.js'
+import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
 import { cityLabelOf } from './disband.js'
 import { cardMoveFigureChoices, cardMoveRuleOf, cardMoveSources } from './card-movement.js'
 import {
@@ -179,6 +180,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       targets: rule.targets,
       prompt: rule.prompt,
       resources: rule.resources,
+      unitedNations: kind === 'culture' ? unitedNationsHolders(state, player.playerId).map((holder) => holder.playerId) : [],
       automatic:
         passiveText === undefined
           ? kind === 'greatPerson'
@@ -411,6 +413,16 @@ interface CardMoveResult {
     readonly movement: PieceMovement | null
     readonly historyId: string
   }[]
+}
+
+/** The colours (lowercase) of the owners of the pieces a card moved, read from the game before the move. */
+function moveOwners(state: GameState, moves: readonly { readonly pieceId: string }[]): readonly string[] {
+  const colours = moves.flatMap((move) => {
+    const piece = state.board.pieces.find((candidate) => candidate.id === move.pieceId)
+    const colour = piece === undefined ? undefined : pieceColorOf(piece)
+    return colour === undefined ? [] : [colour]
+  })
+  return [...new Set(colours)]
 }
 
 /** Moves a set of figures together for a culture card, keeping their offsets within the square. */
@@ -1053,7 +1065,7 @@ function automate(
       if (typeof moved === 'string') return err(moved)
       return ok({
         state: moved.state,
-        extra: { cardMove: { card: name, kind: 'hannibal', from, to, moves: moved.moves } },
+        extra: { cardMove: { card: name, kind: 'hannibal', owners: moveOwners(state, moved.moves), from, to, moves: moved.moves } },
         said: `, moved ${selected.length} ${selected.length === 1 ? 'figure' : 'figures'} from ${squareLabel(from)} to ${squareLabel(to)}`,
       })
     }
@@ -1096,7 +1108,7 @@ function automate(
       if (typeof moved === 'string') return err(moved)
       return ok({
         state: moved.state,
-        extra: { cardMove: { card: name, kind: 'one', from, to, moves: moved.moves } },
+        extra: { cardMove: { card: name, kind: 'one', owners: moveOwners(state, moved.moves), from, to, moves: moved.moves } },
         said: `, moved ${figure.label} from ${squareLabel(from)} to ${squareLabel(to)}`,
       })
     }
@@ -1118,6 +1130,11 @@ function automate(
       const target = holders.length === 1 ? holders[0] : undefined
       if (target === undefined) {
         return err(`Choose a square holding figures of exactly one other player.`)
+      }
+      // The figures of another player are moved against them: the owner of the United Nations must have agreed
+      const unAgreed = unitedNationsHolders(state, player.playerId).some((holder) => holder.playerId === target.playerId)
+      if (unAgreed && !(payload?.consents ?? []).includes(target.playerId)) {
+        return err(`${target.username} owns the United Nations: culture events cannot target them against their will. Ask, and confirm that they agree to play it.`)
       }
       const turnNumber = turnStatus(state).currentTurn
       if (!cardMoveSources(state.board, target, turnNumber, 'group').some((cell) => sameCell(cell, from))) {
@@ -1141,10 +1158,11 @@ function automate(
       if (typeof moved === 'string') return err(moved)
       return ok({
         state: moved.state,
-        extra: { cardMove: { card: name, kind: 'group', from, to, moves: moved.moves } },
+        extra: { cardMove: { card: name, kind: 'group', owners: moveOwners(state, moved.moves), from, to, moves: moved.moves } },
         said:
           `, moved ${figures.length} ${figures.length === 1 ? 'figure' : 'figures'} of ` +
-          `${target.username} from ${squareLabel(from)} to ${squareLabel(to)}`,
+          `${target.username} from ${squareLabel(from)} to ${squareLabel(to)}` +
+          (unAgreed ? `, with the agreement of ${target.username} (United Nations)` : ''),
       })
     }
     case 'Marie Curie': {
@@ -1218,6 +1236,25 @@ export const playCard: AssistedActionDefinition = {
       if (shield !== undefined) return err(rejected('playCard', blocked('unavailable', shield)))
     }
 
+    if (/^The Citizens are Revolting/.test(card.name)) {
+      const shielded = targets.find((target) => isImmuneToAnarchy(state, target))
+      if (shielded !== undefined) {
+        return err(rejected('playCard', blocked('unavailable', `${shielded.username} never needs Anarchy, so ${card.name} cannot target them.`)))
+      }
+    }
+
+    // The United Nations: a culture event cannot name its owner against their will, so the player confirms they agreed
+    const consents = payload.consents ?? []
+    const agreed = card.kind === 'culture'
+      ? targets.filter((target) => unitedNationsHolders(state, player.playerId).some((holder) => holder.playerId === target.playerId))
+      : []
+    const unasked = agreed.filter((holder) => !consents.includes(holder.playerId))
+    if (unasked.length > 0) {
+      const who = unasked.map((holder) => holder.username).join(', ')
+      return err(rejected('playCard', blocked('unavailable',
+        `${who} ${unasked.length === 1 ? 'owns' : 'own'} the United Nations: culture events cannot target ${unasked.length === 1 ? 'them' : 'those players'} against their will. Ask, and confirm that they agree to play it.`)))
+    }
+
     if (card.name === 'Mother Teresa' && !card.coinSources.some((source) => source.key === payload.coinSource)) {
       return err(rejected('playCard', blocked('unavailable', 'Choose one of your coin tokens to give.')))
     }
@@ -1271,11 +1308,12 @@ export const playCard: AssistedActionDefinition = {
 
     const verb = card.kind === 'culture' ? 'played' : card.discards ? 'played' : 'used'
     const aimed =
-      card.targets.kind === 'allOthers'
+      (card.targets.kind === 'allOthers'
         ? ', targeting every other player'
         : targets.length > 0
           ? `, targeting ${joinNames(targets.map((target) => target.username))}`
-          : ''
+          : '') +
+      (agreed.length === 0 ? '' : `, with the agreement of ${joinNames(agreed.map((holder) => holder.username))} (United Nations)`)
     // A played card is open information, so one line serves the log of everyone and the player's own,
     // and the card is named with its own item number as well as the cards its effect moves
     const playedText =

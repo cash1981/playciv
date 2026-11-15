@@ -7,6 +7,7 @@ import { createBoard, mapTop } from '@civ/engine'
 import type { TechItem } from '@civ/engine'
 
 import { api } from '../lib/api.js'
+import { getCancelPick, stopCancelPick } from '../lib/cancelPick.js'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
 import { TechPanel } from './TechPanel.js'
@@ -61,7 +62,9 @@ const action = (kind: string, label: string, status: string, reason: string) => 
   reason,
   ...(['gunpowder', 'pottery', 'philosophy'].includes(kind)
     ? { payment: paymentOf(['Iron', 'Wheat', 'Silk', 'Incense'], kind === 'philosophy' ? 3 : 2) }
-    : {}),
+    : ['writing', 'civilService', 'massMedia'].includes(kind)
+      ? { payment: paymentOf(['Spy'], 1) }
+      : {}),
 })
 
 function viewOf(techsChosen: readonly TechItem[], opponents: readonly unknown[] = []): PlayerView {
@@ -681,26 +684,18 @@ describe('the tech resource abilities in the tech dialog (issue #327, slice 2)',
       expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p3' })
     })
 
-    it('Writing, Civil Service and Mass Media take free text for what is cancelled, and leave it out when empty', async () => {
-      const send = await open('Writing', 'writing')
-      ok()
-      expect(send.mock.calls[0]?.[4]).toEqual({ targetId: 'p2' })
-      cleanup()
-
-      const second = await open('Civil Service', 'civilService')
-      fireEvent.change(screen.getByLabelText('Culture event (optional)'), { target: { value: '  Sinbad ' } })
-      ok()
-      expect(second.mock.calls.at(-1)?.[4]).toEqual({ targetId: 'p2', note: 'Sinbad' })
-      cleanup()
-
-      await open('Mass Media', 'massMedia')
-      expect(screen.getByLabelText('Resource ability (optional)')).toBeTruthy()
-    })
-
-    it('says so when there is no other player', async () => {
-      const send = await open('Writing', 'writing', { opponents: [] })
-      expect(screen.getByRole('dialog').textContent).toContain('There is no other player')
-      expect(send).not.toHaveBeenCalled()
+    it('Writing, Civil Service and Mass Media pick the Spy, then start the log\'s cancel mode instead of sending an action', async () => {
+      for (const [techName, kind] of [['Writing', 'writing'], ['Civil Service', 'civilService'], ['Mass Media', 'massMedia']] as const) {
+        const send = await open(techName, kind)
+        expect(summary()).toBe('Pay Spy.')
+        ok()
+        expect(send).not.toHaveBeenCalled()
+        expect(getCancelPick()).toMatchObject({ name: techName, tech: techName, payment: tokenChoice('Spy') })
+        // The tech's own dialog is closed, so its backdrop does not cover the log the Cancel buttons are in
+        expect(screen.queryByRole('dialog')).toBeNull()
+        stopCancelPick()
+        cleanup()
+      }
     })
   })
 

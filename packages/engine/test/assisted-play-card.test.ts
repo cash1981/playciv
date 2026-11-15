@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { undoLastBoardChange } from '../src/actions/board.js'
+import { placePiece, setWonderOwner, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -94,7 +94,7 @@ describe('which cards can be played, and when', () => {
     expect(card.reason).toBe('Played during a battle.')
   })
 
-  it('lists an automated passive Great Person as a Use button, and an unautomated one not at all', () => {
+  it('lists an automated passive Great Person as a Use button', () => {
     const passive = withCardInHand(startOfTurn(), 'Valmiki').state
     const valmiki = cardOf(passive, 'Valmiki')
     expect(valmiki.kind).toBe('greatPerson')
@@ -109,14 +109,72 @@ describe('which cards can be played, and when', () => {
     expect(henryFord.status).toBe('ready')
     expect(henryFord.discards).toBe(false)
 
-    const unimplemented = withCardInHand(startOfTurn(), 'Dr. Martin Luther King').state
-    expect(playableCardsOf(unimplemented, player(unimplemented)).some((card) => card.name === 'Dr. Martin Luther King')).toBe(false)
+    const king = withCardInHand(startOfTurn(), 'Dr. Martin Luther King').state
+    expect(cardOf(king, 'Dr. Martin Luther King')).toMatchObject({
+      passive: true,
+      status: 'ready',
+      discards: false,
+      targets: { kind: 'none' },
+    })
 
     const anyTime = withCardInHand(startOfTurn(), 'Marco Polo').state
     const card = cardOf(anyTime, 'Marco Polo')
     expect(card.kind).toBe('greatPerson')
     expect(card.status).toBe('ready')
     expect(card.discards).toBe(true)
+  })
+
+  it('refuses to name a player with a faceup Dr. Martin Luther King for The Citizens are Revolting!', () => {
+    const base = withCardInHand(withCardInHand(startOfTurn(), 'The Citizens are Revolting!', ITCHI).state, 'Dr. Martin Luther King')
+    const revealed: GameState = {
+      ...base.state,
+      players: base.state.players.map((candidate) =>
+        candidate.playerId === CASH1981
+          ? { ...candidate, items: candidate.items.map((item) => (item.id === base.itemId ? { ...item, hidden: false } : item)) }
+          : candidate,
+      ),
+    }
+    const revolting = player(revealed, ITCHI).items.find((item) => itemName(item) === 'The Citizens are Revolting!')
+    if (revolting === undefined) throw new Error('card missing')
+    const result = play(revealed, 'r1', revolting.id, { playerId: ITCHI, targets: [CASH1981] })
+    expect(JSON.stringify(unwrapErr(result))).toMatch(/never needs Anarchy/)
+  })
+
+  describe('the United Nations: culture events cannot target its owner against their will', () => {
+    const withUnitedNations = (state: GameState, ownerId: string): GameState => {
+      const placed = unwrap(placePiece(state, { playerId: ownerId, assetId: 'wonders/unitednations', x: 40, y: 700 }))
+      const piece = placed.board.pieces.at(-1)
+      if (piece === undefined || piece.assetId !== 'wonders/unitednations') throw new Error('the wonder was not placed')
+      return unwrap(setWonderOwner(placed, { playerId: ownerId, pieceId: piece.id, ownerId }))
+    }
+    const scene = () => {
+      const card = withCardInHand(startOfTurn(), 'Counterfeiters')
+      return { state: withUnitedNations(card.state, KARANDRAS1), itemId: card.itemId }
+    }
+
+    it('lists the owners on a culture event, and on nothing else', () => {
+      const { state } = scene()
+      expect(cardOf(state, 'Counterfeiters').unitedNations).toEqual([KARANDRAS1])
+      const gift = withCardInHand(state, 'Marco Polo').state
+      expect(cardOf(gift, 'Marco Polo').unitedNations).toEqual([])
+    })
+
+    it('refuses a target that owns it until the player confirms the owner agreed, and says so in the log', () => {
+      const { state, itemId } = scene()
+      const refused = play(state, 'un-1', itemId, { targets: [KARANDRAS1] })
+      expect(JSON.stringify(unwrapErr(refused))).toContain('United Nations')
+      expect(state.discardedItems.some((item) => item.id === itemId)).toBe(false)
+      const done = unwrap(performAssistedAction(state, {
+        playerId: CASH1981, action: 'playCard', requestId: 'un-2', at: AT,
+        payload: { itemId, targets: [KARANDRAS1], consents: [KARANDRAS1] },
+      }))
+      expect(done.log.at(-1)?.publicLog).toContain('with the agreement of Karandras1 (United Nations)')
+    })
+
+    it('needs no agreement from a player who does not own it', () => {
+      const { state, itemId } = scene()
+      expect(play(state, 'un-3', itemId, { targets: [ITCHI] }).ok).toBe(true)
+    })
   })
 
   it('says a Great Person that stays faceup does not discard', () => {

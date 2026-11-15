@@ -218,6 +218,7 @@ export function createGame(options: CreateGameOptions): GameState {
     socialPolicies: numberedPolicies.map((policy) => ({ ...policy, itemNumber: relabel(policy.itemNumber) })),
     log: [],
     assistedActions: [],
+    cancellations: { floorTurn: 1, sealedThrough: 0, events: [], requests: [] },
     tradeOffers: [],
     rng: afterLabels,
     logSecret: options.secret ?? deriveLogSecret(seed, gameId),

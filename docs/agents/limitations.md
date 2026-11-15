@@ -20,9 +20,26 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   second scout's city choice; choosing a city is refused with a reason (#319).
 - **Scout-held Bank coins:** board derivation does not model scout transfers;
   the Sheet is the manual correction.
-- **Game-chat permissions:** `POST /api/games/:gameId/chat` checks login and
-  game locking, not membership, so a non-member can post although the UI hides
-  the composer. Whether that is intended is undecided.
+- **Cancellation coverage:** only structured assisted city actions and culture
+  events and resource abilities can be selected. Abilities without records and unstructured
+  square/building targets remain manual; Bread and Circuses does not infer
+  targeting from a card's owner. Reaction choices show the current hand; the
+  server additionally checks historical availability on submission. King is
+  tested only against the saved state just before the cancellation he undoes.
+- **Cancelling resource abilities:** only recorded abilities that spent a resource can be selected (a note-only or free
+  ability cannot). Mass Media's immunity of its holder's culture events is not enforced.
+  A Spy that is only a piece on the board (no item) cannot pay a cancel. The United Nations is a player's own
+  confirmation that its owner agreed, not an in-game approval request, and it is asked only for a named player or the
+  figures a group move takes: a culture event aimed at an unstructured building or square stays manual.
+- **Cancellation history:** missing exact legacy baselines cannot be guessed
+  from a log prefix. A cancellation cannot cross roster changes or reach behind
+  an earlier cancellation (each seals the history through itself). These
+  corrections require table agreement. No automatic command replay, speculative
+  draws or timeout is implemented, and nothing stops players from playing on
+  before a cancellation: they are expected to wait for each other.
+- **Cancellation feed:** the public log records each cancellation, counter and
+  King protection. The separate Revealed and Discarded feed does not yet
+  synthesize entries for the cards they spent.
 - **Ending on an own city centre:** F&F p. 7 lets figures cross friendly
   centres "as long as they don't end their movement there"; travel still lets a
   figure that is not disbanded stop there (the #319 centre-scout rule assumes
@@ -72,7 +89,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Zheng He's look is a list in the private log; the map shows no marker on the squares it read. A token drawn from keeps its piece on the map, and a later look would give that piece a new item. An undone draw puts the item in the shuffled deck, so earlier lines can then be stale. A piece collected into an area is not listed by a later look.
 - Jerry Garcia's all-city devotion counts no scout's square and offers no Charles Darwin conversion; a figure can be corrected on the culture counter by hand.
 - Unit tech abilities (#327): wounds dealt by Mathematics or Ballistics cannot be undone (health is corrected by hand). Combustion removes the building or turns the walls back itself (like Gunpowder's destroy) and its undo puts them back, but the engine cannot tell that the army really ended its move there or attacked the city. Combustion never targets the player's own walls or buildings in the outskirts of their own city; a building in the outskirts of cities of two colours has no owner and is a target. Marie Curie's armed substitute still replaces a real Uranium token in a payment (existing behaviour, not changed here), so Gunpowder naming Uranium while she is armed pays the substitute resource. With her armed and both the substitute token and a real Uranium token in hand, Gunpowder's warning (or its needs-resource block) can disagree with what a payment would spend; the hand-set tokens decide.
-- Tech resource abilities (#327, slice 2): a production boost is derived from its record and a Build does not consume it, so undoing the boost after a Build used it does not refund that Build. The cancels (Writing, Civil Service, Mass Media) never stop the cancelled action, except that a culture event of a player with Mass Media revealed cannot be canceled by Civil Service's Spy, Jousting Tourney or Bread and Circuses (Primetime TV and Mark Twain are not checked: their text allows cancelling something else). Education's and Code of Laws' coins are automatic once per turn; the undo of a build or of End battle takes them off. If two wonders are built in one turn and the first (the one that earned Education's coin) is undone, the second is not credited: type the coin in by hand. Writing is available in any open phase (human), although its card says City Management. The free tech of Education is not listed in the City Management tab: the page goes to the tech tree when it arrives and the Start of Turn view lists it. Monarchy's kill is refused while a battle is on; Philosophy's undo reshuffles the Great Person deck. Unverified: killing a unit with Monarchy after End battle, undoing End battle, then undoing Monarchy puts the card back in the hand without its `inBattle` flag while its unit stands in the live arena again.
+- Tech resource abilities (#327, slice 2): a production boost is derived from its record and a Build does not consume it, so undoing the boost after a Build used it does not refund that Build. The cancels (Writing, Civil Service, Mass Media) are made from the log and rewind the game (see decisions.md); Education's and Code of Laws' coins are automatic once per turn and the undo of a build or of End battle takes them off; if two wonders are built in one turn and the first (the one that earned Education's coin) is undone, the second is not credited: type the coin in by hand. Writing is available in any open phase (human), although its card says City Management. The free tech of Education is not listed in the City Management tab: the page goes to the tech tree when it arrives and the Start of Turn view lists it. Monarchy's kill is refused while a battle is on; Philosophy's undo reshuffles the Great Person deck. Unverified: killing a unit with Monarchy after End battle, undoing End battle, then undoing Monarchy puts the card back in the hand without its `inBattle` flag while its unit stands in the live arena again.
 - Metalworking, Atomic Theory and Bureaucracy (#327, batch 2): Metalworking adds to the typed attack and cannot tell a unit "played from hand" from one already in the arena. A nuke leaves a figure on the city's centre square, resource tokens, huts and city-states, and does not touch records that refer to destroyed pieces (undoing an earlier build of a destroyed building afterwards may refuse); the nuke's undo refuses only when a piece of the city is on the board again or a city now stands on one of its centre squares, so a figure or building that has moved onto an outskirts square is stacked on by the restore; a nuke of a capital (marker or metropolis) is refused. Gunpowder's destroy has the same kind of caveats: its undo refuses when the piece is on the board again or a building, wonder, city or city-state now stands on the square, and an assisted Build or Upgrade record that points to the destroyed piece refuses its own undo until the Gunpowder is undone. Atomic Theory's extra action is per city and not tracked against the cities' production. Bureaucracy only logs: the policy switch itself is by hand and is not limited.
 
 ## Battle cards

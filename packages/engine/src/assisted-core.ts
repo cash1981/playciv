@@ -28,6 +28,7 @@ import type {
   InvestmentCard,
   Playerhand,
   PlayerStats,
+  SpentResource,
 } from './state.js'
 import { capitalOf } from './sot.js'
 import { publicTurn, publicTurnKey, sameTurn, turnStatus } from './turn.js'
@@ -216,6 +217,8 @@ export interface CardSquare {
 export interface PlayCardPayload {
   readonly itemId: string
   readonly targets: readonly string[]
+  /** The owners of the United Nations among the targets whom the player has asked and who agreed to a culture event against them. */
+  readonly consents?: readonly string[]
   readonly resource?: string
   /** Mother Teresa: the coin counter to give from. */
   readonly coinSource?: string
@@ -410,6 +413,8 @@ export type AssistedActionDefinition = {
    * repeatable: it is never `used`, and each press needs its own `requestId`.
    */
   readonly usageKey: string | null
+  /** Only a token or card in the hand can pay it: a bare piece in the player area is not offered (the cancelling techs, which keep the paid item). */
+  readonly itemPaymentsOnly?: boolean
   /**
    * The phase tab the action belongs to, and that must be open to press it. `'ANY'`
    * is for an action that is not bound to one phase (it works whenever the tech or
@@ -603,13 +608,37 @@ export function cityActionOf(record: Pick<AssistedActionRecord, 'kind' | 'effect
   return { cityPieceId: effect.cityPieceId, label }
 }
 
+/**
+ * What a tech's resource ability paid, when the record is one: every ability of a tech that spends a resource token or
+ * a culture card played as one. An ability that costs nothing (Bureaucracy, healing) is not a resource ability, and
+ * neither is the legacy note of Writing, Civil Service or Mass Media (those cancel from the log now).
+ */
+export function resourceAbilityOf(record: Pick<AssistedActionRecord, 'effect'>): readonly SpentResource[] | undefined {
+  const effect = record.effect
+  const paid = ((): readonly SpentResource[] => {
+    switch (effect.kind) {
+      case 'productionBoost': case 'pottery': case 'philosophy': case 'education': case 'horsebackRiding':
+      case 'mysticism': case 'gunpowder': case 'metalworking': case 'atomicTheory': case 'bureaucracy': case 'monarchy':
+        return effect.spent
+      // Chivalry, Currency and Metal Casting: one Incense for culture
+      case 'communism': case 'techWounds': case 'steamPower': case 'chivalry': case 'currency': case 'metalCasting':
+        return [effect.spent]
+      case 'sotNote':
+        return effect.spent === null ? [] : [effect.spent]
+      default:
+        return []
+    }
+  })()
+  return paid.length === 0 ? undefined : paid
+}
+
 /** The player's city actions of the current turn that have not been undone, oldest first. */
 function cityActionRecordsThisTurn(state: GameState, player: Playerhand, turn: number = turnStatus(state).currentTurn): readonly CityActionRecord[] {
   return state.assistedActions.flatMap((record) => {
     const action = cityActionOf(record)
-    return action === undefined || record.status !== 'applied' || record.playerId !== player.playerId || record.turnNumber !== turn
-      ? []
-      : [action]
+    if (action === undefined || record.status === 'undone' || record.status === 'superseded' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
+    // A city action Mark Twain cancelled is still the city's action of the turn
+    return [record.status === 'cancelled' ? { ...action, label: `${action.label} (cancelled by Mark Twain)` } : action]
   })
 }
 
@@ -642,7 +671,8 @@ export const EXTRA_ACTION_CARD_NAMES: readonly string[] = EXTRA_ACTION_CARDS.map
  */
 function extraActionCredits(state: GameState, player: Playerhand, cityPieceId: string): readonly { readonly id: string; readonly name: string }[] {
   const turn = turnStatus(state).currentTurn
-  const used = new Set(state.assistedActions.flatMap((record) => (record.status === 'applied' && record.lovelaceCreditId !== undefined ? [record.lovelaceCreditId] : [])))
+  // A city action that Twain or Writing cancelled still counts as taken, and it used its credit
+  const used = new Set(state.assistedActions.flatMap((record) => ((record.status === 'applied' || record.status === 'cancelled') && record.lovelaceCreditId !== undefined ? [record.lovelaceCreditId] : [])))
   const isCapital = capitalOf(state, player)?.id === cityPieceId
   return EXTRA_ACTION_CARDS.filter((card) => card.capital || !isCapital).flatMap((card) =>
     state.assistedActions.flatMap((record) =>
@@ -723,7 +753,7 @@ export function cityActionCountsThisTurn(state: GameState, player: Playerhand, t
 
 /** Whether a city action still in force used this card play's credit. */
 export const lovelaceCreditWasUsed = (state: GameState, creditId: string): boolean =>
-  state.assistedActions.some((record) => record.status === 'applied' && record.lovelaceCreditId === creditId)
+  state.assistedActions.some((record) => (record.status === 'applied' || record.status === 'cancelled') && record.lovelaceCreditId === creditId)
 
 export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
 export const ATOMIC_ACTION_NOTE = ' (an extra city action from Atomic Theory)'

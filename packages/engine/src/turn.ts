@@ -35,6 +35,9 @@ export interface TurnOrderVersion {
 }
 
 export interface PlayerTurn {
+  /** A rollback retained these orders, but their gameplay needs reviewing. */
+  readonly needsRevision?: boolean
+  readonly revisionPhases?: readonly TurnPhase[]
   readonly turnNumber: number
   readonly username: string
   /** Java: `disabled` — set once the player has locked the turn. */

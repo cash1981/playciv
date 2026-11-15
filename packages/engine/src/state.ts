@@ -10,6 +10,8 @@
 import type { HutItem, Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement, VillageItem } from './item.js'
 import { isUnit } from './item.js'
 import { drawTokensOf } from './zheng-he.js'
+import { cancellationView } from './cancellation.js'
+import type { CancellationHistory, CancellationView } from './cancellation.js'
 import type { TeslaEffect } from './tesla.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
@@ -319,6 +321,7 @@ export type LogType =
  * the item sits on its own field that the `publicLog` projection never touches.
  */
 export interface GameLogEntry {
+  readonly superseded?: boolean
   readonly id: string
   readonly username: string
   readonly logType: LogType | null
@@ -778,6 +781,8 @@ export type AssistedEffect =
       readonly cardMove?: {
         readonly card: string
         readonly kind: 'one' | 'group' | 'hannibal'
+        /** The colours (lowercase) of the owners of the figures that moved, as they stood: Bread and Circuses needs no piece left on the board. */
+        readonly owners?: readonly string[]
         readonly from: { readonly column: number; readonly row: number }
         readonly to: { readonly column: number; readonly row: number }
         readonly moves: readonly {
@@ -1151,6 +1156,14 @@ export interface DrawnWonder {
  * stay on the record so a later "reopen phase" can find what belongs to it.
  */
 export interface AssistedActionRecord {
+  /** Available protection before the action, even if it was still hidden. Private. */
+  readonly kingAtAction?: string | null
+  /** Whether Dr. Martin Luther King was faceup and unblocked for the player when the action was taken. Private. */
+  readonly kingFaceupAtAction?: boolean
+  /** Exact saved revision before the action (not inferred from its last log line). */
+  readonly beforeRevision?: number
+  /** Actual submitted choices, private like the effect. */
+  readonly selectedInputs?: unknown
   readonly id: string
   readonly kind: AssistedActionKind
   readonly playerId: string
@@ -1161,7 +1174,8 @@ export interface AssistedActionRecord {
   readonly at: string | null
   /** The public log line the action wrote. */
   readonly logId: string
-  readonly status: 'applied' | 'undone'
+  /** `cancelled`: Mark Twain cancelled it and the game was rewound to before it. The record stays, so the city has acted. */
+  readonly status: 'applied' | 'undone' | 'cancelled' | 'superseded'
   readonly effect: AssistedEffect
   /** The Ada Lovelace play whose extra city action this record consumed. */
   readonly lovelaceCreditId?: string
@@ -1213,7 +1227,8 @@ export interface PublicAssistedAction {
   readonly username: string
   readonly turnNumber: number
   readonly phase: TurnPhase
-  readonly status: 'applied' | 'undone'
+  /** `cancelled`: Mark Twain cancelled it and the game was rewound to before it. The record stays, so the city has acted. */
+  readonly status: 'applied' | 'undone' | 'cancelled' | 'superseded'
   /** The public log line, as it was written. */
   readonly text: string
   readonly logId: string
@@ -1239,6 +1254,7 @@ export interface CivRevealSetup {
 }
 
 export interface GameState {
+  readonly cancellations?: CancellationHistory
   readonly id: string
   readonly name: string
   readonly gameType: GameType
@@ -1646,6 +1662,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
 
 /** One log entry as everyone may see it. The item contents are gone. */
 export interface PublicLogEntry {
+  readonly superseded?: boolean
   readonly id: string
   readonly username: string
   readonly logType: LogType | null
@@ -1656,6 +1673,7 @@ export interface PublicLogEntry {
 
 export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
   return {
+    ...(entry.superseded === undefined ? {} : { superseded: entry.superseded }),
     id: entry.id,
     username: entry.username,
     logType: entry.logType,
@@ -1875,6 +1893,7 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
  * appear in public form alone.
  */
 export interface PlayerView {
+  readonly cancellations?: CancellationView
   readonly id: string
   readonly name: string
   readonly gameType: GameType
@@ -2085,6 +2104,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),
     assistedActions: publicAssistedActions(state),
+    cancellations: cancellationView(state, viewerId),
     tradeOffers: publicTradeOffers(state),
     battle: state.battle,
     battleUndo: state.endedBattle === null ? null : { endedBy: state.endedBattle.endedBy },
