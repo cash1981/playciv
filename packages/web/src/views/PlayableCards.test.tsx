@@ -200,7 +200,7 @@ describe('choosing who the card names', () => {
     })
     renderControl(viewWith([sabotage]), sabotage)
     fireEvent.click(playButton('Sabotage'))
-    expect(screen.getByText('Choose up to 1, or nobody.')).toBeTruthy()
+    expect(screen.getByText('Choose one, or nobody.')).toBeTruthy()
     expect(confirmButton().disabled).toBe(false)
   })
 
@@ -269,6 +269,27 @@ describe('choosing who the card names', () => {
     fireEvent.click(confirmButton())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: ['bob'], coinSource: 'pottery' })
+  })
+
+  it('asks for the agreement of a United Nations owner it names, and sends it as consents', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const event = card({ unitedNations: ['bob'] })
+    renderControl(viewWith([event]), event)
+    fireEvent.click(playButton())
+    // Naming Carol needs nobody's agreement
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Carol' }))
+    expect(screen.queryByText(/Bob has agreed/)).toBeNull()
+    expect(confirmButton().disabled).toBe(false)
+    // Naming Bob does, and Confirm waits for it
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Carol' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob' }))
+    expect(screen.getByText(/Culture events cannot target the owner of the United Nations/)).toBeTruthy()
+    expect(confirmButton().disabled).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: /Bob has agreed/ }))
+    expect(confirmButton().disabled).toBe(false)
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: ['bob'], consents: ['bob'] })
   })
 
   it('asks which resource Marie Curie substitutes for Uranium, and sends it', async () => {
@@ -401,6 +422,19 @@ describe('choosing who the card names', () => {
     fireEvent.click(confirmButton())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], tech: 'Sanitation' })
+  })
+
+  it('plays Mark Twain through the log: no action picker on the card itself', () => {
+    const twain = card({
+      name: 'Mark Twain',
+      kind: 'greatPerson',
+      timings: ['ANY'],
+      discards: true,
+    })
+    renderControl(viewWith([twain]), twain)
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByLabelText('Action to cancel')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Play Mark Twain' })).toBeTruthy()
   })
 
   it('lets Frida Kahlo discard the ticked culture cards and sends their ids', async () => {
@@ -889,6 +923,100 @@ describe('movement culture cards', () => {
       from: { column: 2, row: 2 },
       to: { column: 2, row: 5 },
     })
+  })
+})
+
+describe('a group card against the owner of the United Nations', () => {
+  it('asks for the agreement once the square is chosen, before the destination, and sends it', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const blue = findBoardAsset('figures/bluearmy')
+    if (blue === undefined) throw new Error('missing blue army')
+    const blueFigure: BoardPiece = {
+      id: 'blue-army', assetId: blue.id, path: blue.path, label: blue.label, category: 'figure',
+      x: Math.round(2 * SQUARE_SIZE + (SQUARE_SIZE - blue.width) / 2),
+      y: Math.round(mapTop(testBoard) + 2 * SQUARE_SIZE + (SQUARE_SIZE - blue.height) / 2),
+      width: blue.width, height: blue.height, rotation: 0, placedBy: 'bob',
+    }
+    const lost = card({
+      itemId: 'c-lost', name: 'Lost', timings: ['CM'], targets: { kind: 'none' }, prompt: '',
+      automatic: 'moves all figures of another player in a square up to 3 squares to an empty square',
+      mapMove: { kind: 'group', allowance: 3 }, unitedNations: ['bob'],
+      status: 'ready', reason: 'Can be played in city management, which you are in.',
+    })
+    const groupView = {
+      ...testView,
+      board: { ...testBoard, pieces: [blueFigure, ...testTiles] },
+      opponents: [{ playerId: 'bob', username: 'Bob', color: 'Blue', civilization: null, revealedTechs: [], stats: { stacking: 2 } }],
+    } as unknown as PlayerView
+    const begin = vi.fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 5, label: 'C6' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={lost} gameId="g1" view={groupView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Lost'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    // The square is picked, and the player is told to ask before any destination is offered or anything is sent
+    await screen.findByText(/Bob owns the United Nations/)
+    expect(begin).toHaveBeenCalledTimes(1)
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('checkbox', { name: /Bob has agreed/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose destination square' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ itemId: 'c-lost', from: { column: 2, row: 2 }, to: { column: 2, row: 5 }, consents: ['bob'] })
+  })
+})
+
+describe('re-picking the source of a group card against a United Nations owner', () => {
+  it('sends the move for a square that needs no agreement after one that did', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const piece = (id: string, assetId: string, owner: string, row: number): BoardPiece => {
+      const asset = findBoardAsset(assetId)
+      if (asset === undefined) throw new Error(`missing ${assetId}`)
+      return {
+        id, assetId: asset.id, path: asset.path, label: asset.label, category: 'figure',
+        x: Math.round(2 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2),
+        y: Math.round(mapTop(testBoard) + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+        width: asset.width, height: asset.height, rotation: 0, placedBy: owner,
+      }
+    }
+    const lost = card({
+      itemId: 'c-lost', name: 'Lost', timings: ['CM'], targets: { kind: 'none' }, prompt: '',
+      automatic: 'moves all figures of another player in a square up to 3 squares to an empty square',
+      mapMove: { kind: 'group', allowance: 3 }, unitedNations: ['bob'],
+      status: 'ready', reason: 'Can be played in city management, which you are in.',
+    })
+    const groupView = {
+      ...testView,
+      board: { ...testBoard, pieces: [piece('blue-army', 'figures/bluearmy', 'bob', 2), piece('green-army', 'figures/greenarmy', 'carol', 3), ...testTiles] },
+      opponents: [
+        { playerId: 'bob', username: 'Bob', color: 'Blue', civilization: null, revealedTechs: [], stats: { stacking: 2 } },
+        { playerId: 'carol', username: 'Carol', color: 'Green', civilization: null, revealedTechs: [], stats: { stacking: 2 } },
+      ],
+    } as unknown as PlayerView
+    const begin = vi.fn()
+      .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
+      .mockResolvedValueOnce({ column: 2, row: 3, label: 'C4' })
+      .mockResolvedValueOnce({ column: 2, row: 6, label: 'C7' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={lost} gameId="g1" view={groupView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Lost'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await screen.findByText(/Bob owns the United Nations/)
+    // The player will not ask Bob and picks Carol's square instead: nothing needs agreeing, and the move is sent
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toMatchObject({ itemId: 'c-lost', from: { column: 2, row: 3 }, to: { column: 2, row: 6 } })
+    expect(send.mock.calls[0]?.[4]).not.toHaveProperty('consents')
   })
 })
 

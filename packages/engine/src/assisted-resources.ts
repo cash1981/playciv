@@ -154,6 +154,11 @@ export function resourcePaymentOptions(state: GameState, playerId: string, cost:
   }))
 }
 
+/** The ids of the tokens and cards in the player's hand that could pay `resource` (never a bare piece in the player area). */
+export function itemPaymentIds(state: GameState, playerId: string, resource: string): readonly string[] {
+  return selectablePayments(state, playerId, resource).flatMap((payment) => payment.kind === 'piece' ? [] : [paymentId(payment)])
+}
+
 /** The token (never a card) a resource would be paid with. */
 export function findResourceToken(state: GameState, playerId: string, resource: string): SpentResource | undefined {
   return findResourcePayment(state, playerId, resource, true)

@@ -35,6 +35,7 @@ import {
   anyResourceName,
   anyResourcesAvailability,
   eachResourceAvailability,
+  itemPaymentIds,
   missingEachText,
   joinList,
   resourceAvailability,
@@ -696,7 +697,7 @@ const MAX_NOTE = 80
  * the other player takes it back with the undo vote, or corrects it. The line says so.
  */
 function cancelAbility(spec: CancelSpec): AssistedActionDefinition {
-  return techAbility<'cancelAbility', { readonly target: Playerhand; readonly note: string }>({
+  const definition = techAbility<'cancelAbility', { readonly target: Playerhand; readonly note: string }>({
     kind: spec.kind,
     techName: spec.techName,
     effectKind: 'cancelAbility',
@@ -727,6 +728,22 @@ function cancelAbility(spec: CancelSpec): AssistedActionDefinition {
       return ok({ state, said: `; ${spec.what} that was cancelled is not brought back by the game` })
     },
   })
+  // The cancel itself is made from the log (`cancellation.ts`): it rewinds the game to before the target. This button only
+  // shows the Spy to pay with and starts that mode; pressing it as an action would log a cancel that stops nothing.
+  return {
+    ...definition,
+    itemPaymentsOnly: true,
+    strictOnce: true,
+    availability(state, playerId) {
+      const base = definition.availability(state, playerId)
+      if (base.status === 'used') return { ...base, reason: `${spec.techName} has already been used this turn.` }
+      if (base.status === 'ready' && itemPaymentIds(state, playerId, 'Spy').length === 0) {
+        return blocked('needs-resource', 'A Spy that is only a piece in your player area cannot cancel: use a Spy token in your hand, or a culture card that can be played as one.')
+      }
+      return base
+    },
+    apply: () => err(rejected(spec.kind, blocked('unavailable', `Use the Cancel button next to ${spec.what} in the log: ${spec.techName} rewinds the game to before it.`))),
+  }
 }
 
 // ---------------------------------------------------------------------------

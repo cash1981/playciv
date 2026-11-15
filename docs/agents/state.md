@@ -45,6 +45,14 @@ deployment reports do not establish present health.
   Kurosawa, Charles Darwin, A. P. Giannini, Frida Kahlo, Zheng He, Leonidas, Joan of Arc, Florence Nightingale, Sun Tzu, Georgy Zhukov and Gustavus Adolphus apply through the engine.
 - Trade: free-text trade offers (#265); trade resets to coins at turn start for
   a player who researched, and city trade is collected once when Trade starts.
+- Cancellation (#301, #336): Twain and the culture cancellations act at once;
+  nothing pauses. The action is picked with a Cancel button in the log, and a
+  culture cancellation can be countered the same way. Writing, Civil Service and
+  Mass Media cancel with a Spy, and can be countered; Twain, Primetime TV and
+  Mass Media also cancel a recorded resource ability, whose cost stays spent. King's Protect button
+  undoes a cancellation of his holder's city action and keeps Twain in hand.
+  A culture event naming a United Nations owner needs the owner's agreement.
+  Order versions are preserved and each cancellation seals the history before it.
 - Figure movement (#302): enforced speed, water, stacking and stops; movement is
   a pool shared with exploring; card map picker for Galileo, Steam Power,
   Hannibal and movement culture cards; Communism and Brandenburg Gate.

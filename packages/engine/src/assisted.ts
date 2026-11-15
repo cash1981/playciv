@@ -26,6 +26,7 @@
  */
 
 import { flipPieceUnchecked, movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
+import { availableKingId, holdsFaceupKing } from './twain.js'
 import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
@@ -42,6 +43,7 @@ import {
   placeBack,
   playerOf,
   rejected,
+  resourceAbilityOf,
   techBlock,
   useTurnAction,
   usedReason,
@@ -1784,7 +1786,11 @@ export function availableActionsFor(state: GameState, playerId: string): readonl
     ...(definition.buttonText === undefined ? {} : { buttonText: definition.buttonText }),
     ...(definition.techName === null ? {} : { techName: definition.techName }),
     ...(definition.cost === undefined ? {} : {
-      payment: { cost: definition.cost, options: resourcePaymentOptions(state, playerId, definition.cost) },
+      payment: {
+        cost: definition.cost,
+        options: resourcePaymentOptions(state, playerId, definition.cost)
+          .filter((option) => definition.itemPaymentsOnly !== true || option.choice.kind !== 'piece'),
+      },
     }),
     repeatable: definition.strictOnce !== true,
     ...definition.availability(state, playerId),
@@ -1887,6 +1893,10 @@ export function performAssistedAction(
   const lovelaceCreditId =
     cityAction === undefined ? undefined : extraCityActionFor(state, player, cityAction.cityPieceId, cityAction.label)?.creditId
   const record: AssistedActionRecord = {
+    kingAtAction: availableKingId(state, player),
+    kingFaceupAtAction: holdsFaceupKing(state, player),
+    beforeRevision: state.rev,
+    selectedInputs: input.payload,
     id: input.requestId,
     kind: input.action,
     playerId: input.playerId,
@@ -1943,6 +1953,10 @@ export function reverseAssistedAction(
   if (record.status === 'undone') {
     return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: record.logId })
   }
+  if (record.status === 'superseded') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+  if (record.status === 'cancelled') {
+    return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: 'That action was cancelled with Mark Twain, so it cannot be undone.' })
+  }
   const definition = definitionOf(record.kind)
   const player = playerOf(state, record.playerId)
   if (definition === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
@@ -1959,10 +1973,11 @@ export function reverseAssistedAction(
     ),
   }
   // A confirmed repeat shares the first use's key, so the key is freed only when no
-  // other applied record of this player and turn still holds it.
+  // other applied record of this player and turn still holds it. A resource ability that
+  // was cancelled still holds it: it counts as used this turn.
   const stillHeld = marked.assistedActions.some(
     (candidate) =>
-      candidate.status === 'applied' &&
+      (candidate.status === 'applied' || (candidate.status === 'cancelled' && resourceAbilityOf(candidate) !== undefined)) &&
       candidate.playerId === record.playerId &&
       candidate.turnNumber === record.turnNumber &&
       candidate.usageKey === record.usageKey,

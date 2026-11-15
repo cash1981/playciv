@@ -413,6 +413,10 @@ export class JsonFileRepository implements Repository {
     }))
   }
 
+  async hasGameRevision(gameId: string, revision: number): Promise<boolean> {
+    return this.revisions.has(this.revisionKey(gameId, revision))
+  }
+
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
     const row = this.revisions.get(this.revisionKey(gameId, revision))
     if (row === undefined) return undefined

@@ -651,52 +651,13 @@ describe.each([
     expect(availableActionsFor(ready(), CASH1981).find((entry) => entry.action === kind)?.phase).toBe(phase)
   })
 
-  it('pays the Spy, names the player and what is cancelled, and says the game does not stop it', () => {
-    const used = unwrap(press(ready(), kind, { targetId: KARANDRAS1, note: 'Build in Capital' }))
-    expect(hasHut(used, 'Spy')).toBe(false)
-    const line = used.log.at(-1)?.publicLog ?? ''
-    expect(line).toContain(`used ${tech}: spent 1 ${resourceText(used, 'Spy')}, cancelling ${what} of Karandras1 (Build in Capital)`)
-    expect(line).toContain('settle it by hand')
-    if (kind === 'massMedia') expect(line).toContain('the resources spent on it are lost')
-    expect(used.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'cancelAbility', tech, targetId: KARANDRAS1, note: 'Build in Capital' })
-    // Nothing else about the other player changed
-    expect(player(used, KARANDRAS1)).toEqual(player(ready(), KARANDRAS1))
-  })
-
-  it('flattens line breaks and control characters in the note, so the public line stays one line', () => {
-    const used = unwrap(press(ready(), kind, { targetId: ITCHI, note: 'Build\nin\r\n  Capital\u0000!' }))
-    expect(used.log.at(-1)?.publicLog).toContain('(Build in Capital !)')
-    expect(used.log.at(-1)?.publicLog).not.toMatch(/[\u0000-\u001f]/)
-  })
-
-  it('works without a note, refuses yourself, a stranger and a long note, and pays nothing', () => {
-    expect(unwrap(press(ready(), kind, { targetId: ITCHI })).log.at(-1)?.publicLog).toContain(`cancelling ${what} of Itchi`)
-    for (const payload of [undefined, {}, { targetId: CASH1981 }, { targetId: 'nobody' }, { targetId: ITCHI, note: 'x'.repeat(81) }, { targetId: ITCHI, note: 4 }]) {
-      expect(refused(press(ready(), kind, payload))).toBe('ASSISTED_ACTION_REJECTED')
-    }
-    expect(hasHut(ready(), 'Spy')).toBe(true)
-  })
-
-  it('is once per turn, with a confirmed repeat', () => {
-    const first = unwrap(press(ready(), kind, { targetId: ITCHI }))
-    const again = huts(first, 'Spy')
-    expect(refused(press(again, kind, { targetId: ITCHI }, 'req-2'))).toBe('ASSISTED_ACTION_REJECTED')
-    expect(unwrap(press(again, kind, { targetId: ITCHI }, 'req-2', true)).log.at(-1)?.publicLog).toContain('confirmed by the player')
-  })
-
-  it('an undo by vote returns the Spy and frees the use', () => {
-    const used = unwrap(press(ready(), kind, { targetId: ITCHI }))
-    const undone = voted(used, 'req-1')
-    expect(hasHut(undone, 'Spy')).toBe(true)
-    expect(usedKeys(undone)).not.toContain(`card:${tech}`)
-    expect(undone.log.at(-1)?.publicLog).toContain(`${tech} was undone`)
-  })
-
-  it('pays its Spy with a culture card that can be played as one', () => {
-    const state = withCardInHand(cmTurn(tech), 'A Princely Gift').state
-    expect(assistedAvailability(state, CASH1981, kind)).toMatchObject({ status: 'ready', warning: expect.stringContaining('A Princely Gift') })
-    const used = unwrap(press(state, kind, { targetId: ITCHI }))
-    expect(used.log.at(-1)?.publicLog).toMatch(/played A Princely Gift item number #\d+ as Spy, cancelling/)
+  it('is no action: the cancel is made from the log (cancellation.ts), so pressing it spends nothing and logs nothing', () => {
+    const state = ready()
+    const result = press(state, kind, { targetId: ITCHI })
+    expect(refused(result)).toBe('ASSISTED_ACTION_REJECTED')
+    expect(JSON.stringify(unwrapErr(result))).toContain(`Use the Cancel button next to ${what} in the log`)
+    expect(hasHut(state, 'Spy')).toBe(true)
+    expect(state.assistedActions).toHaveLength(0)
   })
 })
 

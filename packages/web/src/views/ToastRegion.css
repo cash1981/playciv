@@ -47,6 +47,20 @@
   color: var(--error-text);
 }
 
+.toast-notice {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 18%, var(--panel));
+  color: var(--text);
+}
+
+.toast-action {
+  flex: none;
+  padding: 0.1rem 0.6rem;
+  border-color: var(--warn);
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .toast-text {
   flex: 1;
   min-width: 0;

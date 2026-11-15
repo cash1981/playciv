@@ -1049,6 +1049,8 @@ export function flipPieceUnchecked(
  */
 function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): boolean {
   const { change } = entry
+  // What a cancellation spent again after its rewind (a cancelled ability's resource, a tech's Spy) was taken off the map by it: not the board Undo's to give back
+  if (state.cancellations?.events.some((event) => event.keptHistoryIds?.includes(entry.id) === true) === true) return true
   return state.assistedActions.some((record) => {
     if (record.status !== 'applied') return false
     const effect = record.effect

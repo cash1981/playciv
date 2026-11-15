@@ -47,12 +47,16 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'discard', 'units', 'from', 'to', 'figureId', 'figureIds', 'tech'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, resource, coinSource, substitute, convert, harbors, discard, units, from, to, figureId, figureIds and tech, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'consents', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'discard', 'units', 'from', 'to', 'figureId', 'figureIds', 'tech'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, consents, resource, coinSource, substitute, convert, harbors, discard, units, from, to, figureId, figureIds and tech, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
     return `targets must be a list of at most ${MAX_TARGETS} player ids`
+  }
+  const consents = args['consents']
+  if (consents !== undefined && (!Array.isArray(consents) || consents.length > MAX_TARGETS || !consents.every(isId))) {
+    return `consents must be a list of at most ${MAX_TARGETS} player ids`
   }
   const resource = args['resource']
   if (resource !== undefined && (typeof resource !== 'string' || resource.length === 0 || resource.length > 20)) {
@@ -148,6 +152,7 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   return {
     itemId: args['itemId'],
     targets,
+    ...(consents === undefined ? {} : { consents: consents as readonly string[] }),
     ...(resource === undefined ? {} : { resource }),
     ...(coinSource === undefined ? {} : { coinSource }),
     ...(substitute === undefined ? {} : { substitute }),
