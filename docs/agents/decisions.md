@@ -1182,7 +1182,8 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   The other allowance wins (human, 2026-11-15): when Atomic Theory, the capital's extra action under Monarchy (a different action
   only), an unused Ada Lovelace or Supply Drop credit (`extraCityActionFor`) or a confirmed repeat can cover the second build, it is a
   whole action with the city's full production and Engineering stays unused (`buildOptionsOf` offers no `engineering`; `apply`
-  recomputes the options without it for a confirmed repeat). The split applies only when nothing else covers the second build.
+  recomputes the options without it for a confirmed repeat). The split applies only when nothing else covers the second build. The web never asks the already-acted question while the
+  split is offered, so a confirmed repeat with full production is reachable through the engine and API only, not the UI.
   Removing the first build's piece by hand while the second stands is a plain removal (`takeBackOpenBuild` returns undefined).
   Tests: `engine/test/assisted-engineering.test.ts`, `web/src/views/BuildPicker.test.tsx`.
 - **Atomic Theory** (Uranium; Marie Curie's substitution applies through the shared layer): one action, one use a turn, two modes.

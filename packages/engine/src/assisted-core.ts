@@ -636,7 +636,6 @@ export function resourceAbilityOf(record: Pick<AssistedActionRecord, 'effect'>):
 function cityActionRecordsThisTurn(state: GameState, player: Playerhand, turn: number = turnStatus(state).currentTurn): readonly CityActionRecord[] {
   return state.assistedActions.flatMap((record) => {
     const action = cityActionOf(record)
-    // Engineering's second build shares the first build's action: it is not an action of its own
     // Engineering's second build shares the first build's action: it is not an action of its own. Only a second build that Twain or
     // Writing cancelled after its first build was undone is still the city's action of the turn, as the cancelled action is
     const sharing = record.effect.kind === 'build' ? record.effect.engineering : undefined
