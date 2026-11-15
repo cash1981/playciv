@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { ASSISTED_TECH_ACTIONS, NIGHTINGALE, SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType, techWoundsOwed, zhukovOwed } from '@civ/engine'
+import { ASSISTED_TECH_ACTIONS, NIGHTINGALE, SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, arenaUnitTier, brandenburgForbiddenCells, isTradable, isUnit, itemName, itemType, healOwed, techWoundsOwed, zhukovOwed } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, CityDefence, Item, LastBattleView, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -1417,6 +1417,8 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null)
   // Mathematics and Ballistics: the enemy unit the player is choosing a number of wounds for, and the number picked (`null` while closed)
   const [woundPick, setWoundPick] = useState<{ readonly tech: string; readonly unitId: string; readonly wounds: number | null } | null>(null)
+  // Animal Husbandry: the own unit and the number of wounds being picked to heal (`null` while closed)
+  const [healPick, setHealPick] = useState<{ readonly unitId: string; readonly wounds: number | null } | null>(null)
   const [draggingArenaUnitId, setDraggingArenaUnitId] = useState<string | null>(null)
   const [selectedBattlePiece, setSelectedBattlePiece] = useState<{
     readonly kind: 'hand' | 'arena'
@@ -1433,7 +1435,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   // The wound popup belongs to the battle it was opened in: it does not come back in a later battle or after End battle is undone
   const battleId = battle?.id ?? null
-  useEffect(() => { setWoundPick(null) }, [battleId])
+  useEffect(() => { setWoundPick(null); setHealPick(null) }, [battleId])
   useEffect(() => {
     if (selectedBattlePiece === null) return
     const stillAvailable = selectedBattlePiece.kind === 'hand'
@@ -1613,6 +1615,25 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
           return action !== undefined && (owed > 0 || listed) ? [{ tech, action, owed, listed }] : []
         })
       : []
+  // Animal Husbandry and Biology: free, once per battle, on the player's own living units. Each has its own button (listed once the tech is
+  // revealed and a battle is on and the heal is ready or used); Animal Husbandry then owes wounds, healed one unit at a time
+  const healableUnits =
+    battle !== null && mySideInBattle !== null
+      ? battle.arena.filter((unit) => unit.side === mySideInBattle && !unit.killed && arenaUnitTier(unit).health > unit.health)
+      : []
+  const healTechs =
+    battle !== null && myCombatant
+      ? ([['Animal Husbandry', 'animalHusbandryHeal'], ['Biology', 'biologyHeal']] as const).flatMap(([tech, action]) => {
+          const status = view.you?.availableActions?.find((candidate) => candidate.action === action)?.status
+          const owed = healOwed(battle, myId, tech)
+          const listed = status === 'ready' || status === 'used'
+          return owed > 0 || listed ? [{ tech, action, owed }] : []
+        })
+      : []
+  const healTarget = healPick === null ? undefined : healableUnits.find((unit) => unit.id === healPick.unitId)
+  const healOwedNow = battle === null ? 0 : healOwed(battle, myId, 'Animal Husbandry')
+  const healMax = healTarget === undefined ? 0 : Math.min(arenaUnitTier(healTarget).health - healTarget.health, healOwedNow)
+  const healCount = Math.min(Math.max(1, healPick?.wounds ?? healMax), Math.max(1, healMax))
   const sunTzuCard = (view.you?.items ?? []).find((item) => item.kind === 'greatperson' && item.name === SUN_TZU)
   const sunTzuAvailable = myCombatant && sunTzuCard !== undefined && !(battle?.sunTzu ?? []).includes(myId)
   // The engine refuses the pass while every figure of the card's type is blockaded
@@ -1906,6 +1927,63 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                 </button>
               ))}
             </div>
+          )}
+
+          {healTechs.map(({ tech, action, owed }) => (
+            <div key={tech} className="row battle-heal" role="group" aria-label={`${tech} heal`}>
+              <AssistedActionButton action={action} gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} />
+              {owed > 0 && (
+                <>
+                  <strong>
+                    {tech}: heal up to {owed} wound{owed === 1 ? '' : 's'}, choosing how many each of your units gets
+                  </strong>
+                  {healableUnits.length === 0 && <span className="muted">None of your units in the arena is wounded.</span>}
+                  {healableUnits.map((unit) => (
+                    <button key={unit.id} className="small" disabled={busy || noMutations} onClick={() => setHealPick({ unitId: unit.id, wounds: null })}>
+                      Heal {itemName(unit.unit)} (front {unit.position + 1}, {unit.health} HP)
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          ))}
+
+          {healPick !== null && (
+            <ChoiceDialog
+              title="Animal Husbandry: heal"
+              okDisabled={busy || noMutations || healTarget === undefined || healMax < 1}
+              onOk={() => {
+                const { unitId } = healPick
+                setHealPick(null)
+                runBattleAction(() => api.healUnits(gameId, 'Animal Husbandry', unitId, healCount, rev))
+              }}
+              onCancel={() => setHealPick(null)}
+            >
+              {healTarget === undefined || healMax < 1 ? (
+                <p role="status" className="assisted-warning">
+                  {healTarget === undefined ? 'That unit is no longer wounded or in the arena.' : 'Animal Husbandry has no wound left to heal.'}
+                </p>
+              ) : (
+                <>
+                  <p>
+                    {itemName(healTarget.unit)} (front {healTarget.position + 1}, {healTarget.health} HP)
+                  </p>
+                  <label>
+                    Wounds to heal{' '}
+                    <select aria-label="Wounds to heal" value={healCount} onChange={(event) => setHealPick({ ...healPick, wounds: Number(event.target.value) })}>
+                      {Array.from({ length: healMax }, (_, index) => index + 1).map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="choice-summary">
+                    Heal {healCount} wound{healCount === 1 ? '' : 's'}; {healOwedNow - healCount} left to heal
+                  </p>
+                </>
+              )}
+            </ChoiceDialog>
           )}
 
           {woundTechs.map(({ tech, action, owed, listed }) => (

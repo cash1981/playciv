@@ -68,6 +68,9 @@ describe('the registry', () => {
       'combustion',
       'gunpowder',
       'mathematics',
+      // Animal Husbandry and Biology heal in a battle (issue #354)
+      'animalHusbandryHeal',
+      'biologyHeal',
       // The resource abilities of the other techs (issue #327, slice 2)
       'animalHusbandry',
       'banking',
@@ -105,7 +108,7 @@ describe('the registry', () => {
       expect(action.phase).toBe(
         startOfTurn.includes(action.action) || action.action.startsWith('sot:')
           ? 'SOT'
-          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'metalworking' || action.action === 'atomicTheory'
+          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'animalHusbandryHeal' || action.action === 'biologyHeal' || action.action === 'metalworking' || action.action === 'atomicTheory'
             ? 'ANY'
             : action.action === 'writing' || action.action === 'civilService' || action.action === 'massMedia'
               ? 'ANY'

@@ -1059,6 +1059,15 @@ First slice of automating the tech resource abilities. Scope: Mathematics, Balli
   draw goes to the defender; a barbarian side wins for nobody), recorded as `endedBattle.codeOfLawsCoin`, so undoing End
   battle (the ender alone) takes the coin off again; its own log line names the winner. "Once per turn" counts the
   game's turn number, so a defender who wins during another player's turn earns it for that turn.
+- **Animal Husbandry and Biology heal** (human, 2026-11-15; issue #354): free, once per battle (the entry in `Battle.heals`,
+  not a turn key), in a battle the player fights in, on their own living arena units, up to the health the card has at its
+  level (`arenaUnitTier`; a killed unit stays dead). They have their own Battle-panel buttons (`animalHusbandryHeal`,
+  `biologyHeal`), separate from Animal Husbandry's production boost, and each can be used in the same battle.
+  Animal Husbandry's button owes 3 wounds, healed with `healUnits` (`POST /battle/arena/heal`) in the number the player
+  chooses per unit, who may stop early (like Mathematics' wounds); its undo vote is refused once a wound was healed. Biology
+  heals every wounded unit when pressed (refused when none is wounded, so the use is not wasted); its undo puts each unit's
+  health back while it still holds what the heal gave it, and only until End battle (the results are counted with the healed units).
+  Both are strictly once per battle: a confirmed repeat does not give another use. Neither is a resource ability, so nothing can cancel them.
 - **Once per turn, not per battle** (human, 2026-11-13): Mathematics, Ballistics and every tech card are once per
   turn, which is the `card:<tech>` usage key with the confirmed repeat; only the healing abilities (Animal
   Husbandry, Biology) are once per battle.

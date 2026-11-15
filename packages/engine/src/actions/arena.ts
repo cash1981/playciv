@@ -23,7 +23,7 @@ import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
-import { SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, playerSideOf, techWoundsOwed, zhukovOwed } from '../battle-cards.js'
+import { SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, healOwed, playerSideOf, techWoundsOwed, zhukovOwed } from '../battle-cards.js'
 import { blockadedGreatPersonTypes } from '../blockade.js'
 import { earnTechCoin, returnTechCoin } from '../tech-coins.js'
 import type { TechCoinGrant } from '../tech-coins.js'
@@ -1294,6 +1294,74 @@ export function techWound(state: GameState, input: TechWoundInput): ActionResult
         const take = Math.min(left, candidate.total - candidate.dealt)
         left -= take
         return take === 0 ? candidate : { ...candidate, dealt: candidate.dealt + take }
+      }),
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Animal Husbandry: heal
+// ---------------------------------------------------------------------------
+
+export interface HealInput {
+  readonly playerId: string
+  /** Animal Husbandry. */
+  readonly tech: string
+  readonly arenaUnitId: string
+  /** How many wounds this unit gets back: from 1 up to what is owed and what the unit has lost. */
+  readonly wounds: number
+}
+
+/** How many wounds a unit can get back: up to the health its card has at its level (or what it already has when that is more). */
+export const healableWounds = (unit: ArenaUnit): number => Math.max(0, arenaUnitTier(unit).health - unit.health)
+
+/**
+ * Animal Husbandry (issue #354): "Once per battle, heal up to a total of 3 wounds from your units in play." Pressing its
+ * button owes the wounds (`Battle.heals`, free); each call heals the number the player chose on one of their own living arena
+ * units, up to the health its card has at its level (a killed unit stays dead). The player may stop early. Like Mathematics'
+ * wounds, the assisted undo is refused once a wound has been healed, and the health is corrected by hand if wrong.
+ */
+export function healUnits(state: GameState, input: HealInput): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+  const battle = state.battle
+  const side = playerSideOf(battle, input.playerId)
+  if (side === null) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+
+  const refuse = (reason: string): ActionResult => err({ kind: 'BATTLE_CARD_REFUSED', reason })
+  if (input.tech !== 'Animal Husbandry') return refuse(`${input.tech} heals nothing one unit at a time.`)
+  const owed = healOwed(battle, input.playerId, input.tech)
+  if (owed <= 0) return refuse(`${input.tech} has no wound to heal: press its button first, or all its wounds have been healed.`)
+  const target = battle.arena.find((unit) => unit.id === input.arenaUnitId)
+  if (target === undefined) return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
+  if (target.side !== side) return refuse('Choose one of your own units.')
+  if (target.killed) return refuse('That unit is killed, and healing does not bring it back.')
+  const lost = healableWounds(target)
+  const healing = input.wounds
+  if (!Number.isInteger(healing) || healing < 1) return refuse('Choose how many wounds to heal: a whole number, at least 1.')
+  if (lost < 1) return refuse('That unit has no wound to heal.')
+  if (healing > owed) return refuse(`${input.tech} has only ${owed} wound${owed === 1 ? '' : 's'} left to heal.`)
+  if (healing > lost) return refuse(`That unit has lost only ${lost} health, so it cannot heal ${healing} wounds.`)
+  const health = target.health + healing
+  const next = appendPublicLog(
+    state,
+    player.username,
+    player.playerId,
+    `uses ${input.tech}: heals ${healing} wound${healing === 1 ? '' : 's'} on ${publicUnitName(target)} (${health} health)`,
+  )
+  let left = healing
+  return ok({
+    ...next,
+    battle: {
+      ...battle,
+      arena: battle.arena.map((unit) => (unit.id === target.id ? { ...unit, health } : unit)),
+      heals: (battle.heals ?? []).map((candidate) => {
+        if (candidate.playerId !== input.playerId || candidate.tech !== input.tech || left <= 0) return candidate
+        const take = Math.min(left, candidate.total - candidate.healed)
+        left -= take
+        return take === 0 ? candidate : { ...candidate, healed: candidate.healed + take }
       }),
     },
   })

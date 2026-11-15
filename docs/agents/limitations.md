@@ -102,3 +102,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Gustavus Adolphus counts "unlocked" as the unit decks infantry, mounted and artillery, and aircraft with Flight; unit
   levels are not checked. The battlehand is not emptied by End battle (only by Reveal battlehand or a new draw), so
   with no battle on Gustavus also counts units that fought and came back to it; reveal the battlehand first.
+- Animal Husbandry and Biology heal (#354): the cap is the health the card has at its level, so a unit whose health was typed higher
+  by hand is not healed, and a unit whose card was not rotated to its level is capped at the lower figure. Units reinforced away
+  are no longer in play and are not healed. A heal that was used cannot be undone after Animal Husbandry healed a wound or a
+  healed unit's health was edited; correct it by hand.
