@@ -4,6 +4,11 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 
 ## Game behavior
 
+- **Engineering:** Egypt's free build (ruling 164 to 168) is not modelled. The cancel list does not say that cancelling the first build of
+  an Engineering split also takes back the second; cancelling only the second leaves the first, and the players are trusted to pick
+  the first build. The remaining production is computed from the first build's recorded cost and production, so a hand-set production
+  changed between the two builds is not seen. Engineering is offered only when the build is the city's first action: a build that is
+  itself an extra action (Atomic Theory, Lovelace, a confirmed repeat) cannot be split.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares

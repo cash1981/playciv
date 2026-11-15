@@ -1163,6 +1163,29 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   arrival fought, and has not been touched since, may still take it (the +3 belongs to the play of the unit): the round is fought
   again and the unit may now live (`fellOnArrival`; human, 2026-11-14). A kill toggled by hand later does not block the undo
   giving the round's HP back: `undoRefight` restores both units through `restoredVitals`, as taking an arrival back does.
+- **Engineering** (issue #354; "once per turn, when spending production from a city, you may split the production to purchase two items";
+  human, 2026-11-15): no button, picker or payload change. With Engineering revealed and unused, the player does two ordinary builds in
+  one city. The second is allowed with no "already acted" question when the city's only action this turn is one applied build whose
+  record holds `cost` and `production` (the figure its options used; an older record has neither, so no second build is offered).
+  `engineeringSecondBuild` derives it from the records and `buildOptionsOf` then shows `production` = that production minus the first
+  cost, never below 0 (`engineering: { firstCost, fullProduction }` marks it): the marker, the caravan and a boost the first build
+  used are not counted again, and hammers the first item adds do not help the second (ruling 80: simultaneous split). Any shortfall
+  is rushed with trade as usual (a first build that was itself rushed leaves 0). The second build's record carries
+  `effect.engineering.firstRecordId` and `usageKey` `card:Engineering`, so the key is written by it, a confirmed repeat cannot
+  override it and an undo of it frees it. It is not a city action of its own (it does not count towards Atomic Theory, Monarchy,
+  Lovelace or Supply Drop, and takes no credit), so Engineering is once per turn even with Atomic Theory (ruling 166). A third action
+  or an action of another kind behaves as before and the refusal adds that Engineering is spent. Undoing the first build while the
+  second stands is refused ("undo the second build first"). A Mark Twain / Writing / Civil Service cancel rewinds the log: cancelling the
+  FIRST build takes back both and frees the key (players are expected to pick the first); cancelling only the second leaves the first
+  and frees the key, and the cancelled second no longer counts as an action, so the split may be made again at once (ruling 165: the
+  player gets Engineering back). Only a cancelled second whose first build was undone afterwards still counts as the city's action.
+  The other allowance wins (human, 2026-11-15): when Atomic Theory, the capital's extra action under Monarchy (a different action
+  only), an unused Ada Lovelace or Supply Drop credit (`extraCityActionFor`) or a confirmed repeat can cover the second build, it is a
+  whole action with the city's full production and Engineering stays unused (`buildOptionsOf` offers no `engineering`; `apply`
+  recomputes the options without it for a confirmed repeat). The split applies only when nothing else covers the second build. The web never asks the already-acted question while the
+  split is offered, so a confirmed repeat with full production is reachable through the engine and API only, not the UI.
+  Removing the first build's piece by hand while the second stands is a plain removal (`takeBackOpenBuild` returns undefined).
+  Tests: `engine/test/assisted-engineering.test.ts`, `web/src/views/BuildPicker.test.tsx`.
 - **Atomic Theory** (Uranium; Marie Curie's substitution applies through the shared layer): one action, one use a turn, two modes.
   `extraActions` (City Management): every city may take one more city action. The allowance is derived from the applied record
   (`atomicExtraActionFor`): a city that has acted once acts again without the question, noted in its line, and one that has acted

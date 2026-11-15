@@ -787,6 +787,9 @@ describe('building', () => {
       position: { x: piece.x, y: piece.y },
       historyId: placed?.id,
       trade: 0,
+      // What Engineering's second build needs of the first
+      cost: 5,
+      production: 5,
       marker: null,
     })
   })

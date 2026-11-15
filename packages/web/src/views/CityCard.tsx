@@ -241,7 +241,7 @@ function BuildEntry({
   options,
   busy,
   build,
-  acted,
+  acted: actedBefore,
 }: {
   readonly city: CityProduction
   readonly options: CityBuildOptions
@@ -253,6 +253,8 @@ function BuildEntry({
   const reasonId = useId()
   const ready = options.status === 'ready'
   const open = build.pickerCityId === city.pieceId
+  // Engineering's second build is the same action split: the options say so and nothing is asked
+  const acted = options.engineering === undefined ? actedBefore : []
   return (
     <div className="city-build">
       <div className="city-build-row">

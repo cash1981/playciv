@@ -1547,3 +1547,34 @@ describe('a second action of the same city this turn', () => {
     expect(send.mock.calls[0]?.[4]).toBe(true)
   })
 })
+
+describe('Engineering: the second build of a city', () => {
+  const split = { firstCost: 5, fullProduction: 8 }
+
+  it('shows what the first build left instead of the production figure', () => {
+    render(
+      <BuildPicker
+        city={options({ production: 3, engineering: split })}
+        note={null}
+        message={null}
+        busy={false}
+        onChoose={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Production left: 3.')).toBeTruthy()
+    expect(screen.getByText(/the first build cost 5 of 8, so 3 is left for this one/)).toBeTruthy()
+  })
+
+  it('asks nothing before the picker opens and sends no confirmedRepeat', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([{ ...ALL_KINDS(), engineering: split }], { acted: ['Build'] })} />)
+    fireEvent.click(buildButton())
+    choose('Infantry unit')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).not.toHaveBeenCalled()
+    expect(send.mock.calls[0]).toHaveLength(4)
+  })
+})

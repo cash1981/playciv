@@ -914,6 +914,15 @@ export type AssistedEffect =
       readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string }
       /** The trade paid for the missing production; 0 when the city's production was enough. */
       readonly trade: number
+      /**
+       * What the build cost in production and what the city had to build with when it was made (the figure the
+       * options showed, caravan and Building Program included). Engineering's second build in the city takes
+       * its remaining production from them. Absent on an older record: no second build is offered then.
+       */
+      readonly cost?: number
+      readonly production?: number
+      /** Engineering's second build in this city: the record of the first build it shares the production with. */
+      readonly engineering?: { readonly firstRecordId: string }
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
       /** The caravan the build used up (Fame and Fortune p. 7), as `marker` is kept. Absent without one. */
@@ -942,6 +951,15 @@ export type AssistedEffect =
       readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
       readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
+      /**
+       * What the build cost in production and what the city had to build with when it was made (the figure the
+       * options showed, caravan and Building Program included). Engineering's second build in the city takes
+       * its remaining production from them. Absent on an older record: no second build is offered then.
+       */
+      readonly cost?: number
+      readonly production?: number
+      /** Engineering's second build in this city: the record of the first build it shares the production with. */
+      readonly engineering?: { readonly firstRecordId: string }
     }
   | {
       readonly kind: 'build'
@@ -958,6 +976,15 @@ export type AssistedEffect =
       readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
       readonly caravan?: { readonly piece: BoardPiece; readonly historyId: string }
+      /**
+       * What the build cost in production and what the city had to build with when it was made (the figure the
+       * options showed, caravan and Building Program included). Engineering's second build in the city takes
+       * its remaining production from them. Absent on an older record: no second build is offered then.
+       */
+      readonly cost?: number
+      readonly production?: number
+      /** Engineering's second build in this city: the record of the first build it shares the production with. */
+      readonly engineering?: { readonly firstRecordId: string }
     }
   | {
       readonly kind: 'startBuildingProgram'
