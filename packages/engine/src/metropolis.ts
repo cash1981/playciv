@@ -11,19 +11,19 @@
  *   and revealed (as for any city), the neighbour not water.
  * - No hut (except for the Zulu, ruling 108), village or city-state in the new outskirts or on the new square (ruling 118),
  *   and no other city's centre within three squares of the new square, so the outskirts do not overlap (ruling 118).
- *   A relic in the new outskirts stops it too, as a relic stops a new city (the rulings do not say; limitations.md).
+ *   An unclaimed relic in the new outskirts also stops growth (human, 2026-11-16).
  * - No enemy figure on the new square (ruling 120). An enemy figure in the outskirts does not stop it (ruling 121).
- * What the game does not carry out, so it offers no direction where it would be needed (limitations.md): a friendly figure
- * on the new square (the rulebook moves it to a neighbouring square, ruling 122) and a building, wonder or Great Person
- * on it (the rulebook overbuilds it, rulings 125 to 127). The player clears the square first, as before founding a city.
+ * Friendly figures move together to a valid neighbouring outskirts square (122); buildings and wonders are destroyed,
+ * and Great Persons go into reserve (125 to 127).
  */
 
 import { cityCenterCells, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import { findBoardAsset, isMapCell, mapTop } from './board.js'
 import type { Board, BoardPiece, Rotation } from './board.js'
-import { squareLabel } from './build-options.js'
+import { squareLabel, WATER_TECHS } from './build-options.js'
 import { isOwnFigure } from './city-founding.js'
+import { figuresAt, occupancyOf } from './movement.js'
 import type { GameState, Playerhand } from './state.js'
 import { terrainAt } from './terrain.js'
 
@@ -55,6 +55,7 @@ export interface MetropolisGrowth {
   readonly rotation: Rotation
   /** Huts a Zulu metropolis has in its new outskirts (explored by hand); empty for everyone else. */
   readonly zuluHuts: readonly string[]
+  readonly overbuilt: readonly BoardPiece[]
 }
 
 type Scene = Pick<GameState, 'board' | 'players'>
@@ -102,6 +103,40 @@ const centreOf = (board: Board, cell: Cell): { readonly x: number; readonly y: n
 const terrainOfCell = (board: Board, cell: Cell) => {
   const centre = centreOf(board, cell)
   return terrainAt(board, centre.x, centre.y)
+}
+
+/** Valid outskirts squares adjacent to the growing square, for the entire displaced group (ruling 122). */
+export function metropolisFigureTargets(
+  board: Board,
+  grower: Grower & Pick<Playerhand, 'techsChosen'>,
+  capital: BoardPiece,
+  second: Cell,
+  stackingLimit: number,
+  forbidden: readonly Cell[] = [],
+): readonly (Cell & { readonly label: string })[] {
+  const figures = figuresAt(board, grower, second)
+  if (figures.length === 0) return []
+  const home = mapCellOf(board, capital)
+  const occupancy = occupancyOf(board, grower)
+  const water = grower.techsChosen.some((tech) => !tech.hidden && WATER_TECHS.includes(tech.name))
+  const scout = figures.some((piece) => piece.assetId.endsWith('scout'))
+  return around(second)
+    .filter((cell) => {
+      if (sameCell(cell, second) || (home !== null && sameCell(cell, home))) return false
+      if (!isMapCell(board, cell.column, cell.row) || forbidden.some((other) => sameCell(cell, other))) return false
+      const terrain = terrainOfCell(board, cell)
+      if (terrain === null || (terrain === 'water' && !water)) return false
+      const key = `${cell.column},${cell.row}`
+      if ((occupancy.own.get(key) ?? 0) + figures.length > stackingLimit) return false
+      if (scout && occupancy.foreign.has(key)) return false
+      return !board.pieces.some((piece) => {
+        const at = mapCellOf(board, piece)
+        if (at === null || !sameCell(at, cell)) return false
+        return piece.category === 'city' || piece.category === 'citystate' || piece.category === 'relic' ||
+          piece.assetId === HUT_ASSET || piece.assetId === VILLAGE_ASSET
+      })
+    })
+    .map((cell) => ({ ...cell, label: squareLabel(cell) }))
 }
 
 /**
@@ -200,18 +235,11 @@ export function metropolisGrowthsOf(scene: Scene, grower: Grower, capital: Board
       reasons.push(`${square} is less than three squares from the city at ${[...new Set(close.map(squareLabel))].join(', ')}, so their outskirts would overlap.`)
     }
 
-    // What stands on the new square: an enemy figure forbids it, a friendly figure or a building the game cannot carry out
+    // Friendly figures and overbuilt pieces are handled by the action; enemy figures forbid growth.
     const onSquare = piecesAt(second)
     if (onSquare.some((piece) => piece.category === 'figure' && !isOwnFigure(scene, grower, piece))) {
       reasons.push(`An enemy figure stands on ${square}.`)
     }
-    if (onSquare.some((piece) => piece.category === 'figure' && isOwnFigure(scene, grower, piece))) {
-      reasons.push(`Your figure stands on ${square}. Move it away first: the game does not move it for you.`)
-    }
-    if (onSquare.some((piece) => piece.category === 'building' || piece.category === 'wonder' || piece.category === 'greatperson')) {
-      reasons.push(`A building, wonder or great person stands on ${square}. Clear it first.`)
-    }
-
     return {
       direction,
       ok: reasons.length === 0,
@@ -222,6 +250,7 @@ export function metropolisGrowthsOf(scene: Scene, grower: Grower, capital: Board
       centre: { x: lay.x, y: lay.y },
       rotation: lay.rotation,
       zuluHuts: isZulu ? [...new Set(huts)] : [],
+      overbuilt: onSquare.filter((piece) => piece.category === 'building' || piece.category === 'wonder' || piece.category === 'greatperson'),
     }
   })
 }

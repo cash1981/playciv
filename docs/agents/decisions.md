@@ -1238,14 +1238,24 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   `metropolis.ts` (`metropolisGrowthsOf`), from the rulings 116 to 128 and the founding rules: the new square is land and all
   eight squares around it are on the map and revealed; no village, no hut (the Zulu may, ruling 108) and no city-state in the
   new outskirts or on the new square, and no other city centre within three squares of it (ruling 118); no enemy figure on the
-  new square (ruling 120), while enemy figures in the outskirts do not matter (121). A relic in the new outskirts stops it as it
-  stops a new city: the rulings do not list relics (limitations.md). The undo vote turns the marker back exactly as it stood,
+  new square (ruling 120), while enemy figures in the outskirts do not matter (121). An unclaimed relic in the new outskirts
+  stops growth (human, 2026-11-16). A city-state beside a legally founded capital is impossible; the defensive check on the
+  growing square remains, without adding a city-state destruction rule. The undo vote turns the marker back exactly as it stood,
   walls included, refused when the metropolis is gone, shows another face (walls built since) or was moved, or when a city
   action was taken with it since (a build in the new outskirts); the board Undo cannot take the turning over alone and cannot
   walk back past the vote (`undoFloor`). The web works the legal squares out from the public board (the same function), the
-  engine decides again on the press, and the reason lists what stops each of the four sides when none is legal. Not carried out,
-  so such a side is not offered: a friendly figure on the new square (ruling 122 moves it) and a building, wonder or Great
-  Person on it (125 to 127 overbuild it); the player clears the square first, as before founding a city.
+  engine decides again on the press, and the reason lists what stops each of the four sides when none is legal.
+  **Overbuilding and displacement** (human, 2026-11-16, PR #359): buildings and wonders on the growing square are destroyed;
+  a Great Person returns to the player area as reserve, reusing Build's overbuilding helpers (rulings 125-127). Friendly
+  armies and scouts do not block the side. The player chooses a second highlighted square for the whole displaced group,
+  adjacent to the growing square and in the metropolis outskirts (122). The request carries optional `figureTarget`;
+  it is required only when figures are displaced. Water needs a revealed Sailing, Steam Power or Flight; the full group
+  must fit the effective stacking limit, scouts cannot attack, and Brandenburg Gate's protected squares remain forbidden.
+  Displacement spends no movement. An army displaced onto enemies starts a manually resolved battle (124).
+  Every removal, reserve move and figure displacement belongs to the same action and undo vote. Undo restores those pieces
+  exactly and refuses if a displaced figure changed, a reserved person left reserve, a destroyed piece returned, its supply
+  was reused, or the growing square is now occupied. Exceptional centre disbanding and partial-group displacement (123)
+  remain manual; the ordinary outskirts relocation does not choose or destroy figures for the player.
 
 Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-agriculture.ts`, `metropolis.ts`, `assisted-resources.ts` (`spendEachResource`), `city-production.ts`
 (`boost`), `build-options.ts`, `actions/player.ts` (`revealTech`), `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
@@ -1513,8 +1523,8 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   is reached through the other city; a square in the building city's own outskirts keeps the older rule, and the battle stays
   manual. The `build` action needs no new field: it checks the target against the choice's `squares`, and the refusal reads
   "... is not in the outskirts of that city or of one of your cities with a Shipyard." The web only shows `choice.squares`.
-  Open: a Military Dock (the upgraded form that replaces a Shipyard) does not count as a Shipyard, as the card and the rulings
-  name the Shipyard only (limitations.md). Source: `build-options.ts` (`figureCellsOf`); tests `tech-navy.test.ts`,
+  **House rule** (human, 2026-11-16, PR #359): a Military Dock counts as a Shipyard, including the enemy-on-dock restriction;
+  upgrading the building does not remove Navy placement eligibility. Source: `build-options.ts` (`figureCellsOf`); tests `tech-navy.test.ts`,
   `BuildPicker.test.tsx`.
 - **Held city-states in the estimate** (W&W p. 9, human, hotfix): the capital's
   production and trade estimate counts each held city-state: its printed trade

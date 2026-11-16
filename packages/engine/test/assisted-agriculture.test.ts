@@ -9,15 +9,15 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { movePiece, placePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { movePiece, placePiece, removePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
-import { cityCenterCells, cityFootprintsOf } from '../src/blockade.js'
+import { cityCenterCells, cityFootprintsOf, mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE, boardUndoBlocked, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { cityProductionsOf } from '../src/city-production.js'
-import { growableCapital, metropolisAssetIdOf, metropolisGrowthsOf } from '../src/metropolis.js'
+import { growableCapital, metropolisAssetIdOf, metropolisFigureTargets, metropolisGrowthsOf } from '../src/metropolis.js'
 import type { GrowDirection } from '../src/metropolis.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { capitalOf } from '../src/sot.js'
@@ -87,13 +87,13 @@ const capital = (state: GameState): BoardPiece => {
   return found
 }
 
-const grow = (state: GameState, direction: GrowDirection | undefined, requestId = 'req-1') =>
+const grow = (state: GameState, direction: GrowDirection | undefined, requestId = 'req-1', figureTarget?: { column: number; row: number }) =>
   performAssistedAction(state, {
     playerId: CASH1981,
     action: 'agriculture',
     requestId,
     at: AT,
-    ...(direction === undefined ? {} : { payload: { direction } }),
+    ...(direction === undefined ? {} : { payload: { direction, ...(figureTarget === undefined ? {} : { figureTarget }) } }),
   })
 const grown = (state: GameState, direction: GrowDirection, requestId = 'req-1'): GameState => unwrap(grow(state, direction, requestId))
 
@@ -224,6 +224,11 @@ describe('a direction that is not legal', () => {
     }
     const withRelic = put(ready(), 'relics/atlantis', 5, 2)
     expect(reasonOf(withRelic, 'east')).toContain('A relic would stand in the new outskirts (F3)')
+    expect(refusal(withRelic, 'east')).toContain('A relic would stand in the new outskirts (F3)')
+    const relic = withRelic.board.pieces.find((piece) => piece.category === 'relic')
+    if (relic === undefined) throw new Error('no relic')
+    const taken = unwrap(removePiece(withRelic, { playerId: CASH1981, pieceId: relic.id }))
+    expect(grow(taken, 'east').ok).toBe(true)
     // A hut on the capital's own outskirts (C4 and D3 are old squares for the east growth) is not new
     expect(reasonOf(put(ready(), 'resources/hut', 2, 2), 'east')).toBe('')
   })
@@ -257,14 +262,6 @@ describe('a direction that is not legal', () => {
     expect(reasonOf(put(ready(), 'figures/bluescout', 2, 2, KARANDRAS1), 'east')).toBe('')
   })
 
-  it('a figure of your own, a building, a wonder or a great person on the new square are not carried out, so the square is not offered', () => {
-    expect(reasonOf(put(ready(), 'figures/redscout', 4, 3), 'east')).toContain('Your figure stands on E4.')
-    expect(reasonOf(put(ready(), 'buildings/library', 4, 3), 'east')).toContain('A building, wonder or great person stands on E4. Clear it first.')
-    expect(reasonOf(put(ready(), 'great people/artist', 4, 3), 'east')).toContain('A building, wonder or great person stands on E4.')
-    // a figure on the capital's own square stays there
-    expect(reasonOf(put(ready(), 'figures/redscout', 3, 3), 'east')).toBe('')
-  })
-
   it('says why no direction works when none does', () => {
     let state = ready()
     for (const [column, row] of [[3, 2], [2, 3], [4, 3], [3, 4]] as const) state = put(state, 'figures/bluearmy', column, row, KARANDRAS1)
@@ -273,6 +270,105 @@ describe('a direction that is not legal', () => {
     expect(status.reason).toContain('Your capital cannot grow now:')
     for (const part of ['North (D3)', 'West (C4)', 'East (E4)', 'South (D5)']) expect(status.reason).toContain(part)
     expect(unwrapErr(grow(state, 'east')).kind).toBe('ASSISTED_ACTION_REJECTED')
+  })
+
+  describe('overbuilding and displacing figures', () => {
+    it.each(['buildings/library', 'wonders/colossus', 'great people/artist'])('grows over %s and restores it with the vote undo', (assetId) => {
+      const before = put(ready(), assetId, 4, 3)
+      const piece = before.board.pieces.at(-1)
+      expect(piece).toBeDefined()
+      expect(reasonOf(before, 'east')).toBe('')
+      const snapshot = JSON.stringify(before)
+      const done = grown(before, 'east')
+      if (assetId.startsWith('great people/')) {
+        const reserved = done.board.pieces.find((other) => other.id === piece?.id)
+        expect(reserved).toBeDefined()
+        expect(reserved === undefined ? undefined : mapCellOf(done.board, reserved)).toBeNull()
+        expect(done.log.at(-1)?.publicLog).toContain('to reserve')
+      } else {
+        expect(done.board.pieces.some((other) => other.id === piece?.id)).toBe(false)
+        expect(done.log.at(-1)?.publicLog).toContain('destroying')
+      }
+      expect(unwrapErr(undoLastBoardChange(done, CASH1981))).toEqual({ kind: 'BOARD_UNDO_ASSISTED' })
+      const undone = unwrap(undoByVote(done))
+      expect(undone.board.pieces.find((other) => other.id === piece?.id)).toEqual(piece)
+      expect(capital(undone)).toEqual(capital(before))
+      expect(JSON.stringify(before)).toBe(snapshot)
+    })
+
+    it('moves an army and a scout together into the chosen outskirts, without spending movement, and undoes the entire action', () => {
+      const before = put(put(put(ready(), 'buildings/library', 4, 3), 'figures/redarmy', 4, 3), 'figures/redscout', 4, 3)
+      const figures = before.board.pieces.filter((piece) => piece.category === 'figure')
+      const target = { column: 5, row: 2 }
+      const snapshot = JSON.stringify(before)
+      expect(reasonOf(before, 'east')).toBe('')
+      const done = unwrap(grow(before, 'east', 'req-1', target))
+      for (const figure of figures) {
+        const moved = done.board.pieces.find((piece) => piece.id === figure.id)
+        expect(moved === undefined ? null : mapCellOf(done.board, moved)).toEqual(target)
+        expect(moved?.movement).toEqual(figure.movement)
+      }
+      expect(done.log.at(-1)?.publicLog).toContain('moving 2 friendly figures to F3')
+      expect(done.board.history.slice(before.board.history.length).every((entry) => entry.logLength === done.log.length)).toBe(true)
+      const undone = unwrap(undoByVote(done))
+      for (const piece of before.board.pieces) expect(undone.board.pieces.find((other) => other.id === piece.id)).toEqual(piece)
+      expect(JSON.stringify(before)).toBe(snapshot)
+    })
+
+    it('requires a valid destination and rejects water, full squares, the city centres and squares not adjacent to the growing square', () => {
+      let before = put(ready(), 'figures/redarmy', 4, 3)
+      before = put(put(before, 'figures/redarmy', 5, 2), 'figures/redscout', 5, 2)
+      expect(refusal(before, 'east')).toContain('Choose a neighbouring outskirts square')
+      for (const target of [{ column: 5, row: 2 }, { column: 3, row: 3 }, { column: 4, row: 3 }, { column: 2, row: 3 }]) {
+        expect(JSON.stringify(unwrapErr(grow(before, 'east', 'req-1', target)))).toContain('cannot hold all')
+      }
+      const wet = put(ready({ map: mapOf({ east: 'tiles/america' }) }), 'figures/redscout', 3, 2)
+      // Growing north onto D3: E4 is water on the America tile.
+      const targets = metropolisFigureTargets(wet.board, me(wet), capital(wet), { column: 3, row: 2 }, 2)
+      expect(targets).not.toContainEqual({ column: 4, row: 3, label: 'E4' })
+      const sailing = learn(wet, 'Sailing')
+      expect(metropolisFigureTargets(sailing.board, me(sailing), capital(sailing), { column: 3, row: 2 }, 2)).toContainEqual({ column: 4, row: 3, label: 'E4' })
+    })
+
+    it('allows armies but not scouts to be displaced onto enemy figures', () => {
+      const base = put(ready(), 'figures/bluearmy', 5, 2, KARANDRAS1)
+      const army = put(base, 'figures/redarmy', 4, 3)
+      expect(grow(army, 'east', 'req-1', { column: 5, row: 2 }).ok).toBe(true)
+      const scout = put(base, 'figures/redscout', 4, 3)
+      expect(JSON.stringify(unwrapErr(grow(scout, 'east', 'req-1', { column: 5, row: 2 })))).toContain('cannot hold all')
+    })
+
+    it('refuses undo when a displaced figure moved again or a reserved Great Person left reserve', () => {
+      const before = put(ready(), 'figures/redscout', 4, 3)
+      const done = unwrap(grow(before, 'east', 'req-1', { column: 5, row: 2 }))
+      const figure = done.board.pieces.find((piece) => piece.category === 'figure')
+      if (figure === undefined) throw new Error('no figure')
+      const moved = unwrap(movePiece(done, { playerId: CASH1981, pieceId: figure.id, x: figure.x + 5, y: figure.y }))
+      expect(JSON.stringify(unwrapErr(undoByVote(moved)))).toContain('displaced figure has moved')
+      const withPerson = grown(put(ready(), 'great people/artist', 4, 3), 'east')
+      const person = withPerson.board.pieces.find((piece) => piece.category === 'greatperson')
+      if (person === undefined) throw new Error('no person')
+      const placed = unwrap(movePiece(withPerson, { playerId: CASH1981, pieceId: person.id, x: 5 * SQUARE_SIZE, y: mapTop(withPerson.board) + 2 * SQUARE_SIZE }))
+      expect(JSON.stringify(unwrapErr(undoByVote(placed)))).toContain('has left your player area')
+    })
+
+    it('refuses to restore overbuilt pieces onto a newly occupied square', () => {
+      const done = put(grown(put(ready(), 'buildings/library', 4, 3), 'east'), 'buildings/granary', 4, 3)
+      expect(JSON.stringify(unwrapErr(undoByVote(done)))).toContain('growing square is occupied')
+    })
+
+    it('does not duplicate a returned wonder or restore a building when its freed supply has been reused', () => {
+      const wonder = grown(put(ready(), 'wonders/colossus', 4, 3), 'east')
+      const effect = wonder.assistedActions[0]?.effect
+      if (effect?.kind !== 'agriculture') throw new Error('no growth')
+      const piece = effect.overbuilt?.[0]?.piece
+      if (piece === undefined) throw new Error('no overbuilt piece')
+      const returned = { ...wonder, board: { ...wonder.board, pieces: [...wonder.board.pieces, piece] } }
+      expect(JSON.stringify(unwrapErr(undoByVote(returned)))).toContain('on the board again')
+      let exhausted = grown(put(ready(), 'buildings/library', 4, 3), 'east')
+      for (let column = 0; column < 6; column += 1) exhausted = put(exhausted, 'buildings/library', column, 0)
+      expect(JSON.stringify(unwrapErr(undoByVote(exhausted)))).toContain('supply')
+    })
   })
 
   it('needs a direction, and one of the four', () => {

@@ -22,10 +22,12 @@ import {
   combustionTargets,
   fellOnArrival,
   findCoinSource,
+  figuresAt,
   growableCapital,
   isMapCell,
   itemName,
   metropolisGrowthsOf,
+  metropolisFigureTargets,
   nukeTargetsOf,
   obsoletableWondersOf,
   destroyableBuildingsOf,
@@ -830,18 +832,38 @@ export function AssistedActionButton({
       cells: legal.map((growth) => ({ ...growth.cell, label: growth.square })),
       describeCell: (cell) => {
         const growth = legal.find((candidate) => candidate.cell.column === cell.column && candidate.cell.row === cell.row)
-        return `Grow your capital ${growth?.direction ?? ''} onto ${cell.label}`
+        return `Grow your capital ${growth?.direction ?? ''} onto ${cell.label}` +
+          (growth?.overbuilt ?? []).map((piece) => piece.category === 'greatperson'
+            ? `, returning ${piece.label} to reserve`
+            : `, destroying ${piece.label}`).join('')
       },
     })
     if (picked === null) return
     const growth = legal.find((candidate) => candidate.cell.column === picked.column && candidate.cell.row === picked.row)
     if (growth === undefined) return
+    const hasFigures = figuresAt(view.board, you, growth.cell).length > 0
+    let figureTarget: { readonly column: number; readonly row: number } | undefined
+    if (hasFigures && capital !== undefined) {
+      const targets = metropolisFigureTargets(view.board, you, capital, growth.cell, you.stackingLimit, brandenburgForbiddenCells(view.brandenburgZones, you.playerId))
+      if (targets.length === 0) {
+        setHint('No neighbouring outskirts square can hold all the displaced figures. Relocate them by hand first.')
+        return
+      }
+      const target = await mapPicker.begin({
+        title: 'where the displaced figures go',
+        cells: targets,
+        describeCell: (cell) => `Move all displaced figures to ${cell.label}` +
+          (occupancyOf(view.board, you).foreign.has(`${cell.column},${cell.row}`) ? ', onto enemy figures: settle the battle by hand' : ''),
+      })
+      if (target === null) return
+      figureTarget = { column: target.column, row: target.row }
+    }
     const key = `${gameId}:${playerId}:agriculture:${growth.direction}`
     if (inFlight.has(key)) return
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, 'agriculture', requestId, rev, { direction: growth.direction }, used),
+      (requestId) => api.actionWithArgs(gameId, 'agriculture', requestId, rev, { direction: growth.direction, ...(figureTarget === undefined ? {} : { figureTarget }) }, used),
       view,
     ).then((done) => {
       if (done) onDone?.()

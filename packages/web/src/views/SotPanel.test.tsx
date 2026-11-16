@@ -633,6 +633,7 @@ describe('growing a capital into a metropolis (Agriculture)', () => {
         username: 'Alice',
         color: 'Red',
         civilization: null,
+        stackingLimit: 2,
         startOfTurn: sotWith(),
         techsChosen: [{ name: 'Agriculture', hidden: options.revealed === false }],
         cities: [{ pieceId: 'cap', label: options.label ?? 'Capital D4' }],
@@ -692,6 +693,37 @@ describe('growing a capital into a metropolis (Agriculture)', () => {
     const begin = withPicker(ready(), () => null)
     fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
     await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('offers an occupied growth square and then lets the player choose where all displaced figures go', async () => {
+    const view = ready([
+      piece('army', 'figures/redarmy', 'figure', 4, 3),
+      piece('scout', 'figures/redscout', 'figure', 4, 3),
+      piece('building', 'buildings/library', 'building', 4, 3),
+    ])
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+    let picks = 0
+    const begin = withPicker(view, (cells) => {
+      const label = picks++ === 0 ? 'E4' : 'F3'
+      return cells.find((cell) => cell.label === label) ?? null
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(begin).toHaveBeenCalledTimes(2)
+    const targets = begin.mock.calls[1]?.[0]?.cells ?? []
+    expect(targets.map((cell) => cell.label)).toContain('F3')
+    expect(targets.map((cell) => cell.label)).not.toContain('D4')
+    expect(send.mock.calls[0]?.[4]).toEqual({ direction: 'east', figureTarget: { column: 5, row: 2 } })
+  })
+
+  it('does not grow or destroy anything when figure relocation is cancelled', async () => {
+    const view = ready([piece('scout', 'figures/redscout', 'figure', 4, 3)])
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+    let picks = 0
+    const begin = withPicker(view, (cells) => picks++ === 0 ? cells.find((cell) => cell.label === 'E4') ?? null : null)
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
     expect(send).not.toHaveBeenCalled()
   })
 

@@ -1,5 +1,5 @@
 /**
- * Agriculture over HTTP (issue #354): the payload is a strict `{ direction }`, the engine decides which direction is legal
+ * Agriculture over HTTP (issue #354): strict direction and optional figureTarget; the engine decides what is legal
  * (rules in `packages/engine/test/assisted-agriculture.test.ts`), the line is public and the vote undo turns the marker back.
  */
 
@@ -106,7 +106,13 @@ describe('Agriculture over HTTP', () => {
   it('takes a strict direction: anything else is a 400 and changes nothing', async () => {
     const t = await table('AgriArgs')
     const rev = (await view(t.gameId, t.starter)).rev
-    for (const args of [undefined, {}, { direction: 'up' }, { direction: 7 }, { direction: 'east', extra: 1 }, [], 'east']) {
+    for (const args of [
+      undefined, {}, { direction: 'up' }, { direction: 7 }, { direction: 'east', extra: 1 }, [], 'east',
+      { direction: 'east', figureTarget: null }, { direction: 'east', figureTarget: [] },
+      { direction: 'east', figureTarget: { column: 5.5, row: 2 } },
+      { direction: 'east', figureTarget: { column: 5, row: -1 } },
+      { direction: 'east', figureTarget: { column: 5, row: 2, extra: true } },
+    ]) {
       expect((await send(t, 'req-bad', rev, args)).status, JSON.stringify(args)).toBe(400)
     }
     expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
@@ -138,9 +144,40 @@ describe('Agriculture over HTTP', () => {
     expect(entryOf(await view(t.gameId, t.starter))?.status).toBe('ready')
   })
 
+  it('persists overbuilding and a chosen figure relocation, and one vote restores them both', async () => {
+    const t = await table('AgriDisplace', { extra: [['buildings/library', 4, 3]] })
+    const state = await repo.findGame(t.gameId)
+    if (state === undefined) throw new Error('no game')
+    const before = unwrap(placePiece(state, {
+      playerId: t.starterId, assetId: `figures/${t.colour}scout`,
+      x: 4 * SQUARE_SIZE + 4, y: mapTop(state.board) + 3 * SQUARE_SIZE + 4,
+    }))
+    const figure = before.board.pieces.at(-1)
+    if (figure === undefined) throw new Error('no figure')
+    await repo.saveGame(before)
+    const response = await send(t, 'req-1', (await view(t.gameId, t.starter)).rev, {
+      direction: 'east', figureTarget: { column: 5, row: 2 },
+    })
+    expect(response.status).toBe(200)
+    const after = await response.json<View>()
+    const saved = await repo.findGame(t.gameId)
+    expect(saved?.board.pieces.some((piece) => piece.assetId === 'buildings/library')).toBe(false)
+    expect(saved?.board.pieces.find((piece) => piece.id === figure.id)).toMatchObject({
+      x: figure.x + SQUARE_SIZE, y: figure.y - SQUARE_SIZE,
+    })
+    const logId = after.assistedActions[0]?.logId
+    if (logId === undefined) throw new Error('no action')
+    expect((await post(t.other, `/api/games/${t.gameId}/undo/${logId}`, {})).status).toBe(200)
+    expect((await post(t.starter, `/api/games/${t.gameId}/undo/${logId}/vote`, { vote: true })).status).toBe(200)
+    const undone = await repo.findGame(t.gameId)
+    expect(undone?.board.pieces.find((piece) => piece.id === figure.id)).toEqual(figure)
+    expect(undone?.board.pieces.find((piece) => piece.assetId === 'buildings/library')).toEqual(
+      before.board.pieces.find((piece) => piece.assetId === 'buildings/library'),
+    )
+  })
+
   it('refuses an illegal direction with the reason, as a 400, and keeps the capital', async () => {
-    const t = await table('AgriBlocked', { extra: [['figures/bluearmy', 4, 3]] })
-    // A blue army stands on E4: an enemy's, or the starter's own when they are blue; the direction is refused either way
+    const t = await table('AgriBlocked', { extra: [['resources/hut', 5, 2]] })
     const rev = (await view(t.gameId, t.starter)).rev
     const response = await send(t, 'req-1', rev, { direction: 'east' })
     expect(response.status).toBe(400)

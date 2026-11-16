@@ -132,6 +132,11 @@ with what the server actually sends.
 
 ## Deliberate improvements
 
+Agriculture growth overbuilds buildings and wonders, returns Great Persons to
+reserve, and lets you choose a neighbouring outskirts square for displaced
+figures. An unclaimed relic in the new outskirts blocks growth. Under the house
+rule, Military Docks count as Shipyards for Navy army placement.
+
 Technology resource abilities offer only usable payments actually held in your
 hand or player area. You can explicitly choose a resource culture card such as
 A Generous Gift instead of a token. Multi-resource payments cannot reuse the

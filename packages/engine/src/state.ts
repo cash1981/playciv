@@ -1153,6 +1153,12 @@ export type TechAbilityEffect =
       readonly from: PieceFace
       readonly to: PieceFace
       readonly historyId: string
+      readonly overbuilt?: readonly { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean }[]
+      readonly figures?: readonly {
+        readonly piece: BoardPiece
+        readonly to: { readonly x: number; readonly y: number }
+        readonly historyId: string
+      }[]
     }
   | {
       /** Bureaucracy: one social policy may be switched during Research this turn. */

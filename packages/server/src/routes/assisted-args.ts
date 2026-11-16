@@ -290,11 +290,13 @@ function parseAtomicTheory(args: Record<string, unknown>): AtomicTheoryPayload |
 }
 
 function parseAgriculture(args: Record<string, unknown>): AgriculturePayload | string {
-  const extra = extraKeys(args, ['direction'])
-  if (extra.length > 0) return `agriculture takes only direction, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['direction', 'figureTarget'])
+  if (extra.length > 0) return `agriculture takes only direction and figureTarget, not ${extra.join(', ')}`
   const direction = args['direction']
   if (!isGrowDirection(direction)) return 'direction must be north, west, east or south'
-  return { direction }
+  if (args['figureTarget'] === undefined) return { direction }
+  const figureTarget = wholeSquare(args['figureTarget'], 'figureTarget')
+  return typeof figureTarget === 'string' ? figureTarget : { direction, figureTarget }
 }
 
 function parseMonarchy(args: Record<string, unknown>): MonarchyPayload | string {

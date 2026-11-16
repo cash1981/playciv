@@ -332,6 +332,7 @@ export interface AtomicTheoryPayload {
 /** What Agriculture carries: the side of the capital the second city square lies on. */
 export interface AgriculturePayload {
   readonly direction: 'north' | 'west' | 'east' | 'south'
+  readonly figureTarget?: CardSquare
 }
 
 /** What `steamPower` carries: the square whose figures move, and the water square they move to. */

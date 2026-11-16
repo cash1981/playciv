@@ -158,6 +158,21 @@ describe('Navy: the squares of an army', () => {
     expect(labels(scene({ dockOn: C4 }))).toContain('D3')
   })
 
+  it('a Military Dock counts as a Shipyard, including the enemy-on-dock restriction', () => {
+    const base = scene({ d4: false, techs: ['Navy', 'Sailing'] })
+    const city = put(base, CASH1981, 'cities/redcity2', { column: 3, row: 3 })
+    const dock = put(city, CASH1981, 'buildings/militarydock', C4)
+    expect(labels(dock)).toContain('D3')
+    expect(labels(dock)).toContain('C4')
+    const done = unwrap(tryBuild(dock, D3))
+    expect(armiesOf(done)).toHaveLength(1)
+    const blocked = put(dock, KARANDRAS1, 'figures/bluearmy', C4)
+    expect(labels(blocked)).not.toContain('C4')
+    expect(refusalOf(blocked, C4)).toContain('enemy figure')
+    expect(labels(blocked)).toContain('D3')
+    expect(labels(dock, SCOUT)).not.toContain('D3')
+  })
+
   it('a city of the player without a Shipyard adds nothing', () => {
     const state = scene({ a4: true })
     expect(labels(state)).not.toContain('B4')

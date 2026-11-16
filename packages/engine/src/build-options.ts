@@ -526,12 +526,12 @@ function figureSquaresOf(
 const NAVY_TECH = 'Navy'
 const SHIPYARD_ASSET_ID = 'buildings/shipyard'
 
-/** The squares in a city's outskirts that hold a Shipyard; empty for a city without one. */
+/** Military Docks count as Shipyards under the house rule (human, 2026-11-16). */
 function shipyardCellsOf(scene: Scene, footprint: CityFootprintView): ReadonlySet<string> {
   const outskirts = new Set(mapOutskirts(scene.state.board, footprint).map(keyOf))
   const found = new Set<string>()
   for (const piece of scene.state.board.pieces) {
-    if (piece.category !== 'building' || piece.assetId !== SHIPYARD_ASSET_ID) continue
+    if (piece.category !== 'building' || (piece.assetId !== SHIPYARD_ASSET_ID && piece.assetId !== 'buildings/militarydock')) continue
     const cell = mapCellOf(scene.state.board, piece)
     if (cell !== null && outskirts.has(keyOf(cell))) found.add(keyOf(cell))
   }

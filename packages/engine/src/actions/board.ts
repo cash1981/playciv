@@ -1120,8 +1120,12 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'combustion' && (effect.building?.historyId === entry.id || effect.unwalled?.historyId === entry.id)) return true
     // A nuke removed the city and what stood around it: only the vote on its line puts them back
     if (effect.kind === 'atomicTheory' && effect.mode === 'nuke' && effect.removed.some((removal) => removal.historyId === entry.id)) return true
-    // Agriculture turned the capital marker over to the metropolis: only the vote on its line turns it back
-    if (effect.kind === 'agriculture' && effect.historyId === entry.id) return true
+    // Growth, overbuilding and figure displacement belong to the same Agriculture vote.
+    if (effect.kind === 'agriculture' && (
+      effect.historyId === entry.id ||
+      effect.overbuilt?.some((piece) => piece.historyId === entry.id) === true ||
+      effect.figures?.some((move) => move.historyId === entry.id) === true
+    )) return true
     // Philosophy put the Great Person marker in the player's area, as a culture advance does
     if (effect.kind === 'philosophy' && effect.marker?.historyId === entry.id) return true
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
