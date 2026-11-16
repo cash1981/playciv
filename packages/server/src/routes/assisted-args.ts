@@ -8,8 +8,9 @@
  * `upgradeBuildings`) keep their own top-level fields in `play.ts`.
  */
 
-import { BUILDABLE_BUILDING_IDS, isGovernment, parseResourcePayments, resourceCostOf } from '@civ/engine'
+import { BUILDABLE_BUILDING_IDS, isGovernment, isGrowDirection, parseResourcePayments, resourceCostOf } from '@civ/engine'
 import type {
+  AgriculturePayload,
   ArenaUnitPayload,
   AtomicTheoryPayload,
   AssignScoutPayload,
@@ -288,6 +289,16 @@ function parseAtomicTheory(args: Record<string, unknown>): AtomicTheoryPayload |
   return { mode, cityPieceId: args['cityPieceId'] }
 }
 
+function parseAgriculture(args: Record<string, unknown>): AgriculturePayload | string {
+  const extra = extraKeys(args, ['direction', 'figureTarget'])
+  if (extra.length > 0) return `agriculture takes only direction and figureTarget, not ${extra.join(', ')}`
+  const direction = args['direction']
+  if (!isGrowDirection(direction)) return 'direction must be north, west, east or south'
+  if (args['figureTarget'] === undefined) return { direction }
+  const figureTarget = wholeSquare(args['figureTarget'], 'figureTarget')
+  return typeof figureTarget === 'string' ? figureTarget : { direction, figureTarget }
+}
+
 function parseMonarchy(args: Record<string, unknown>): MonarchyPayload | string {
   const extra = extraKeys(args, ['mode', 'targetId', 'wonderPieceId'])
   if (extra.length > 0) return `monarchy takes only mode, targetId and wonderPieceId, not ${extra.join(', ')}`
@@ -413,6 +424,7 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['monarchy', parseMonarchy],
   ['metalworking', parseArenaUnit],
   ['atomicTheory', parseAtomicTheory],
+  ['agriculture', parseAgriculture],
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['gianniniBuild', parseGianniniBuild],

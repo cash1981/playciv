@@ -268,7 +268,19 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     },
   })
 
-  const logged = appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed)
+  const revealLogged = appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed)
+  // Space Flight: "Immediately win the game with a Tech victory." Like the Culture Victory space it only says so in the log: the game
+  // does not end and no winner is set, since a Military victory can still be won (also by another player in the same turn) and the
+  // players name the winner themselves when they end the game (human, 2026-11-15). Only the first reveal says it.
+  const logged =
+    tech.hidden && tech.name === SPACE_FLIGHT
+      ? appendLog(revealLogged, {
+          username: player.username,
+          playerId: player.playerId,
+          publicLog: `${player.username} has researched ${SPACE_FLIGHT} and reached space: a Tech victory`,
+          privateLog: '',
+        })
+      : revealLogged
   const researchedTurn = player.researchTurns[tech.name]
   const archimedes =
     researchedTurn !== undefined && turnStatus(logged).currentTurn > researchedTurn
@@ -284,6 +296,9 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     }),
   )
 }
+
+/** The tech whose reveal is a Tech victory. */
+export const SPACE_FLIGHT = 'Space Flight'
 
 export interface SetTechSlotInput {
   readonly playerId: string

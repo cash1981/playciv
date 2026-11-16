@@ -43,6 +43,7 @@ const press = (state: GameState, requestId: string, action: 'chivalry' | 'democr
 describe('the registry', () => {
   it('lists the incense cards, Democracy, Printing Press, the culture advance and the Start of Turn abilities', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
+      'agriculture',
       'chivalry',
       'communism',
       'cultureAdvance',
@@ -108,7 +109,7 @@ describe('the registry', () => {
       expect(action.phase).toBe(
         startOfTurn.includes(action.action) || action.action.startsWith('sot:')
           ? 'SOT'
-          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'animalHusbandryHeal' || action.action === 'biologyHeal' || action.action === 'metalworking' || action.action === 'atomicTheory'
+          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'animalHusbandryHeal' || action.action === 'biologyHeal' || action.action === 'metalworking' || action.action === 'atomicTheory' || action.action === 'agriculture'
             ? 'ANY'
             : action.action === 'writing' || action.action === 'civilService' || action.action === 'massMedia'
               ? 'ANY'

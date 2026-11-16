@@ -3,10 +3,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createBoard, mapTop } from '@civ/engine'
+
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { MapPickerContext } from './mapPick.js'
+import type { MapPicker } from './mapPick.js'
 import { StartOfTurnChoices } from './SotPanel.js'
 
 beforeEach(() => {
@@ -601,31 +605,175 @@ describe('scouts and cities', () => {
   })
 })
 
-describe('growing a capital into a metropolis', () => {
-  const withAgriculture = (cities: readonly { label: string }[], revealed = true): PlayerView =>
+describe('growing a capital into a metropolis (Agriculture)', () => {
+  const board = createBoard()
+  const size = board.squareSize
+  const tile = (assetId: string, slotColumn: number, slotRow: number) => ({
+    id: `tile-${assetId}`, assetId, category: 'tile', label: assetId, rotation: 0,
+    x: slotColumn * size, y: mapTop(board) + slotRow * size, width: 4 * size, height: 4 * size,
+  })
+  const piece = (id: string, assetId: string, category: string, column: number, row: number) => ({
+    id, assetId, category, label: assetId, rotation: 0, width: 80, height: 80,
+    x: column * size + 7, y: mapTop(board) + row * size + 7,
+  })
+  /** An 8 x 8 corner of land with a capital on D4, so all four neighbours are legal; `extra` pieces stand on the map. */
+  const ready = (extra: readonly object[] = [], options: { revealed?: boolean; label?: string; status?: string; reason?: string } = {}): PlayerView =>
     ({
       rev: 6,
+      board: {
+        ...board,
+        pieces: [
+          tile('tiles/tile12', 0, 0), tile('tiles/tile23b', 4, 0), tile('tiles/america', 0, 4), tile('tiles/china', 4, 4),
+          piece('cap', 'cities/redcapital2', 'city', 3, 3),
+          ...extra,
+        ],
+      },
       you: {
         playerId: 'me',
         username: 'Alice',
+        color: 'Red',
+        civilization: null,
+        stackingLimit: 2,
+        stats: { stacking: 2 },
+        items: [],
         startOfTurn: sotWith(),
-        techsChosen: [{ name: 'Agriculture', hidden: !revealed }],
-        cities,
+        techsChosen: [{ name: 'Agriculture', hidden: options.revealed === false }],
+        cities: [{ pieceId: 'cap', label: options.label ?? 'Capital D4' }],
+        availableActions: [
+          { action: 'agriculture', label: 'Agriculture', status: options.status ?? 'ready', reason: options.reason ?? 'Ready to use.', group: 'Cities', phase: 'ANY', buttonText: 'Grow your capital into a metropolis' },
+        ],
       },
       opponents: [],
     }) as unknown as PlayerView
 
-  it('points at the map for a player with Agriculture and a capital that is not a metropolis', () => {
-    renderChoices(withAgriculture([{ label: 'Capital B3' }]))
+  const withPicker = (view: PlayerView, picked: (cells: readonly { column: number; row: number; label: string }[]) => { column: number; row: number; label: string } | null) => {
+    const begin = vi.fn(async (request: { cells: readonly { column: number; row: number; label: string }[] }) => picked(request.cells))
+    const picker: MapPicker = { begin: begin as unknown as MapPicker['begin'], cancel: vi.fn() }
+    render(
+      <MapPickerContext.Provider value={picker}>
+        <StartOfTurnChoices gameId="g1" view={view} busy={false} readOnly={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    return begin
+  }
+
+  it('offers the button to a player with Agriculture and a capital, and highlights the four legal squares on the map', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(ready())
+    const begin = withPicker(ready(), (cells) => cells.find((cell) => cell.label === 'E4') ?? null)
     const section = screen.getByRole('region', { name: 'Metropolis' })
-    expect(within(section).getByRole('button', { name: 'Go to the map' })).toBeTruthy()
+    fireEvent.click(within(section).getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    const request = begin.mock.calls[0]?.[0] as unknown as { cells: readonly { label: string }[]; describeCell: (cell: { column: number; row: number; label: string }) => string }
+    expect(request.cells.map((cell) => cell.label).sort()).toEqual(['C4', 'D3', 'D5', 'E4'])
+    expect(request.describeCell({ column: 3, row: 2, label: 'D3' })).toBe('Grow your capital north onto D3')
+    expect(request.describeCell({ column: 2, row: 3, label: 'C4' })).toBe('Grow your capital west onto C4')
+    expect(request.describeCell({ column: 4, row: 3, label: 'E4' })).toBe('Grow your capital east onto E4')
+    expect(request.describeCell({ column: 3, row: 4, label: 'D5' })).toBe('Grow your capital south onto D5')
+    expect(send.mock.calls[0]?.slice(1, 3)).toEqual(['agriculture', expect.any(String)])
+    expect(send.mock.calls[0]?.[4]).toEqual({ direction: 'east' })
+  })
+
+  it.each([['north', 'D3'], ['west', 'C4'], ['south', 'D5']] as const)('the square tapped names the side: %s', async (direction, label) => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(ready())
+    withPicker(ready(), (cells) => cells.find((cell) => cell.label === label) ?? null)
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ direction })
+  })
+
+  it('highlights only the legal sides: an enemy army on E4 and a hut in the new north outskirts leave west and south', async () => {
+    const view = ready([piece('foe', 'figures/bluearmy', 'figure', 4, 3), piece('hut', 'resources/hut', 'token', 4, 1)])
+    const begin = withPicker(view, () => null)
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    const cells = (begin.mock.calls[0]?.[0] as unknown as { cells: readonly { label: string }[] }).cells
+    expect(cells.map((cell) => cell.label).sort()).toEqual(['C4', 'D5'])
+  })
+
+  it('sends nothing when the pick is cancelled', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(ready())
+    const begin = withPicker(ready(), () => null)
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('offers an occupied growth square and then lets the player choose where all displaced figures go', async () => {
+    const view = ready([
+      piece('army', 'figures/redarmy', 'figure', 4, 3),
+      piece('scout', 'figures/redscout', 'figure', 4, 3),
+      piece('building', 'buildings/library', 'building', 4, 3),
+    ])
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+    let picks = 0
+    const begin = withPicker(view, (cells) => {
+      const label = picks++ === 0 ? 'E4' : 'F3'
+      return cells.find((cell) => cell.label === label) ?? null
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(begin).toHaveBeenCalledTimes(2)
+    const targets = begin.mock.calls[1]?.[0]?.cells ?? []
+    expect(targets.map((cell) => cell.label)).toContain('F3')
+    expect(targets.map((cell) => cell.label)).not.toContain('D4')
+    expect(send.mock.calls[0]?.[4]).toEqual({ direction: 'east', figureTarget: { column: 5, row: 2 } })
+  })
+
+  it('does not grow or destroy anything when figure relocation is cancelled', async () => {
+    const view = ready([piece('scout', 'figures/redscout', 'figure', 4, 3)])
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue(view)
+    let picks = 0
+    const begin = withPicker(view, (cells) => picks++ === 0 ? cells.find((cell) => cell.label === 'E4') ?? null : null)
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('uses the post-overbuild stacking limit in the picker (remaining Scientist blockaded: %s)', async (blockaded) => {
+    const base = ready([
+      piece('free-scientist', 'great people/scientist', 'greatperson', 4, 3),
+      piece('remaining-scientist', 'great people/scientist', 'greatperson', 2, 2),
+      ...(blockaded ? [piece('enemy', 'figures/bluearmy', 'figure', 2, 2)] : []),
+      piece('displaced', 'figures/redarmy', 'figure', 4, 3),
+      piece('army', 'figures/redarmy', 'figure', 5, 2),
+      piece('scout', 'figures/redscout', 'figure', 5, 2),
+    ])
+    if (base.you === null) throw new Error('no player')
+    const view: PlayerView = {
+      ...base,
+      you: {
+        ...base.you,
+        stackingLimit: 3,
+        stats: { ...base.you.stats, stacking: 2 },
+        items: [{
+          id: 'pasteur', kind: 'greatperson', sheetName: 'GREAT_PERSON', itemNumber: 1,
+          description: null, used: false, hidden: false, ownerId: 'me',
+          name: 'Louis Pasteur', type: 'Scientist',
+        }],
+      },
+    }
+    let picks = 0
+    const begin = withPicker(view, (cells) => picks++ === 0 ? cells.find((cell) => cell.label === 'E4') ?? null : null)
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    const targets = begin.mock.calls[1]?.[0]?.cells.map((cell) => cell.label) ?? []
+    expect(targets).toContain('F4')
+    expect(targets.includes('F3')).toBe(!blockaded)
+  })
+
+  it('shows the reason and leaves the button off when no side can grow', () => {
+    const reason = 'Your capital cannot grow now: North (D3): An enemy figure stands on D3.'
+    renderChoices(ready([], { status: 'unavailable', reason }))
+    const section = screen.getByRole('region', { name: 'Metropolis' })
+    expect((within(section).getByRole('button', { name: 'Grow your capital into a metropolis' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(within(section).getByText(reason)).toBeTruthy()
   })
 
   it('says nothing without Agriculture revealed, or once the capital is a metropolis', () => {
-    renderChoices(withAgriculture([{ label: 'Capital B3' }], false))
+    renderChoices(ready([], { revealed: false }))
     expect(screen.queryByRole('region', { name: 'Metropolis' })).toBeNull()
     cleanup()
-    renderChoices(withAgriculture([{ label: 'Metropolis B3' }]))
+    renderChoices(ready([], { label: 'Metropolis D4' }))
     expect(screen.queryByRole('region', { name: 'Metropolis' })).toBeNull()
   })
 })

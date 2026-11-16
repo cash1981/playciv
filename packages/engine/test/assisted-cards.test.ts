@@ -123,6 +123,8 @@ describe('the registry and the tech map', () => {
       'atomicTheory',
       'bureaucracy',
       'metalworking',
+      // Agriculture grows the capital into a metropolis (issue #354)
+      'agriculture',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
     ].sort())
@@ -158,6 +160,7 @@ describe('the registry and the tech map', () => {
       Metalworking: 'metalworking',
       'Atomic Theory': 'atomicTheory',
       Bureaucracy: 'bureaucracy',
+      Agriculture: 'agriculture',
     })
     // Masonry has no resource ability
     expect(ASSISTED_TECH_ACTIONS.get('Masonry')).toBeUndefined()

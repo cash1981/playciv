@@ -1070,6 +1070,30 @@ describe('building a figure', () => {
     })
   })
 
+  it('highlights the squares of a Shipyard city\'s outskirts that Navy adds, and places the army there', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    // Navy: the engine adds the legal squares around another own city with a Shipyard (here H9 and I9, far from the city D5)
+    const navy: BuildChoice = {
+      ...ARMY,
+      squares: [...ARMY.squares, { column: 7, row: 8, label: 'H9' }, { column: 8, row: 8, label: 'I9' }],
+    }
+    render(<Harness initial={viewOf([options({ choices: [LIBRARY, navy, SCOUT] })])} />)
+    startFigure('Army figure')
+    expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Place Army figure on D5',
+      'Place Army figure on E5, enemy figure there, resolve by hand',
+      'Place Army figure on H9',
+      'Place Army figure on I9',
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on H9' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'army' },
+      target: { column: 7, row: 8 },
+    })
+  })
+
   it('a scout enters square picking and sends its item with the tapped square', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
     render(<Harness initial={viewOf([ALL_KINDS()])} />)

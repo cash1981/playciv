@@ -286,6 +286,8 @@ type SquareProblem =
   | { readonly kind: 'city-state' }
   | { readonly kind: 'marker'; readonly marker: string }
   | { readonly kind: 'water' }
+  /** Navy: the square holds the Shipyard of the city it is in the outskirts of, and an enemy figure stands on it (Navy ruling 189). */
+  | { readonly kind: 'shipyard-enemy' }
   | { readonly kind: 'full'; readonly count: number; readonly limit: number }
 
 /** Where a building or wonder may go on a square: nowhere (the problem), or there, taking the place of `replaces` when something of the player's stands on it. */
@@ -520,6 +522,67 @@ function figureSquaresOf(
   return { cells, held: new Set(held.map(keyOf)) }
 }
 
+/** Navy (base card text, rulings 186 to 189): an army built with a city action may go in the outskirts of a city with a Shipyard. */
+const NAVY_TECH = 'Navy'
+const SHIPYARD_ASSET_ID = 'buildings/shipyard'
+
+/** Military Docks count as Shipyards under the house rule (human, 2026-11-16). */
+function shipyardCellsOf(scene: Scene, footprint: CityFootprintView): ReadonlySet<string> {
+  const outskirts = new Set(mapOutskirts(scene.state.board, footprint).map(keyOf))
+  const found = new Set<string>()
+  for (const piece of scene.state.board.pieces) {
+    if (piece.category !== 'building' || (piece.assetId !== SHIPYARD_ASSET_ID && piece.assetId !== 'buildings/militarydock')) continue
+    const cell = mapCellOf(scene.state.board, piece)
+    if (cell !== null && outskirts.has(keyOf(cell))) found.add(keyOf(cell))
+  }
+  return found
+}
+
+interface FigureCell {
+  readonly cell: Cell
+  /** Why the figure cannot go here, or `undefined` when it can. */
+  readonly problem: SquareProblem | undefined
+}
+
+/**
+ * Every square a figure built by `footprint`'s city may be offered, in reading order, each with
+ * the reason it cannot be used or `undefined`. A scout and an army go in the city's own outskirts
+ * (and a capital's held city-states). With a revealed Navy an army may also go in the outskirts of
+ * any of the player's cities that has a Shipyard (the city that builds it still pays and acts), under
+ * the same army rules; only a Shipyard square with an enemy figure on it is out (ruling 189). A square
+ * the building city can use on its own never gets that extra condition.
+ */
+function figureCellsOf(
+  scene: Scene,
+  player: Playerhand,
+  footprint: CityFootprintView,
+  rules: FigureRules,
+  navy: boolean,
+): readonly FigureCell[] {
+  const own = figureSquaresOf(scene, player, footprint, rules.colour)
+  const found = new Map<string, FigureCell>()
+  for (const cell of own.cells) {
+    found.set(keyOf(cell), { cell, problem: figureSquareProblem(scene, footprint, rules, cell, own.held) })
+  }
+  if (navy && rules.kind === 'army') {
+    for (const other of cityFootprintsOf(scene.state, rules.colour)) {
+      if (other.piece.id === footprint.piece.id) continue
+      const docks = shipyardCellsOf(scene, other)
+      if (docks.size === 0) continue
+      const via = figureSquaresOf(scene, player, other, rules.colour)
+      for (const cell of via.cells) {
+        const key = keyOf(cell)
+        const known = found.get(key)
+        if (known !== undefined && known.problem === undefined) continue
+        let problem = figureSquareProblem(scene, other, rules, cell, via.held)
+        if (problem === undefined && docks.has(key) && other.hasEnemyFigureAt(cell)) problem = { kind: 'shipyard-enemy' }
+        if (known === undefined || problem === undefined) found.set(key, { cell, problem })
+      }
+    }
+  }
+  return [...found.values()].sort((a, b) => a.cell.row - b.cell.row || a.cell.column - b.cell.column)
+}
+
 const WATER_TECH_TEXT = 'a revealed Sailing, Steam Power or Flight'
 
 function describeProblem(cell: Cell, problem: SquareProblem): string {
@@ -545,6 +608,8 @@ function describeProblem(cell: Cell, problem: SquareProblem): string {
       return `${square} has a ${problem.marker} marker. The rules do not say how a figure is placed there, so Build leaves it to you: place the figure by hand.`
     case 'water':
       return `${square} is water, and a figure may stand in water only with ${WATER_TECH_TEXT}.`
+    case 'shipyard-enemy':
+      return `${square} holds the Shipyard and an enemy figure stands on it, so an army cannot be placed there.`
     case 'full':
       if (problem.limit <= 0) return `${square} cannot hold a figure: your stacking limit is ${problem.limit}.`
       return `${square} already holds ${problem.count} of your figures, which is your stacking limit of ${problem.limit}.`
@@ -571,6 +636,7 @@ function noSquareReason(intro: string | null, problems: readonly SquareProblem[]
   const markers = count('marker')
   const water = count('water')
   const full = count('full')
+  const shipyards = count('shipyard-enemy')
   if (wrong > 0) parts.push(`${plural(wrong, 'square has', 'squares have')} the wrong terrain`)
   if (taken > 0) parts.push(`${plural(taken, 'square is', 'squares are')} taken`)
   if (foreign > 0) parts.push(`${plural(foreign, 'square holds', 'squares hold')} another player's wonder, which cannot be replaced`)
@@ -584,6 +650,7 @@ function noSquareReason(intro: string | null, problems: readonly SquareProblem[]
   if (markers > 0) parts.push(`${plural(markers, 'square has', 'squares have')} a hut or village marker, which Build leaves for you to place by hand`)
   if (water > 0) parts.push(`${plural(water, 'square is', 'squares are')} water, which needs ${WATER_TECH_TEXT}`)
   if (full > 0) parts.push(`${plural(full, 'square is', 'squares are')} full to the stacking limit`)
+  if (shipyards > 0) parts.push(`${plural(shipyards, 'Shipyard square has', 'Shipyard squares have')} an enemy figure on it`)
   return `No legal square. ${intro === null ? '' : `${intro}: `}${parts.join(', ')}.`
 }
 
@@ -611,9 +678,15 @@ export function buildSquareRefusal(
   const square = plain(cell.column) && plain(cell.row) ? squareLabel(cell) : 'That square'
   if (!isMapCell(state.board, cell.column, cell.row)) return `${square} is not on the map.`
   const scene = sceneOf(state)
-  const figure = item.kind === 'army' || item.kind === 'scout' ? figureSquaresOf(scene, player, footprint, player.color.toLowerCase()) : undefined
-  const inOutskirts = (figure?.cells ?? footprint.outskirts).some((candidate) => keyOf(candidate) === keyOf(cell))
-  if (!inOutskirts) return `${square} is not in the outskirts of that city.`
+  const techs = techViewOf(player)
+  const rules = item.kind === 'army' || item.kind === 'scout' ? figureRulesOf(state, player, item.kind, techs) : undefined
+  const figure = rules === undefined ? undefined : figureCellsOf(scene, player, footprint, rules, techs.revealed.has(NAVY_TECH))
+  const inOutskirts = (figure?.map((entry) => entry.cell) ?? footprint.outskirts).some((candidate) => keyOf(candidate) === keyOf(cell))
+  if (!inOutskirts) {
+    return item.kind === 'army' && techs.revealed.has(NAVY_TECH)
+      ? `${square} is not in the outskirts of that city or of one of your cities with a Shipyard.`
+      : `${square} is not in the outskirts of that city.`
+  }
   if (item.kind === 'building' || item.kind === 'wonder') {
     const { problems } = placedSquaresOf(
       scene,
@@ -626,9 +699,8 @@ export function buildSquareRefusal(
     const problem = problems.get(keyOf(cell))
     return problem === undefined ? undefined : describeProblem(cell, problem)
   }
-  const rules = figureRulesOf(state, player, item.kind, techViewOf(player))
   if (rules === undefined) return undefined
-  const problem = figureSquareProblem(scene, footprint, rules, cell, figure?.held ?? new Set())
+  const problem = figure?.find((entry) => keyOf(entry.cell) === keyOf(cell))?.problem
   return problem === undefined ? undefined : describeProblem(cell, problem)
 }
 
@@ -1129,7 +1201,6 @@ function optionsForCity(
   }
 
   // Army and scout figures: put on a square of the outskirts like a building
-  const figureSquares = player.color === null ? undefined : figureSquaresOf(scene, player, footprint, player.color.toLowerCase())
   for (const kind of ['army', 'scout'] as const) {
     const item: BuildItem = { kind }
     const label = kind === 'army' ? 'Army figure' : 'Scout figure'
@@ -1152,9 +1223,7 @@ function optionsForCity(
 
     const squares: BuildSquare[] = []
     const problems: SquareProblem[] = []
-    const { cells, held } = figureSquares ?? { cells: [], held: new Set<string>() }
-    for (const cell of cells) {
-      const problem = figureSquareProblem(scene, footprint, rules, cell, held)
+    for (const { cell, problem } of figureCellsOf(scene, player, footprint, rules, techs.revealed.has(NAVY_TECH))) {
       if (problem !== undefined) {
         problems.push(problem)
         continue

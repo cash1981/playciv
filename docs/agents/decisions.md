@@ -673,6 +673,10 @@ the engine; the browser decides no rule.
   assumption the human has not confirmed). Undo moves the marker back, refunds and
   returns all drawn cards to the deck with a reshuffle; refused if a kept card left
   the hand.
+- **Space Flight** (human, 2026-11-15): revealing it for the first time writes one public line, "<player> has researched Space
+  Flight and reached space: a Tech victory" (`revealTech`), exactly as reaching the Culture Victory space only logs. The game
+  does not end and no winner is set, because a Military victory can still be won, also by another player in the same turn;
+  the players name the winner themselves when they end the game. Test: `space-flight.test.ts`.
 - **Card choice publicity (#304):** the public line names the cards not kept
   (already in the public discard pile); the kept card stays secret. Undo returns
   all drawn cards and reshuffles; the earlier public line stays.
@@ -774,8 +778,7 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   village adjacent (Zulu may, then explore it); no enemy figure adjacent; no city
   closer than three squares, diagonals included, anyone's; no relic adjacent; a
   city-state on the square is destroyed for 3 culture, one adjacent forbids it.
-  Romans advance one space free. Growing a capital into a metropolis only scrolls
-  to the map (human).
+  Romans advance one space free. Agriculture grows the capital by its own button (see Tech resource abilities).
 - **Scouts send squares** (human): a scout sends its square to one city for the
   turn, to the capital when not sent. The square counts for that city's
   production and trade, and its culture/resource icons are offered only to that
@@ -869,6 +872,12 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   nothing. Flight also flies over huts, villages and other players' figures (see Water and Huts below). Natural Religion, Henry Ford and Captain James Cook
   apply on top. The status sidebar shows the tech's speed as the Movement value (with the tech named in its tooltip) when it
   is more than what is typed. Tests: `movement.test.ts`, `PlayerStatusSidebar.test.tsx`.
+- **Tech stacking limit** (human, 2026-11-15): a revealed tech gives a stacking limit (Masonry 3, Printing Press 4, Biology 5,
+  Replacement Parts 6; `TECH_STACKING`, `techStackingOf` in `movement.ts`). The highest counts and they do not add up; a
+  hidden tech gives nothing. `stackingLimitOf` is the larger of the typed `stacking` stat and that limit, so a typed value that
+  is higher (a correction by hand) still wins, with Louis Pasteur's +1 on top. Every engine rule check reads `stackingLimitOf` (the web's group-move picker for another player's cards works out `max(typed, tech)` itself and leaves out Pasteur's +1, as before), and
+  `PlayerView.you.stackingLimit` carries it to movement. The status sidebar shows the tech's limit as the Stacking value (tech
+  named in its tooltip) when it is more than what is typed. Tests: `tech-stacking.test.ts`, `PlayerStatusSidebar.test.tsx`.
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
   for an army outside Anarchy unless the expression already has a `+` term (older
   saves recorded `3+1`, which a scout does not get: it loses one point of it
@@ -1215,11 +1224,46 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   revealed (`actions/player.ts`), so there is nothing to permit. The action is a once-per-turn logged note in the open Research
   phase, costs nothing, and the switch itself stays manual in the social policy panel. The 1 coin is the existing flat-coin
   handling on reveal (`coinOnReveal`, tested).
+- **Agriculture** (#354; human, 2026-11-15, replacing the old hint that only pointed at the map): "Immediately grow your
+  capital into a metropolis" is an assisted action with no payment and `phase: 'ANY'` (the card says "immediately", and ruling
+  128 lets it happen in another player's Start of Turn), listed under Cities. The player taps one of the highlighted squares
+  next to the capital (the web uses the map picker, as Communism does); the tapped square names the side, `direction` north,
+  west, east or south. The engine then turns the capital piece over to the metropolis piece (`flipPieceUnchecked`, one board
+  history entry; the same piece id, so every record naming the capital, a Building Program marker on its square and a scout
+  assignment survive). A walled capital becomes the walled metropolis (`redcapitalwalled2` to `redmetropoliswalled2`), a plain
+  one the plain metropolis. The marker lies on the capital's square and the neighbouring one, one pixel towards the capital so
+  the capital's square stays the anchor centre and the city keeps its name ("Metropolis D4"); north and south turn it 90
+  degrees. "Once per game" is derived, not counted: the capital marker is gone afterwards (`capitalOf` falls back to the
+  metropolis, which only a capital grows into), so the button reads "Your capital is already a metropolis." Legality is
+  `metropolis.ts` (`metropolisGrowthsOf`), from the rulings 116 to 128 and the founding rules: the new square is land and all
+  eight squares around it are on the map and revealed; no village, no hut (the Zulu may, ruling 108) and no city-state in the
+  new outskirts or on the new square, and no other city centre within three squares of it (ruling 118); no enemy figure on the
+  new square (ruling 120), while enemy figures in the outskirts do not matter (121). An unclaimed relic in the new outskirts
+  stops growth (human, 2026-11-16). A city-state beside a legally founded capital is impossible; the defensive check on the
+  growing square remains, without adding a city-state destruction rule. The undo vote turns the marker back exactly as it stood,
+  walls included, refused when the metropolis is gone, shows another face (walls built since) or was moved, or when a city
+  action was taken with it since (a build in the new outskirts); the board Undo cannot take the turning over alone and cannot
+  walk back past the vote (`undoFloor`). The web works the legal squares out from the public board (the same function), the
+  engine decides again on the press, and the reason lists what stops each of the four sides when none is legal.
+  **Overbuilding and displacement** (human, 2026-11-16, PR #359): buildings and wonders on the growing square are destroyed;
+  a Great Person returns to the player area as reserve, reusing Build's overbuilding helpers (rulings 125-127). Friendly
+  armies and scouts do not block the side. The player chooses a second highlighted square for the whole displaced group,
+  adjacent to the growing square and in the metropolis outskirts (122). The request carries optional `figureTarget`;
+  it is required only when figures are displaced. Water needs a revealed Sailing, Steam Power or Flight; the full group
+  must fit the effective stacking limit **after overbuilding**, scouts cannot attack, and Brandenburg Gate's protected squares remain forbidden.
+  The map picker previews that same limit from public board/ownership data, and the engine checks it again after actually
+  overbuilding, before moving any figure. Reserving the only unblocked Scientist can disable Louis Pasteur's +1 when the
+  remaining Scientists are blockaded; a later legal placement on an unblocked square re-enables it, not before that placement.
+  Displacement spends no movement. An army displaced onto enemies starts a manually resolved battle (124).
+  Every removal, reserve move and figure displacement belongs to the same action and undo vote. Undo restores those pieces
+  exactly and refuses if a displaced figure changed, a reserved person left reserve, a destroyed piece returned, its supply
+  was reused, or the growing square is now occupied. Exceptional centre disbanding and partial-group displacement (123)
+  remain manual; the ordinary outskirts relocation does not choose or destroy figures for the player.
 
-Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-resources.ts` (`spendEachResource`), `city-production.ts`
+Source: `engine/src/assisted-tech-abilities.ts`, `assisted-atomic-theory.ts`, `atomic-theory.ts`, `assisted-bureaucracy.ts`, `assisted-agriculture.ts`, `metropolis.ts`, `assisted-resources.ts` (`spendEachResource`), `city-production.ts`
 (`boost`), `build-options.ts`, `actions/player.ts` (`revealTech`), `assisted-techs.ts`, `server/src/routes/assisted-args.ts`,
 `web/src/views/AssistedActions.tsx` (`TechPickerForm`); tests `assisted-tech-abilities`, `assisted-tech-abilities-api`,
-`TechPanelAssisted.test.tsx`.
+`TechPanelAssisted.test.tsx`; Agriculture: `assisted-agriculture.test.ts`, `assisted-agriculture-api.test.ts`, `SotPanel.test.tsx`.
 
 ### Tech in the Research tab
 
@@ -1468,6 +1512,23 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   their capital's outskirts, so the capital may build a figure on it wherever it
   lies, under the same stacking, water and blockade rules. Other cities and
   buildings and wonders still may not.
+- **Navy** (#354; human, 2026-11-15; rulings 186 to 189): "Each time you build an army with a city action, you may place that
+  unit in the outskirts of a city with a shipyard." With Navy revealed (a chosen but unrevealed Navy changes nothing), the
+  squares offered for an **army** (the `build` item `army`; a scout and every other item are not covered) are those of the
+  building city's own outskirts plus the legal squares in the outskirts of any of the player's own cities that has a Shipyard
+  piece in its outskirts (`shipyardCellsOf`; the building city itself included, which adds nothing new). The city that builds
+  still pays with its production and the build is its action; only the square may lie elsewhere. The squares follow the normal
+  army rules per square (stacking limit, centres, city-states not held, hut and village markers, enemy figure note), and
+  water only with a revealed Sailing, Steam Power or Flight: a Shipyard alone does not let an army stand on water. A
+  capital with a Shipyard counts its held city-states as part of its outskirts, so another city may build on one (rulings
+  39 and 188; `figureSquaresOf` for the shipyard city). Ruling 189 (an army may be placed where enemy figures stand, a battle
+  follows, except on the Shipyard square itself when an enemy figure stands on it) is a refusal of that square only when it
+  is reached through the other city; a square in the building city's own outskirts keeps the older rule, and the battle stays
+  manual. The `build` action needs no new field: it checks the target against the choice's `squares`, and the refusal reads
+  "... is not in the outskirts of that city or of one of your cities with a Shipyard." The web only shows `choice.squares`.
+  **House rule** (human, 2026-11-16, PR #359): a Military Dock counts as a Shipyard, including the enemy-on-dock restriction;
+  upgrading the building does not remove Navy placement eligibility. Source: `build-options.ts` (`figureCellsOf`); tests `tech-navy.test.ts`,
+  `BuildPicker.test.tsx`.
 - **Held city-states in the estimate** (W&W p. 9, human, hotfix): the capital's
   production and trade estimate counts each held city-state: its printed trade
   (cs1 3, cs5 1) and production (cs3 1, cs5 1). There is no base +1 trade per

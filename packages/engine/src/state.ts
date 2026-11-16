@@ -476,6 +476,7 @@ export type AssistedActionKind =
   | 'metalworking'
   | 'atomicTheory'
   | 'bureaucracy'
+  | 'agriculture'
   // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
   | `militaryTradition:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
@@ -1135,6 +1136,29 @@ export type TechAbilityEffect =
       readonly cityLabel: string
       readonly ownerId: string
       readonly removed: readonly { readonly piece: BoardPiece; readonly historyId: string }[]
+    }
+  | {
+      /**
+       * Agriculture: the capital marker turned over to the metropolis marker (walled when the capital was) on the capital's square and
+       * the neighbouring one, as one board history entry. `from` and `to` are the faces, so the undo puts the capital back exactly as it
+       * stood, walls and all.
+       */
+      readonly kind: 'agriculture'
+      readonly spent: readonly SpentResource[]
+      readonly cityPieceId: string
+      /** The capital's square before ('B3'); the metropolis keeps the capital's square as its anchor. */
+      readonly capitalSquare: string
+      readonly direction: 'north' | 'west' | 'east' | 'south'
+      readonly square: string
+      readonly from: PieceFace
+      readonly to: PieceFace
+      readonly historyId: string
+      readonly overbuilt?: readonly { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean }[]
+      readonly figures?: readonly {
+        readonly piece: BoardPiece
+        readonly to: { readonly x: number; readonly y: number }
+        readonly historyId: string
+      }[]
     }
   | {
       /** Bureaucracy: one social policy may be switched during Research this turn. */

@@ -53,7 +53,7 @@ function neighbours(cell: Cell): readonly Cell[] {
 }
 
 /** Whether a figure piece is the player's own: their colour, or the white figure of their civilization. */
-export function isOwnFigure(_state: GameState, player: Playerhand, piece: BoardPiece): boolean {
+export function isOwnFigure(_state: Pick<GameState, 'board' | 'players'>, player: Pick<Playerhand, 'civilization' | 'color'>, piece: BoardPiece): boolean {
   if (piece.category !== 'figure') return false
   const white = whiteFigureCivilization(piece.assetId)
   if (white !== undefined) return white === player.civilization?.name

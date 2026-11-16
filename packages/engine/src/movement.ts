@@ -107,6 +107,22 @@ export function techSpeedOf(techs: readonly { readonly name: string; readonly hi
 }
 
 /**
+ * The stacking limit a revealed tech gives (human, 2026-11-15): Masonry 3, Printing Press 4, Biology 5, Replacement Parts 6. The
+ * highest one counts; they do not add up. A tech not listed gives no limit of its own.
+ */
+export const TECH_STACKING: Readonly<Record<string, number>> = { Masonry: 3, 'Printing Press': 4, Biology: 5, 'Replacement Parts': 6 }
+
+/** The stacking limit the player's revealed techs give, and the tech that gives it, or `null` when none does. */
+export function techStackingOf(techs: readonly { readonly name: string; readonly hidden: boolean }[]): { readonly limit: number; readonly tech: string } | null {
+  let best: { readonly limit: number; readonly tech: string } | null = null
+  for (const tech of techs) {
+    const limit = tech.hidden ? undefined : TECH_STACKING[tech.name]
+    if (limit !== undefined && (best === null || limit > best.limit)) best = { limit, tech: tech.name }
+  }
+  return best
+}
+
+/**
  * The typed Movement split into its base (the first term) and its bonus (every `+` term after it: Spain's +1, or how older
  * saves typed Natural Religion). A revealed tech replaces the base when it gives more; the bonus is added on top.
  */
