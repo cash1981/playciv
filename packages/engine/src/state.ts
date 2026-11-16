@@ -1673,6 +1673,8 @@ export interface OpaquePlayerhand {
   readonly pyramidPlacements: readonly PublicPyramidPlacement[]
   /** The status board (issue #43) is public, unlike the rest of the hand. */
   readonly stats: PlayerStats
+  /** Effective stacking from the typed base, revealed techs and public bonuses only. */
+  readonly stackingLimit: number
   readonly government: Government
   /** Derived from the board, so it cannot drift out of step. See `state.ts`. */
   readonly cultureMarkerLevel: number | null
@@ -1717,6 +1719,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
     pyramidPlacements: player.pyramidPlacements.map((placement) => ({ slot: placement.slot })),
     stats: derivedStats(state, player),
+    stackingLimit: stackingLimitOf(state, player),
     government: player.government,
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),
@@ -1893,7 +1896,7 @@ export interface StartOfTurnView {
 }
 
 export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
-  /** The effective stacking limit: the status number plus a faceup, unblockaded Louis Pasteur. */
+  /** Effective stacking from the typed base, revealed techs, Russia and active Louis Pasteur. */
   readonly stackingLimit: number
   /**
    * The card choices waiting for the viewer, each with its candidate cards.

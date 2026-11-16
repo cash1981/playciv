@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SQUARE_SIZE,
   createBoard,
+  createGame,
   findBoardAsset,
   mapTop,
+  toPlayerView,
 } from '@civ/engine'
 import type { BoardPiece, PlayableCard } from '@civ/engine'
 
@@ -899,6 +901,7 @@ describe('movement culture cards', () => {
           civilization: null,
           revealedTechs: [],
           stats: { stacking: 2 },
+          stackingLimit: 2,
         },
       ],
     } as unknown as PlayerView
@@ -924,6 +927,64 @@ describe('movement culture cards', () => {
       to: { column: 2, row: 5 },
     })
   })
+
+  it.each([
+    ['Pasteur', false, true, 3],
+    ['Russia', true, false, 3],
+    ['Russia and Pasteur', true, true, 4],
+  ] as const)('offers a path that needs the opponent bonus from %s', async (_label, russian, pasteur, crossingCount) => {
+    const state = createGame({
+      name: 'Stacking picker', numOfPlayers: 2, seed: 'stacking-picker',
+      players: [{ playerId: 'me', username: 'Alice', color: 'Red' }, { ...BOB, color: 'Blue' }],
+    })
+    const civ = state.items.find((item) => item.kind === 'civ' && item.name === 'Russians')
+    const scientist = state.items.find((item) => item.kind === 'greatperson' && item.name === 'Louis Pasteur')
+    const masonry = state.techs.find((tech) => tech.name === 'Masonry')
+    const blue = findBoardAsset('figures/bluearmy')
+    if (civ?.kind !== 'civ' || scientist === undefined || masonry === undefined || blue === undefined) {
+      throw new Error('missing stacking fixture')
+    }
+    const blueAt = (id: string, column: number): BoardPiece => ({
+      id, assetId: blue.id, path: blue.path, label: blue.label, category: 'figure',
+      x: Math.round(column * SQUARE_SIZE + (SQUARE_SIZE - blue.width) / 2),
+      y: Math.round(mapTop(state.board) + SQUARE_SIZE + (SQUARE_SIZE - blue.height) / 2),
+      width: blue.width, height: blue.height, rotation: 0, placedBy: 'bob',
+    })
+    const groupView = toPlayerView({
+      ...state,
+      items: state.items.filter((item) => item.id !== scientist.id && item.id !== civ.id),
+      board: {
+        ...state.board,
+        pieces: [
+          ...testTiles,
+          blueAt('source', 1),
+          ...Array.from({ length: crossingCount }, (_, index) => blueAt(`crossing-${index}`, 2)),
+        ],
+      },
+      players: state.players.map((candidate) => candidate.playerId === 'bob' ? {
+        ...candidate,
+        civilization: russian ? { ...civ, hidden: false, ownerId: 'bob' } : null,
+        items: pasteur ? [{ ...scientist, hidden: false, ownerId: 'bob' }] : [],
+        techsChosen: [{ ...masonry, hidden: false }],
+      } : candidate),
+    }, 'me')
+    const disoriented = card({
+      name: 'Disoriented', timings: ['CM'], targets: { kind: 'none' }, prompt: '',
+      mapMove: { kind: 'group', allowance: 2 },
+    })
+    const begin = vi.fn()
+      .mockResolvedValueOnce({ column: 1, row: 1, label: 'B2' })
+      .mockResolvedValueOnce(null)
+    render(
+      <MapPickerContext.Provider value={{ begin, cancel: vi.fn() }}>
+        <PlayCardControl card={disoriented} gameId="g1" view={groupView} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Disoriented'))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose source square' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    expect(begin.mock.calls[1]?.[0].cells).toContainEqual(expect.objectContaining({ column: 3, row: 1 }))
+  })
 })
 
 describe('a group card against the owner of the United Nations', () => {
@@ -947,7 +1008,7 @@ describe('a group card against the owner of the United Nations', () => {
     const groupView = {
       ...testView,
       board: { ...testBoard, pieces: [blueFigure, ...testTiles] },
-      opponents: [{ playerId: 'bob', username: 'Bob', color: 'Blue', civilization: null, revealedTechs: [], stats: { stacking: 2 } }],
+      opponents: [{ playerId: 'bob', username: 'Bob', color: 'Blue', civilization: null, revealedTechs: [], stats: { stacking: 2 }, stackingLimit: 2 }],
     } as unknown as PlayerView
     const begin = vi.fn()
       .mockResolvedValueOnce({ column: 2, row: 2, label: 'C3' })
@@ -995,8 +1056,8 @@ describe('re-picking the source of a group card against a United Nations owner',
       ...testView,
       board: { ...testBoard, pieces: [piece('blue-army', 'figures/bluearmy', 'bob', 2), piece('green-army', 'figures/greenarmy', 'carol', 3), ...testTiles] },
       opponents: [
-        { playerId: 'bob', username: 'Bob', color: 'Blue', civilization: null, revealedTechs: [], stats: { stacking: 2 } },
-        { playerId: 'carol', username: 'Carol', color: 'Green', civilization: null, revealedTechs: [], stats: { stacking: 2 } },
+        { playerId: 'bob', username: 'Bob', color: 'Blue', civilization: null, revealedTechs: [], stats: { stacking: 2 }, stackingLimit: 2 },
+        { playerId: 'carol', username: 'Carol', color: 'Green', civilization: null, revealedTechs: [], stats: { stacking: 2 }, stackingLimit: 2 },
       ],
     } as unknown as PlayerView
     const begin = vi.fn()

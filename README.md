@@ -132,6 +132,12 @@ with what the server actually sends.
 
 ## Deliberate improvements
 
+Stacking checks automatically add Russia's +1 and active Louis Pasteur's +1
+to the higher of the typed base and revealed technology limit. Opponent-group
+movement pickers use that same effective limit. The saved stacking value remains
+a base override: if you manually included Russia's bonus, remove that workaround
+to avoid counting it twice.
+
 Agriculture growth overbuilds buildings and wonders, returns Great Persons to
 reserve, and lets you choose a neighbouring outskirts square for displaced
 figures, using the stacking limit after overbuilding (including any lost

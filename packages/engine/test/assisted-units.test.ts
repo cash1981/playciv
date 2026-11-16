@@ -674,9 +674,14 @@ describe('the stacking limit', () => {
       ...state,
       players: state.players.map((p) => (p.playerId === CASH1981 ? { ...p, civilization: null } : p)),
     })
-    // Russia: the white army is theirs, so red army and white army fill the square
+    // Russia has room for three: the white army counts together with the red figures.
     const own = white(ready())
-    expect(cellsOf(choiceOf(optionsOf(own), ARMY)?.squares)).not.toContainEqual([2, 1])
+    expect(cellsOf(choiceOf(optionsOf(own), ARMY)?.squares)).toContainEqual([2, 1])
+    const full = figuresOn(own, C2, 'figures/redarmy')
+    expect(cellsOf(choiceOf(optionsOf(full), ARMY)?.squares)).not.toContainEqual([2, 1])
+    expect(buildSquareRefusal(full, me(full), cityOf(full).id, ARMY, C2)).toBe(
+      'C2 already holds 3 of your figures, which is your stacking limit of 3.',
+    )
     // Not Russia: with no Russian player it is an enemy of all, and the square is blockaded, not full
     const notRussia = noCivilization(white(ready()))
     expect(buildSquareRefusal(notRussia, me(notRussia), cityOf(notRussia).id, ARMY, C2)).toBeUndefined()
