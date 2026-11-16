@@ -875,8 +875,13 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 - **Tech stacking limit** (human, 2026-11-15): a revealed tech gives a stacking limit (Masonry 3, Printing Press 4, Biology 5,
   Replacement Parts 6; `TECH_STACKING`, `techStackingOf` in `movement.ts`). The highest counts and they do not add up; a
   hidden tech gives nothing. `stackingLimitOf` is the larger of the typed `stacking` stat and that limit, so a typed value that
-  is higher (a correction by hand) still wins, with Louis Pasteur's +1 on top. Every engine rule check reads `stackingLimitOf` (the web's group-move picker for another player's cards works out `max(typed, tech)` itself and leaves out Pasteur's +1, as before), and
-  `PlayerView.you.stackingLimit` carries it to movement. The status sidebar shows the tech's limit as the Stacking value (tech
+  is higher (a correction by hand) still wins. Russia's printed +1 and active Louis Pasteur's +1 are added on top (#360),
+  so Russians have 3 initially, 4 with Masonry and 5 with Masonry/Pasteur. Hidden techs and hidden or fully blockaded
+  Pasteur give nothing; Russia's bonus remains. The typed stat is an unchanged base override, not a total including bonuses.
+  Existing saves cannot distinguish a manually included Russian bonus from another correction: no values are rewritten;
+  players who typed that bonus must remove the workaround themselves. Every engine rule check reads `stackingLimitOf`.
+  Both own and opponent projections expose the effective numeric `stackingLimit`, derived only from public eligibility,
+  so group-move pickers use the engine's value without receiving hidden cards. The status sidebar shows the tech's limit as the Stacking value (tech
   named in its tooltip) when it is more than what is typed. Tests: `tech-stacking.test.ts`, `PlayerStatusSidebar.test.tsx`.
 - **Speed:** total of the manual `mvmt` expression. Revealed Natural Religion +1
   for an army outside Anarchy unless the expression already has a `+` term (older

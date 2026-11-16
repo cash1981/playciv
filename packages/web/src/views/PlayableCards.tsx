@@ -29,7 +29,6 @@ import {
   galileoDestinations,
   galileoSources,
   squareLabel,
-  techStackingOf,
 } from '@civ/engine'
 import type { CardTiming, PlayableCard, TurnPhase } from '@civ/engine'
 
@@ -223,7 +222,7 @@ export function PlayCardControl({
               : brandenburgForbiddenCells(view.brandenburgZones, groupHoldersAt(from)[0]?.playerId ?? ''),
             cardMove.kind === 'one'
               ? { owner: viewer, stackingLimit: viewer.stackingLimit }
-              : { owner: groupHoldersAt(from)[0] ?? viewer, stackingLimit: Math.max(groupHoldersAt(from)[0]?.stats.stacking ?? 1, techStackingOf(groupHoldersAt(from)[0]?.revealedTechs ?? [])?.limit ?? 0) },
+              : { owner: groupHoldersAt(from)[0] ?? viewer, stackingLimit: groupHoldersAt(from)[0]?.stackingLimit ?? viewer.stackingLimit },
           )
   const moveDestinationCells = moveFrom === null ? [] : destinationCellsFor(moveFrom)
   // A culture event cannot name the owner of the United Nations against their will: the player confirms each owner agreed

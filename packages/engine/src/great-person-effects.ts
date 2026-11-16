@@ -29,12 +29,13 @@ export function activeGreatPerson(
 }
 
 /**
- * Louis Pasteur: "Your stacking limit is increased by 1." The manual stacking
- * number stays the player's bookkeeping; Build uses this effective value. A revealed tech sets the limit too
- * (`techStackingOf`); the larger of it and the typed value counts, and Pasteur's +1 goes on top.
+ * The typed base or highest revealed tech limit, whichever is larger, plus
+ * Russia's +1 and active Louis Pasteur's +1. The saved base stays unchanged.
  */
-export function stackingLimitOf(state: BlockadeScene, player: Pick<Playerhand, 'color' | 'items' | 'stats' | 'techsChosen'>): number {
-  return Math.max(player.stats.stacking, techStackingOf(player.techsChosen)?.limit ?? 0) + (activeGreatPerson(state, player, 'Louis Pasteur') ? 1 : 0)
+export function stackingLimitOf(state: BlockadeScene, player: Pick<Playerhand, 'color' | 'civilization' | 'items' | 'stats' | 'techsChosen'>): number {
+  return Math.max(player.stats.stacking, techStackingOf(player.techsChosen)?.limit ?? 0)
+    + (player.civilization?.name === 'Russians' ? 1 : 0)
+    + (activeGreatPerson(state, player, 'Louis Pasteur') ? 1 : 0)
 }
 
 /** The techs another player has revealed, for Thomas Edison's free research. */

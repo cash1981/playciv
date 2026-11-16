@@ -28,6 +28,7 @@ import { unwrap } from '../src/result.js'
 import { findPlayer, toPlayerView, toPublicLog } from '../src/state.js'
 
 import { chivalryTurn, player, withCardInHand, withHutInHand, withPieceInArea, withVillageInHand } from './assisted-fixture.js'
+import { withCivilization } from './culture-advance-fixture.js'
 import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 describe('toPublicLog', () => {
@@ -157,6 +158,25 @@ describe('toPlayerView', () => {
     const serialised = JSON.stringify(view)
     for (const item of hand) {
       expect(serialised, `leaked ${revealAll(item)}`).not.toContain(revealAll(item))
+    }
+  })
+
+  it('public stacking limits reveal no hidden Pasteur, tech, hand contents or private logs', () => {
+    const russian = withCivilization(firstCivGame(), 'Russians')
+    const masonry = unwrap(chooseTech(russian, { playerId: CASH1981, techName: 'Masonry' }))
+    const revealed = unwrap(revealTech(masonry, { playerId: CASH1981, techName: 'Masonry' }))
+    const hiddenTech = unwrap(chooseTech(revealed, { playerId: CASH1981, techName: 'Biology' }))
+    const secret = withCardInHand(hiddenTech, 'Louis Pasteur')
+    for (const viewerId of [KARANDRAS1, 'spectator']) {
+      const view = toPlayerView(secret.state, viewerId)
+      const opponent = view.opponents.find((candidate) => candidate.playerId === CASH1981)
+      expect(opponent).toHaveProperty('stackingLimit', 4)
+      expect(opponent).not.toHaveProperty('items')
+      expect(JSON.stringify({ opponent, log: view.log })).not.toContain('Biology')
+      const serialised = JSON.stringify(view)
+      for (const hidden of ['Louis Pasteur', secret.itemId, '"privateLog"', '"privateOrders"']) {
+        expect(serialised).not.toContain(hidden)
+      }
     }
   })
 
