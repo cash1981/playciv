@@ -47,18 +47,21 @@ import {
   disbandOfferAt,
   figureMovementOptions,
   findBoardAsset,
+  isMapCell,
   locationOf,
+  mapCellOf,
   mapHeight,
   mapTop,
   nearestSlotOrigin,
   piecesReplacedByGreatPerson,
+  planRoute,
   remainingBoardAssetCount,
   slotOrigin,
   terrainAt,
   terrainWarning,
   whiteFigureCivilization,
 } from '@civ/engine'
-import type { Board, BoardArea, BoardAsset, BoardPiece, MovementPlayer } from '@civ/engine'
+import type { Board, BoardArea, BoardAsset, BoardPiece, Cell, MovementPlayer } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
@@ -202,6 +205,8 @@ const assetUrl = (path: string): string =>
   `/board/${path.split('/').map(encodeURIComponent).join('/')}`
 
 const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.65, 0.8, 1] as const
+/** The smallest comfortable size of a tap target, in CSS pixels. */
+const TOUCH_TARGET_PX = 44
 
 /**
  * Arrow-key nudge distance, in screen pixels rather than board coordinates, so
@@ -370,6 +375,19 @@ export function BoardView({
   useEffect(() => {
     if (explicitMoveId !== null && moveModeId !== explicitMoveId) setExplicitMoveId(null)
   }, [explicitMoveId, moveModeId])
+  /**
+   * The route being previewed for a figure (issue #362): the destination tapped, the waypoints chosen and whether
+   * the next tap picks another one. Nothing is sent until Move; Cancel just drops it.
+   */
+  const [routeDraft, setRouteDraft] = useState<{
+    readonly pieceId: string
+    readonly via: readonly Cell[]
+    readonly to: Cell
+    readonly addingWaypoint: boolean
+  } | null>(null)
+  useEffect(() => {
+    setRouteDraft((current) => (current !== null && current.pieceId !== selectedId ? null : current))
+  }, [selectedId])
   const { settings: displaySettings, setSettings: setDisplaySettings, reset: resetDisplaySettings } = useDisplaySettings()
   const [autoZoom, setAutoZoom] = useState<number>(ZOOM_STEPS[0])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -685,6 +703,68 @@ export function BoardView({
   const selectedMovement =
     selected !== null && !readOnly && !picking ? movementOptionsFor(selected) : null
   const moveSquares = selectedMovement?.destinations ?? []
+  const draft =
+    routeDraft !== null && selected !== null && routeDraft.pieceId === selected.id && selectedMovement !== null
+      ? routeDraft
+      : null
+  const routePlan = useMemo(
+    () =>
+      draft === null || selected === null || movementPlayer === null || movementTurn === null
+        ? null
+        : planRoute(board, movementPlayer, selected, movementTurn, draft.via, draft.to, movementLocks, movementForbidden),
+    [board, draft, movementForbidden, movementLocks, movementPlayer, movementTurn, selected],
+  )
+  // While adding a waypoint, every square the route could still pass through is a target, not only the
+  // squares the figure could end on: a crossing-only square (England on water) is a fine waypoint.
+  const waypointSquares = useMemo(() => {
+    if (draft === null || !draft.addingWaypoint || selected === null || selectedMovement === null) return []
+    if (movementPlayer === null || movementTurn === null) return []
+    const start = mapCellOf(board, selected)
+    if (start === null) return []
+    const range = selectedMovement.remaining - 1
+    const cells: Cell[] = []
+    for (let row = start.row - range; row <= start.row + range; row += 1) {
+      for (let column = start.column - range; column <= start.column + range; column += 1) {
+        if (Math.abs(column - start.column) + Math.abs(row - start.row) > range) continue
+        if (!isMapCell(board, column, row)) continue
+        const cell = { column, row }
+        const planned = planRoute(
+          board, movementPlayer, selected, movementTurn, [...draft.via, cell], draft.to, movementLocks, movementForbidden,
+        )
+        if (planned.ok) cells.push(cell)
+      }
+    }
+    return cells
+  }, [board, draft, movementForbidden, movementLocks, movementPlayer, movementTurn, selected, selectedMovement])
+  const routeOpen = draft !== null
+  useEffect(() => {
+    if (!routeOpen) return
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      setRouteDraft(null)
+    }
+    document.addEventListener('keydown', cancelOnEscape)
+    return () => document.removeEventListener('keydown', cancelOnEscape)
+  }, [routeOpen])
+  // Bring a newly chosen destination into the middle of the window, clear of the bar that opens under it.
+  const draftTargetKey = draft === null ? null : `${draft.pieceId}:${draft.to.column},${draft.to.row}`
+  useEffect(() => {
+    if (draftTargetKey === null) return
+    const [, square] = draftTargetKey.split(':')
+    const [column, row] = (square ?? '').split(',')
+    const target = surfaceRef.current?.querySelector(`[data-move-column="${column}"][data-move-row="${row}"]`)
+    if (!(target instanceof HTMLElement) || typeof target.scrollIntoView !== 'function') return
+    const reduced =
+      typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center', inline: 'center' })
+  }, [draftTargetKey])
+  // Squares smaller than a comfortable touch target make taps ambiguous: offer to zoom in rather than overlap targets.
+  const cellPixels = board.squareSize * zoom
+  const tooSmallToTap = draft !== null && cellPixels < TOUCH_TARGET_PX
+  const zoomForTouch = (): void => {
+    const step = ZOOM_STEPS.find((candidate) => board.squareSize * candidate >= TOUCH_TARGET_PX) ?? 1
+    setDisplaySettings({ ...displaySettings, mapZoom: step })
+  }
 
   /**
    * Empty map slots are unknown territory until a tile is placed there. Only
@@ -965,7 +1045,7 @@ export function BoardView({
     <section
       ref={panelRef}
       id={BOARD_PANEL_ID}
-      className={`panel board-panel${picking ? ' build-picking' : ''}`}
+      className={`panel board-panel${picking ? ' build-picking' : ''}${draft !== null ? ' route-previewing' : ''}`}
       tabIndex={-1}
       aria-labelledby={`${BOARD_PANEL_ID}-heading`}
     >
@@ -1201,61 +1281,86 @@ export function BoardView({
                   )
                 })}
 
-                {moveSquares.map((cell) => (
-                  <button
-                    key={`move-${cell.column}-${cell.row}`}
-                    type="button"
-                    className={`board-move-cell${cell.contact === true ? ' board-contact-cell' : ''}`}
-                    data-move-column={cell.column}
-                    data-move-row={cell.row}
-                    aria-label={`Move ${selected?.label ?? 'figure'} to ${cell.label}, ${cell.distance} ${
-                      cell.distance === 1 ? 'square' : 'squares'
-                    }${cell.contact === true ? ', onto another player’s figures' : ''}`}
-                    title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}${
-                      cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''
-                    }`}
-                    disabled={busy || readOnly}
-                    style={{
-                      left: cell.column * board.squareSize * zoom,
-                      top: (mapStart + cell.row * board.squareSize) * zoom,
-                      width: board.squareSize * zoom,
-                      height: board.squareSize * zoom,
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      if (selected === null) return
-                      if (
-                        cell.contact === true &&
-                        !window.confirm(
-                          `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
-                        )
-                      ) {
-                        return
-                      }
-                      // Fame and Fortune p. 7: arriving on a centre of an own city, the figure may be disbanded there
-                      const offer = cell.contact === true ? undefined : disbandOfferAt(board, viewerColor, selected, cell)
-                      const disband =
-                        offer !== undefined &&
-                        window.confirm(
-                          offer.existing === undefined
-                            ? `Disband ${selected.label} in ${offer.cityLabel} for a ${offer.marker} marker? ` +
-                                (offer.marker === 'caravan'
-                                  ? 'The caravan adds 2 production to the next Build there. '
-                                  : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
-                                'OK disbands it; Cancel just moves it there.'
-                            : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
-                                'Disband it anyway? OK disbands it; Cancel just moves it there.',
-                        )
-                      setMoveModeId(null)
-                      void run(() =>
-                        api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
+                {routePlan?.ok === true &&
+                  routePlan.route.map((cell, index) => {
+                    const last = index === routePlan.route.length - 1
+                    const waypoint = draft?.via.some((via) => via.column === cell.column && via.row === cell.row) === true
+                    return (
+                      <div
+                        key={`route-${cell.column}-${cell.row}`}
+                        aria-hidden="true"
+                        className={`board-route-step${last ? ' end' : ''}${waypoint ? ' via' : ''}`}
+                        style={{
+                          left: cell.column * board.squareSize * zoom,
+                          top: (mapStart + cell.row * board.squareSize) * zoom,
+                          width: board.squareSize * zoom,
+                          height: board.squareSize * zoom,
+                        }}
+                      >
+                        <span>{waypoint ? `◆${index + 1}` : last ? `${index + 1} ⚑` : index + 1}</span>
+                      </div>
+                    )
+                  })}
+
+                {draft?.addingWaypoint === true
+                  ? waypointSquares.map((cell) => (
+                      <button
+                        key={`waypoint-${cell.column}-${cell.row}`}
+                        type="button"
+                        className="board-move-cell board-waypoint-cell"
+                        aria-label={`Route through ${columnLabel(cell.column)}${cell.row + 1}`}
+                        title={`Route through ${columnLabel(cell.column)}${cell.row + 1}`}
+                        disabled={busy || readOnly}
+                        style={{
+                          left: cell.column * board.squareSize * zoom,
+                          top: (mapStart + cell.row * board.squareSize) * zoom,
+                          width: board.squareSize * zoom,
+                          height: board.squareSize * zoom,
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setRouteDraft({ ...draft, via: [...draft.via, cell], addingWaypoint: false })
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                      >
+                        <span aria-hidden="true">{columnLabel(cell.column)}{cell.row + 1}</span>
+                      </button>
+                    ))
+                  : moveSquares.map((cell) => {
+                      const chosen = draft?.to.column === cell.column && draft.to.row === cell.row
+                      return (
+                        <button
+                          key={`move-${cell.column}-${cell.row}`}
+                          type="button"
+                          className={`board-move-cell${cell.contact === true ? ' board-contact-cell' : ''}${chosen ? ' chosen' : ''}`}
+                          data-move-column={cell.column}
+                          data-move-row={cell.row}
+                          aria-label={`Route ${selected?.label ?? 'figure'} to ${cell.label}, ${cell.distance} ${
+                            cell.distance === 1 ? 'square' : 'squares'
+                          }${cell.contact === true ? ', onto another player’s figures' : ''}`}
+                          aria-pressed={chosen}
+                          title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}${
+                            cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''
+                          }`}
+                          disabled={busy || readOnly}
+                          style={{
+                            left: cell.column * board.squareSize * zoom,
+                            top: (mapStart + cell.row * board.squareSize) * zoom,
+                            width: board.squareSize * zoom,
+                            height: board.squareSize * zoom,
+                          }}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            if (selected === null) return
+                            // A tap only previews the route: Move sends it
+                            setRouteDraft({ pieceId: selected.id, via: [], to: cell, addingWaypoint: false })
+                          }}
+                          onPointerDown={(event) => event.stopPropagation()}
+                        >
+                          <span aria-hidden="true">{cell.label}</span>
+                        </button>
                       )
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <span aria-hidden="true">{cell.label}</span>
-                  </button>
-                ))}
+                    })}
 
                 {(selectedMovement?.explore ?? []).map((cell) => (
                   <button
@@ -1340,6 +1445,103 @@ export function BoardView({
           {statusSidebar}
         </div>
 
+        {draft !== null && selected !== null && selectedMovement !== null && (
+          <div className="route-bar" role="group" aria-label={`Route for ${selected.label}`}>
+            <p className="route-bar-summary" role="status" aria-live="polite">
+              {routePlan?.ok === true ? (
+                <>
+                  <strong>
+                    {selected.label} to {routePlan.destination.label}
+                  </strong>
+                  {': '}
+                  {[locationOf(board, areas, selected), ...routePlan.route.map((cell) => `${columnLabel(cell.column)}${cell.row + 1}`)].join(' → ')}
+                  {' · '}
+                  {routePlan.route.length} movement, {selectedMovement.remaining - routePlan.route.length} left
+                  {routePlan.destination.contact === true && ' · onto another player’s figures: a battle starts'}
+                </>
+              ) : (
+                <>{routePlan?.ok === false ? routePlan.reason : 'No route.'}</>
+              )}
+              {draft.addingWaypoint && ' Tap a square to route through it.'}
+            </p>
+            {tooSmallToTap && (
+              <p className="route-bar-hint">
+                The squares are smaller than {TOUCH_TARGET_PX} px.{' '}
+                <button type="button" className="small" onClick={zoomForTouch}>
+                  Zoom in
+                </button>
+              </p>
+            )}
+            <div className="route-bar-buttons">
+              <button
+                type="button"
+                className="primary"
+                disabled={busy || readOnly || routePlan?.ok !== true}
+                onClick={() => {
+                  if (routePlan?.ok !== true) return
+                  const cell = routePlan.destination
+                  if (
+                    cell.contact === true &&
+                    !window.confirm(
+                      `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
+                    )
+                  ) {
+                    return
+                  }
+                  // Fame and Fortune p. 7: arriving on a centre of an own city, the figure may be disbanded there
+                  const offer = cell.contact === true ? undefined : disbandOfferAt(board, viewerColor, selected, cell)
+                  const disband =
+                    offer !== undefined &&
+                    window.confirm(
+                      offer.existing === undefined
+                        ? `Disband ${selected.label} in ${offer.cityLabel} for a ${offer.marker} marker? ` +
+                            (offer.marker === 'caravan'
+                              ? 'The caravan adds 2 production to the next Build there. '
+                              : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
+                            'OK disbands it; Cancel just moves it there.'
+                        : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
+                            'Disband it anyway? OK disbands it; Cancel just moves it there.',
+                    )
+                  setMoveModeId(null)
+                  setRouteDraft(null)
+                  void run(() =>
+                    api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, routePlan.route),
+                  )
+                }}
+              >
+                Move
+              </button>
+              <button type="button" disabled={busy} onClick={() => setRouteDraft(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                aria-pressed={draft.addingWaypoint}
+                disabled={busy || readOnly}
+                onClick={() => setRouteDraft({ ...draft, addingWaypoint: !draft.addingWaypoint })}
+              >
+                Add waypoint
+              </button>
+              <button
+                type="button"
+                aria-label="Remove last waypoint"
+                disabled={busy || readOnly || draft.via.length === 0}
+                onClick={() => setRouteDraft({ ...draft, via: draft.via.slice(0, -1), addingWaypoint: false })}
+              >
+                Remove last
+              </button>
+              <button
+                type="button"
+                aria-label="Reset route"
+                disabled={busy || readOnly || draft.via.length === 0}
+                onClick={() => setRouteDraft({ ...draft, via: [], addingWaypoint: false })}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+
         <aside className="board-palette">
           <BoardPalette
             assets={assets}
@@ -1397,7 +1599,7 @@ export function BoardView({
                   ) : (
                     <span>
                       Travel speed {selectedMovement.speed}
-                      {selectedMovement.used > 0 && `, ${selectedMovement.remaining} left`}. Click a yellow square to move.
+                      {selectedMovement.used > 0 && `, ${selectedMovement.remaining} left`}. Tap a yellow square to preview the route, then Move.
                       {selectedMovement.explore.length > 0 &&
                         ' A square marked Explore is unexplored: it costs 1 movement to uncover.'}
                     </span>

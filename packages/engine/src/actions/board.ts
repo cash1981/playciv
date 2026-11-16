@@ -32,6 +32,7 @@ import {
   boardAreas,
   AREA_LABEL_HEIGHT,
   clampToBoard,
+  columnLabel,
   faceOf,
   findBoardAsset,
   findPiece,
@@ -62,11 +63,13 @@ import { communismLocksOf } from '../communism.js'
 import { brandenburgForbiddenFor } from '../brandenburg.js'
 import { activeGreatPerson, stackingLimitOf } from '../great-person-effects.js'
 import {
+  checkRoute,
   destinationTo,
   figureBelongsTo,
   figureMovementOptions,
   movementOf,
 } from '../movement.js'
+import type { MovementDestination } from '../movement.js'
 import { startMarkerOf, startPlayerOf, turnStatus } from '../turn.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -403,6 +406,12 @@ export interface TravelFigureInput {
   readonly column: number
   readonly row: number
   /**
+   * The squares to enter, in order, excluding the start and ending on the destination. The whole route is
+   * checked and its length charged, so a longer detour costs more than the shortest way. When absent the
+   * shortest distance is charged and no route is recorded: the way taken is unknown, so none is invented.
+   */
+  readonly route?: readonly Cell[]
+  /**
    * Disband the figure on arrival (Fame and Fortune p. 7): only onto a centre square
    * of the player's own city, for an army or a scout. The web asks first.
    */
@@ -419,6 +428,8 @@ export interface MoveFigureWithMovementInput {
   readonly movementFrom: PieceMovement | null
   /** The bookkeeping after it; `null` clears the field, as an undo does. */
   readonly movementTo: PieceMovement | null
+  /** The squares entered, for an enforced route (issue #362). */
+  readonly route?: readonly Cell[]
   /** What the history line says, after the actor's name and a space. */
   readonly description: string
   readonly at?: string
@@ -459,6 +470,7 @@ export function moveFigureWithMovementUnchecked(
       to: { x, y },
       fromIndex,
       movement: { from: input.movementFrom, to: input.movementTo },
+      ...(input.route === undefined ? {} : { route: input.route.map(({ column, row }) => ({ column, row })) }),
     },
     description: input.description,
   })
@@ -511,7 +523,25 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
       reason: `${piece.label} is not on the map.`,
     })
   }
-  const destination = destinationTo(options, { column: input.column, row: input.row })
+  const locks = communismLocksOf(state)
+  const forbidden = brandenburgForbiddenFor(state, input.playerId)
+  let destination: MovementDestination | undefined
+  let route: readonly Cell[] | undefined
+  if (input.route !== undefined) {
+    // An explicit route is charged at its own length and must end where the request says.
+    const checked = checkRoute(state.board, movementPlayer, piece, turnNumber, input.route, locks, forbidden)
+    if (!checked.ok) return err({ kind: 'FIGURE_MOVE_ILLEGAL', reason: checked.reason })
+    if (checked.destination.column !== input.column || checked.destination.row !== input.row) {
+      return err({
+        kind: 'FIGURE_MOVE_ILLEGAL',
+        reason: `The route ends on ${checked.destination.label}, not on the square asked for.`,
+      })
+    }
+    destination = checked.destination
+    route = checked.route
+  } else {
+    destination = destinationTo(options, { column: input.column, row: input.row })
+  }
   if (destination === undefined) {
     return err({
       kind: 'FIGURE_MOVE_ILLEGAL',
@@ -547,9 +577,13 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
     y,
     movementFrom: piece.movement ?? null,
     movementTo: movement,
+    ...(route === undefined ? {} : { route }),
     description:
       `moved ${piece.label} from ${locationOf(state.board, areas, piece)} to ${destination.label}` +
       ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})` +
+      (route !== undefined && route.length > 1
+        ? ` via ${route.slice(0, -1).map((cell) => `${columnLabel(cell.column)}${cell.row + 1}`).join(' ')}`
+        : '') +
       (destination.contact === true ? ', onto another player\'s figures: settle the battle and loot by hand' : ''),
     ...(input.at === undefined ? {} : { at: input.at }),
   })

@@ -992,12 +992,23 @@ export const api = {
       y,
       ...(snap === undefined ? {} : { snap }),
     }),
-  /** Moves a figure by the Movement rules (issue #302) to a map square. */
-  travelFigure: (gameId: string, pieceId: string, column: number, row: number, disband = false) =>
+  /**
+   * Moves a figure by the Movement rules (issue #302) to a map square. `route` is the squares entered, in order, which
+   * the server validates and charges at its own length (issue #362).
+   */
+  travelFigure: (
+    gameId: string,
+    pieceId: string,
+    column: number,
+    row: number,
+    disband = false,
+    route?: readonly { readonly column: number; readonly row: number }[],
+  ) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/travel`, {
       column,
       row,
       ...(disband ? { disband } : {}),
+      ...(route === undefined ? {} : { route }),
     }),
   /** A figure spends 1 movement to explore the fog next to it: the next map tile is laid there (issue #302). */
   exploreSquare: (gameId: string, pieceId: string, column: number, row: number) =>

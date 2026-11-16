@@ -894,6 +894,16 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   while speed is left. It locks when the pool is spent or the move ends on a hut,
   village or another player's figures (`MovementDestination.ends`). Board Undo
   takes moves back one at a time.
+- **Routes** (#362): the web preview (tap a destination, then Move, with optional waypoints and Cancel/Escape) sends the
+  explicit squares to enter. `checkRoute` validates them with the same per-square rules as the search (`figureRulesOf`:
+  crossing versus ending, huts, foreign figures, stacking, fog, Communism lock, Brandenburg), allows no repeated square and
+  charges the route's own length, so a detour costs more than the shortest way; the route must end on the requested square.
+  `planRoute` plans the preview: a shortest leg per waypoint, later targets reserved. It is greedy, so a first leg can
+  take squares a later leg needs. The server re-validates against the current board, which is what rejects a stale
+  preview. The route is stored on the `move` board change (`route`) and shown as ` via …` in the log when longer than one square, and one Undo
+  takes the whole move back. `/travel` without a route keeps the old behaviour (shortest distance charged, no route
+  recorded): the way taken is unknown and is never reconstructed, for moves before #362 either. Tests: `movement.test.ts`
+  (routes), `board-api.test.ts`, `BoardView.test.tsx`.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
   England crosses but cannot end there. An unknown (tile-back) square is not water.
 - **Huts and villages:** a move must stop on one; with Flight it flies over, but

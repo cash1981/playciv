@@ -976,13 +976,100 @@ describe('BoardView mobile placement', () => {
     })) Object.defineProperty(event, name, { value })
     tile.dispatchEvent(event)
 
-    const squares = await screen.findAllByRole('button', { name: /Move Red army to/ })
+    const squares = await screen.findAllByRole('button', { name: /Route Red army to/ })
     expect(squares.length).toBeGreaterThan(0)
     fireEvent.click(squares[0] as HTMLElement)
+    // A tap only previews the route: nothing is sent until Move
+    expect(travel).not.toHaveBeenCalled()
+    expect(screen.getByRole('group', { name: 'Route for Red army' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
 
     await waitFor(() =>
-      expect(travel).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false),
+      expect(travel).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false, [
+        expect.objectContaining({ column: expect.any(Number), row: expect.any(Number) }),
+      ]),
     )
+    travel.mockRestore()
+    cleanup()
+  })
+
+  it('routes through a waypoint and sends nothing until Move; Cancel drops the preview (issue #362)', async () => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([])
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
+    const army = findBoardAsset('figures/redarmy')
+    const back = findBoardAsset('tiles/tileback')
+    if (army === undefined || back === undefined) throw new Error('missing asset')
+    const top = mapTop(createBoard())
+    const pieces: BoardPiece[] = [
+      {
+        id: 'tile-back', assetId: back.id, path: back.path, label: back.label, category: 'tile',
+        x: 0, y: top, width: back.width, height: back.height, rotation: 0, placedBy: 'player-one',
+      },
+      {
+        id: 'army-1', assetId: army.id, path: army.path, label: army.label, category: 'figure',
+        x: SQUARE_SIZE + (SQUARE_SIZE - army.width) / 2,
+        y: top + SQUARE_SIZE + (SQUARE_SIZE - army.height) / 2,
+        width: army.width, height: army.height, rotation: 0, placedBy: 'player-one',
+      },
+    ]
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        movementPlayer={{
+          color: 'Red', civilization: null, stats: { mvmt: '4' }, items: [], socialPolicies: [], techsChosen: [], playerTurns: [],
+        }}
+        movementTurn={1}
+        run={async action => { await action() }}
+      />,
+    )
+    const select = () => {
+      const tile = container.querySelector('[data-piece-id="army-1"]')
+      if (!(tile instanceof HTMLElement)) throw new Error('piece missing')
+      const event = new Event('pointerdown', { bubbles: true })
+      for (const [name, value] of Object.entries({
+        pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20,
+      })) Object.defineProperty(event, name, { value })
+      tile.dispatchEvent(event)
+    }
+    select()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Route Red army to C2, 1 square/ }))
+    expect(screen.getAllByRole('status').some((node) => node.textContent?.includes('1 movement, 3 left'))).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add waypoint' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Route through C3' }))
+    expect(screen.getAllByRole('status').some((node) => node.textContent?.includes('3 movement, 1 left'))).toBe(true)
+    expect(travel).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove last waypoint' }))
+    expect(screen.getAllByRole('status').some((node) => node.textContent?.includes('1 movement, 3 left'))).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Add waypoint' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Route through C3' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+    await waitFor(() =>
+      expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, [
+        { column: 1, row: 2 },
+        { column: 2, row: 2 },
+        { column: 2, row: 1 },
+      ]),
+    )
+
+    travel.mockClear()
+    select()
+    fireEvent.click(await screen.findByRole('button', { name: /Route Red army to C2, 1 square/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('group', { name: 'Route for Red army' })).toBeNull()
+    expect(travel).not.toHaveBeenCalled()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Route Red army to C2, 1 square/ }))
+    expect(screen.getByRole('group', { name: 'Route for Red army' })).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('group', { name: 'Route for Red army' })).toBeNull()
+    expect(travel).not.toHaveBeenCalled()
     travel.mockRestore()
     cleanup()
   })
@@ -1048,15 +1135,17 @@ describe('BoardView mobile placement', () => {
     })) Object.defineProperty(event, name, { value })
     tile.dispatchEvent(event)
 
-    fireEvent.click(await screen.findByRole('button', { name: /Move Red army to B3/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Route Red army to B3/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
     expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/^Disband Red army in City B3 for a fortification marker\?/))
-    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 1, 2, disband))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 1, 2, disband, [{ column: 1, row: 2 }]))
 
     // Elsewhere nothing is asked
     confirm.mockClear()
     tile.dispatchEvent(event)
-    fireEvent.click(await screen.findByRole('button', { name: /Move Red army to A2/ }))
-    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 0, 1, false))
+    fireEvent.click(await screen.findByRole('button', { name: /Route Red army to A2/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 0, 1, false, [{ column: 0, row: 1 }]))
     expect(confirm).not.toHaveBeenCalled()
     confirm.mockRestore()
     travel.mockRestore()
@@ -1227,12 +1316,13 @@ describe('BoardView mobile placement', () => {
     tile.dispatchEvent(event)
 
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const target = await screen.findByRole('button', { name: /Move Red army to C2, 1 square, onto another player’s figures/ })
+    const target = await screen.findByRole('button', { name: /Route Red army to C2, 1 square, onto another player’s figures/ })
     expect(target.className).toContain('board-contact-cell')
     fireEvent.click(target)
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
 
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('starts a battle'))
-    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, [{ column: 2, row: 1 }]))
     travel.mockRestore()
     confirm.mockRestore()
     cleanup()

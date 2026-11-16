@@ -86,6 +86,14 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Display settings (#342) are per browser: two tabs in one browser do not sync, and
   the tab that saves last overwrites all three values. Auto zoom still uses the
   old fitting steps.
+- Movement routes (#362): Defection, Mass Defection and Wholesale Defection are not automated against a route. Open
+  questions for the human before that: where an interruption cuts the move (before or on the square entered), what happens
+  with several reactions or a cancelled one, whether the route is revealed to reacting players, and how a hidden card in
+  the reacting hand stays private. A route cannot yet be cut at a chosen square, and a move without a recorded route
+  (anything before #362 or via the API without `route`) cannot be reconstructed. Waypoint planning is greedy (see
+  decisions.md), so a narrow corridor can report no way although one exists; add the squares as extra waypoints. The route bar
+  is at the end of the page for keyboard users (Escape cancels), and a rejected Move clears the preview. Checked in headless
+  Chrome at 360 px only; no real touch device, and desktop drag along a route is not built.
 - Asset regeneration needs untracked source material. Check that local Military
   Science artwork is the intended replacement before running the generator.
 

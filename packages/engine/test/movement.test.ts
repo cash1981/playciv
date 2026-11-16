@@ -14,9 +14,11 @@ import {
 } from '../src/board.js'
 import {
   arrangeWithinSquare,
+  checkRoute,
   figureMovementOptions,
   movementOf,
   movementTotal,
+  planRoute,
   splitMovement,
   travelSpeedOf,
 } from '../src/movement.js'
@@ -592,5 +594,159 @@ describe('arranging a figure in its own square', () => {
     expect(movementOf(figure(shifted), 1)).toEqual(movementOf(moved, 1))
     const again = unwrap(travelFigure(shifted, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 }))
     expect(movementOf(figure(again), 1)).toMatchObject({ used: 2, locked: true })
+  })
+})
+
+describe('routes (issue #362)', () => {
+  const cell = (column: number, row: number) => ({ column, row })
+  const withSpeed = (state: GameState, mvmt: string): GameState =>
+    withPlayer(state, { ...playerOf(state), stats: { ...playerOf(state).stats, mvmt } })
+  const travel = (state: GameState, route: ReturnType<typeof cell>[]) => {
+    const last = route.at(-1) ?? cell(0, 0)
+    return travelFigure(state, {
+      playerId: CASH1981,
+      pieceId: figure(state).id,
+      column: last.column,
+      row: last.row,
+      route,
+    })
+  }
+  const check = (state: GameState, route: ReturnType<typeof cell>[]) =>
+    checkRoute(state.board, playerOf(state), figure(state), 1, route)
+
+  it('records the chosen route, charges its length and undoes it in one step', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    for (const [route, via] of [
+      [[cell(2, 1), cell(2, 2)], 'C2'],
+      [[cell(1, 2), cell(2, 2)], 'B3'],
+    ] as const) {
+      const moved = unwrap(travel(state, [...route]))
+      expect(movementOf(figure(moved), 1)).toMatchObject({ used: 2, locked: true })
+      expect(moved.board.history.at(-1)?.change).toMatchObject({ kind: 'move', route })
+      expect(moved.board.history.at(-1)?.description).toContain(`via ${via}`)
+      // The route survives a save and a reload
+      const reloaded = JSON.parse(JSON.stringify(moved)) as GameState
+      expect(reloaded.board.history.at(-1)?.change).toMatchObject({ route })
+
+      const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+      expect(figure(undone).x).toBe(figure(state).x)
+      expect(figure(undone).movement).toBeUndefined()
+    }
+  })
+
+  it('charges a longer detour and uses the pool for what is left', () => {
+    const state = withSpeed(place(game(), 'figures/redarmy', 1, 1), '4')
+    // Two squares away as the crow flies, three squares as walked
+    const moved = unwrap(travel(state, [cell(1, 2), cell(2, 2), cell(2, 1)]))
+    expect(movementOf(figure(moved), 1)).toMatchObject({ used: 3, locked: false })
+    expect(unwrapErr(travel(moved, [cell(2, 2), cell(2, 3)])).kind).toBe('FIGURE_MOVE_ILLEGAL')
+    const rest = unwrap(travel(moved, [cell(3, 1)]))
+    expect(movementOf(figure(rest), 1)).toMatchObject({ used: 4, locked: true })
+  })
+
+  it('charges the shortest distance and records no route when none is sent', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const moved = unwrap(
+      travelFigure(state, { playerId: CASH1981, pieceId: figure(state).id, column: 3, row: 1 }),
+    )
+    const change = moved.board.history.at(-1)?.change
+    expect(change).toMatchObject({ kind: 'move', movement: { to: { used: 2 } } })
+    expect(change).not.toHaveProperty('route')
+    expect(moved.board.history.at(-1)?.description).not.toContain(' via ')
+  })
+
+  it('refuses a route that is too long, broken, repeating, or ends elsewhere than asked', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    expect(check(state, [cell(1, 2), cell(2, 2), cell(2, 1)])).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining('takes 3 movement'),
+    })
+    expect(check(state, [cell(2, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('not next to') })
+    expect(check(state, [])).toMatchObject({ ok: false })
+    const roomy = withSpeed(state, '5')
+    expect(check(roomy, [cell(2, 1), cell(1, 1)])).toMatchObject({ ok: false, reason: expect.stringContaining('twice') })
+    expect(
+      unwrapErr(
+        travelFigure(state, { playerId: CASH1981, pieceId: figure(state).id, column: 1, row: 2, route: [cell(2, 1)] }),
+      ).kind,
+    ).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+
+  it('tells crossing a square from ending on it', () => {
+    // England may cross the water on A3 but not end there
+    const base = place(waterGame(), 'figures/bluearmy', 1, 3, KARANDRAS1)
+    const england = withPlayer(base, {
+      ...playerOf(base),
+      civilization: { name: 'England' } as Playerhand['civilization'],
+    })
+    expect(check(england, [cell(0, 2), cell(1, 2)])).toMatchObject({ ok: true })
+    expect(check(england, [cell(0, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('cannot end') })
+    expect(check(base, [cell(0, 2), cell(1, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('cannot enter') })
+
+    // A hut ends the move unless Flight flies over it, and nothing may end on it with Flight
+    let hut = withSpeed(place(game(), 'figures/redarmy', 1, 1), '3')
+    hut = place(hut, 'resources/hut', 2, 1)
+    expect(check(hut, [cell(2, 1)])).toMatchObject({ ok: true })
+    expect(check(hut, [cell(2, 1), cell(3, 1)])).toMatchObject({ ok: false, reason: expect.stringContaining('carry on') })
+    const flying = withTech(hut, 'Flight')
+    expect(check(flying, [cell(2, 1), cell(3, 1)])).toMatchObject({ ok: true })
+    expect(check(flying, [cell(2, 1)])).toMatchObject({ ok: false })
+  })
+
+  it('rejects a stale route once the board has changed under it', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const route = [cell(2, 1), cell(2, 2)]
+    expect(check(state, route)).toMatchObject({ ok: true })
+    const changed = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    expect(check(changed, route)).toMatchObject({ ok: false })
+    expect(unwrapErr(travel(changed, route)).kind).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+
+  it('plans the shortest route, through waypoints when asked, and says when there is none', () => {
+    const state = withSpeed(place(game(), 'figures/redarmy', 1, 1), '5')
+    const plan = (via: ReturnType<typeof cell>[], to: ReturnType<typeof cell>) =>
+      planRoute(state.board, playerOf(state), figure(state), 1, via, to)
+
+    expect(plan([], cell(3, 1))).toMatchObject({ ok: true, route: [cell(2, 1), cell(3, 1)] })
+    const bent = plan([cell(2, 2)], cell(3, 1))
+    expect(bent).toMatchObject({ ok: true, destination: { distance: 4 } })
+    expect(bent.ok && bent.route.map((step) => `${step.column},${step.row}`)).toContain('2,2')
+    // A later square is not taken on the way to an earlier one
+    const loop = plan([cell(2, 2)], cell(2, 1))
+    expect(loop.ok && loop.route).toEqual([cell(1, 2), cell(2, 2), cell(2, 1)])
+    expect(plan([cell(1, 1)], cell(3, 1))).toMatchObject({ ok: false })
+    expect(plan([cell(9, 9)], cell(3, 1))).toMatchObject({ ok: false })
+    // A waypoint beyond what is left is not planned
+    expect(plan([cell(6, 1)], cell(1, 1))).toMatchObject({ ok: false })
+  })
+
+  it('plans every square the search reaches, with the distance the search gave', () => {
+    let state = withSpeed(place(game(), 'figures/redarmy', 2, 2), '4')
+    state = place(state, 'figures/bluearmy', 3, 2, KARANDRAS1)
+    const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
+    if (options === null) throw new Error('expected movement options')
+    expect(options.destinations.length).toBeGreaterThan(8)
+    for (const destination of options.destinations) {
+      const planned = planRoute(state.board, playerOf(state), figure(state), 1, [], destination)
+      expect(planned, destination.label).toMatchObject({ ok: true, destination: { distance: destination.distance } })
+    }
+  })
+
+  it('honours a locked square and a forbidden square on a route', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const locked = checkRoute(state.board, playerOf(state), figure(state), 1, [cell(2, 1)], [cell(1, 1)])
+    expect(locked).toMatchObject({ ok: false })
+    const forbidden = checkRoute(state.board, playerOf(state), figure(state), 1, [cell(2, 1)], [], [cell(2, 1)])
+    expect(forbidden).toMatchObject({ ok: false })
+    expect(checkRoute(state.board, playerOf(state), figure(state), 1, [cell(2, 1)], [], [cell(3, 3)])).toMatchObject({
+      ok: true,
+    })
+  })
+
+  it('refuses a step off the map or onto a fractional square', () => {
+    const state = place(game(), 'figures/redarmy', 0, 0)
+    expect(check(state, [cell(-1, 0)])).toMatchObject({ ok: false })
+    expect(check(state, [cell(0.5, 0)])).toMatchObject({ ok: false })
+    expect(check(state, [cell(0.5, 0.5)])).toMatchObject({ ok: false })
   })
 })
