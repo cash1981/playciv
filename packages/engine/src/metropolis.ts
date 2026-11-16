@@ -18,11 +18,12 @@
  */
 
 import { cityCenterCells, mapCellOf, pieceColorOf } from './blockade.js'
-import type { Cell } from './blockade.js'
+import type { BlockadeScene, Cell } from './blockade.js'
 import { findBoardAsset, isMapCell, mapTop } from './board.js'
 import type { Board, BoardPiece, Rotation } from './board.js'
 import { squareLabel, WATER_TECHS } from './build-options.js'
 import { isOwnFigure } from './city-founding.js'
+import { stackingLimitOf } from './great-person-effects.js'
 import { figuresAt, occupancyOf } from './movement.js'
 import type { GameState, Playerhand } from './state.js'
 import { terrainAt } from './terrain.js'
@@ -105,17 +106,24 @@ const terrainOfCell = (board: Board, cell: Cell) => {
   return terrainAt(board, centre.x, centre.y)
 }
 
-/** Valid outskirts squares adjacent to the growing square, for the entire displaced group (ruling 122). */
+/** Valid adjacent outskirts for the entire displaced group, using the stacking limit after overbuilding. */
 export function metropolisFigureTargets(
-  board: Board,
-  grower: Grower & Pick<Playerhand, 'techsChosen'>,
+  scene: BlockadeScene,
+  grower: Grower & Pick<Playerhand, 'items' | 'stats' | 'techsChosen'>,
   capital: BoardPiece,
   second: Cell,
-  stackingLimit: number,
   forbidden: readonly Cell[] = [],
 ): readonly (Cell & { readonly label: string })[] {
+  const board = scene.board
   const figures = figuresAt(board, grower, second)
   if (figures.length === 0) return []
+  // Reserving an unblocked Scientist can disable Pasteur when the remaining Scientists are all blockaded.
+  const pieces = board.pieces.filter((piece) => {
+    if (piece.category !== 'building' && piece.category !== 'wonder' && piece.category !== 'greatperson') return true
+    const cell = mapCellOf(board, piece)
+    return cell === null || !sameCell(cell, second)
+  })
+  const stackingLimit = stackingLimitOf({ ...scene, board: { ...board, pieces } }, grower)
   const home = mapCellOf(board, capital)
   const occupancy = occupancyOf(board, grower)
   const water = grower.techsChosen.some((tech) => !tech.hidden && WATER_TECHS.includes(tech.name))

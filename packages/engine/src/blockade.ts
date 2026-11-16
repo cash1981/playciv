@@ -20,6 +20,12 @@ import type { Board, BoardPiece } from './board.js'
 import { applyChange, mapTop, squareOf, whiteFigureCivilization } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
+/** Public ownership information needed to derive blockades from either the state or a player view. */
+export interface BlockadeScene {
+  readonly board: Board
+  readonly players: readonly Pick<Playerhand, 'playerId' | 'color' | 'civilization'>[]
+}
+
 /** The five player colours a city or figure piece can come in, matching `PLAYER_COLORS`. */
 const PIECE_COLORS = ['blue', 'green', 'purple', 'red', 'yellow'] as const
 
@@ -53,7 +59,7 @@ const COIN_TOKEN_IDS: ReadonlySet<string> = new Set([
 
 /** The colour of the player with this civilization, lower case; `undefined` when there is none or it has no colour yet. */
 function civilizationColor(
-  state: Pick<GameState, 'players'>,
+  state: Pick<BlockadeScene, 'players'>,
   civilization: string,
 ): string | undefined {
   return state.players
@@ -147,7 +153,7 @@ class BlockadeIndex {
   private readonly cities: readonly CityFootprint[]
   private readonly figureColors = new Map<string, Set<string | undefined>>()
 
-  constructor(private readonly state: Pick<GameState, 'board' | 'players'>) {
+  constructor(private readonly state: BlockadeScene) {
     const cities: CityFootprint[] = []
     for (const piece of state.board.pieces) {
       if (piece.category !== 'city' && piece.category !== 'figure') continue
@@ -467,8 +473,8 @@ export function blockadedPieceIds(state: Pick<GameState, 'board' | 'players'>): 
  * cards in the hand.
  */
 export function blockadedGreatPersonTypes(
-  state: Pick<GameState, 'board' | 'players'>,
-  player: Playerhand,
+  state: BlockadeScene,
+  player: Pick<Playerhand, 'color'>,
 ): readonly string[] {
   if (player.color === null) return []
   const colour = player.color.toLowerCase()

@@ -634,6 +634,8 @@ describe('growing a capital into a metropolis (Agriculture)', () => {
         color: 'Red',
         civilization: null,
         stackingLimit: 2,
+        stats: { stacking: 2 },
+        items: [],
         startOfTurn: sotWith(),
         techsChosen: [{ name: 'Agriculture', hidden: options.revealed === false }],
         cities: [{ pieceId: 'cap', label: options.label ?? 'Capital D4' }],
@@ -725,6 +727,38 @@ describe('growing a capital into a metropolis (Agriculture)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
     await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('uses the post-overbuild stacking limit in the picker (remaining Scientist blockaded: %s)', async (blockaded) => {
+    const base = ready([
+      piece('free-scientist', 'great people/scientist', 'greatperson', 4, 3),
+      piece('remaining-scientist', 'great people/scientist', 'greatperson', 2, 2),
+      ...(blockaded ? [piece('enemy', 'figures/bluearmy', 'figure', 2, 2)] : []),
+      piece('displaced', 'figures/redarmy', 'figure', 4, 3),
+      piece('army', 'figures/redarmy', 'figure', 5, 2),
+      piece('scout', 'figures/redscout', 'figure', 5, 2),
+    ])
+    if (base.you === null) throw new Error('no player')
+    const view: PlayerView = {
+      ...base,
+      you: {
+        ...base.you,
+        stackingLimit: 3,
+        stats: { ...base.you.stats, stacking: 2 },
+        items: [{
+          id: 'pasteur', kind: 'greatperson', sheetName: 'GREAT_PERSON', itemNumber: 1,
+          description: null, used: false, hidden: false, ownerId: 'me',
+          name: 'Louis Pasteur', type: 'Scientist',
+        }],
+      },
+    }
+    let picks = 0
+    const begin = withPicker(view, (cells) => picks++ === 0 ? cells.find((cell) => cell.label === 'E4') ?? null : null)
+    fireEvent.click(screen.getByRole('button', { name: 'Grow your capital into a metropolis' }))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(2))
+    const targets = begin.mock.calls[1]?.[0]?.cells.map((cell) => cell.label) ?? []
+    expect(targets).toContain('F4')
+    expect(targets.includes('F3')).toBe(!blockaded)
   })
 
   it('shows the reason and leaves the button off when no side can grow', () => {

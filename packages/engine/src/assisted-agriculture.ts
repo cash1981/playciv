@@ -23,7 +23,6 @@ import type { BoardPiece } from './board.js'
 import { findBoardAsset } from './board.js'
 import { brandenburgForbiddenFor } from './brandenburg.js'
 import { squareLabel } from './build-options.js'
-import { stackingLimitOf } from './great-person-effects.js'
 import { GROW_DIRECTIONS, growableCapital, isGrowDirection, metropolisFigureTargets, metropolisGrowthsOf } from './metropolis.js'
 import type { GrowDirection, MetropolisGrowth } from './metropolis.js'
 import { figuresAt } from './movement.js'
@@ -81,7 +80,7 @@ export const agriculture = techAbility<'agriculture', Plan>({
     }
     const capital = growableCapital(state, player)
     if (capital === undefined) return err('You have no capital marker on the map.')
-    const targets = metropolisFigureTargets(state.board, player, capital, growth.cell, stackingLimitOf(state, player), brandenburgForbiddenFor(state, player.playerId))
+    const targets = metropolisFigureTargets(state, player, capital, growth.cell, brandenburgForbiddenFor(state, player.playerId))
     const target = payload['figureTarget']
     if (typeof target !== 'object' || target === null || !('column' in target) || !('row' in target)) {
       return err('Choose a neighbouring outskirts square for all your figures on the growing square.')
@@ -110,6 +109,11 @@ export const agriculture = techAbility<'agriculture', Plan>({
       overbuilt.push({ piece: replaced.value.piece, historyId: replaced.value.historyId, reserved: replaced.value.reserved })
     }
     if (plan.figureTarget !== undefined) {
+      const target = plan.figureTarget
+      const targets = metropolisFigureTargets(current, player, capital, growth.cell, brandenburgForbiddenFor(current, player.playerId))
+      if (!targets.some((cell) => cell.column === target.column && cell.row === target.row)) {
+        return err('That square cannot hold all the figures displaced by the metropolis after overbuilding.')
+      }
       for (const piece of figuresAt(state.board, player, growth.cell)) {
         const x = piece.x + (plan.figureTarget.column - growth.cell.column) * state.board.squareSize
         const y = piece.y + (plan.figureTarget.row - growth.cell.row) * state.board.squareSize

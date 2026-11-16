@@ -9,6 +9,7 @@
  */
 
 import { blockadedGreatPersonTypes, cityFootprintsOf, GREAT_PERSON_CARD_TYPES, mapCellOf } from './blockade.js'
+import type { BlockadeScene } from './blockade.js'
 import { findBoardAsset, remainingBoardAssetCount } from './board.js'
 import type { GreatPersonItem, Item } from './item.js'
 import { techStackingOf } from './movement.js'
@@ -16,8 +17,8 @@ import type { GameState, Playerhand } from './state.js'
 
 /** Whether `name` is a revealed Great Person whose type is not fully blockaded. */
 export function activeGreatPerson(
-  state: GameState,
-  player: Playerhand,
+  state: BlockadeScene,
+  player: Pick<Playerhand, 'color' | 'items'>,
   name: string,
 ): boolean {
   const card = player.items.find(
@@ -32,7 +33,7 @@ export function activeGreatPerson(
  * number stays the player's bookkeeping; Build uses this effective value. A revealed tech sets the limit too
  * (`techStackingOf`); the larger of it and the typed value counts, and Pasteur's +1 goes on top.
  */
-export function stackingLimitOf(state: GameState, player: Playerhand): number {
+export function stackingLimitOf(state: BlockadeScene, player: Pick<Playerhand, 'color' | 'items' | 'stats' | 'techsChosen'>): number {
   return Math.max(player.stats.stacking, techStackingOf(player.techsChosen)?.limit ?? 0) + (activeGreatPerson(state, player, 'Louis Pasteur') ? 1 : 0)
 }
 

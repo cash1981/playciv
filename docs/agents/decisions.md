@@ -1250,7 +1250,10 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   armies and scouts do not block the side. The player chooses a second highlighted square for the whole displaced group,
   adjacent to the growing square and in the metropolis outskirts (122). The request carries optional `figureTarget`;
   it is required only when figures are displaced. Water needs a revealed Sailing, Steam Power or Flight; the full group
-  must fit the effective stacking limit, scouts cannot attack, and Brandenburg Gate's protected squares remain forbidden.
+  must fit the effective stacking limit **after overbuilding**, scouts cannot attack, and Brandenburg Gate's protected squares remain forbidden.
+  The map picker previews that same limit from public board/ownership data, and the engine checks it again after actually
+  overbuilding, before moving any figure. Reserving the only unblocked Scientist can disable Louis Pasteur's +1 when the
+  remaining Scientists are blockaded; a later legal placement on an unblocked square re-enables it, not before that placement.
   Displacement spends no movement. An army displaced onto enemies starts a manually resolved battle (124).
   Every removal, reserve move and figure displacement belongs to the same action and undo vote. Undo restores those pieces
   exactly and refuses if a displaced figure changed, a reserved person left reserve, a destroyed piece returned, its supply

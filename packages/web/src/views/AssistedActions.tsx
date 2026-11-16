@@ -844,7 +844,7 @@ export function AssistedActionButton({
     const hasFigures = figuresAt(view.board, you, growth.cell).length > 0
     let figureTarget: { readonly column: number; readonly row: number } | undefined
     if (hasFigures && capital !== undefined) {
-      const targets = metropolisFigureTargets(view.board, you, capital, growth.cell, you.stackingLimit, brandenburgForbiddenCells(view.brandenburgZones, you.playerId))
+      const targets = metropolisFigureTargets({ board: view.board, players: [you, ...view.opponents] }, you, capital, growth.cell, brandenburgForbiddenCells(view.brandenburgZones, you.playerId))
       if (targets.length === 0) {
         setHint('No neighbouring outskirts square can hold all the displaced figures. Relocate them by hand first.')
         return

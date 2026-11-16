@@ -134,7 +134,8 @@ with what the server actually sends.
 
 Agriculture growth overbuilds buildings and wonders, returns Great Persons to
 reserve, and lets you choose a neighbouring outskirts square for displaced
-figures. An unclaimed relic in the new outskirts blocks growth. Under the house
+figures, using the stacking limit after overbuilding (including any lost
+Louis Pasteur bonus). An unclaimed relic in the new outskirts blocks growth. Under the house
 rule, Military Docks count as Shipyards for Navy army placement.
 
 Technology resource abilities offer only usable payments actually held in your

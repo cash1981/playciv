@@ -17,6 +17,7 @@ import { cityCenterCells, cityFootprintsOf, mapCellOf } from '../src/blockade.js
 import { SQUARE_SIZE, boardUndoBlocked, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { cityProductionsOf } from '../src/city-production.js'
+import { stackingLimitOf } from '../src/great-person-effects.js'
 import { growableCapital, metropolisAssetIdOf, metropolisFigureTargets, metropolisGrowthsOf } from '../src/metropolis.js'
 import type { GrowDirection } from '../src/metropolis.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -25,6 +26,7 @@ import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
 import { withCivilization } from './culture-advance-fixture.js'
+import { withCardInHand } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-15T10:00:00.000Z'
@@ -273,6 +275,60 @@ describe('a direction that is not legal', () => {
   })
 
   describe('overbuilding and displacing figures', () => {
+    function pasteurGrowth(blockaded = true): GameState {
+      let state = put(put(ready(), 'great people/scientist', 4, 3), 'great people/scientist', 2, 2)
+      if (blockaded) state = put(state, 'figures/bluearmy', 2, 2, KARANDRAS1)
+      state = put(put(put(state, 'figures/redarmy', 4, 3), 'figures/redarmy', 5, 2), 'figures/redscout', 5, 2)
+      const card = withCardInHand(state, 'Louis Pasteur')
+      return {
+        ...card.state,
+        players: card.state.players.map((player) => player.playerId !== CASH1981 ? player : {
+          ...player,
+          stats: { ...player.stats, stacking: 2 },
+          items: player.items.map((item) => item.id === card.itemId ? { ...item, hidden: false } : item),
+        }),
+      }
+    }
+
+    it('rejects a displacement that only fits before overbuilding disables Pasteur', () => {
+      const before = pasteurGrowth()
+      const snapshot = JSON.stringify(before)
+      expect(stackingLimitOf(before, me(before))).toBe(3)
+      const result = grow(before, 'east', 'req-1', { column: 5, row: 2 })
+      expect(result.ok).toBe(false)
+      expect(JSON.stringify(unwrapErr(result))).toContain('cannot hold all')
+      expect(JSON.stringify(before)).toBe(snapshot)
+    })
+
+    it('uses the reduced limit until a reserved Scientist is placed on an unblocked square again', () => {
+      const before = pasteurGrowth()
+      const scientist = before.board.pieces.find((piece) => piece.assetId === 'great people/scientist')
+      if (scientist === undefined) throw new Error('no Scientist')
+      const done = unwrap(grow(before, 'east', 'req-1', { column: 5, row: 3 }))
+      expect(stackingLimitOf(done, me(done))).toBe(2)
+      const undone = unwrap(undoByVote(done))
+      expect(stackingLimitOf(undone, me(undone))).toBe(3)
+      for (const piece of before.board.pieces) expect(undone.board.pieces.find((other) => other.id === piece.id)).toEqual(piece)
+      const asset = findBoardAsset(scientist.assetId)
+      if (asset === undefined) throw new Error('no Scientist asset')
+      const replaced = unwrap(movePiece(done, {
+        playerId: CASH1981, pieceId: scientist.id,
+        x: 4 * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
+        y: mapTop(done.board) + 2 * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+      }))
+      expect(stackingLimitOf(replaced, me(replaced))).toBe(3)
+    })
+
+    it('keeps Pasteur enabled when another unblocked Scientist remains after overbuilding', () => {
+      const before = pasteurGrowth(false)
+      const done = unwrap(grow(before, 'east', 'req-1', { column: 5, row: 2 }))
+      expect(stackingLimitOf(done, me(done))).toBe(3)
+      expect(done.board.pieces.filter((piece) => {
+        const cell = mapCellOf(done.board, piece)
+        return piece.category === 'figure' && cell?.column === 5 && cell.row === 2
+      })).toHaveLength(3)
+    })
+
     it.each(['buildings/library', 'wonders/colossus', 'great people/artist'])('grows over %s and restores it with the vote undo', (assetId) => {
       const before = put(ready(), assetId, 4, 3)
       const piece = before.board.pieces.at(-1)
@@ -324,10 +380,10 @@ describe('a direction that is not legal', () => {
       }
       const wet = put(ready({ map: mapOf({ east: 'tiles/america' }) }), 'figures/redscout', 3, 2)
       // Growing north onto D3: E4 is water on the America tile.
-      const targets = metropolisFigureTargets(wet.board, me(wet), capital(wet), { column: 3, row: 2 }, 2)
+      const targets = metropolisFigureTargets(wet, me(wet), capital(wet), { column: 3, row: 2 })
       expect(targets).not.toContainEqual({ column: 4, row: 3, label: 'E4' })
       const sailing = learn(wet, 'Sailing')
-      expect(metropolisFigureTargets(sailing.board, me(sailing), capital(sailing), { column: 3, row: 2 }, 2)).toContainEqual({ column: 4, row: 3, label: 'E4' })
+      expect(metropolisFigureTargets(sailing, me(sailing), capital(sailing), { column: 3, row: 2 })).toContainEqual({ column: 4, row: 3, label: 'E4' })
     })
 
     it('allows armies but not scouts to be displaced onto enemy figures', () => {
