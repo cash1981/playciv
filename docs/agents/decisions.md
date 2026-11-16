@@ -894,7 +894,7 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   while speed is left. It locks when the pool is spent or the move ends on a hut,
   village or another player's figures (`MovementDestination.ends`). Board Undo
   takes moves back one at a time.
-- **Routes** (#362): the web preview (tap a destination, then Move, with optional waypoints and Cancel/Escape) sends the
+- **Routes** (#362): the web preview (tap a destination, then Move or tap the same square again, with optional waypoints and Cancel/Escape) sends the
   explicit squares to enter. `checkRoute` validates them with the same per-square rules as the search (`figureRulesOf`:
   crossing versus ending, huts, foreign figures, stacking, fog, Communism lock, Brandenburg), allows no repeated square and
   charges the route's own length, so a detour costs more than the shortest way; the route must end on the requested square.

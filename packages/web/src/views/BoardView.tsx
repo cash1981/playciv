@@ -474,7 +474,14 @@ export function BoardView({
     const clearSelectionOutsideBoard = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
-      if (target.closest('.board-surface') !== null || target.closest('.board-palette') !== null) return
+      // The route bar is outside the board: pressing Move must not clear the selection the route belongs to
+      if (
+        target.closest('.board-surface') !== null ||
+        target.closest('.board-palette') !== null ||
+        target.closest('.route-bar') !== null
+      ) {
+        return
+      }
       setSelectedId(null)
       setMoveModeId(null)
     }
@@ -758,6 +765,38 @@ export function BoardView({
       typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center', inline: 'center' })
   }, [draftTargetKey])
+  /** Sends the previewed route: the Move button, or a second tap on the chosen destination. */
+  const confirmRoute = (): void => {
+    if (routePlan?.ok !== true || selected === null) return
+    const cell = routePlan.destination
+    if (
+      cell.contact === true &&
+      !window.confirm(
+        `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
+      )
+    ) {
+      return
+    }
+    // Fame and Fortune p. 7: arriving on a centre of an own city, the figure may be disbanded there
+    const offer = cell.contact === true ? undefined : disbandOfferAt(board, viewerColor, selected, cell)
+    const disband =
+      offer !== undefined &&
+      window.confirm(
+        offer.existing === undefined
+          ? `Disband ${selected.label} in ${offer.cityLabel} for a ${offer.marker} marker? ` +
+              (offer.marker === 'caravan'
+                ? 'The caravan adds 2 production to the next Build there. '
+                : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
+              'OK disbands it; Cancel just moves it there.'
+          : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
+              'Disband it anyway? OK disbands it; Cancel just moves it there.',
+      )
+    setMoveModeId(null)
+    setRouteDraft(null)
+    void run(() =>
+      api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, routePlan.route),
+    )
+  }
   // Squares smaller than a comfortable touch target make taps ambiguous: offer to zoom in rather than overlap targets.
   const cellPixels = board.squareSize * zoom
   const tooSmallToTap = draft !== null && cellPixels < TOUCH_TARGET_PX
@@ -1352,7 +1391,11 @@ export function BoardView({
                           onClick={(event) => {
                             event.stopPropagation()
                             if (selected === null) return
-                            // A tap only previews the route: Move sends it
+                            // A first tap previews the route; tapping the chosen square again sends it
+                            if (chosen && routePlan?.ok === true) {
+                              confirmRoute()
+                              return
+                            }
                             setRouteDraft({ pieceId: selected.id, via: [], to: cell, addingWaypoint: false })
                           }}
                           onPointerDown={(event) => event.stopPropagation()}
@@ -1477,37 +1520,7 @@ export function BoardView({
                 type="button"
                 className="primary"
                 disabled={busy || readOnly || routePlan?.ok !== true}
-                onClick={() => {
-                  if (routePlan?.ok !== true) return
-                  const cell = routePlan.destination
-                  if (
-                    cell.contact === true &&
-                    !window.confirm(
-                      `Another player's figures stand on ${cell.label}. Moving there ends the move and starts a battle; settle the battle and any loot by hand. Continue?`,
-                    )
-                  ) {
-                    return
-                  }
-                  // Fame and Fortune p. 7: arriving on a centre of an own city, the figure may be disbanded there
-                  const offer = cell.contact === true ? undefined : disbandOfferAt(board, viewerColor, selected, cell)
-                  const disband =
-                    offer !== undefined &&
-                    window.confirm(
-                      offer.existing === undefined
-                        ? `Disband ${selected.label} in ${offer.cityLabel} for a ${offer.marker} marker? ` +
-                            (offer.marker === 'caravan'
-                              ? 'The caravan adds 2 production to the next Build there. '
-                              : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
-                            'OK disbands it; Cancel just moves it there.'
-                        : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
-                            'Disband it anyway? OK disbands it; Cancel just moves it there.',
-                    )
-                  setMoveModeId(null)
-                  setRouteDraft(null)
-                  void run(() =>
-                    api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, routePlan.route),
-                  )
-                }}
+                onClick={confirmRoute}
               >
                 Move
               </button>

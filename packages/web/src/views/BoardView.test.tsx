@@ -982,6 +982,8 @@ describe('BoardView mobile placement', () => {
     // A tap only previews the route: nothing is sent until Move
     expect(travel).not.toHaveBeenCalled()
     expect(screen.getByRole('group', { name: 'Route for Red army' })).toBeTruthy()
+    // A real press starts with pointerdown on the bar, which must not clear the selection under it
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Move' }))
     fireEvent.click(screen.getByRole('button', { name: 'Move' }))
 
     await waitFor(() =>
@@ -1070,6 +1072,15 @@ describe('BoardView mobile placement', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('group', { name: 'Route for Red army' })).toBeNull()
     expect(travel).not.toHaveBeenCalled()
+
+    // Tapping the chosen destination a second time sends the previewed route
+    const target = await screen.findByRole('button', { name: /Route Red army to C2, 1 square/ })
+    fireEvent.click(target)
+    expect(travel).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /Route Red army to C2, 1 square/ }))
+    await waitFor(() =>
+      expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, [{ column: 2, row: 1 }]),
+    )
     travel.mockRestore()
     cleanup()
   })
