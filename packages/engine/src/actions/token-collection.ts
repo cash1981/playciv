@@ -8,7 +8,7 @@
  * Flight cannot end on a hut or village, so it never collects one.
  */
 
-import { boardAreas, nextFreeSlot } from '../board.js'
+import { areaSlotRegion, boardAreas, nextFreeSlot } from '../board.js'
 import { squareLabel } from '../build-options.js'
 import type { EngineError } from '../errors.js'
 import type { Result } from '../result.js'
@@ -50,7 +50,9 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
   const card = findPlayer(drawn.value, input.playerId)?.items.find((item) => !held.has(item.id))
   if (card === undefined) return travelled
 
-  const [x, y] = nextFreeSlot(drawn.value.board, area, drawn.value.board.pieces, { x: token.piece.x, y: token.piece.y })
+  // A full area still takes the token, at the area's first slot: it must leave the map either way
+  const region = areaSlotRegion(area)
+  const [x, y] = nextFreeSlot(drawn.value.board, area, drawn.value.board.pieces, { x: region.x, y: region.y })
   const placed = movePieceUnchecked(drawn.value, {
     playerId: input.playerId,
     pieceId: token.piece.id,
@@ -59,8 +61,13 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
     snap: false,
     ...(input.at === undefined ? {} : { at: input.at }),
   })
+  // The draw's own log line cannot be voted back on its own: the board Undo returns the token and the card together
+  const sealed =
+    placed === undefined
+      ? undefined
+      : { ...placed, log: placed.log.map((line) => (line.item?.id === card.id && line.logType === 'ITEM' ? { ...line, undo: null, superseded: true } : line)) }
   const entry = placed?.board.history.at(-1)
-  if (placed === undefined || entry === undefined) return travelled
+  if (placed === undefined || sealed === undefined || entry === undefined) return travelled
   const collection: TokenCollection = {
     historyId: entry.id,
     playerId: input.playerId,
@@ -69,5 +76,5 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
     under,
     square: squareLabel(token.cell),
   }
-  return ok({ ...placed, tokenCollections: [...(placed.tokenCollections ?? []), collection] })
+  return ok({ ...sealed, tokenCollections: [...(sealed.tokenCollections ?? []), collection] })
 }

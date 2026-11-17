@@ -325,4 +325,23 @@ describe('collecting a token by ending a move on it', () => {
     expect(state.board.pieces.find((piece) => piece.id === hut.id)?.x).toBe(hut.x)
     expect(tokensOf(state)).toHaveLength(2)
   })
+
+  it('seals the draw line against an independent undo vote and still moves the token off the map when the area is full', () => {
+    const { state, armyId, hutId } = scene()
+    const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === CASH1981)
+    if (area === undefined) throw new Error('no area')
+    // Fill the area with markers, so no tidy slot is free
+    let full = state
+    for (let index = 0; index < 400; index++) {
+      const placed = placePiece(full, { playerId: CASH1981, assetId: 'markers/coin1', x: area.x + 20 + (index % 20) * 30, y: area.y + 60 + Math.floor(index / 20) * 30 })
+      if (!placed.ok) break
+      full = placed.value
+    }
+    const moved = go(full, armyId, true)
+    const token = moved.board.pieces.find((piece) => piece.id === hutId) as BoardPiece
+    expect(mapTokensOf(moved.board).some((candidate) => candidate.piece.id === hutId)).toBe(false)
+    expect(areaAt(playerAreas(moved.board, moved.players), token.x + token.width / 2, token.y + token.height / 2)?.playerId).toBe(CASH1981)
+    const card = me(moved).items.find((item) => item.sheetName === 'HUTS')
+    expect(moved.log.filter((entry) => entry.item?.id === card?.id && entry.logType === 'ITEM').every((entry) => entry.superseded === true && entry.undo === null)).toBe(true)
+  })
 })
