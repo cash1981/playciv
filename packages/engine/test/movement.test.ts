@@ -386,8 +386,11 @@ describe('huts and villages', () => {
       expect(flown.destinations).toContainEqual(
         expect.objectContaining({ column: 3, row: 1, distance: 2 }),
       )
-      // Flight crosses the marker but cannot end on it (unofficial rule 283).
-      expect(flown.destinations.some((cell) => cell.column === 2 && cell.row === 1)).toBe(false)
+      // Flight crosses the marker or lands on it; landing ends the move. Ruling 283 (cross, never end) is
+      // about the Migrants, Colonists and Immigrants cards only.
+      expect(flown.destinations).toContainEqual(
+        expect.objectContaining({ column: 2, row: 1, distance: 1, ends: true }),
+      )
     },
   )
 
@@ -683,14 +686,14 @@ describe('routes (issue #362)', () => {
     expect(check(england, [cell(0, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('cannot end') })
     expect(check(base, [cell(0, 2), cell(1, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('cannot enter') })
 
-    // A hut ends the move unless Flight flies over it, and nothing may end on it with Flight
+    // A hut ends the move unless Flight flies over it; with Flight a move may also end on it
     let hut = withSpeed(place(game(), 'figures/redarmy', 1, 1), '3')
     hut = place(hut, 'resources/hut', 2, 1)
     expect(check(hut, [cell(2, 1)])).toMatchObject({ ok: true })
     expect(check(hut, [cell(2, 1), cell(3, 1)])).toMatchObject({ ok: false, reason: expect.stringContaining('carry on') })
     const flying = withTech(hut, 'Flight')
     expect(check(flying, [cell(2, 1), cell(3, 1)])).toMatchObject({ ok: true })
-    expect(check(flying, [cell(2, 1)])).toMatchObject({ ok: false })
+    expect(check(flying, [cell(2, 1)])).toMatchObject({ ok: true })
   })
 
   it('rejects a stale route once the board has changed under it', () => {

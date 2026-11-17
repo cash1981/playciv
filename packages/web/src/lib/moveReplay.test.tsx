@@ -99,6 +99,11 @@ describe('moveReplaysBetween', () => {
     expect(moveReplaysBetween(routed.after, routed.after)).toEqual([])
   })
 
+  it('plays the first move of a game, whose previous board had no history', () => {
+    const { before, after } = afterMove(true)
+    expect(flat({ ...before, history: [] }, { ...after, history: [after.history[1]!] })).toEqual([centre(1, 5), centre(1, 6), centre(1, 7)])
+  })
+
   it('plays only the newest moves when many arrive at once', () => {
     const { before, after } = afterMove(true)
     const move = after.history[1]!

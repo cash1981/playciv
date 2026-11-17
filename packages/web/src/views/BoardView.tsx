@@ -711,7 +711,10 @@ export function BoardView({
   const pendingAsset = assets.find((asset) => asset.id === pendingAssetId) ?? null
   const selectedMovement =
     selected !== null && !readOnly && !picking ? movementOptionsFor(selected) : null
-  const moveSquares = selectedMovement?.destinations ?? []
+  // The figure is drawn on an earlier route square while a recorded move plays back: its targets would cover it
+  // and a drag would start from the real square, so both wait until playback ends.
+  const selectedPlaying = selected !== null && replaySteps.has(selected.id)
+  const moveSquares = selectedPlaying ? [] : (selectedMovement?.destinations ?? [])
   const draft =
     routeDraft !== null && selected !== null && routeDraft.pieceId === selected.id && selectedMovement !== null
       ? routeDraft
@@ -726,7 +729,7 @@ export function BoardView({
   // While adding a waypoint, every square the route could still pass through is a target, not only the
   // squares the figure could end on: a crossing-only square (England on water) is a fine waypoint.
   const waypointSquares = useMemo(() => {
-    if (draft === null || !draft.addingWaypoint || selected === null || selectedMovement === null) return []
+    if (draft === null || selectedPlaying || !draft.addingWaypoint || selected === null || selectedMovement === null) return []
     if (movementPlayer === null || movementTurn === null) return []
     const start = mapCellOf(board, selected)
     if (start === null) return []
@@ -744,7 +747,7 @@ export function BoardView({
       }
     }
     return cells
-  }, [board, draft, movementForbidden, movementLocks, movementPlayer, movementTurn, selected, selectedMovement])
+  }, [board, draft, movementForbidden, movementLocks, movementPlayer, movementTurn, selected, selectedMovement, selectedPlaying])
   const routeOpen = draft !== null
   useEffect(() => {
     if (!routeOpen) return
@@ -959,6 +962,8 @@ export function BoardView({
     // the user taps an existing piece such as a starting tile.
     if (pendingAsset !== null || picking || surfaceOwnsTap(piece, event.pointerType)) return
     if (busy || readOnly) return
+    // A figure being played back is drawn away from its real square: it cannot be grabbed until it arrives
+    if (replaySteps.has(piece.id)) return
     if (!event.isPrimary) {
       // A second finger may land on a piece, whose pointerdown does not bubble
       // to the surface. Cancel any pending surface tap before returning.
@@ -1409,7 +1414,7 @@ export function BoardView({
                       )
                     })}
 
-                {(selectedMovement?.explore ?? []).map((cell) => (
+                {(selectedPlaying ? [] : (selectedMovement?.explore ?? [])).map((cell) => (
                   <button
                     key={`explore-${cell.column}-${cell.row}`}
                     type="button"

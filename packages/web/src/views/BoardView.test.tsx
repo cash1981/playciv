@@ -995,6 +995,73 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 
+  it('suspends targets and grabbing for a figure while its recorded route plays back (issue #362)', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(api, 'boardAssets').mockResolvedValue([])
+      const army = findBoardAsset('figures/redarmy')
+      const back = findBoardAsset('tiles/tileback')
+      if (army === undefined || back === undefined) throw new Error('missing asset')
+      const top = mapTop(createBoard())
+      const tileBack: BoardPiece = {
+        id: 'tile-back', assetId: back.id, path: back.path, label: back.label, category: 'tile',
+        x: 0, y: top, width: back.width, height: back.height, rotation: 0, placedBy: 'player-one',
+      }
+      const at = (row: number): BoardPiece => ({
+        id: 'army-1', assetId: army.id, path: army.path, label: army.label, category: 'figure',
+        x: SQUARE_SIZE + (SQUARE_SIZE - army.width) / 2,
+        y: top + row * SQUARE_SIZE + (SQUARE_SIZE - army.height) / 2,
+        width: army.width, height: army.height, rotation: 0, placedBy: 'player-one',
+      })
+      const movementPlayer: MovementPlayer = {
+        color: 'Red', civilization: null, stats: { mvmt: '3' }, items: [], socialPolicies: [], techsChosen: [], playerTurns: [],
+      }
+      const before = { ...createBoard(), pieces: [tileBack, at(1)] }
+      const after = {
+        ...before,
+        pieces: [tileBack, at(3)],
+        history: [{
+          id: 'h1', at: null, playerId: 'player-one', username: 'one', description: 'moved', logLength: 0,
+          change: {
+            kind: 'move' as const, pieceId: 'army-1',
+            from: { x: at(1).x, y: at(1).y }, to: { x: at(3).x, y: at(3).y }, fromIndex: 1,
+            route: [{ column: 1, row: 2 }, { column: 1, row: 3 }],
+          },
+        }],
+      }
+      const props = { gameId: 'game', numOfPlayers: 2, areas: [], busy: false, movementPlayer, movementTurn: 1, run: async (action: () => Promise<unknown>) => { await action() } }
+      const { container, rerender } = render(<BoardView {...props} board={before} />)
+      const piece = (): HTMLElement => {
+        const found = container.querySelector('[data-piece-id="army-1"]')
+        if (!(found instanceof HTMLElement)) throw new Error('piece missing')
+        return found
+      }
+      const press = (): void => {
+        const event = new Event('pointerdown', { bubbles: true })
+        for (const [name, value] of Object.entries({ pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+          Object.defineProperty(event, name, { value })
+        }
+        act(() => void piece().dispatchEvent(event))
+      }
+      press()
+      expect(screen.queryAllByRole('button', { name: /Route Red army to/ }).length).toBeGreaterThan(0)
+
+      // The move arrives: the figure is drawn on its start square and offers no targets
+      rerender(<BoardView {...props} board={after} />)
+      expect(screen.queryAllByRole('button', { name: /Route Red army to/ })).toHaveLength(0)
+      const drawnTop = piece().style.top
+      press() // ignored: no drag starts from the real square
+      expect(piece().style.top).toBe(drawnTop)
+
+      // Playback ends: the real position and the targets are back
+      act(() => void vi.advanceTimersByTime(10_000))
+      expect(screen.queryAllByRole('button', { name: /Route Red army to/ }).length).toBeGreaterThan(0)
+    } finally {
+      vi.useRealTimers()
+      cleanup()
+    }
+  })
+
   it('routes through a waypoint and sends nothing until Move; Cancel drops the preview (issue #362)', async () => {
     vi.spyOn(api, 'boardAssets').mockResolvedValue([])
     const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)

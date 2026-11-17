@@ -376,8 +376,9 @@ function figureRulesOf(
       // A figure may enter a Communism-locked square but never leave it.
       if (lockedKeys.has(keyOf(cell))) return false
       // A hut or village ends the move: the figure may land there but not pass it.
-      // A revealed Flight flies over, so it neither stops nor blocks the squares beyond,
-      // but rule 283 still forbids ending the move on the marker square.
+      // A revealed Flight flies over, so it neither stops nor blocks the squares beyond. It may also land
+      // there instead: that ends the move like any landing. Ruling 283 (cross but never end) belongs to the
+      // Migrants, Colonists and Immigrants cards, whose moves are `cardMoveDestinations`, not to ordinary travel.
       if (!flight && mustStop.has(keyOf(cell))) return false
       // Landing on another player's figures ends the move unless Flight flies over them (rule 52)
       return flight || !occupancy.foreign.has(keyOf(cell))
@@ -390,8 +391,7 @@ function figureRulesOf(
         !mayEndHere ||
         !(attacker || !occupancy.foreign.has(key)) ||
         forbiddenKeys.has(key) ||
-        !hasRoom(key) ||
-        (flight && mustStop.has(key))
+        !hasRoom(key)
       ) {
         return undefined
       }

@@ -52,7 +52,8 @@ export function moveReplaysBetween(
 ): readonly (readonly MoveReplayFrame[])[] {
   const last = previous.history.at(-1)
   const known = last === undefined ? -1 : next.history.findIndex((entry) => entry.id === last.id)
-  if (last === undefined || known < 0) return []
+  // A board that had no history yet gets every entry; a last entry that is gone (an undo) plays nothing.
+  if (last !== undefined && known < 0) return []
   return next.history
     .slice(known + 1)
     .flatMap((entry) => (entry.change.kind === 'move' && entry.change.route !== undefined ? [entry.change] : []))
