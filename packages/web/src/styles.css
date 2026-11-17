@@ -1002,6 +1002,16 @@ ul.list.vote-needed {
   touch-action: manipulation;
 }
 
+.board-piece.board-piece-stepping {
+  transition: left 0.3s linear, top 0.3s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-piece.board-piece-stepping {
+    transition: none;
+  }
+}
+
 .board-piece:active {
   cursor: grabbing;
 }

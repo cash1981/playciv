@@ -94,6 +94,8 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   decisions.md), so a narrow corridor can report no way although one exists; add the squares as extra waypoints. The route bar
   is at the end of the page for keyboard users (Escape cancels), and a rejected Move clears the preview. Checked in headless
   Chrome at 360 px only; no real touch device, and desktop drag along a route is not built.
+- Route playback (#362) is not checked in a browser or on a real device, and only follows the figure: a battle or
+  loot that happened on the way is not shown. Going Back one revision does not play the route in reverse.
 - Asset regeneration needs untracked source material. Check that local Military
   Science artwork is the intended replacement before running the generator.
 

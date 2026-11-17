@@ -64,6 +64,7 @@ import {
 import type { Board, BoardArea, BoardAsset, BoardPiece, Cell, MovementPlayer } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
+import { useMoveReplay } from '../lib/moveReplay.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { DisplaySettings, formatZoom, useDisplaySettings } from './DisplaySettings.js'
@@ -490,6 +491,7 @@ export function BoardView({
   }, [moveModeId, selectedId])
 
   const pieces = board.pieces
+  const replaySteps = useMoveReplay(board, gameId)
 
   /**
    * Asks before a building, wonder or Great Person goes onto terrain its rule
@@ -1266,8 +1268,10 @@ export function BoardView({
 
                 {pieces.map((piece) => {
                   const dragging = dragRef.current?.id === piece.id && dragPosition !== null
-                  const x = dragging ? (dragPosition as { x: number }).x : piece.x
-                  const y = dragging ? (dragPosition as { y: number }).y : piece.y
+                  // A recorded route is played back square by square; the board itself already has the end position.
+                  const stepping = dragging ? undefined : replaySteps.get(piece.id)
+                  const x = dragging ? (dragPosition as { x: number }).x : (stepping ?? piece).x
+                  const y = dragging ? (dragPosition as { y: number }).y : (stepping ?? piece).y
 
                   const blockaded = blockadedPieceIds.includes(piece.id)
                   const disabledWonder = piece.disabled === true
@@ -1277,7 +1281,7 @@ export function BoardView({
                     <Fragment key={piece.id}>
                       <img
                         data-piece-id={piece.id}
-                        className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${crossed ? ' board-piece-blockaded' : ''}${piece.id === selectedId ? ' selected' : ''}`}
+                        className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${crossed ? ' board-piece-blockaded' : ''}${piece.id === selectedId ? ' selected' : ''}${stepping?.glide === true ? ' board-piece-stepping' : ''}`}
                         src={assetUrl(piece.path)}
                         alt={blockaded ? `${piece.label}, blockaded` : disabledWonder ? `${piece.label}, disabled` : piece.label}
                         title={`${piece.label} · ${locationOf(board, areas, piece)}${blockaded ? ' · Blockaded by an enemy figure' : disabledWonder ? ' · Disabled' : ''}`}

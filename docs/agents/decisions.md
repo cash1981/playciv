@@ -904,6 +904,12 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   takes the whole move back. `/travel` without a route keeps the old behaviour (shortest distance charged, no route
   recorded): the way taken is unknown and is never reconstructed, for moves before #362 either. Tests: `movement.test.ts`
   (routes), `board-api.test.ts`, `BoardView.test.tsx`.
+- **Route playback** (#362, `web/src/lib/moveReplay.ts`): when a newer board arrives (auto refresh, Forward, or Live after a
+  replay) the figure steps through the squares of each recorded route, one square per 320 ms, before it rests on its real
+  position. Display only: the board is never changed. Plays the newest 4 route moves of what arrived, also for the
+  viewer's own move and for redo; figures waiting their turn are held on their start square; a reload that leaves the
+  history unchanged does not cut playback short; moves without a recorded route, undo and jumps back never animate; off for `prefers-reduced-motion`.
+  Tests: `moveReplay.test.tsx`.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
   England crosses but cannot end there. An unknown (tile-back) square is not water.
 - **Huts and villages:** a move must stop on one; with Flight it flies over, but
