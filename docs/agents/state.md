@@ -58,7 +58,8 @@ deployment reports do not establish present health.
   Hannibal and movement culture cards; Communism and Brandenburg Gate.
   Disbanding on an own city centre leaves a caravan or fortification (F&F), and
   a battle for a city counts its defence bonus. Battle resolution, loot and
-  removal stay manual by the human's choice.
+  removal stay manual by the human's choice. Hut and village tokens (#364): a tile laid on the map gets a token on each hut or
+  village icon, turning with the tile; a figure that ends its move on one is asked whether to draw it, and Undo returns the card.
 
 The matching topics in [decisions.md](decisions.md) give the rules and
 reasons; [limitations.md](limitations.md) lists known gaps.

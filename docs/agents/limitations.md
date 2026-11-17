@@ -115,3 +115,6 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   healed unit's health was edited; correct it by hand.
 - Space Flight (#354): the Tech victory line is a separate log entry, so undoing the reveal by vote removes the tech but leaves the line, and revealing it again writes a second line. The game never ends by itself on it; the players name the winner.
 - Agriculture shows its button in every phase tab and also in the Start of Turn tab's own Metropolis section, so it can appear twice there.
+- Hut and village tokens (#364): the village prompt offers the draw at once. If a village is defended by a battle in the
+  rulebook, settle it by hand first and confirm afterwards; the engine does not model it. Tokens follow a tile only while
+  their centres lie on it, so a token dragged off its tile by hand stays where it was put.

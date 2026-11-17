@@ -45,6 +45,7 @@ import {
   cultureTrackHeight,
   CARAVAN_ASSET_ID,
   disbandOfferAt,
+  mapTokensOf,
   figureMovementOptions,
   findBoardAsset,
   locationOf,
@@ -1246,9 +1247,23 @@ export function BoardView({
                             : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
                                 'Disband it anyway? OK disbands it; Cancel just moves it there.',
                         )
+                      // A hut or village on the square: the figure's move ends there, and the token can be drawn at once
+                      const token =
+                        cell.contact === true || disband
+                          ? undefined
+                          : mapTokensOf(board).find((candidate) => candidate.cell.column === cell.column && candidate.cell.row === cell.row)
+                      const collectToken =
+                        token !== undefined &&
+                        window.confirm(
+                          `${selected.label} ends its move on a ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} on ${cell.label}. ` +
+                            `Draw the ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} now? OK takes the token into your area and the card into your hand; ` +
+                            'Cancel just moves there and leaves the token.',
+                        )
                       setMoveModeId(null)
                       void run(() =>
-                        api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
+                        collectToken
+                          ? api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, true)
+                          : api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
                       )
                     }}
                     onPointerDown={(event) => event.stopPropagation()}

@@ -98,6 +98,8 @@ export type EngineError =
    * Only the undo vote on that action's log line may put it back.
    */
   | { readonly kind: 'BOARD_UNDO_ASSISTED' }
+  /** The card drawn from a hut or village token is no longer in the player's hand, so collecting it cannot be undone (issue #364). */
+  | { readonly kind: 'BOARD_UNDO_TOKEN_CARD_GONE' }
   /** Nothing has been undone since the last board change, so there is nothing to redo */
   | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
   /** The game has not started: there is no player to the left of the caller yet (barbarians) */
@@ -267,6 +269,8 @@ export function describeError(error: EngineError): string {
       return 'The last board change was made by someone else'
     case 'BOARD_UNDO_ASSISTED':
       return 'The last board change was made by an assisted action. Ask for an undo vote on its log line instead'
+    case 'BOARD_UNDO_TOKEN_CARD_GONE':
+      return 'The card drawn from that token has left the hand, so collecting it cannot be undone'
     case 'NOTHING_TO_REDO_ON_BOARD':
       return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':

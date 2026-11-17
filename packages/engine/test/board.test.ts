@@ -630,7 +630,9 @@ describe('movePiece', () => {
     state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: tile.id, x: 800, y: 800 }))
 
     expect(state.board.pieces[0]?.id).toBe(tile.id)
-    expect(state.board.pieces.at(-1)?.category).toBe('city')
+    // The tokens its icons put on the square come after the tile too (issue #364): the city is still above the tile
+    expect(state.board.pieces.findIndex((piece) => piece.category === 'city')).toBeGreaterThan(0)
+    expect(state.board.pieces.filter((piece) => piece.category === 'tile')).toHaveLength(1)
   })
 
   it('another player can move a piece you put down', () => {

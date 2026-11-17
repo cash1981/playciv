@@ -68,6 +68,7 @@ import {
   movementOf,
 } from '../movement.js'
 import { startMarkerOf, startPlayerOf, turnStatus } from '../turn.js'
+import { carriedTileTokens, collectedTokenIds, returnCollectedCard, seedTileTokens, tileOnMap, turnedTileTokens } from './tile-tokens.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -225,6 +226,8 @@ export function placeUnchecked(
      * with the original placer; `null` keeps a piece with no placer unattributed.
      */
     readonly placedBy?: string | null
+    /** The map tile a hut or village was put on (issue #364): `BoardPiece.tileId`. */
+    readonly tileId?: string
   },
 ): GameState | undefined {
   const asset = findBoardAsset(input.assetId)
@@ -268,6 +271,7 @@ export function placeUnchecked(
     rotation: input.rotation ?? 0,
     placedBy: input.placedBy === undefined ? input.playerId : input.placedBy,
     ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
+    ...(input.tileId !== undefined ? { tileId: input.tileId } : {}),
   }
 
   // Map tiles go under everything else, or they would cover the pieces on them
@@ -319,7 +323,14 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   }
   // Only a marker that arrives on a square replaces what is there: a nudge or a re-drop on its own square leaves it alone
   const from = before === undefined ? null : mapCellOf(state.board, before)
-  return ok(replaceUnderGreatPerson(announceStartPlayer(state, moved, input.pieceId), input.pieceId, input, from))
+  const placed = replaceUnderGreatPerson(announceStartPlayer(state, moved, input.pieceId), input.pieceId, input, from)
+  // A tile that has just come onto a map slot from somewhere else (a player area) gets its hut and village
+  // tokens, once. Setting a tile that already lies on the map into another slot changes nothing (issue #364).
+  return ok(
+    before?.category === 'tile' && !tileOnMap(state.board, before)
+      ? seedTileTokens(placed, input.pieceId, input.playerId, ...(input.at === undefined ? [] : [input.at]))
+      : placed,
+  )
 }
 
 /**
@@ -374,16 +385,24 @@ export function movePieceUnchecked(
 
   const from = locationOf(state.board, areas, piece)
   const to = locationOf(state.board, areas, moved)
+  // The hut and village tokens on a map tile go with it (issue #364)
+  const carried = carriedTileTokens(state.board, piece, x, y, collectedTokenIds(state))
+  const shifted = new Map(carried.map((token) => [token.pieceId, token.to]))
+  const withTokens = pieces.map((other) => {
+    const to = shifted.get(other.id)
+    return to === undefined ? other : { ...other, x: to.x, y: to.y }
+  })
 
   return record(input, {
     state,
-    pieces,
+    pieces: withTokens,
     change: {
       kind: 'move',
       pieceId: piece.id,
       from: { x: piece.x, y: piece.y },
       to: { x, y },
       fromIndex,
+      ...(carried.length === 0 ? {} : { tokens: carried }),
     },
     description:
       from === to
@@ -834,15 +853,26 @@ export function rotatePiece(state: GameState, input: RotatePieceInput): ActionRe
   if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
 
   const rotation = input.rotation ?? nextRotation(piece.rotation)
-  const pieces = state.board.pieces.map((other) =>
-    other.id === piece.id ? { ...other, rotation } : other,
-  )
+  // The hut and village tokens on a map tile stay on the same printed squares when it is turned (issue #364)
+  const tokens = piece.category === 'tile' ? turnedTileTokens(state.board, piece, rotation, collectedTokenIds(state)) : []
+  const turned = new Map(tokens.map((token) => [token.pieceId, token.to]))
+  const pieces = state.board.pieces.map((other) => {
+    if (other.id === piece.id) return { ...other, rotation }
+    const to = turned.get(other.id)
+    return to === undefined ? other : { ...other, x: to.x, y: to.y }
+  })
 
   return ok(
     record(input, {
       state,
       pieces,
-      change: { kind: 'rotate', pieceId: piece.id, from: piece.rotation, to: rotation },
+      change: {
+        kind: 'rotate',
+        pieceId: piece.id,
+        from: piece.rotation,
+        to: rotation,
+        ...(tokens.length === 0 ? {} : { tokens }),
+      },
       description: `turned ${piece.label} to ${rotation} degrees`,
     }),
   )
@@ -1183,6 +1213,22 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   }
   if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
   if (isAssistedBoardChange(state, last)) return err({ kind: 'BOARD_UNDO_ASSISTED' })
+
+  // A token a figure collected (issue #364): the card goes back with it. It is not offered for a redo,
+  // because a redo would move the token without drawing again.
+  const collection = state.tokenCollections?.find((candidate) => candidate.historyId === last.id)
+  if (collection !== undefined) {
+    const returned = returnCollectedCard(state, collection)
+    if (returned === undefined) return err({ kind: 'BOARD_UNDO_TOKEN_CARD_GONE' })
+    return ok(
+      withBoard(returned, {
+        ...returned.board,
+        pieces: revertChange(returned.board.pieces, last.change),
+        history: returned.board.history.slice(0, -1),
+        redo: [],
+      }),
+    )
+  }
 
   return ok(
     withBoard(state, {

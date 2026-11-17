@@ -348,6 +348,12 @@ export interface BoardPiece {
    * everything else. The turn number makes last turn's value stale without a reset.
    */
   readonly movement?: PieceMovement
+  /**
+   * The map tile a hut or village piece was put on when that tile was laid or moved onto the map
+   * (issue #364). Only the seeded tokens carry it; it tells a tile that has been given its tokens
+   * from one that has not (`tileTokensSeeded`).
+   */
+  readonly tileId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -402,12 +408,16 @@ export type BoardChange =
         readonly from: PieceMovement | null
         readonly to: PieceMovement | null
       }
+      /** Hut and village pieces that went with a map tile (issue #364), so an undo puts them back too. */
+      readonly tokens?: readonly { readonly pieceId: string; readonly from: { readonly x: number; readonly y: number }; readonly to: { readonly x: number; readonly y: number } }[]
     }
   | {
       readonly kind: 'rotate'
       readonly pieceId: string
       readonly from: Rotation
       readonly to: Rotation
+      /** Hut and village pieces that turned with a map tile (issue #364), so an undo puts them back too. */
+      readonly tokens?: readonly { readonly pieceId: string; readonly from: { readonly x: number; readonly y: number }; readonly to: { readonly x: number; readonly y: number } }[]
     }
   | {
       readonly kind: 'owner'
@@ -1322,7 +1332,10 @@ export function applyChange(
     case 'move': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
-      const rest = withoutPiece(pieces, piece.id)
+      const rest = withoutPiece(pieces, piece.id).map((other) => {
+        const token = change.tokens?.find((candidate) => candidate.pieceId === other.id)
+        return token === undefined ? other : { ...other, x: token.to.x, y: token.to.y }
+      })
       const placed =
         change.movement === undefined
           ? { ...piece, x: change.to.x, y: change.to.y }
@@ -1332,9 +1345,11 @@ export function applyChange(
         : [...rest, placed]
     }
     case 'rotate':
-      return pieces.map((piece) =>
-        piece.id === change.pieceId ? { ...piece, rotation: change.to } : piece,
-      )
+      return pieces.map((piece) => {
+        if (piece.id === change.pieceId) return { ...piece, rotation: change.to }
+        const token = change.tokens?.find((candidate) => candidate.pieceId === piece.id)
+        return token === undefined ? piece : { ...piece, x: token.to.x, y: token.to.y }
+      })
     case 'owner':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.to, ...(change.disabled === undefined ? {} : { disabled: change.disabled.to }) } : piece)
     case 'wonderCoins':
@@ -1379,7 +1394,10 @@ export function revertChange(
       if (piece === undefined) return pieces
       const restored = { ...piece, x: change.from.x, y: change.from.y }
       return insertAt(
-        withoutPiece(pieces, piece.id),
+        withoutPiece(pieces, piece.id).map((other) => {
+          const token = change.tokens?.find((candidate) => candidate.pieceId === other.id)
+          return token === undefined ? other : { ...other, x: token.from.x, y: token.from.y }
+        }),
         change.fromIndex,
         change.movement === undefined
           ? restored
@@ -1387,9 +1405,11 @@ export function revertChange(
       )
     }
     case 'rotate':
-      return pieces.map((piece) =>
-        piece.id === change.pieceId ? { ...piece, rotation: change.from } : piece,
-      )
+      return pieces.map((piece) => {
+        if (piece.id === change.pieceId) return { ...piece, rotation: change.from }
+        const token = change.tokens?.find((candidate) => candidate.pieceId === piece.id)
+        return token === undefined ? piece : { ...piece, x: token.from.x, y: token.from.y }
+      })
     case 'owner':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.from, ...(change.disabled === undefined ? {} : { disabled: change.disabled.from }) } : piece)
     case 'wonderCoins':

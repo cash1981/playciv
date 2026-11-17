@@ -38,6 +38,7 @@ import {
   hasGreatPersonMarkerLeft,
 } from '../great-person-effects.js'
 import { placeUnchecked } from './board.js'
+import { seedTileTokens } from './tile-tokens.js'
 import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
@@ -286,7 +287,11 @@ function placeExploredTile(
   if (assetId === undefined) return state
 
   const [x, y] = origin ?? firstFreeSlot(state.board)
-  return placeUnchecked(state, { playerId, assetId, x, y }) ?? state
+  const placed = placeUnchecked(state, { playerId, assetId, x, y })
+  if (placed === undefined) return state
+  // The tile goes under everything else, so it is the first piece; its hut and village icons become tokens (issue #364)
+  const laid = placed.board.pieces[0]
+  return laid === undefined ? placed : seedTileTokens(placed, laid.id, playerId)
 }
 
 /**

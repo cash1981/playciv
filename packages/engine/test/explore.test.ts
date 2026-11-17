@@ -9,6 +9,7 @@ import { placePiece, travelFigure, undoLastBoardChange } from '../src/actions/bo
 import { exploreSquare } from '../src/actions/explore.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
+import { tileTokenSquares } from '../src/tile-icons.js'
 import { isExploredCell, isUnexploredCell } from '../src/explore.js'
 import { figureMovementOptions, movementOf } from '../src/movement.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -197,11 +198,17 @@ describe('exploreSquare', () => {
     expect(refused.kind).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
-  it('is taken back by two board Undos: the tile first, then the movement', () => {
+  it('is taken back by board Undos: the tokens first, then the tile, then the movement', () => {
     const state = place(withStartTile(game()), 'figures/redarmy', 3, 1)
-    const explored = unwrap(
+    let explored = unwrap(
       exploreSquare(state, { playerId: CASH1981, pieceId: armyOf(state).id, column: 4, row: 1 }),
     )
+    // The hut and village icons of the laid tile became tokens after it (issue #364)
+    const laid = explored.board.pieces.find((piece) => piece.category === 'tile' && piece.id !== state.board.pieces.find((other) => other.category === 'tile')?.id)
+    const tokens = explored.board.pieces.filter((piece) => piece.tileId === laid?.id)
+    expect(tokens).toHaveLength(tileTokenSquares(laid?.assetId ?? '').length)
+    for (const _ of tokens) explored = unwrap(undoLastBoardChange(explored, CASH1981))
+    expect(explored.board.pieces.some((piece) => piece.tileId !== undefined)).toBe(false)
     const noTile = unwrap(undoLastBoardChange(explored, CASH1981))
     expect(tilesOn(noTile)).toBe(1)
     expect(movementOf(armyOf(noTile), 1)).toMatchObject({ used: 1 })

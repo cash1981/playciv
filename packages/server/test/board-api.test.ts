@@ -308,6 +308,48 @@ describe('history over HTTP', () => {
     expect((await again.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
+  it('draws the hut a figure ends its move on only when asked, and board Undo takes it back (issue #364)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Collect')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    await place(gameId, starter, 'resources/hut', 2 * square + 20, top + square + 20)
+    const placed = await place(gameId, starter, assetId, square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+
+    const travelled = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+      headers: bearer(starter),
+      payload: { column: 2, row: 1, collectToken: true },
+    })
+    expect(travelled.status).toBe(200)
+    const view = await travelled.json() as {
+      you: { huts: number } | null
+      board: { history: { description: string }[] }
+    }
+    expect(view.board.history).toHaveLength(5)
+    expect(view.board.history.at(-1)?.description).toMatch(/moved Hut/)
+    const saved = await repo.findGame(gameId)
+    expect(saved?.tokenCollections).toHaveLength(1)
+
+    const undone = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/undo`,
+      headers: bearer(starter),
+    })
+    expect(undone.status).toBe(200)
+    expect((await repo.findGame(gameId))?.tokenCollections ?? []).toHaveLength(0)
+  })
+
   it('disbands a figure that travels onto its own city centre when asked (F&F p. 7)', async () => {
     const { gameId, starter, starterName } = await startedGame('Disband')
     const state = await repo.findGame(gameId)

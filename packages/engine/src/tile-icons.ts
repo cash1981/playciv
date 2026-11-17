@@ -28,6 +28,8 @@ interface IconEntry {
   readonly resource?: ResourceKind
   readonly culture?: number
   readonly trade?: number
+  /** A hut or village icon (issue #364). */
+  readonly token?: 'hut' | 'village'
 }
 
 const TILE_ICONS = (tileIcons as unknown as { readonly tiles: Readonly<Record<string, readonly IconEntry[]>> }).tiles
@@ -69,3 +71,17 @@ export const squareIconsOfCell = (board: Board, cell: { readonly column: number;
     (cell.column + 0.5) * board.squareSize,
     mapTop(board) + (cell.row + 0.5) * board.squareSize,
   )
+
+/** A hut or village icon printed on a tile square, in the printed orientation. */
+export interface TileTokenSquare {
+  readonly row: number
+  readonly column: number
+  readonly kind: 'hut' | 'village'
+}
+
+/** The hut and village icons of a tile asset, top row first. Empty when the tile has none or has not been read. */
+export function tileTokenSquares(assetId: string): readonly TileTokenSquare[] {
+  return (TILE_ICONS[assetId] ?? []).flatMap((entry) =>
+    entry.token === undefined ? [] : [{ row: entry.row, column: entry.column, kind: entry.token }],
+  )
+}

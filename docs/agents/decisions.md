@@ -431,7 +431,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   area)"); a moved piece with nothing under it is the same as a random draw and is not
   listed. The last button is "Random hut (not from a token)" (a card, a village marker).
   A chosen token gives the item under it (the top card when nobody has looked) and its
-  piece stays where it is, to be moved by hand (`DrawInput.fromPieceId`); a public line
+  piece stays where it is, to be moved by hand (`DrawInput.fromPieceId`; a token a figure ends its move on is collected automatically, see Figure movement); a public line
   says where. A draw with no piece never gives an item under a piece still on the board,
   and gives the item under a piece that was deleted from the board, one per draw, so every
   other item stays under its piece, out of reach of shuffles and of a board undo that
@@ -945,10 +945,30 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   city of either kind; a later disband only removes the figure. The shared pool
   of 15 markers is not limited. Effects: City production (caravan) and Coins,
   wonders and blockade (fortification).
+- **Hut and village tokens on tiles** (#364): `data/tile-icons.json` records the hut and village icons of the exploration
+  tiles (`token`: `hut` or `village`, printed orientation, read by eye from the tile images and checked in a second pass; the
+  starting tiles have none). A tile laid on a map slot by exploration or a manual draw, or brought onto a slot from a player
+  area, gets one `resources/hut` or `resources/village` piece on each such square, centred, once (`seedTileTokens`; the tokens
+  carry `BoardPiece.tileId` and a tile counts as seeded while one of those placements is still in the history, so an undone
+  one seeds again). A tile that already lies on the map and is only set into another slot, or placed from the palette, gets
+  none; its tokens go with it when it is moved (`move` change `tokens`), also off the map and back. Seeding adds one board history entry per token after the tile's own, so board Undo takes the tokens off, then the tile,
+  then (for exploration) refunds the movement. Turning a tile turns the tokens on it with it (`rotate` change `tokens`), so
+  they stay on the same printed squares. Hut and village pieces are not a limited supply (#116). Tile 15a to 17a, 22b and 23b
+  show none.
+- **Collecting a token** (#364): `travelFigureCollecting` (the `/travel` route's `collectToken`) is `travelFigure` plus, when the
+  player confirmed in the web (a hut or village is the only reason a move ends on a square with no figures), the draw from that
+  piece (`draw` with `fromPieceId`, so what Zheng He saw under it is what is drawn), the token moved into the player's area
+  (next free slot) and a `TokenCollection` record (`GameState.tokenCollections`, never projected, it names the card). Board
+  Undo takes the token and the card back first (the card leaves the hand and is bound back under the piece, so the player's
+  knowledge of it never becomes the next card anyone draws; the draw's own log line can no longer be voted back; a public line
+  says so; the redo stack is cleared, as a redo would not draw again) and the move on the next press.
+  It is refused (`BOARD_UNDO_TOKEN_CARD_GONE`) once the card has left the hand. Without the confirmation, or when no hut or
+  village is left, the move stands and the token stays on its square, to be drawn by hand as before. Flight cannot end on a
+  hut or village, so it collects none. Tests: `tile-tokens`, `BoardView`.
 - **Not done:** automated battle, loot and figure removal.
 
 Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`), `actions/board.ts`
-(`travelFigure`), `disband.ts`, `explore.ts`, `actions/explore.ts`, `actions/draw.ts`
+(`travelFigure`), `actions/tile-tokens.ts`, `actions/token-collection.ts`, `tile-icons.ts`, `disband.ts`, `explore.ts`, `actions/explore.ts`, `actions/draw.ts`
 (`drawTileAt`), `communism.ts`, `assisted-communism.ts`, `brandenburg.ts`,
 `server/src/routes/board.ts`, `web/src/views/BoardView.tsx`; tests `movement`,
 `stacking-movement`, `explore`, `communism`, `brandenburg`, `assisted-gather`.

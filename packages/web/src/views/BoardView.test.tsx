@@ -1238,6 +1238,68 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 
+  it.each([true, false])('asks before drawing the hut the figure ends on and sends the answer %s (issue #364)', async (answer) => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([])
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
+    const army = findBoardAsset('figures/redarmy')
+    const hut = findBoardAsset('resources/hut')
+    const back = findBoardAsset('tiles/tileback')
+    if (army === undefined || hut === undefined || back === undefined) throw new Error('missing asset')
+    const top = mapTop(createBoard())
+    const made = (id: string, asset: typeof army, column: number, row: number): BoardPiece => ({
+      id,
+      assetId: asset.id,
+      path: asset.path,
+      label: asset.label,
+      category: asset.category,
+      x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
+      y: top + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+      width: asset.width,
+      height: asset.height,
+      rotation: 0,
+      placedBy: 'player-one',
+    })
+    const movementPlayer: MovementPlayer = {
+      color: 'Red',
+      civilization: null,
+      stats: { mvmt: '2' },
+      items: [],
+      socialPolicies: [],
+      techsChosen: [],
+      playerTurns: [],
+    }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [{ ...made('tile-back', back, 0, 0), x: 0, y: top }, made('army-1', army, 1, 1), made('hut-1', hut, 2, 1)] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        movementPlayer={movementPlayer}
+        movementTurn={1}
+        run={async action => { await action() }}
+      />,
+    )
+    const figure = container.querySelector('[data-piece-id="army-1"]')
+    if (!(figure instanceof HTMLElement)) throw new Error('piece missing')
+    const event = new Event('pointerdown', { bubbles: true })
+    for (const [name, value] of Object.entries({ pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+      Object.defineProperty(event, name, { value })
+    }
+    figure.dispatchEvent(event)
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(answer)
+    fireEvent.click(await screen.findByRole('button', { name: /Move Red army to C2/ }))
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Draw the hut now?'))
+    await waitFor(() =>
+      expect(travel).toHaveBeenCalledWith(...(answer ? (['game', 'army-1', 2, 1, false, true] as const) : (['game', 'army-1', 2, 1, false] as const))),
+    )
+    travel.mockRestore()
+    confirm.mockRestore()
+    cleanup()
+  })
+
 
 
   it('arranges the viewer’s map figure only inside its own square (issue #302)', async () => {

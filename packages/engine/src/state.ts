@@ -1193,6 +1193,20 @@ export interface UnderToken {
   readonly square?: string
 }
 
+/** One hut or village a figure collected: the token's move into the player's area, and the card it gave. Server only. */
+export interface TokenCollection {
+  /** The board history entry that moved the token into the player's area. */
+  readonly historyId: string
+  readonly playerId: string
+  readonly pieceId: string
+  /** The card that went to the hand. */
+  readonly itemId: string
+  /** What lay under the token (Zheng He's look) before the draw, to be put back under it. */
+  readonly under: UnderToken | null
+  /** "J6": where the token lay. */
+  readonly square: string
+}
+
 /** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
 export interface DrawTokenView {
   readonly pieceId: string
@@ -1346,6 +1360,11 @@ export interface GameState {
    * only: a projection must never carry it. Absent until a first look.
    */
   readonly underTokens?: readonly UnderToken[]
+  /**
+   * Hut and village tokens a figure collected by moving onto them (issue #364), so the board Undo can put the token
+   * back and return the card. Server only: it names the drawn card, so a projection must never carry it.
+   */
+  readonly tokenCollections?: readonly TokenCollection[]
   readonly players: readonly Playerhand[]
   /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]
