@@ -4,7 +4,7 @@
  * A map square is explored when a tile lies under it; a slot with no tile is
  * unexplored, drawn as fog on the board. Nobody walks onto fog: a figure on a
  * square next to it may spend 1 movement to explore, which draws the next tile
- * from the deck and lays it in that slot (turned any way by hand afterwards).
+ * from the deck and lays it in that slot, arrow towards the figure (turned any way by hand afterwards).
  * Exploring neither moves the figure nor locks it, so it may explore and then
  * travel, or travel to the edge and then explore, with the speed it has left.
  *

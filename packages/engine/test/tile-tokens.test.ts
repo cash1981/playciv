@@ -93,13 +93,15 @@ const explore = (state: GameState): GameState => {
 describe('placing tokens on a laid tile', () => {
   it('puts a village and a hut on the printed squares of an explored tile', () => {
     const explored = explore(EXPLORING())
-    // The tile fills squares E1 to H4; its village is printed on row 1, column 1 and its hut on row 3, column 3
+    // The tile fills squares E1 to H4 and is laid turned 90 degrees, as the army explored from the west: its village is
+    // printed on row 1, column 1 and its hut on row 3, column 3, which that turn puts on row 1, column 2 and row 3, column 0
+    expect(tileOf(explored, 'tiles/tile04').rotation).toBe(90)
     expect(tokensOf(explored)).toEqual([
-      { kind: 'VILLAGES', column: 5, row: 1 },
-      { kind: 'HUTS', column: 7, row: 3 },
+      { kind: 'VILLAGES', column: 6, row: 1 },
+      { kind: 'HUTS', column: 4, row: 3 },
     ])
     const village = mapTokensOf(explored.board)[0]
-    expect(village?.piece.x).toBe(Math.round(5 * SQUARE_SIZE + (SQUARE_SIZE - (village?.piece.width ?? 0)) / 2))
+    expect(village?.piece.x).toBe(Math.round(6 * SQUARE_SIZE + (SQUARE_SIZE - (village?.piece.width ?? 0)) / 2))
     expect(village?.piece.tileId).toBe(tileOf(explored, 'tiles/tile04').id)
   })
 
@@ -183,14 +185,13 @@ describe('turning the tile', () => {
     }
   })
 
-  it('moves the village from E1-ish squares to where the turned print puts it (90 degrees)', () => {
+  it('moves the tokens back to the printed squares when the laid tile is turned upright', () => {
     const explored = explore(EXPLORING())
     const tile = tileOf(explored, 'tiles/tile04')
-    const turned = unwrap(rotatePiece(explored, { playerId: CASH1981, pieceId: tile.id, rotation: 90 }))
-    // printed (row 1, column 1) goes to row 1, column 2; printed (3, 3) to row 3, column 0
+    const turned = unwrap(rotatePiece(explored, { playerId: CASH1981, pieceId: tile.id, rotation: 0 }))
     expect(tokensOf(turned)).toEqual([
-      { kind: 'VILLAGES', column: 6, row: 1 },
-      { kind: 'HUTS', column: 4, row: 3 },
+      { kind: 'VILLAGES', column: 5, row: 1 },
+      { kind: 'HUTS', column: 7, row: 3 },
     ])
   })
 })

@@ -122,6 +122,10 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   three-player saves with pieces and five-player saves keep their old rectangle
   so pieces do not move; see [legacy layout limitations](limitations.md#game-behavior).
 - Culture track: 21 positions with freely placed markers.
+- A civilization revealed before the table is full is laid out while every seat is still number 0, so its starting
+  tile lands in the first corner. When the game starts and seats are numbered, such tiles are moved and turned to
+  their owner's corner (a system board change, so nobody's Undo reverts it); otherwise a later player's tile
+  was drawn underneath it and looked missing.
 - Player status sidebar (#342): a view beside the map (under it at 900px and
   below) shows every status value per player with an icon whose `alt`/`title`
   names it. It reads only fields the old Player status panel showed (`username`,
@@ -910,7 +914,9 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 - **Exploring:** a square with no tile is fog (tile back), never walked onto and
   never a card destination. A figure next to fog may `exploreSquare` (`POST
   .../pieces/:id/explore`): spends 1 movement, draws the next TILES card and lays
-  it in the covering slot (rotation 0, turned by hand). It neither moves nor
+  it in the covering slot, turned so its arrow (on the bottom edge of the art) is on the
+  side the figure explored from: figure south of the tile 0, west 90, north 180, east 270.
+  It can still be turned by hand. It neither moves nor
   locks the figure; any lock forbids exploring. It fails without spending when the
   card has no artwork. The tile card goes to the hand like any draw, so board Undo
   (two presses: tile, then movement) does not return it; explore-undo-explore to

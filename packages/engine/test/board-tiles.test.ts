@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { joinGame } from '../src/actions/game.js'
 import { movePiece, placePiece, rotatePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { markPhasesDone } from '../src/actions/turn.js'
@@ -514,4 +515,36 @@ describe('revealing civilizations, one player at a time (issue #171)', () => {
       }
     },
   )
+})
+
+describe('a civilization revealed before the game starts', () => {
+  const reveal = (state: GameState, playerId: string): GameState => {
+    const drawn = unwrap(draw(state, { playerId, sheetName: 'CIV' }))
+    const civ = findPlayer(drawn, playerId)?.items.find((item) => item.kind === 'civ')
+    if (civ?.kind !== 'civ') throw new Error('no civ in the hand')
+    return unwrap(revealItem(drawn, { playerId, sheetName: 'CIV', itemNumber: civ.itemNumber }))
+  }
+
+  it('is moved to the corner of the seat its owner gets, so it does not hide the next tile', () => {
+    // A seed where the early player is shuffled into the second seat
+    for (let attempt = 0; attempt < 20; attempt++) {
+      let state = createGame({ name: 'Early', numOfPlayers: 2, seed: `early-civ-${attempt}` })
+      state = unwrap(joinGame(state, { playerId: 'early', username: 'early', gameCreator: true }))
+      state = reveal(state, 'early')
+      state = unwrap(joinGame(state, { playerId: 'late', username: 'late' }))
+      if (findPlayer(state, 'early')?.playernumber !== 2) continue
+
+      state = reveal(state, 'late')
+
+      const tiles = state.board.pieces.filter((piece) => piece.category === 'civtile')
+      expect(tiles).toHaveLength(2)
+      for (const player of state.players) {
+        const tile = tiles.find((piece) => piece.placedBy === player.playerId)
+        const corner = startingCorner(state.board, player.playernumber)
+        expect([tile?.x, tile?.y, tile?.rotation]).toEqual([corner.x, corner.y, corner.rotation])
+      }
+      return
+    }
+    throw new Error('no seed put the early player in the second seat')
+  })
 })

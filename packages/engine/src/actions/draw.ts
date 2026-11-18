@@ -14,6 +14,7 @@ import {
   wonderAssetId,
   wondersArea,
 } from '../board.js'
+import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll, revealPublic } from '../item.js'
@@ -251,6 +252,7 @@ function takeFromDeck(
   player: Playerhand,
   index: number,
   tileOrigin?: readonly [x: number, y: number],
+  tileRotation?: Rotation,
 ): GameState {
   const item = state.items[index] as Item
   const drawn: Item = { ...item, ownerId: player.playerId, hidden: true }
@@ -265,7 +267,7 @@ function takeFromDeck(
   })
 
   const logged = appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
-  return drawn.kind === 'tile' ? placeExploredTile(logged, player.playerId, drawn, tileOrigin) : logged
+  return drawn.kind === 'tile' ? placeExploredTile(logged, player.playerId, drawn, tileOrigin, tileRotation) : logged
 }
 
 /**
@@ -280,6 +282,7 @@ function placeExploredTile(
   playerId: string,
   tile: Item,
   origin?: readonly [x: number, y: number],
+  rotation?: Rotation,
 ): GameState {
   if (tile.kind !== 'tile') return state
   // Tile cards are named "1" to "27"; the images are tile01, tile15a, Tile26b …
@@ -287,7 +290,7 @@ function placeExploredTile(
   if (assetId === undefined) return state
 
   const [x, y] = origin ?? firstFreeSlot(state.board)
-  const placed = placeUnchecked(state, { playerId, assetId, x, y })
+  const placed = placeUnchecked(state, { playerId, assetId, x, y, ...(rotation === undefined ? {} : { rotation }) })
   if (placed === undefined) return state
   // The tile goes under everything else, so it is the first piece; its hut and village icons become tokens (issue #364)
   const laid = placed.board.pieces[0]
@@ -299,22 +302,24 @@ function placeExploredTile(
  * figure's exploration does (issue #302). Like a manual draw the card goes to the player's hand,
  * faceup on the map from then on; the deck is reshuffled from the discards when it has run out.
  * It has no turn check: the caller (the figure's movement) has made its own.
+ * `rotation` turns the tile as it is laid; left out, it lies unturned.
  */
 export function drawTileAt(
   state: GameState,
   playerId: string,
   origin: readonly [x: number, y: number],
+  rotation?: Rotation,
 ): DrawResult {
   const found = requirePlayer(state, playerId)
   if (!found.ok) return found
   const index = state.items.findIndex((item) => item.sheetName === 'TILES')
-  if (index >= 0) return ok(takeFromDeck(state, found.value, index, origin))
+  if (index >= 0) return ok(takeFromDeck(state, found.value, index, origin, rotation))
 
   const reshuffled = reshuffleItems(state, 'TILES')
   if (!reshuffled.ok) return reshuffled
   const retryIndex = reshuffled.value.items.findIndex((item) => item.sheetName === 'TILES')
   if (retryIndex < 0) return err({ kind: 'ITEM_NOT_FOUND', sheetName: 'TILES' })
-  return ok(takeFromDeck(reshuffled.value, found.value, retryIndex, origin))
+  return ok(takeFromDeck(reshuffled.value, found.value, retryIndex, origin, rotation))
 }
 
 /**

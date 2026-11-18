@@ -108,6 +108,30 @@ describe('exploreSquare', () => {
     expect(after.destinations).toContainEqual(expect.objectContaining({ column: 4, row: 1, distance: 1 }))
   })
 
+  // The art has its arrow on the bottom edge: it goes on the edge the figure explored from
+  it.each([
+    ['west', { column: 7, row: 5 }, { column: 8, row: 5 }, 90],
+    ['north', { column: 5, row: 3 }, { column: 5, row: 4 }, 180],
+    ['east', { column: 4, row: 5 }, { column: 3, row: 5 }, 270],
+    ['south', { column: 5, row: 4 }, { column: 5, row: 3 }, 0],
+  ] as const)('turns the tile so its arrow faces the figure exploring from the %s', (_side, at, target, rotation) => {
+    // The tile in slot (4, 0) for the north case, (4, 4) otherwise
+    const slotRow = at.row <= 3 ? 0 : 4
+    const start = unwrap(
+      placePiece(game(), {
+        playerId: CASH1981,
+        assetId: 'tiles/tile05',
+        x: 4 * SQUARE_SIZE,
+        y: mapTop(game().board) + slotRow * SQUARE_SIZE,
+      }),
+    )
+    const state = place(start, 'figures/redarmy', at.column, at.row)
+    const explored = unwrap(exploreSquare(state, { playerId: CASH1981, pieceId: armyOf(state).id, ...target }))
+
+    const laid = explored.board.pieces.filter((piece) => piece.category === 'tile' && piece.assetId !== 'tiles/tile05')
+    expect(laid.map((piece) => piece.rotation)).toEqual([rotation])
+  })
+
   it('keeps the whole speed: after exploring, travel cannot go past what is left', () => {
     const state = place(withStartTile(game()), 'figures/redarmy', 3, 3)
     const explored = unwrap(

@@ -849,8 +849,22 @@ export function rotatePiece(state: GameState, input: RotatePieceInput): ActionRe
   const denied = requireAccess(state, input.playerId)
   if (denied !== undefined) return err(denied)
 
+  const turned = rotatePieceUnchecked(state, input)
+  if (turned === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  return ok(turned)
+}
+
+/**
+ * The same as `rotatePiece`, but without the access check and without a Result:
+ * for a rule that turns a piece itself. Returns `undefined` when the piece does
+ * not exist.
+ */
+export function rotatePieceUnchecked(
+  state: GameState,
+  input: RotatePieceInput,
+): GameState | undefined {
   const piece = findPiece(state.board, input.pieceId)
-  if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  if (piece === undefined) return undefined
 
   const rotation = input.rotation ?? nextRotation(piece.rotation)
   // The hut and village tokens on a map tile stay on the same printed squares when it is turned (issue #364)
@@ -862,20 +876,18 @@ export function rotatePiece(state: GameState, input: RotatePieceInput): ActionRe
     return to === undefined ? other : { ...other, x: to.x, y: to.y }
   })
 
-  return ok(
-    record(input, {
-      state,
-      pieces,
-      change: {
-        kind: 'rotate',
-        pieceId: piece.id,
-        from: piece.rotation,
-        to: rotation,
-        ...(tokens.length === 0 ? {} : { tokens }),
-      },
-      description: `turned ${piece.label} to ${rotation} degrees`,
-    }),
-  )
+  return record(input, {
+    state,
+    pieces,
+    change: {
+      kind: 'rotate',
+      pieceId: piece.id,
+      from: piece.rotation,
+      to: rotation,
+      ...(tokens.length === 0 ? {} : { tokens }),
+    },
+    description: `turned ${piece.label} to ${rotation} degrees`,
+  })
 }
 
 /** Assigns or clears ownership of a wonder. Ownership changes are replayable and undoable. */
