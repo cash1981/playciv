@@ -151,7 +151,7 @@ const page = (messages: readonly TimelineMessageDto[], hasMore = false): ChatPag
 
 async function renderPanel(
   view: PlayerView,
-  props: { readOnly?: boolean; autoRefresh?: boolean; reloadCount?: number; run?: typeof run } = {},
+  props: { readOnly?: boolean; autoRefresh?: boolean; isAdmin?: boolean; reloadCount?: number; run?: typeof run } = {},
 ): Promise<ReturnType<typeof render>> {
   let result: ReturnType<typeof render> | undefined
   await act(async () => {
@@ -164,6 +164,7 @@ async function renderPanel(
         run={props.run ?? run}
         reloadCount={props.reloadCount ?? 0}
         autoRefresh={props.autoRefresh ?? false}
+        isAdmin={props.isAdmin ?? false}
         editorComponent={FakeEditor}
         authors={
           new Map([
@@ -632,6 +633,22 @@ describe('the composer', () => {
     const replay = await renderPanel(makeView(), { readOnly: true })
     expect(replay.container.querySelector('.chat-orders-composer')).toBeNull()
     expect(screen.getByRole('log', { name: 'Timeline' })).not.toBeNull()
+  })
+})
+
+describe('Admin without a seat', () => {
+  it('can send chat but not orders', async () => {
+    chatPage.mockResolvedValue(page([message('a')]))
+    sendChat.mockResolvedValue(undefined as never)
+    const { container } = await renderPanel(makeView({ you: null }), { isAdmin: true })
+    expect(container.querySelector('.chat-orders-composer')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Order' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Private' })).toBeNull()
+    fireEvent.change(screen.getByLabelText('Chat message'), { target: { value: 'Is the game over?' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    })
+    expect(sendChat).toHaveBeenCalledWith('game', 'Is the game over?')
   })
 })
 

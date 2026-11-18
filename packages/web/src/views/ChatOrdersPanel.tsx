@@ -298,6 +298,8 @@ interface Props {
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
   readonly reloadCount: number
   readonly autoRefresh: boolean
+  /** An admin may post chat in any game, seated or not; orders need a seat. */
+  readonly isAdmin?: boolean
   readonly authors?: ReadonlyMap<string, ChatAuthor>
   readonly editorComponent?: MarkdownEditorComponent | undefined
 }
@@ -311,6 +313,7 @@ export function ChatOrdersPanel({
   run,
   reloadCount,
   autoRefresh,
+  isAdmin = false,
   authors,
   editorComponent: EditorComponent = MarkdownEditor,
 }: Props): React.JSX.Element {
@@ -343,7 +346,7 @@ export function ChatOrdersPanel({
   const currentTurn = viewerTurn(view)
   const orderTurn = turnPick ?? currentTurn
   const orderPhase = phasePick ?? firstOpenPhase(view, orderTurn)
-  const canWrite = view.you !== null && !readOnly
+  const canWrite = (view.you !== null || isAdmin) && !readOnly
   const doneInTurn = view.you?.playerTurns.find((candidate) => candidate.turnNumber === orderTurn)?.done
   const isPhaseDone = (phase: TurnPhase): boolean => doneInTurn?.[phase] === true
   const remoteNote = view.you?.gamenote ?? ''
@@ -608,6 +611,7 @@ export function ChatOrdersPanel({
                 send()
               }}
             >
+              {view.you !== null && (
               <div className="chat-orders-mode" role="group" aria-label="Message type">
                 {(['chat', 'order'] as const).map((name) => (
                   <button
@@ -621,6 +625,7 @@ export function ChatOrdersPanel({
                   </button>
                 ))}
               </div>
+              )}
               {mode === 'order' && (
                 <div className="chat-orders-fields">
                   <label htmlFor="chat-orders-turn">
