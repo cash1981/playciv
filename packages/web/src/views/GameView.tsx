@@ -726,6 +726,7 @@ export function GameView({
             run={run}
             reloadCount={reloadCount}
             autoRefresh={autoRefresh}
+            isAdmin={player?.role === 'admin'}
             authors={chatAuthors}
           />
         )}
