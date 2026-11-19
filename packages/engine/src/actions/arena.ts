@@ -18,7 +18,7 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { battleSummaries, battleWinner, findPlayer, withPlayer } from '../state.js'
-import type { ArenaFaceOff, ArenaRefight, ArenaUnit, ArenaVitals, BattleSide, BattleSideId } from '../battle.js'
+import type { ArenaFaceOff, ArenaRefight, ArenaUnit, ArenaVitals, Battle, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
@@ -1371,6 +1371,11 @@ export function healUnits(state: GameState, input: HealInput): ActionResult {
 // endBattle (extends the existing one in draw.ts)
 // ---------------------------------------------------------------------------
 
+/** Civilization abilities that act when a battle ends. */
+const AZTECS = 'Aztecs'
+const CHINESE = 'Chinese'
+const AZTEC_WIN_TRADE = 3
+
 export interface EndBattleInput {
   readonly playerId: string
   /** ISO timestamp for the board history entry that removes a fortification. */
@@ -1477,6 +1482,56 @@ export function endBattleAction(
     }
   }
 
+  // Aztecs (civilization card): 3 trade for winning a battle, and 1 culture for each unit killed in a battle they fought,
+  // killed units of both sides counted. A side the barbarians fight on is not a player's own army, so it never counts
+  let aztecs: { readonly playerId: string; readonly trade: number; readonly culture: number } | undefined
+  const aztec = [battle.attacker, battle.defender].find(
+    (side) => side.kind === 'player' && findPlayer(nextState, side.playerId)?.civilization?.name === AZTECS,
+  )
+  const aztecHand = aztec === undefined ? undefined : findPlayer(nextState, aztec.playerId)
+  if (aztec !== undefined && aztecHand !== undefined) {
+    const trade = outcome !== null && outcome.winner.kind === 'player' && outcome.winner.playerId === aztec.playerId ? AZTEC_WIN_TRADE : 0
+    const culture = [...battle.arena, ...battle.departedUnits].filter((unit) => unit.killed).length
+    if (trade > 0 || culture > 0) {
+      const gained = [
+        trade > 0 ? `${trade} (${aztecHand.stats.trade + trade}) trade for winning` : undefined,
+        culture > 0 ? `${culture} (${aztecHand.stats.culture + culture}) culture for the ${culture === 1 ? 'unit' : 'units'} killed` : undefined,
+      ].filter((part) => part !== undefined)
+      nextState = appendPublicLog(
+        withPlayer(nextState, {
+          ...aztecHand,
+          stats: { ...aztecHand.stats, trade: aztecHand.stats.trade + trade, culture: aztecHand.stats.culture + culture },
+        }),
+        aztecHand.username,
+        aztecHand.playerId,
+        `gains ${gained.join(' and ')} as the Aztecs`,
+      )
+      aztecs = { playerId: aztecHand.playerId, trade, culture }
+    }
+  }
+
+  // Chinese (civilization card): after a battle they may save one of their killed units, which stays in the hand
+  // (Florence Nightingale's `saved` mark). The end-of-battle action carries no unit choice, so it is the first killed
+  // Chinese unit that is not already saved; figure losses are settled by hand before.
+  let chineseSaved: string | undefined
+  let storedBattle = announcedBattle
+  const chinese = [battle.attacker, battle.defender].find(
+    (side) => side.kind === 'player' && findPlayer(nextState, side.playerId)?.civilization?.name === CHINESE,
+  )
+  if (chinese !== undefined) {
+    const sideId = chinese === battle.attacker ? 'attacker' : 'defender'
+    const candidate = [...announcedBattle.arena, ...announcedBattle.departedUnits].find(
+      (unit) => unit.side === sideId && unit.killed && unit.saved !== true,
+    )
+    const hand = findPlayer(nextState, chinese.playerId)
+    if (candidate !== undefined && hand !== undefined) {
+      const mark = (unit: ArenaUnit): ArenaUnit => (unit.id === candidate.id ? { ...unit, saved: true } : unit)
+      storedBattle = { ...announcedBattle, arena: announcedBattle.arena.map(mark), departedUnits: announcedBattle.departedUnits.map(mark) }
+      nextState = appendPublicLog(nextState, hand.username, hand.playerId, 'saves one killed unit as the Chinese: it stays in the hand')
+      chineseSaved = candidate.id
+    }
+  }
+
   // A fortification is used up by the battle for its city, whoever won (Fame and Fortune p. 7, the human)
   const defence = summaries.find((s) => s.side === 'defender')?.cityDefence ?? null
   const fortification =
@@ -1506,11 +1561,13 @@ export function endBattleAction(
     ...nextState,
     battle: null,
     endedBattle: {
-      battle: announcedBattle,
+      battle: storedBattle,
       endedBy: input.playerId,
       summary: summaries,
       ...(fortification === undefined ? {} : { fortification }),
       ...(codeOfLawsCoin === undefined ? {} : { codeOfLawsCoin }),
+      ...(aztecs === undefined ? {} : { aztecs }),
+      ...(chineseSaved === undefined ? {} : { chineseSaved }),
     },
   })
 }
@@ -1585,7 +1642,16 @@ export function undoEndBattle(
     return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
   }
 
-  const battle = ended.battle
+  // The unit the Chinese saved is killed and unsaved again, as it stood in the battle
+  const unsave = (unit: ArenaUnit): ArenaUnit => {
+    if (unit.id !== ended.chineseSaved) return unit
+    const { saved: _saved, ...rest } = unit
+    return rest
+  }
+  const battle: Battle =
+    ended.chineseSaved === undefined
+      ? ended.battle
+      : { ...ended.battle, arena: ended.battle.arena.map(unsave), departedUnits: ended.battle.departedUnits.map(unsave) }
   let nextState = state
   for (const arenaUnit of [...battle.arena, ...battle.departedUnits]) {
     const ownerSide =
@@ -1606,11 +1672,25 @@ export function undoEndBattle(
   const coinBack = ended.codeOfLawsCoin !== undefined
   if (ended.codeOfLawsCoin !== undefined) nextState = returnTechCoin(nextState, ended.codeOfLawsCoin)
 
+  // What the Aztecs gained goes back with it
+  const aztecs = ended.aztecs
+  const aztecHand = aztecs === undefined ? undefined : findPlayer(nextState, aztecs.playerId)
+  if (aztecs !== undefined && aztecHand !== undefined) {
+    nextState = withPlayer(nextState, {
+      ...aztecHand,
+      stats: {
+        ...aztecHand.stats,
+        trade: Math.max(0, aztecHand.stats.trade - aztecs.trade),
+        culture: Math.max(0, aztecHand.stats.culture - aztecs.culture),
+      },
+    })
+  }
+
   nextState = appendPublicLog(
     nextState,
     player.username,
     player.playerId,
-    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}`,
+    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}${aztecs === undefined ? '' : ' and takes back what the Aztecs gained'}${ended.chineseSaved === undefined ? '' : ', and the saved Chinese unit is killed again'}`,
   )
 
   return ok({ ...nextState, battle, endedBattle: null })

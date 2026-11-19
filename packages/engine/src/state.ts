@@ -1507,6 +1507,10 @@ export interface EndedBattle {
   readonly fortification?: BoardPiece
   /** The Code of Laws coin the winner earned for this battle, so an undo takes it off again. */
   readonly codeOfLawsCoin?: TechCoinGrant
+  /** What the Aztecs gained for this battle (3 trade for a win, 1 culture per killed unit), so an undo takes it off again. */
+  readonly aztecs?: { readonly playerId: string; readonly trade: number; readonly culture: number }
+  /** The killed Chinese unit (its arena unit id) the Chinese saved after this battle, so an undo marks it killed again. */
+  readonly chineseSaved?: string
 }
 
 // ---------------------------------------------------------------------------

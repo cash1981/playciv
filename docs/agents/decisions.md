@@ -1381,6 +1381,12 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   reads) and logs it. A value the player already typed is left alone. The `civSetup` records
   what it set, and the reveal undo restores it only if the value is still the one it set.
 
+- **Aztecs (end of battle):** the Aztec player gains 3 trade for winning and 1 culture for each
+  unit killed, both sides counted, in a battle they fought as a player (not the barbarians they
+  only control). **Chinese:** the end of the battle saves the first killed Chinese unit that is
+  not already saved (`ArenaUnit.saved`); there is no unit choice yet. Both are kept on
+  `endedBattle` and taken back by `undoEndBattle` (`actions/arena.ts`).
+
 Source: `assisted.ts` (`build`), `actions/token-collection.ts`, `actions/tile-tokens.ts`,
 `actions/player.ts`, `actions/undo.ts`; tests `assisted-wonders`, `tile-tokens`,
 `undo-civ-reveal`.
