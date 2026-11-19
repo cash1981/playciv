@@ -1675,22 +1675,25 @@ export function undoEndBattle(
   // What the Aztecs gained goes back with it
   const aztecs = ended.aztecs
   const aztecHand = aztecs === undefined ? undefined : findPlayer(nextState, aztecs.playerId)
+  let aztecNote = ''
   if (aztecs !== undefined && aztecHand !== undefined) {
+    // As much as is still there goes back: what the Aztecs have spent since stays spent
+    const tradeBack = Math.min(aztecHand.stats.trade, aztecs.trade)
+    const cultureBack = Math.min(aztecHand.stats.culture, aztecs.culture)
     nextState = withPlayer(nextState, {
       ...aztecHand,
-      stats: {
-        ...aztecHand.stats,
-        trade: Math.max(0, aztecHand.stats.trade - aztecs.trade),
-        culture: Math.max(0, aztecHand.stats.culture - aztecs.culture),
-      },
+      stats: { ...aztecHand.stats, trade: aztecHand.stats.trade - tradeBack, culture: aztecHand.stats.culture - cultureBack },
     })
+    const part = (word: string, back: number, gained: number): string | undefined =>
+      gained === 0 ? undefined : back === gained ? `${back} ${word}` : `${back} of ${gained} ${word}`
+    aztecNote = ` and takes back ${[part('trade', tradeBack, aztecs.trade), part('culture', cultureBack, aztecs.culture)].filter((x) => x !== undefined).join(' and ')} the Aztecs gained`
   }
 
   nextState = appendPublicLog(
     nextState,
     player.username,
     player.playerId,
-    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}${aztecs === undefined ? '' : ' and takes back what the Aztecs gained'}${ended.chineseSaved === undefined ? '' : ', and the saved Chinese unit is killed again'}`,
+    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}${aztecNote}${ended.chineseSaved === undefined ? '' : ', and the saved Chinese unit is killed again'}`,
   )
 
   return ok({ ...nextState, battle, endedBattle: null })

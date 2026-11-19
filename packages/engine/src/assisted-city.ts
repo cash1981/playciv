@@ -9,6 +9,7 @@
  */
 
 import { movePieceUnchecked, placeUnchecked, removePiece } from './actions/board.js'
+import { joinList } from './assisted-resources.js'
 import { collectMapToken } from './actions/collect-token.js'
 import { returnCollectedCard } from './actions/tile-tokens.js'
 import { mapTokensOf } from './zheng-he.js'
@@ -166,6 +167,7 @@ export const foundCity: AssistedActionDefinition = {
     }
 
     // The Zulu explore the huts next to the city at once (civilization card): each token goes to their area and its card to the hand
+    const explored: string[] = []
     const huts: { readonly historyId: string; readonly pieceId: string; readonly from: { readonly x: number; readonly y: number }; readonly itemId: string }[] = []
     for (const token of mapTokensOf(working.board)) {
       if (token.sheet !== 'HUTS' || !check.zuluHuts.includes(squareLabel(token.cell))) continue
@@ -174,7 +176,15 @@ export const foundCity: AssistedActionDefinition = {
       if (next === undefined || collection === undefined) continue
       working = next
       huts.push({ historyId: collection.historyId, pieceId: token.piece.id, from: { x: token.piece.x, y: token.piece.y }, itemId: collection.itemId })
+      explored.push(squareLabel(token.cell))
     }
+    // Only the huts that were collected are said to be: the others (no card left in the deck) stay on the map
+    const stayed = check.zuluHuts.filter((label) => !explored.includes(label))
+    const hutText =
+      check.zuluHuts.length === 0
+        ? ''
+        : (explored.length === 0 ? '' : `, exploring the ${explored.length === 1 ? 'hut' : 'huts'} at ${joinList(explored)} at once`) +
+          (stayed.length === 0 ? '' : `${explored.length === 0 ? ', but' : '; and'} the ${stayed.length === 1 ? 'hut' : 'huts'} at ${joinList(stayed)} ${stayed.length === 1 ? 'stays' : 'stay'} on the map (no hut card could be drawn)`)
 
     // The new city counts towards the number of social policies a civilization may adopt
     const cities = ownCityPieces(working, player).length
@@ -188,7 +198,7 @@ export const foundCity: AssistedActionDefinition = {
       publicLog:
         `${player.username} founded a city on ${square} with ${withFigure}` +
         (destroyed === null ? '' : `, destroying the city-state there (+${CITY_STATE_CULTURE} (${holder.stats.culture}) culture)`) +
-        (check.zuluHuts.length === 0 ? '' : `, next to a hut they ${huts.length === 0 ? 'may explore' : 'explore at once'} (${check.zuluHuts.join(', ')})`) +
+        hutText +
         policyNote,
       privateLog: '',
       createdAt: context.at ?? null,

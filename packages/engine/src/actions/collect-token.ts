@@ -63,7 +63,7 @@ export function collectMapToken(
       : { ...placed, log: placed.log.map((line) => (line.item?.id === card.id && line.logType === 'ITEM' ? { ...line, undo: null, superseded: true } : line)) }
   const entry = placed?.board.history.at(-1)
   if (placed === undefined || sealed === undefined || entry === undefined) return undefined
-  // The Chinese gain 3 culture for a hut (civilization card); a village is not a hut, and a relic is handled above
+  // The Chinese gain 3 culture for a hut (civilization card); a village is not a hut, and a relic is not a token (`takeRelic` handles it)
   const culture = options.chineseCulture && token.sheet === 'HUTS' && player.civilization?.name === CHINESE ? CHINESE_HUT_CULTURE : 0
   const collection: TokenCollection = {
     ...(culture === 0 ? {} : { culture }),

@@ -13,7 +13,6 @@
 import { performAssistedAction } from '../assisted.js'
 import { IMMEDIATE_RELIC_CLAIMS } from '../assisted-relics.js'
 import { mapCellOf } from '../blockade.js'
-import { boardAreas } from '../board.js'
 import { squareLabel } from '../build-options.js'
 import type { EngineError } from '../errors.js'
 import type { Result } from '../result.js'
@@ -64,14 +63,10 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
   if (relic !== undefined) return travelled.ok ? takeRelic(travelled.value, input, relic.id) : travelled
   if (!travelled.ok || !collecting) return travelled
   const moved = travelled.value
-  const player = findPlayer(moved, input.playerId)
   const token = mapTokensOf(moved.board).find(
     (candidate) => candidate.cell.column === input.column && candidate.cell.row === input.row,
   )
-  if (player === undefined || token === undefined) return travelled
-  const area = boardAreas(moved.board, moved.players).find((candidate) => candidate.playerId === input.playerId)
-  if (area === undefined) return travelled
-
+  if (token === undefined) return travelled
   const collected = collectMapToken(moved, input.playerId, token, { at: input.at, chineseCulture: true })
   return collected === undefined ? travelled : ok(collected)
 }

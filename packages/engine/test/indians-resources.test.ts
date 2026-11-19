@@ -4,12 +4,12 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { findResourcePayment, resourcePaymentOptions, returnResource, spendResource } from '../src/assisted-resources.js'
+import { findResourcePayment, resourceAvailability, resourcePaymentOptions, returnResource, spendEachResource, spendResource } from '../src/assisted-resources.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
 import { withCivilization } from './culture-advance-fixture.js'
-import { withPieceInArea } from './assisted-fixture.js'
+import { withCardInHand, withPieceInArea } from './assisted-fixture.js'
 import { CASH1981, firstCivGame } from './fixture.js'
 
 const withToken = (civ: string, asset: string): GameState =>
@@ -37,12 +37,41 @@ describe('the Indians and resources', () => {
 
   it('prefer the real resource, and never cover Spy or Uranium', () => {
     const both = withPieceInArea(withToken('Indians', 'resources/silk'), 'resources/iron').state
-    expect(findResourcePayment(both, CASH1981, 'Iron')).toMatchObject({ resource: 'Iron' })
-    expect(findResourcePayment(both, CASH1981, 'Iron')?.kind === 'piece' && (findResourcePayment(both, CASH1981, 'Iron') as { asResource?: string }).asResource).toBeFalsy()
+    const payment = findResourcePayment(both, CASH1981, 'Iron')
+    expect(payment).toMatchObject({ kind: 'piece', resource: 'Iron' })
+    expect(payment).not.toHaveProperty('asResource')
     const silk = withToken('Indians', 'resources/silk')
     expect(findResourcePayment(silk, CASH1981, 'Spy')).toBeUndefined()
     expect(findResourcePayment(silk, CASH1981, 'Uranium')).toBeUndefined()
     expect(unwrapErr(spendResource(silk, CASH1981, 'Spy'))).toBe('NO_RESOURCE')
+  })
+
+  it('spend a token of another kind before a culture card that could pay, and warn about the token only', () => {
+    const withCard = withCardInHand(withToken('Indians', 'resources/silk'), 'A Generous Gift').state
+    // The card can pay iron by itself, but it would be lost: the Silk token goes first
+    expect(findResourcePayment(withCard, CASH1981, 'Iron')).toMatchObject({ kind: 'piece', resource: 'Silk', asResource: 'Iron' })
+    const spent = unwrap(spendResource(withCard, CASH1981, 'Iron'))
+    expect(spent.spent.kind).toBe('piece')
+    expect(resourceAvailability(withCard, CASH1981, 'Iron')).toMatchObject({ status: 'ready', warning: 'You have no Iron token: your Silk token would be spent as Iron.' })
+    // Without any token the card is played, as before
+    const cardOnly = withCardInHand(withCivilization(firstCivGame(), 'Indians'), 'A Generous Gift').state
+    expect(findResourcePayment(cardOnly, CASH1981, 'Iron')).toMatchObject({ kind: 'card' })
+  })
+
+  it('give one of each of four kinds without a wildcard taking the token another kind needs', () => {
+    // Silk and Iron wanted, with a Silk and a Wheat token: Iron takes the Wheat, never the Silk that Silk needs
+    const state = withPieceInArea(withToken('Indians', 'resources/silk'), 'resources/wheat').state
+    const paid = unwrap(spendEachResource(state, CASH1981, ['Iron', 'Silk']))
+    expect(paid.spent.map((payment) => [payment.resource, payment.kind === 'card' ? undefined : payment.asResource])).toEqual([
+      ['Wheat', 'Iron'],
+      ['Silk', undefined],
+    ])
+  })
+
+  it('list each token once for an Any cost, without wildcard copies', () => {
+    const state = withPieceInArea(withToken('Indians', 'resources/silk'), 'resources/wheat').state
+    const labels = resourcePaymentOptions(state, CASH1981, [null]).map((option) => option.label)
+    expect(labels.sort()).toEqual(['Silk (player area)', 'Wheat (player area)'])
   })
 
   it('give nothing to another civilization', () => {

@@ -2455,7 +2455,7 @@ export function ArenaUnitCard({
         onDragEnd={onDragEnd}
       />
       {unit.killed && <span className="tag discarded">DEAD</span>}
-      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved by Florence Nightingale: it stays in the hand">SAVED</span>}
+      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved (Florence Nightingale or the Chinese): it stays in the hand">SAVED</span>}
       <button
         className="small"
         disabled={busy || readOnly}

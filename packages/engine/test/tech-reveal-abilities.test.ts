@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { drawUnitsForBattle } from '../src/actions/draw.js'
 import { chooseTech, removeTech, revealTech } from '../src/actions/player.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { isUnit } from '../src/item.js'
@@ -86,6 +87,51 @@ describe('the Germans and techs that upgrade or unlock a unit', () => {
     expect(units(removed)).toHaveLength(0)
   })
 
+  it('are taken back from the battle hand too, where a drawn copy of the card also stands', () => {
+    const revealed = learn(germans(), 'Chivalry')
+    const withBattle = unwrap(drawUnitsForBattle(revealed, { playerId: CASH1981, numberOfDraws: 1 }))
+    const card = units(revealed)[0]
+    expect(me(withBattle).battlehand.some((item) => item.id === card?.id)).toBe(true)
+    const undone = undoReveal(withBattle, 'Chivalry')
+    expect(me(undone).battlehand.some((item) => item.id === card?.id)).toBe(false)
+    expect(units(undone)).toHaveLength(0)
+  })
+
+  it('say that the card could no longer be returned when it left the hand, and keep it where it went', () => {
+    const revealed = learn(germans(), 'Chivalry')
+    const card = units(revealed)[0]
+    if (card === undefined) throw new Error('no card')
+    const discarded: GameState = {
+      ...revealed,
+      players: revealed.players.map((p) => (p.playerId === CASH1981 ? { ...p, items: p.items.filter((item) => item.id !== card.id) } : p)),
+      discardedItems: [...revealed.discardedItems, card],
+    }
+    const deckBefore = discarded.items.filter((item) => item.sheetName === 'MOUNTED').length
+    const undone = undoReveal(discarded, 'Chivalry')
+    expect(lines(undone).some((line) => line.includes('took back 0 of 1 free units (a card could no longer be returned: it has left the hand)'))).toBe(true)
+    expect(undone.discardedItems.some((item) => item.id === card.id)).toBe(true)
+    expect(undone.items.filter((item) => item.sheetName === 'MOUNTED')).toHaveLength(deckBefore)
+    // Removing the tech by hand is just as truthful
+    const removed = unwrap(removeTech(discarded, { playerId: CASH1981, techName: 'Chivalry' }))
+    expect(lines(removed).some((line) => line.includes('could no longer be returned'))).toBe(true)
+    expect(removed.techRevealEffects ?? []).toHaveLength(0)
+  })
+
+  it('skip the unit with a line when no card of the type is left, and still point at the resource', () => {
+    const base = germans()
+    const empty: GameState = {
+      ...base,
+      items: base.items.filter((item) => item.sheetName !== 'MOUNTED'),
+      discardedItems: base.discardedItems.filter((item) => item.sheetName !== 'MOUNTED'),
+    }
+    const revealed = learn(empty, 'Chivalry')
+    expect(units(revealed)).toHaveLength(0)
+    expect(lines(revealed)).toContain('cash1981 would build a free mounted unit as the Germans, but no mounted unit cards are left')
+    expect(lines(revealed)).toContain('cash1981 may take one resource of their choice from the market as the Germans (Chivalry)')
+    // Nothing to give back, so the undo adds no claim about units
+    expect(lines(undoReveal(revealed, 'Chivalry')).some((line) => line.includes('free unit'))).toBe(false)
+  })
+
   it('name no card in the public log or in what another player sees', () => {
     const revealed = learn(germans(), 'Chivalry')
     const card = units(revealed)[0]
@@ -137,6 +183,19 @@ describe('the Greeks and techs', () => {
     const start = culture(state)
     const revealed = learn(state, 'Pottery')
     expect(culture(undoReveal(revealed, 'Pottery'))).toBe(start)
+    expect(lines(undoReveal(revealed, 'Pottery')).some((line) => line.includes('took back 3 culture: the Greeks ability for Pottery goes with the tech'))).toBe(true)
     expect(culture(unwrap(removeTech(revealed, { playerId: CASH1981, techName: 'Pottery' })))).toBe(start)
+  })
+
+  it('take back only what is left of the culture when it was spent, and say so', () => {
+    const state = greeks()
+    const revealed = learn(state, 'Pottery')
+    const spent: GameState = {
+      ...revealed,
+      players: revealed.players.map((p) => (p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, culture: 1 } } : p)),
+    }
+    const undone = undoReveal(spent, 'Pottery')
+    expect(culture(undone)).toBe(0)
+    expect(lines(undone).some((line) => line.includes('took back 1 of 3 culture (the rest is spent)'))).toBe(true)
   })
 })

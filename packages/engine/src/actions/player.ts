@@ -74,8 +74,10 @@ import { draw, drawWonderToBoard } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
 
-/** Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). */
+/** The civilizations whose reveal does something by itself. */
 const ARABS = 'Arabs'
+
+/** Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). */
 const SPANISH = 'Spanish'
 const SPANISH_MVMT = '2+1'
 
@@ -731,6 +733,8 @@ function placeWhiteFigure(
   )
 }
 
+const capitalised = (kind: string): string => kind.charAt(0).toUpperCase() + kind.slice(1)
+
 /**
  * Arabs (civilization card): the game starts with one of each resource from the market. Each token is put in the
  * player's area and counts as a piece of the reveal, so undoing the reveal takes them off again. A resource whose
@@ -763,8 +767,8 @@ function placeArabResources(state: GameState, player: Playerhand, civ: CivItem):
     next,
     player.username,
     player.playerId,
-    `starts with one of each resource from the market as the Arabs (${taken.join(', ') || 'none'})` +
-      (missing.length === 0 ? '' : `; the market has no ${missing.join(', ')} left`),
+    `starts with one of each resource from the market as the Arabs (${taken.map(capitalised).join(', ') || 'none'})` +
+      (missing.length === 0 ? '' : `; the market has no ${missing.map(capitalised).join(', ')} left`),
   )
 }
 

@@ -41,12 +41,11 @@ export function applyTechRevealAbilities(state: GameState, playerId: string, tec
   let next = state
 
   if (civ === GREEKS) {
-    // Players who know the tech, or have it chosen (hidden or not), are not counted; the other players only
+    // Players who know the tech, or have it chosen (hidden or not, which is what researching is), are not counted; the other players only
     const culture = state.players.filter(
       (other) =>
         other.playerId !== playerId &&
-        !other.techsChosen.some((tech) => tech.name === techName) &&
-        other.researchTurns[techName] === undefined,
+        !other.techsChosen.some((tech) => tech.name === techName),
     ).length
     if (culture === 0) return state
     const holder = findPlayer(next, playerId) ?? player
@@ -91,8 +90,9 @@ const recorded = (state: GameState, effect: TechRevealEffect): GameState => ({
 })
 
 /**
- * Takes back what the first reveal of the tech gave, when the tech is taken back: the culture (not below 0) and the
- * free unit cards that are still in the hand, which go back in their decks, those decks shuffled again.
+ * Takes back what the first reveal of the tech gave, when the tech is taken back. The culture goes back as far as it is
+ * still there (never below 0), and a free unit card still in the hand or the battle hand goes back to its deck, which is
+ * shuffled again. A line says what was really taken back: a gain that is spent, or a card that has left the hand, stays.
  */
 export function undoTechRevealAbilities(state: GameState, playerId: string, techName: string): GameState {
   const effects = (state.techRevealEffects ?? []).filter((effect) => effect.playerId === playerId && effect.techName === techName)
@@ -101,19 +101,38 @@ export function undoTechRevealAbilities(state: GameState, playerId: string, tech
     ...state,
     techRevealEffects: (state.techRevealEffects ?? []).filter((effect) => !effects.includes(effect)),
   }
+  const said: string[] = []
   for (const effect of effects) {
     const holder = findPlayer(next, playerId)
     if (holder === undefined) continue
-    const back = holder.items.filter((item) => effect.units.some((unit) => unit.itemId === item.id))
+    const wanted = new Set(effect.units.map((unit) => unit.itemId))
+    // The card is in the hand, and a unit drawn for a battle is a copy in the battle hand: both go
+    const back = holder.items.filter((item) => wanted.has(item.id))
+    const taken = Math.min(holder.stats.culture, effect.culture)
     next = withPlayer(next, {
       ...holder,
-      items: holder.items.filter((item) => !back.includes(item)),
-      stats: { ...holder.stats, culture: Math.max(0, holder.stats.culture - effect.culture) },
+      items: holder.items.filter((item) => !wanted.has(item.id)),
+      battlehand: holder.battlehand.filter((item) => !wanted.has(item.id)),
+      stats: { ...holder.stats, culture: holder.stats.culture - taken },
     })
     if (back.length > 0) {
       next = { ...next, ...deckWith(next, back.map((item) => ({ ...item, hidden: true, ownerId: null }))) }
       for (const sheetName of new Set(back.map((item) => item.sheetName))) next = shuffleSheetTwice(next, sheetName)
     }
+    if (effect.culture > 0) {
+      said.push(taken === effect.culture ? `took back ${taken} culture` : `took back ${taken} of ${effect.culture} culture (the rest is spent)`)
+    }
+    if (effect.units.length > 0) {
+      const lost = effect.units.length - back.length
+      said.push(
+        lost === 0
+          ? `took back the free unit${back.length === 1 ? '' : 's'}`
+          : `took back ${back.length} of ${effect.units.length} free units (${lost === 1 ? 'a card' : `${lost} cards`} could no longer be returned: ${lost === 1 ? 'it has' : 'they have'} left the hand)`,
+      )
+    }
   }
-  return next
+  const owner = findPlayer(next, playerId)
+  return owner === undefined || said.length === 0
+    ? next
+    : appendPublicLog(next, owner.username, owner.playerId, `${said.join(' and ')}: the ${owner.civilization?.name ?? 'civilization'} ability for ${techName} goes with the tech`)
 }

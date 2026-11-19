@@ -17,6 +17,7 @@ import { chooseTech, discardItem, removeTech, revealItem } from '../src/actions/
 import { markPhasesDone } from '../src/actions/turn.js'
 import { canInitiateUndo, initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/undo.js'
 import { DEFAULT_GOVERNMENT } from '../src/government.js'
+import { findBoardAsset, remainingBoardAssetCount } from '../src/board.js'
 import { isUnit, itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameLogEntry, GameState } from '../src/state.js'
@@ -591,11 +592,30 @@ describe("the Arabs' starting resources", () => {
   it('puts one token of each resource in the area on the reveal, and the undo takes them off again', () => {
     const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Arabs'), CASH1981)
     expect(resources(revealed).map((piece) => piece.assetId).sort()).toEqual(['resources/incense', 'resources/iron', 'resources/silk', 'resources/wheat'])
-    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 starts with one of each resource from the market as the Arabs (wheat, silk, incense, iron)')).toBe(true)
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 starts with one of each resource from the market as the Arabs (Wheat, Silk, Incense, Iron)')).toBe(true)
     expect(resources(undoByVote(revealed, CASH1981))).toHaveLength(0)
   })
 
   it('gives nothing to another civilization', () => {
     expect(resources(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toHaveLength(0)
+  })
+
+  it('skips a resource whose supply is used up, and says so', () => {
+    const base = giveCiv(firstCivGame(), CASH1981, 'Arabs')
+    const asset = findBoardAsset('resources/iron')
+    if (asset === undefined) throw new Error('no iron asset')
+    // Put iron pieces on the board until the market has none left
+    let state = base
+    for (let guard = 0; guard < 100 && (remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? 0) > 0; guard += 1) {
+      state = unwrap(placePiece(state, { playerId: KARANDRAS1, assetId: 'resources/iron', x: 5 + guard * 3, y: 5 }))
+    }
+    expect(remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)).toBe(0)
+    const revealed = revealHidden(state, CASH1981)
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 starts with one of each resource from the market as the Arabs (Wheat, Silk, Incense); the market has no Iron left')).toBe(true)
+    const own = (s: GameState) => s.board.pieces.filter((piece) => piece.assetId.startsWith('resources/') && piece.placedBy === CASH1981 && piece.assetId !== 'resources/iron')
+    expect(own(revealed)).toHaveLength(3)
+    expect(undoByVote(revealed, CASH1981).board.pieces.filter((piece) => piece.assetId === 'resources/iron')).toHaveLength(
+      state.board.pieces.filter((piece) => piece.assetId === 'resources/iron').length,
+    )
   })
 })

@@ -74,13 +74,47 @@ describe('the Aztecs after a battle', () => {
     expect(me(other).stats.culture).toBe(me(fight()).stats.culture)
   })
 
-  it('earn nothing from a battle against the barbarians they only control', () => {
-    // Karandras1 controls the barbarians for Cash; as the Aztecs they fought no battle of their own
-    const base = withCivilization(firstCivGame(), 'Aztecs', KARANDRAS1)
-    const state = unwrap(initiateBattle(base, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+  it('earn nothing from a battle the barbarians they only control fight', () => {
+    // Karandras1 (the Aztecs) controls the barbarians for Cash. The barbarians win a battle in which a unit is killed:
+    // as a side of their own army the Aztecs would gain trade and culture; as the barbarians' controller they gain nothing
+    let base = withCivilization(firstCivGame(), 'Aztecs', KARANDRAS1)
+    base = unwrap(draw(base, { playerId: CASH1981, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+    base = unwrap(drawUnitsForBattle(base, { playerId: CASH1981, numberOfDraws: 1 }))
+    let state = unwrap(initiateBattle(base, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    expect(state.battle?.defender).toEqual({ kind: 'barbarians', playerId: KARANDRAS1 })
+    const own = me(state).battlehand[0]
+    const barbarian = me(state, KARANDRAS1).barbarians[0]
+    if (own === undefined || barbarian === undefined) throw new Error('no units')
+    state = unwrap(placeUnitInArena(state, { playerId: CASH1981, unitId: own.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
+    state = unwrap(placeUnitInArena(state, { playerId: KARANDRAS1, unitId: barbarian.id, side: 'defender', position: 0, attack: 1, health: 3 }))
+    const killed = state.battle?.arena.find((unit) => unit.side === 'attacker')
+    if (killed === undefined) throw new Error('no attacker')
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: killed.id }))
     const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    expect(me(ended, KARANDRAS1).stats.trade).toBe(me(base, KARANDRAS1).stats.trade)
+    expect(ended.endedBattle?.summary?.find((side) => side.kind === 'barbarians')?.side).toBe('defender')
+    expect(me(ended, KARANDRAS1).stats).toEqual(me(base, KARANDRAS1).stats)
     expect(ended.endedBattle?.aztecs).toBeUndefined()
+  })
+
+  it('are put back as far as it is still there when it was spent, and the line says how much', () => {
+    const state = kill(kill(aztecFight(), KARANDRAS1, 1, CASH1981), CASH1981, 2, KARANDRAS1)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(me(ended).stats).toMatchObject({ trade: 8, culture: 8 })
+    // The Aztecs have spent 6 trade and 7 culture since
+    const spent: GameState = {
+      ...ended,
+      players: ended.players.map((p) => (p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, trade: 2, culture: 1 } } : p)),
+    }
+    const undone = unwrap(undoEndBattle(spent, { playerId: CASH1981 }))
+    expect(me(undone).stats).toMatchObject({ trade: 0, culture: 0 })
+    expect(lines(undone).at(-1)).toContain('takes back 2 of 3 trade and 1 of 3 culture the Aztecs gained')
+    const partly: GameState = {
+      ...ended,
+      players: ended.players.map((p) => (p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, trade: 4, culture: 2 } } : p)),
+    }
+    const some = unwrap(undoEndBattle(partly, { playerId: CASH1981 }))
+    expect(me(some).stats).toMatchObject({ trade: 1, culture: 0 })
+    expect(lines(some).at(-1)).toContain('takes back 3 trade and 2 of 3 culture the Aztecs gained')
   })
 
   it('are put back by undoing the end of the battle, and the log names no unit', () => {
@@ -89,7 +123,7 @@ describe('the Aztecs after a battle', () => {
     const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
     expect(me(undone).stats).toMatchObject({ trade: 5, culture: 5 })
     expect(undone.battle).not.toBeNull()
-    expect(lines(undone).at(-1)).toContain('takes back what the Aztecs gained')
+    expect(lines(undone).at(-1)).toContain('takes back 3 trade and 2 culture the Aztecs gained')
     const unitName = unitsOf(state, KARANDRAS1)[0]?.unit.id ?? 'x'
     expect(lines(ended).filter((line) => line.includes('Aztecs')).every((line) => !line.includes(unitName))).toBe(true)
   })
@@ -106,8 +140,9 @@ describe('the Chinese after a battle', () => {
     expect(saved.map((unit) => unit.id)).toEqual([killed[0]?.id])
     expect(ended.endedBattle?.chineseSaved).toBe(killed[0]?.id)
     expect(lines(ended)).toContain('cash1981 saves one killed unit as the Chinese: it stays in the hand')
-    // The card is in the hand, not in the discards
+    // Nothing discards a killed card: it is still in the hand, and the other killed unit is no different
     expect(me(ended).items.some((item) => item.id === killed[0]?.unit.id)).toBe(true)
+    expect(ended.discardedItems.some((item) => item.id === killed[0]?.unit.id)).toBe(false)
     // The public view of the last battle carries the mark, with ids scrubbed
     const view = toPlayerView(ended, KARANDRAS1)
     expect(view.lastBattle?.arena.filter((unit) => unit.saved === true)).toHaveLength(1)
@@ -128,5 +163,23 @@ describe('the Chinese after a battle', () => {
     expect(undone.battle?.arena.filter((unit) => unit.killed)).toHaveLength(1)
     expect(lines(undone).at(-1)).toContain('the saved Chinese unit is killed again')
     expect(undone.endedBattle).toBeNull()
+  })
+})
+
+describe('the Chinese and Florence Nightingale on the same battle', () => {
+  it('save the next killed unit when Nightingale has already saved the first, and the undo leaves her mark', () => {
+    let state = kill(withCivilization(fight(), 'Chinese'), KARANDRAS1, 2, CASH1981)
+    const [first, second] = unitsOf(state, CASH1981)
+    if (first === undefined || second === undefined) throw new Error('no units')
+    // Nightingale's mark, as the battle card writes it
+    state = {
+      ...state,
+      battle: state.battle === null ? null : { ...state.battle, arena: state.battle.arena.map((unit) => (unit.id === first.id ? { ...unit, saved: true } : unit)) },
+    }
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(ended.endedBattle?.chineseSaved).toBe(second.id)
+    expect(ended.endedBattle?.battle.arena.filter((unit) => unit.saved === true).map((unit) => unit.id).sort()).toEqual([first.id, second.id].sort())
+    const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(undone.battle?.arena.filter((unit) => unit.saved === true).map((unit) => unit.id)).toEqual([first.id])
   })
 })

@@ -113,13 +113,18 @@ export function findResourcePayment(
   playerId: string,
   resource: string,
   tokensOnly = false,
+  wildcard = true,
 ): SpentResource | undefined {
   const player = playerOf(state, playerId)
   if (player === undefined) return undefined
 
   const curieSubstitute = resource === 'Uranium' ? player.curieSubstitute ?? undefined : undefined
   const paid = curieSubstitute ?? resource
-  const payment = physicalPayments(state, playerId, paid, tokensOnly)[0] ?? (curieSubstitute === undefined ? indianPayments(state, playerId, resource)[0] : undefined)
+  // A token of the resource, then (the Indians) a token of another resource, and only then a culture card, which is lost
+  const payment =
+    physicalPayments(state, playerId, paid, true)[0] ??
+    (curieSubstitute === undefined && wildcard ? indianPayments(state, playerId, resource)[0] : undefined) ??
+    (tokensOnly ? undefined : physicalPayments(state, playerId, paid, false)[0])
   return payment === undefined ? undefined : { ...payment, ...(curieSubstitute === undefined ? {} : { curieSubstitute }) }
 }
 
@@ -141,9 +146,9 @@ function indianPayments(state: GameState, playerId: string, resource: string): r
 const paymentId = (payment: SpentResource): string => payment.kind === 'piece' ? payment.piece.id : payment.itemId
 
 /** Explicit choices retain normal Uranium options as well as the armed, one-shot substitutes. */
-function selectablePayments(state: GameState, playerId: string, resource: string): readonly SpentResource[] {
+function selectablePayments(state: GameState, playerId: string, resource: string, wildcard = true): readonly SpentResource[] {
   const direct = physicalPayments(state, playerId, resource, false)
-  const normal = [...direct, ...indianPayments(state, playerId, resource).filter((payment) => !direct.some((other) => other.kind === payment.kind && paymentId(other) === paymentId(payment)))]
+  const normal = [...direct, ...(wildcard ? indianPayments(state, playerId, resource) : []).filter((payment) => !direct.some((other) => other.kind === payment.kind && paymentId(other) === paymentId(payment)))]
   const substitute = resource === 'Uranium' ? playerOf(state, playerId)?.curieSubstitute : undefined
   if (substitute === undefined || substitute === null) return normal
   // A card that can pay Uranium directly needs no substitution. Its wire choice is the same either way.
@@ -157,7 +162,8 @@ export function resourcePaymentOptions(state: GameState, playerId: string, cost:
   const resources = cost.includes(null) ? ANY_RESOURCES : [...new Set(cost.filter((resource): resource is string => resource !== null))]
   const player = playerOf(state, playerId)
   if (player === undefined) return []
-  return resources.flatMap((resource) => selectablePayments(state, playerId, resource).map((payment) => {
+  // An Any slot already lists every resource the player holds, so no token is offered a second time as another one
+  return resources.flatMap((resource) => selectablePayments(state, playerId, resource, !cost.includes(null)).map((payment) => {
     const item = payment.kind === 'piece' ? undefined : player.items.find((candidate) => candidate.id === payment.itemId)
     const label = payment.kind === 'card'
       ? `${item === undefined ? 'Culture card' : itemName(item)} (as ${resource})`
@@ -230,6 +236,9 @@ export function resourceAvailability(state: GameState, playerId: string, resourc
         (cardCanPay(resource) ? ', or a culture card that can be played as that resource.' : '.'),
     )
   }
+  if (payment.kind !== 'card' && payment.asResource !== undefined) {
+    return readyWith(`You have no ${payment.asResource} token: your ${payment.resource} token would be spent as ${payment.asResource}.`)
+  }
   return payment.kind === 'card' ? readyWith(cardWarning(state, playerId, payment)) : READY
 }
 
@@ -263,10 +272,11 @@ export function spendResource(
   at?: string,
   tokensOnly = false,
   choice?: ResourcePaymentChoice,
+  wildcard = true,
 ): Result<SpendOutcome, 'NO_RESOURCE'> {
   const player = playerOf(state, playerId)
   const token = choice === undefined
-    ? findResourcePayment(state, playerId, resource, tokensOnly)
+    ? findResourcePayment(state, playerId, resource, tokensOnly, wildcard)
     : choice.resource !== resource ? undefined : selectablePayments(state, playerId, resource).find((payment) =>
       payment.kind === choice.kind && paymentId(payment) === choice.id && (!tokensOnly || payment.kind !== 'card'),
     )
@@ -560,7 +570,8 @@ export function spendAnyResources(
  * Automatically pays one resource of each of the `kinds`: a token of the kind first (a hut/village, then a piece
  * in the player's area), else a culture card that can be played as that kind (`resourceCards`: the fewest-allowed card
  * first, each card at most once, so several cards may be used when the player holds several). A token of another kind never
- * stands in. `missing` lists every kind neither can pay, and nothing is spent then.
+ * stands in, except for the Indians, whose token of another kind pays a kind that has no token of its own, before any card.
+ * `missing` lists every kind neither can pay, and nothing is spent then.
  */
 export function spendEachResource(
   state: GameState,
@@ -575,10 +586,11 @@ export function spendEachResource(
   }
   let current = state
   const slots: (SpentResource | undefined)[] = kinds.map(() => undefined)
-  for (const tokensOnly of [true, false]) {
+  // Every kind's own token first, so a wildcard token (the Indians) is never taken from the kind that needs it; then the wildcard; then cards
+  for (const [tokensOnly, wildcard] of [[true, false], [true, true], [false, true]] as const) {
     for (const [index, kind] of kinds.entries()) {
       if (slots[index] !== undefined) continue
-      const paid = spendResource(current, playerId, kind, at, tokensOnly)
+      const paid = spendResource(current, playerId, kind, at, tokensOnly, undefined, wildcard)
       if (!paid.ok) continue
       current = paid.value.state
       slots[index] = paid.value.spent

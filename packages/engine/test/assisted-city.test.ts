@@ -305,7 +305,62 @@ describe('founding a city', () => {
   it('names the huts a Zulu city is next to', () => {
     const state = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
     const result = unwrap(found(state, scoutOf(state).id))
-    expect(result.log.at(-1)?.publicLog).toContain('next to a hut they explore at once (C2)')
+    expect(result.log.at(-1)?.publicLog).toContain(', exploring the hut at C2 at once')
+  })
+
+  it('collects two adjacent huts and the hut on the city square, names exactly those, and gives back all of them on undo', () => {
+    let state = withScout({ civ: 'Zulu' })
+    for (const [column, row] of [[2, 1], [1, 2], [1, 1]] as const) state = put(state, CASH1981, 'resources/hut', column, row)
+    const result = unwrap(found(state, scoutOf(state).id))
+    expect(result.tokenCollections).toHaveLength(3)
+    expect(me(result).items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(3)
+    expect(result.log.some((entry) => entry.publicLog.includes('exploring the huts at B2, C2 and B3 at once'))).toBe(true)
+    const undone = undoByVote(result, 'req-1')
+    expect(me(undone).items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(0)
+    expect(undone.tokenCollections ?? []).toHaveLength(0)
+    expect(undone.board.pieces.filter((piece) => piece.assetId === 'resources/hut').map((piece) => [piece.x, piece.y]).sort()).toEqual(
+      state.board.pieces.filter((piece) => piece.assetId === 'resources/hut').map((piece) => [piece.x, piece.y]).sort(),
+    )
+  })
+
+  it('still founds the city when no hut card is left, the hut stays on the map and the line says so', () => {
+    const base = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
+    const empty: GameState = {
+      ...base,
+      items: base.items.filter((item) => item.sheetName !== 'HUTS'),
+      discardedItems: base.discardedItems.filter((item) => item.sheetName !== 'HUTS'),
+    }
+    const result = unwrap(found(empty, scoutOf(empty).id))
+    expect(cityAt(result, 1, 1)).toBeDefined()
+    expect(result.tokenCollections).toBeUndefined()
+    expect(result.board.pieces.some((piece) => piece.assetId === 'resources/hut' && mapCellOf(result.board, piece) !== null)).toBe(true)
+    expect(result.log.some((entry) => entry.publicLog.includes('but the hut at C2 stays on the map (no hut card could be drawn)'))).toBe(true)
+    expect(result.log.some((entry) => entry.publicLog.includes('exploring'))).toBe(false)
+  })
+
+  it('refuses the undo once the hut card has left the hand, and leaks neither the card nor the collection', () => {
+    const state = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
+    const result = unwrap(found(state, scoutOf(state).id))
+    const card = me(result).items.find((item) => item.sheetName === 'HUTS')
+    if (card === undefined) throw new Error('no hut card')
+    // Nobody else sees the card or the collection, and the public lines name no card
+    const view = JSON.stringify(toPlayerView(result, KARANDRAS1))
+    expect(view).not.toContain(card.id)
+    expect(view).not.toContain('tokenCollections')
+    expect(result.log.filter((entry) => entry.publicLog !== '').every((entry) => !entry.publicLog.includes(card.id))).toBe(true)
+    // The card is spent
+    const spent: GameState = {
+      ...result,
+      players: result.players.map((p) => (p.playerId === CASH1981 ? { ...p, items: p.items.filter((item) => item.id !== card.id) } : p)),
+    }
+    const entry = spent.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no line')
+    let next = unwrap(initiateUndo(spent, { logId: entry.id, playerId: CASH1981 }))
+    next = unwrap(vote(next, { logId: entry.id, playerId: KARANDRAS1, vote: true, at: AT }))
+    next = unwrap(vote(next, { logId: entry.id, playerId: ITCHI, vote: true, at: AT }))
+    const error = unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    if (error.kind !== 'ASSISTED_UNDO_BLOCKED') throw new Error(`unexpected error ${error.kind}`)
+    expect(error.reason).toMatch(/The hut card from C2 has left the hand/)
   })
 
   it('has the Zulu explore the huts next to the city at once, and the undo vote puts them back', () => {

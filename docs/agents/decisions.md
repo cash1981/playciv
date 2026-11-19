@@ -1366,7 +1366,7 @@ The picture is decorative (empty alt) when the row names the card in text.
 Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 `PlayableCards.tsx` and their tests.
 
-### Civilization abilities: Romans, Chinese, Spanish (#368)
+### Civilization abilities (#368)
 
 - **Romans:** a wonder build advances the leader marker one space for free, as a city does
   (`freeAdvanceStatus`, `performAdvance` with `free`). A wonder is refused before it is placed
@@ -1406,9 +1406,20 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   wildcard. The spend is recorded with `asResource` and the line says "spent 1 Silk as Iron".
   Egyptians' free building is not modelled yet (needs its own action and UI).
 
-Source: `assisted.ts` (`build`), `actions/token-collection.ts`, `actions/tile-tokens.ts`,
-`actions/player.ts`, `actions/undo.ts`; tests `assisted-wonders`, `tile-tokens`,
-`undo-civ-reveal`.
+- **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, a German free unit
+  card): the undo takes back as much as is still there and its line says how much ("took back 2
+  of 3 culture"), or that a card could no longer be returned; it never refuses and never goes
+  below 0. A German card also copied into the battle hand is removed from both.
+- A Zulu hut on the city's own square is collected too, like the huts around it. The founding
+  line names the huts that were collected and says which stayed on the map (no card left).
+- One free German unit per unit type a tech unlocks (Logistics gives three): pending the human's
+  confirmation.
+
+Source: `assisted.ts` (`build`), `assisted-city.ts`, `assisted-resources.ts`,
+`tech-reveal-abilities.ts`, `actions/arena.ts` (`endBattleAction`), `actions/collect-token.ts`,
+`actions/token-collection.ts`, `actions/tile-tokens.ts`, `actions/player.ts`, `actions/undo.ts`;
+tests `assisted-wonders`, `assisted-city`, `tile-tokens`, `undo-civ-reveal`,
+`battle-civ-abilities`, `tech-reveal-abilities`, `indians-resources`.
 
 ## Reopening a phase (2026-10-23)
 
