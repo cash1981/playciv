@@ -261,12 +261,16 @@ const hutAndVillageSquares = (board: Board): ReadonlySet<string> =>
 
 /**
  * The squares a scout may not enter (base rules p. 15 and 20, Fame and Fortune p. 9): a hut or village, and a relic
- * square unless an army of the player already stands there. Flight and a Republic make no difference.
+ * square unless an army of the player already stands there. Flight and a Republic make no difference. A revealed
+ * Pacifism ("Your scouts can explore huts, but not villages") lets scouts onto huts; it does not help on relics,
+ * which the Wisdom and Warfare rules name expressly.
  */
-function scoutForbiddenSquares(board: Board, owner: FigureOwner): ReadonlySet<string> {
-  const accompanied = pieceSquares(board, (piece) => figureBelongsTo(owner, piece) && isArmy(piece))
+function scoutForbiddenSquares(board: Board, player: MovementPlayer): ReadonlySet<string> {
+  const accompanied = pieceSquares(board, (piece) => figureBelongsTo(player, piece) && isArmy(piece))
   const relics = pieceSquares(board, (piece) => piece.category === 'relic')
-  return new Set([...hutAndVillageSquares(board), ...[...relics].filter((key) => !accompanied.has(key))])
+  const huts = hasPolicy(player, 'Pacifism') && !inAnarchy(player) ? new Set<string>() : pieceSquares(board, (piece) => piece.assetId === 'resources/hut')
+  const villages = pieceSquares(board, (piece) => piece.assetId === 'resources/village')
+  return new Set([...huts, ...villages, ...[...relics].filter((key) => !accompanied.has(key))])
 }
 
 /**

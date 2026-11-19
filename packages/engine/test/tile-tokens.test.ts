@@ -385,12 +385,38 @@ describe('scouts and relics', () => {
     }
   })
 
+  it('lets a scout onto a hut, but not a village or a relic, under a revealed Pacifism', () => {
+    const policyOf = (hidden: boolean) => [{ name: 'Pacifism', hidden } as Playerhand['socialPolicies'][number]]
+    const withPolicy = (state: GameState, hidden: boolean): GameState => ({
+      ...state,
+      players: state.players.map((player) => (player.playerId === CASH1981 ? { ...player, socialPolicies: policyOf(hidden) } : player)),
+    })
+    for (const [marker, allowed] of [['resources/hut', true], ['resources/village', false], ['relics/atlantis', false]] as const) {
+      const state = withPolicy(put(put(START(), 'figures/redscout', 3, 2), marker, 3, 1), false)
+      expect(travel(state, pieceOf(state, 'figures/redscout').id, 3, 1).ok).toBe(allowed)
+    }
+    // A policy that is not revealed has no effect
+    const hidden = withPolicy(put(put(START(), 'figures/redscout', 3, 2), 'resources/hut', 3, 1), true)
+    expect(travel(hidden, pieceOf(hidden, 'figures/redscout').id, 3, 1).ok).toBe(false)
+  })
+
   it('keeps a scout off a relic unless an army of its owner already stands there', () => {
     const base = put(put(START(), 'figures/redscout', 3, 2), 'relics/atlantis', 3, 1)
     const scout = pieceOf(base, 'figures/redscout')
     expect(travel(base, scout.id, 3, 1).ok).toBe(false)
     const accompanied = put(base, 'figures/redarmy', 3, 1)
     expect(travel(accompanied, scout.id, 3, 1).ok).toBe(true)
+  })
+
+  it('lets a scout enter the square alone once the relic marker has been taken', () => {
+    const state = put(put(put(START(), 'figures/redarmy', 3, 2), 'figures/redscout', 2, 1), 'relics/atlantis', 3, 1)
+    const scout = pieceOf(state, 'figures/redscout')
+    expect(travel(state, scout.id, 3, 1).ok).toBe(false)
+    const taken = unwrap(travel(state, pieceOf(state, 'figures/redarmy').id, 3, 1, true))
+    // The army moves on and leaves the square; the marker is gone, so nothing keeps the scout out
+    const armyId = pieceOf(taken, 'figures/redarmy').id
+    const cleared = unwrap(movePiece(taken, { playerId: CASH1981, pieceId: armyId, x: 0, y: mapTop(taken.board) + 5 * SQUARE_SIZE }))
+    expect(travel(cleared, pieceOf(cleared, 'figures/redscout').id, 3, 1).ok).toBe(true)
   })
 
   it('lets an army end on a relic square, and removes the marker only when the player confirms', () => {
@@ -413,6 +439,13 @@ describe('scouts and relics', () => {
     const undone = unwrap(undoLastBoardChange(taken, CASH1981))
     expect(undone.board.pieces.some((piece) => piece.category === 'relic')).toBe(true)
     expect(undone.board.pieces.find((piece) => piece.id === army.id)?.movement?.locked).toBe(true)
+  })
+
+  it('leaves the marker when the army moves onto another player\'s figures: the battle comes first', () => {
+    const state = put(put(put(START(), 'figures/redarmy', 3, 2), 'relics/atlantis', 3, 1), 'figures/bluearmy', 3, 1)
+    const army = pieceOf(state, 'figures/redarmy')
+    const moved = unwrap(travel(state, army.id, 3, 1, true))
+    expect(moved.board.pieces.some((piece) => piece.category === 'relic')).toBe(true)
   })
 
   it('does not take a relic for a scout that is allowed to stand on it', () => {

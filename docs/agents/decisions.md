@@ -967,11 +967,11 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   turned, carried and undone exactly as hut and village tokens (`tileTokenSquares`), unless that relic is already on the map.
   Tile 17a's relic square is forest, as the rulebook says (the terrain was read as mountain). Scouts may not enter a hut or
   village square (base rules p. 15 and 20; the rulebook names both, so a scout cannot cross one either, with or without
-  Flight), nor a relic square unless one of the owner's armies already stands there (`scoutForbiddenSquares`; a Republic
+  Flight; a revealed Pacifism, "Your scouts can explore huts, but not villages", lets them onto huts), nor a relic square unless one of the owner's armies already stands there (`scoutForbiddenSquares`; a Republic
   makes no difference). An army that ends its move on a relic square and whose player confirms (`collectToken`, the same
   prompt as a hut) has the marker removed as the next board history entry credited to the player, which is what the relic
   claim reads, and its movement is over for the turn; board Undo puts the marker back and then takes the move back. A public
-  line names the ability. Passing through, or declining, leaves the marker. Only Atlantis and Seven Cities of Gold have a
+  line names the ability. Passing through, declining, or moving onto another player's figures (the battle comes first) leaves the marker. Only Atlantis and Seven Cities of Gold have a
   Start of Turn button; Ark of the Covenant, Attila's Village and the School of Confucius (two great people, with the Greek
   exception) are applied by hand. Movement cards (Galileo, culture events) do not apply the scout restrictions to the squares
   they cross: they cannot end on any marker square.

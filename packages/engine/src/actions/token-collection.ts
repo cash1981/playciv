@@ -18,8 +18,9 @@ import type { Result } from '../result.js'
 import { ok } from '../result.js'
 import type { GameState, TokenCollection } from '../state.js'
 import { findPlayer } from '../state.js'
-import { mapTokensOf } from '../zheng-he.js'
 import { appendPublicLog } from '../log.js'
+import { occupancyOf } from '../movement.js'
+import { mapTokensOf } from '../zheng-he.js'
 import { movePieceUnchecked, removePiece, travelFigure } from './board.js'
 import type { TravelFigureInput } from './board.js'
 import { draw } from './draw.js'
@@ -41,7 +42,10 @@ const RELIC_GAINS: Readonly<Record<string, string>> = {
 /** The relic marker on the map square an army moves to, or `undefined` for a scout or a square without one. */
 function relicForArmyAt(state: GameState, input: TravelCollectingInput) {
   const mover = state.board.pieces.find((piece) => piece.id === input.pieceId)
-  if (mover === undefined || !mover.assetId.endsWith('army')) return undefined
+  const player = findPlayer(state, input.playerId)
+  if (mover === undefined || player === undefined || !mover.assetId.endsWith('army')) return undefined
+  // Another player's figures on the square mean a battle first: the marker stays until it is settled
+  if (occupancyOf(state.board, player).foreign.has(`${input.column},${input.row}`)) return undefined
   return state.board.pieces.find((piece) => {
     const cell = piece.category === 'relic' ? mapCellOf(state.board, piece) : null
     return cell !== null && cell.column === input.column && cell.row === input.row
