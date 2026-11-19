@@ -1,4 +1,4 @@
-# Civ abilities: Romans, Chinese, Spanish
+# Civ abilities (#368): Romans, Chinese, Spanish, Aztecs, Germans, Greeks, Zulu, Arabs, Indians
 
 - **Slug:** `civ-abilities-romans-chinese-spain` · **Branch:** `feat/civ-abilities-romans-chinese-spain` · **Owner:** orchestrator (Claude Sonnet 5.5) · **Status:** in progress
 
@@ -14,7 +14,9 @@ Issue #368 ("Automate Civs"), first batch. The human asked to start with Romans,
 
 **In:** the three effects above, each with a log line, undo behaviour and tests.
 
-**Out:** conquest triggers (Romans, Chinese village conquest), Chinese walls and battle save, other civs. Not covered by this branch.
+**Also in (human, overnight): "ta resten av alle civene":** Chinese saved unit and Aztec gains at end of battle; German free unit and Greek culture at tech reveal (FAQ 2.0 Greece text); Zulu hut exploring at city founding; Arab starting resources; Indian resource wildcard.
+
+**Out:** conquest triggers (Romans, Chinese village conquest); capital-based setup (Chinese walls, American great person, Indian metropolis: no capital exists at reveal); Mongol loot (not modelled); French policy cap (not modelled); Russian sacrifice (enemy army city not modelled); Egyptian free building and Spanish free building (need new UI/prompts); Arab +2 culture per spent resource (many spend paths); Zulu metropolis hut exploring; German resource choice is a log line only.
 
 ## Reference
 

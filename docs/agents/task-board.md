@@ -15,7 +15,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Branch:** `feat/civ-abilities-romans-chinese-spain`
 - **Brief:** `docs/agents/tasks/civ-abilities-romans-chinese-spain.md`
 - **Status:** in progress
-- **Claimed paths:** `packages/engine/src/assisted.ts`, `assisted-city.ts`, `actions/token-collection.ts`, `actions/player.ts`, `actions/undo.ts`, `packages/engine/src/actions/tile-tokens.ts`, `actions/board.ts`, `state.ts`, `errors.ts`, `actions/arena.ts`, `battle-cards.ts`, `packages/server/src/errors.ts`, `actions/player.ts` (revealTech), `build-item.ts`, `tech-reveal-abilities.ts`, `culture-track.ts`, `actions/explore.ts`, `assisted-city.ts`, `metropolis.ts`, `assisted-resources.ts`, `city-actions.ts`, `packages/engine/test/`, `docs/agents/decisions.md`
+- **Claimed paths:** `packages/engine/src/assisted.ts`, `assisted-city.ts`, `actions/token-collection.ts`, `actions/player.ts`, `actions/undo.ts`, `packages/engine/src/actions/tile-tokens.ts`, `actions/board.ts`, `state.ts`, `errors.ts`, `actions/arena.ts`, `battle-cards.ts`, `packages/server/src/errors.ts`, `actions/player.ts` (revealTech), `build-item.ts`, `tech-reveal-abilities.ts`, `culture-track.ts`, `actions/explore.ts`, `assisted-city.ts`, `metropolis.ts`, `assisted-resources.ts`, `city-actions.ts`, `actions/collect-token.ts`, `packages/web/src/views/SotPanel.tsx`, `packages/web/src/views/GameView.tsx` (text only), `packages/engine/test/`, `packages/web/src/views/*.test.tsx`, `docs/agents/decisions.md`
 - **Notes:** issue #368 first batch
 
 ## Format
