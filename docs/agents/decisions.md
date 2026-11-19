@@ -12,7 +12,6 @@ checking the current code.
 
 ## Architecture and authority
 
-- The Java/Angular systems are historical references, not the specification.
 - Engine reducers are pure and return errors as values.
 - Hono runs on Node with JSON storage locally and on a Cloudflare Worker with D1
   in production. Render/Mongo hosting is retired.
@@ -806,10 +805,11 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   investable); Cristo Redentor draws two events of a chosen level; Statue of
   Liberty, the Teacher hut and Atlantis grant a free tech chosen in the tech tree;
   Seven Cities of Gold ask which investment card gets 2 markers, with no coin and
-  no free Arab advance (human). Relics are taken in Movement by hand and claimed
+  no free Arab advance (human). Relics are taken by an army that ends its move on
+  the square (see "Relic markers" under Movement) or by hand, and claimed
   in any later Start of Turn by the player whose board history removed the marker,
   once per game (`unavailable` afterwards, not `used`); only Atlantis and Seven
-  Cities have a button (human). Great Wall, Hanging Gardens, Taj Mahal, Big Ben,
+  Cities of Gold have a button (human). Great Wall, Hanging Gardens, Taj Mahal, Big Ben,
   Machu Picchu, Plastics and Ecology only log, once per turn. Wonder obsolescence
   is not tracked (human).
 - **Judgements not settled with the human:** a card over the hand size can still
@@ -960,7 +960,21 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   none; its tokens go with it when it is moved (`move` change `tokens`), also off the map and back. Seeding adds one board history entry per token after the tile's own, so board Undo takes the tokens off, then the tile,
   then (for exploration) refunds the movement. Turning a tile turns the tokens on it with it (`rotate` change `tokens`), so
   they stay on the same printed squares. Hut and village pieces are not a limited supply (#116). Tile 15a to 17a, 22b and 23b
-  show none.
+  show no hut or village: they carry a relic instead.
+- **Relic markers** (Fame and Fortune p. 9, Wisdom and Warfare): `data/tile-icons.json` `relics` gives each of tiles 15a
+  (Atlantis), 16a (School of Confucius), 17a (Seven Cities of Gold), 22b (Attila's Village) and 23b (Ark of the Covenant) its
+  relic and printed square, read from the tile image. A laid tile gets the matching `relics/…` marker on that square, seeded,
+  turned, carried and undone exactly as hut and village tokens (`tileTokenSquares`), unless that relic is already on the map.
+  Tile 17a's relic square is forest, as the rulebook says (the terrain was read as mountain). Scouts may not enter a hut or
+  village square (base rules p. 15 and 20; the rulebook names both, so a scout cannot cross one either, with or without
+  Flight), nor a relic square unless one of the owner's armies already stands there (`scoutForbiddenSquares`; a Republic
+  makes no difference). An army that ends its move on a relic square and whose player confirms (`collectToken`, the same
+  prompt as a hut) has the marker removed as the next board history entry credited to the player, which is what the relic
+  claim reads, and its movement is over for the turn; board Undo puts the marker back and then takes the move back. A public
+  line names the ability. Passing through, or declining, leaves the marker. Only Atlantis and Seven Cities of Gold have a
+  Start of Turn button; Ark of the Covenant, Attila's Village and the School of Confucius (two great people, with the Greek
+  exception) are applied by hand. Movement cards (Galileo, culture events) do not apply the scout restrictions to the squares
+  they cross: they cannot end on any marker square.
 - **Collecting a token** (#364): `travelFigureCollecting` (the `/travel` route's `collectToken`) is `travelFigure` plus, when the
   player confirmed in the web (a hut or village is the only reason a move ends on a square with no figures), the draw from that
   piece (`draw` with `fromPieceId`, so what Zheng He saw under it is what is drawn), the token moved into the player's area

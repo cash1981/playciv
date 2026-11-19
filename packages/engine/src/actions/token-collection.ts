@@ -6,8 +6,11 @@
  * holds two entries, in this order: the figure's move and the token's. The first board Undo puts the token
  * back and returns the card (`tokenCollections`), the second takes the move back, as the exploration does.
  * Flight cannot end on a hut or village, so it never collects one.
+ *
+ * An army that ends on a relic and is confirmed takes the marker off the board instead (`takeRelic`).
  */
 
+import { mapCellOf } from '../blockade.js'
 import { areaSlotRegion, boardAreas, nextFreeSlot } from '../board.js'
 import { squareLabel } from '../build-options.js'
 import type { EngineError } from '../errors.js'
@@ -16,7 +19,8 @@ import { ok } from '../result.js'
 import type { GameState, TokenCollection } from '../state.js'
 import { findPlayer } from '../state.js'
 import { mapTokensOf } from '../zheng-he.js'
-import { movePieceUnchecked, travelFigure } from './board.js'
+import { appendPublicLog } from '../log.js'
+import { movePieceUnchecked, removePiece, travelFigure } from './board.js'
 import type { TravelFigureInput } from './board.js'
 import { draw } from './draw.js'
 
@@ -25,8 +29,29 @@ export interface TravelCollectingInput extends TravelFigureInput {
   readonly collectToken?: boolean
 }
 
+/** What the owner gains by removing a relic marker (Fame and Fortune p. 9, Wisdom and Warfare). */
+const RELIC_GAINS: Readonly<Record<string, string>> = {
+  'relics/atlantis': 'a free tech of their choice at the start of the next turn',
+  'relics/school_of_confucius': 'two great people, drawn by hand',
+  'relics/seven_cities_of_gold': 'two investment markers for free at the start of the next turn',
+  'relics/ark_of_the_covenant': 'two free culture track advances, taken by hand',
+  'relics/attilas_village': 'two free units they have unlocked, built by hand',
+}
+
+/** The relic marker on the map square an army moves to, or `undefined` for a scout or a square without one. */
+function relicForArmyAt(state: GameState, input: TravelCollectingInput) {
+  const mover = state.board.pieces.find((piece) => piece.id === input.pieceId)
+  if (mover === undefined || !mover.assetId.endsWith('army')) return undefined
+  return state.board.pieces.find((piece) => {
+    const cell = piece.category === 'relic' ? mapCellOf(state.board, piece) : null
+    return cell !== null && cell.column === input.column && cell.row === input.row
+  })
+}
+
 export function travelFigureCollecting(state: GameState, input: TravelCollectingInput): Result<GameState, EngineError> {
-  const travelled = travelFigure(state, input)
+  const relic = input.collectToken === true && input.disband !== true ? relicForArmyAt(state, input) : undefined
+  const travelled = travelFigure(state, relic === undefined ? input : { ...input, endsMove: true })
+  if (relic !== undefined) return travelled.ok ? takeRelic(travelled.value, input, relic.id) : travelled
   if (!travelled.ok || input.collectToken !== true || input.disband === true) return travelled
   const moved = travelled.value
   const player = findPlayer(moved, input.playerId)
@@ -77,4 +102,20 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
     square: squareLabel(token.cell),
   }
   return ok({ ...sealed, tokenCollections: [...(sealed.tokenCollections ?? []), collection] })
+}
+
+/**
+ * An army ended its move on a relic: the marker leaves the board as the next history entry, credited to the
+ * player (`relicBlock` reads that), so the first board Undo puts it back. The ability is claimed from Start of
+ * Turn where the game has a button for it; the rest is by hand.
+ */
+function takeRelic(moved: GameState, input: TravelCollectingInput, relicId: string): Result<GameState, EngineError> {
+  const relic = moved.board.pieces.find((piece) => piece.id === relicId)
+  const player = findPlayer(moved, input.playerId)
+  if (relic === undefined || player === undefined) return ok(moved)
+  const removed = removePiece(moved, { playerId: input.playerId, pieceId: relicId, ...(input.at === undefined ? {} : { at: input.at }) })
+  if (!removed.ok) return ok(moved)
+  const gain = RELIC_GAINS[relic.assetId]
+  const said = `took the ${relic.label} relic on ${squareLabel({ column: input.column, row: input.row })}` + (gain === undefined ? '' : `, gaining ${gain}`)
+  return ok(appendPublicLog(removed.value, player.username, player.playerId, said))
 }

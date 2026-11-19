@@ -118,3 +118,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Hut and village tokens (#364): the village prompt offers the draw at once. If a village is defended by a battle in the
   rulebook, settle it by hand first and confirm afterwards; the engine does not model it. Tokens follow a tile only while
   their centres lie on it, so a token dragged off its tile by hand stays where it was put.
+- Relics (#364): taking one only removes the marker; only Atlantis and Seven Cities of Gold are claimed from a button, and
+  the Ark of the Covenant, Attila's Village and School of Confucius are applied by hand. A scout and an army cannot be
+  moved together, so a scout joins an army on a relic square after it, and a movement card moving a scout can still cross
+  hut, village and relic squares (it cannot end on them).

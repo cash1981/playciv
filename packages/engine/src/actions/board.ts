@@ -426,6 +426,8 @@ export interface TravelFigureInput {
    * of the player's own city, for an army or a scout. The web asks first.
    */
   readonly disband?: boolean
+  /** The move ends the figure's movement for the turn whatever the square, as taking a relic does. */
+  readonly endsMove?: boolean
   readonly at?: string
 }
 
@@ -556,7 +558,7 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
   const used = (saved?.used ?? 0) + destination.distance
   // Movement is a pool: the figure may move again while it has speed left. It is locked once the pool is
   // spent, or at once when the move ended on a hut, a village or another player's figures.
-  const locked = destination.ends === true || used >= options.speed
+  const locked = destination.ends === true || input.endsMove === true || used >= options.speed
   const movement: PieceMovement = { turn: turnNumber, used, locked, reason: 'travel' }
   const areas = areasFor(state)
   const moved = moveFigureWithMovementUnchecked(state, {

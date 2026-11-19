@@ -1238,11 +1238,16 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 
-  it.each([true, false])('asks before drawing the hut the figure ends on and sends the answer %s (issue #364)', async (answer) => {
+  it.each([
+    [true, 'resources/hut', 'Draw the hut now?'],
+    [false, 'resources/hut', 'Draw the hut now?'],
+    [true, 'relics/atlantis', 'relic on C2'],
+    [false, 'relics/atlantis', 'relic on C2'],
+  ])('asks before drawing the hut or taking the relic the figure ends on and sends the answer %s on %s (issue #364)', async (answer, markerId, question) => {
     vi.spyOn(api, 'boardAssets').mockResolvedValue([])
     const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
     const army = findBoardAsset('figures/redarmy')
-    const hut = findBoardAsset('resources/hut')
+    const hut = findBoardAsset(markerId)
     const back = findBoardAsset('tiles/tileback')
     if (army === undefined || hut === undefined || back === undefined) throw new Error('missing asset')
     const top = mapTop(createBoard())
@@ -1291,7 +1296,7 @@ describe('BoardView mobile placement', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(answer)
     fireEvent.click(await screen.findByRole('button', { name: /Move Red army to C2/ }))
 
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Draw the hut now?'))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining(question))
     await waitFor(() =>
       expect(travel).toHaveBeenCalledWith(...(answer ? (['game', 'army-1', 2, 1, false, true] as const) : (['game', 'army-1', 2, 1, false] as const))),
     )

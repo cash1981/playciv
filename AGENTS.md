@@ -10,8 +10,8 @@ of `docs/agents/`, all task briefs or historical logs into every session.
 Playciv implements *Sid Meier's Civilization: The Board Game* with *Fame and
 Fortune* and *Wisdom and Warfare*. [README.md](README.md) describes the product.
 
-1. **Current code and tests are the reference.** Old Java/Angular repositories
-   and retired briefs explain history; they do not specify current behavior.
+1. **Current code and tests are the reference.** Retired briefs explain
+   history; they do not specify current behavior.
    Record intentional rule or visible behavior changes in the relevant section
    of [decisions.md](docs/agents/decisions.md), with a regression test.
 2. **Do not invent FFG rules.** Consult the relevant rulebooks, current code and

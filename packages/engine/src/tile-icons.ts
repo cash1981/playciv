@@ -32,7 +32,20 @@ interface IconEntry {
   readonly token?: 'hut' | 'village'
 }
 
-const TILE_ICONS = (tileIcons as unknown as { readonly tiles: Readonly<Record<string, readonly IconEntry[]>> }).tiles
+interface RelicEntry {
+  readonly row: number
+  readonly column: number
+  /** The board asset id of the relic marker printed on this square. */
+  readonly relic: string
+}
+
+const ICON_DATA = tileIcons as unknown as {
+  readonly tiles: Readonly<Record<string, readonly IconEntry[]>>
+  readonly relics: Readonly<Record<string, RelicEntry>>
+}
+
+const TILE_ICONS = ICON_DATA.tiles
+const TILE_RELICS = ICON_DATA.relics
 
 /** What one square holds. */
 export interface SquareIcons {
@@ -72,16 +85,21 @@ export const squareIconsOfCell = (board: Board, cell: { readonly column: number;
     mapTop(board) + (cell.row + 0.5) * board.squareSize,
   )
 
-/** A hut or village icon printed on a tile square, in the printed orientation. */
+/** A hut, village or relic printed on a tile square, in the printed orientation. */
 export interface TileTokenSquare {
   readonly row: number
   readonly column: number
-  readonly kind: 'hut' | 'village'
+  /** The board asset id of the marker laid on the square: `resources/hut`, `resources/village` or a `relics/` one. */
+  readonly assetId: string
 }
 
-/** The hut and village icons of a tile asset, top row first. Empty when the tile has none or has not been read. */
+const TOKEN_ASSETS = { hut: 'resources/hut', village: 'resources/village' } as const
+
+/** The hut, village and relic squares of a tile asset, top row first. Empty when the tile has none or has not been read. */
 export function tileTokenSquares(assetId: string): readonly TileTokenSquare[] {
-  return (TILE_ICONS[assetId] ?? []).flatMap((entry) =>
-    entry.token === undefined ? [] : [{ row: entry.row, column: entry.column, kind: entry.token }],
+  const printed = (TILE_ICONS[assetId] ?? []).flatMap((entry) =>
+    entry.token === undefined ? [] : [{ row: entry.row, column: entry.column, assetId: TOKEN_ASSETS[entry.token] }],
   )
+  const relic = TILE_RELICS[assetId]
+  return relic === undefined ? printed : [...printed, { row: relic.row, column: relic.column, assetId: relic.relic }]
 }

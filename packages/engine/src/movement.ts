@@ -260,6 +260,16 @@ const hutAndVillageSquares = (board: Board): ReadonlySet<string> =>
   pieceSquares(board, (piece) => HUT_AND_VILLAGE_ASSETS.has(piece.assetId))
 
 /**
+ * The squares a scout may not enter (base rules p. 15 and 20, Fame and Fortune p. 9): a hut or village, and a relic
+ * square unless an army of the player already stands there. Flight and a Republic make no difference.
+ */
+function scoutForbiddenSquares(board: Board, owner: FigureOwner): ReadonlySet<string> {
+  const accompanied = pieceSquares(board, (piece) => figureBelongsTo(owner, piece) && isArmy(piece))
+  const relics = pieceSquares(board, (piece) => piece.category === 'relic')
+  return new Set([...hutAndVillageSquares(board), ...[...relics].filter((key) => !accompanied.has(key))])
+}
+
+/**
  * The movement options for one of the player's figures, or `null` when the
  * piece is not their figure on the map.
  */
@@ -311,6 +321,7 @@ export function figureMovementOptions(
   const attacker = isArmy(piece)
   const hasRoom = (key: string): boolean => (occupancy.own.get(key) ?? 0) < limit
   const mustStop = hutAndVillageSquares(board)
+  const scoutForbidden = attacker ? new Set<string>() : scoutForbiddenSquares(board, player)
   const distances = new Map<string, number>([[keyOf(start), 0]])
   const queue: Cell[] = [start]
   const destinations: MovementDestination[] = []
@@ -356,6 +367,7 @@ export function figureMovementOptions(
       // A scout never attacks, so it does not enter another player's square at all without Flight.
       // A square at the stacking limit cannot be crossed either.
       if (occupancy.foreign.has(keyOf(next)) && !flight && !attacker) continue
+      if (scoutForbidden.has(keyOf(next))) continue
       if (!hasRoom(keyOf(next))) continue
       // Fog is not walked onto: it is explored first, from the square next to it.
       if (isUnexploredCell(board, next)) continue

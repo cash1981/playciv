@@ -1,12 +1,12 @@
 /**
- * Hut and village tokens on the map tiles (issue #364).
+ * Hut, village and relic markers on the map tiles (issue #364).
  *
  * The icons are printed on the tile images and recorded in `data/tile-icons.json`. A tile laid on a
- * map slot gets one `resources/hut` or `resources/village` piece on each of those squares, once. The
- * tokens turn with the tile, so they stay on the same printed squares.
+ * map slot gets one `resources/hut`, `resources/village` or `relics/…` piece on each of those squares,
+ * once. The markers turn with the tile, so they stay on the same printed squares.
  *
- * Seeding writes one board history entry per token after the tile's own entry, so the board Undo takes
- * the tokens off first and the tile after them.
+ * Seeding writes one board history entry per marker after the tile's own entry, so the board Undo takes
+ * the markers off first and the tile after them.
  */
 
 import { findBoardAsset, findPiece, nearestSlotOrigin } from '../board.js'
@@ -25,7 +25,7 @@ export const TOKEN_ASSET_IDS: Readonly<Record<'hut' | 'village', string>> = {
 }
 
 const isTokenPiece = (piece: BoardPiece): boolean =>
-  piece.assetId === TOKEN_ASSET_IDS.hut || piece.assetId === TOKEN_ASSET_IDS.village
+  piece.assetId === TOKEN_ASSET_IDS.hut || piece.assetId === TOKEN_ASSET_IDS.village || piece.category === 'relic'
 
 /** Whether the tile sits exactly on a map slot, as a laid tile does. */
 export function tileOnMap(board: Board, tile: BoardPiece): boolean {
@@ -51,8 +51,10 @@ export function seedTileTokens(state: GameState, tileId: string, playerId: strin
   const size = state.board.squareSize
   let current = state
   for (const square of squares) {
-    const asset = findBoardAsset(TOKEN_ASSET_IDS[square.kind])
+    const asset = findBoardAsset(square.assetId)
     if (asset === undefined) continue
+    // A relic exists once: one already on the map (placed by hand) is not laid again
+    if (asset.category === 'relic' && current.board.pieces.some((piece) => piece.assetId === asset.id)) continue
     const [row, column] = displayedSquare(square.row, square.column, tile.rotation)
     const placed = placeUnchecked(current, {
       playerId,
@@ -94,12 +96,11 @@ function tokensOnTile(
     const centred =
       Math.abs(centreX - (tile.x + (displayedColumn + 0.5) * board.squareSize)) <= 1 &&
       Math.abs(centreY - (tile.y + (displayedRow + 0.5) * board.squareSize)) <= 1
-    const kind = piece.assetId === TOKEN_ASSET_IDS.village ? 'village' : 'hut'
     if (
       piece.tileId === tile.id &&
       centred &&
       !collected.has(piece.id) &&
-      printed.some((square) => square.row === row && square.column === column && square.kind === kind)
+      printed.some((square) => square.row === row && square.column === column && square.assetId === piece.assetId)
     ) {
       found.push({ piece, row, column })
     }

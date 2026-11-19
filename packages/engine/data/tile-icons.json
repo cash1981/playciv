@@ -1,5 +1,32 @@
 {
  "_note": "Resource, trade and natural wonder culture icons of each map tile, read by eye from the images in packages/web/public/board/tiles against the key on p. 7 of the base rulebook (wheat, silk, incense, iron, trade, culture). Row and column are in the printed (unrotated) orientation, top row first, like tile-terrain.json. A tile listed with no squares was looked at and has none; a tile that is missing has not been read. The trade icons were read from the images at twice their size and are not checked against a printed list. Production and coin icons are not recorded. A `token` of `hut` or `village` marks a hut or village icon (issue #364), read from the 27 exploration tiles in a first pass and a second pass; the starting tiles carry none in the data. Not checked against a printed list.",
+ "relics": {
+  "tiles/tile15a": {
+   "row": 1,
+   "column": 2,
+   "relic": "relics/atlantis"
+  },
+  "tiles/tile16a": {
+   "row": 1,
+   "column": 1,
+   "relic": "relics/school_of_confucius"
+  },
+  "tiles/tile17a": {
+   "row": 2,
+   "column": 2,
+   "relic": "relics/seven_cities_of_gold"
+  },
+  "tiles/tile22b": {
+   "row": 1,
+   "column": 2,
+   "relic": "relics/attilas_village"
+  },
+  "tiles/tile23b": {
+   "row": 1,
+   "column": 2,
+   "relic": "relics/ark_of_the_covenant"
+  }
+ },
  "tiles": {
   "tiles/tile01": [
    {

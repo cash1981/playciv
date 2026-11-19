@@ -14,8 +14,6 @@ on-demand map, not additional required startup reading.
 | `.codex/`, `.agents/skills/` | yes | Codex role adapters and feature/review skills. |
 | `docs/history/` | yes | Instructions for retrieving retired documentation from Git. |
 | `.opencode/` | yes | OpenCode agent definitions for the `coder` and `reviewer` roles under `agents/`. The reviewer is read-only, as in `.claude/agents/`; Skills load from `.claude/skills/`. |
-| `old-civ-rest/` | **no** | The dead Java 8 / Dropwizard / MongoDB backend. No longer the specification; read it when a question needs it, never change it. |
-| `old-civ-web/` | **no** | The dead AngularJS 1 client. No longer the specification; useful for how the UI used to present things, and the card artwork. |
 | `Civilization/` | **no** | Rulebooks, board templates (ODP/PPTX), piece and card artwork, a Mongo dump. Large binaries. |
 
 The three gitignored folders are reference material. They are on the human's
@@ -34,12 +32,12 @@ the seed held in state. This is where the game lives.
 | `src/board.ts` | Board geometry: squares, the culture track, player areas, map-tile slots, the asset manifest, history replay. |
 | `src/actions/` | Game, draw, player, turn, board, arena and undo reducers. |
 | `src/log.ts` | Log entries and the public/private text pair. |
-| `src/gamedata.ts` | Reads the converted spreadsheet into the deck. Port of `ItemReader.java`. |
-| `src/random.ts` | Seeded PRNG and a shuffle that matches `Collections.shuffle`. |
+| `src/gamedata.ts` | Reads the converted spreadsheet into the deck. |
+| `src/random.ts` | Seeded PRNG and a deterministic shuffle. |
 | `src/result.ts` | `Result<T, E>`. Nothing in the engine throws. |
 | `src/migrate.ts` | Brings old saved games forward when the state shape changes. |
 | `data/` | Generated JSON: the deck (`gamedata-faf-waw.json`) and the board asset manifest (`board-assets.json`). Do not hand-edit. |
-| `test/` | Vitest. Most files are ports of a Java test class and say so at the top. |
+| `test/` | Vitest. |
 
 ## packages/server
 

@@ -14,6 +14,7 @@ import {
 import { drawTileAt } from '../src/actions/draw.js'
 import { exploreSquare } from '../src/actions/explore.js'
 import { travelFigureCollecting } from '../src/actions/token-collection.js'
+import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE, areaAt, findBoardAsset, mapTop, playerAreas } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
 import { itemName } from '../src/item.js'
@@ -105,10 +106,27 @@ describe('placing tokens on a laid tile', () => {
     expect(village?.piece.tileId).toBe(tileOf(explored, 'tiles/tile04').id)
   })
 
-  it('places nothing for a tile without such icons', () => {
+  it('lays the relic marker of an explored tile on its printed square, with the tile turned', () => {
     const state = withTopTile(put(START(), 'figures/redarmy', 3, 1), '15')
-    expect(tileTokenSquares('tiles/tile15a')).toHaveLength(0)
-    expect(tokensOf(explore(state))).toEqual([])
+    expect(tileTokenSquares('tiles/tile15a')).toEqual([{ row: 1, column: 2, assetId: 'relics/atlantis' }])
+    const explored = explore(state)
+    // Printed on row 1, column 2; the tile is turned 90 degrees, which puts it on row 2, column 2 of the tile (G3)
+    const relic = explored.board.pieces.find((piece) => piece.category === 'relic')
+    expect(relic?.assetId).toBe('relics/atlantis')
+    expect(mapCellOf(explored.board, relic as BoardPiece)).toEqual({ column: 6, row: 2 })
+    // Hut and village tokens only: a relic is not drawn from
+    expect(tokensOf(explored)).toEqual([])
+
+    // The marker goes before the tile on Undo, and is not laid a second time
+    const undone = unwrap(undoLastBoardChange(explored, CASH1981))
+    expect(undone.board.pieces.some((piece) => piece.category === 'relic')).toBe(false)
+  })
+
+  it('keeps the relic marker on its printed square when the tile is turned', () => {
+    const explored = explore(withTopTile(put(START(), 'figures/redarmy', 3, 1), '15'))
+    const turned = unwrap(rotatePiece(explored, { playerId: CASH1981, pieceId: tileOf(explored, 'tiles/tile15a').id, rotation: 0 }))
+    const relic = turned.board.pieces.find((piece) => piece.category === 'relic')
+    expect(mapCellOf(turned.board, relic as BoardPiece)).toEqual({ column: 6, row: 1 })
   })
 
   it('does not place them for a tile that is not on a map slot, and places them once when it arrives', () => {
@@ -344,5 +362,63 @@ describe('collecting a token by ending a move on it', () => {
     expect(areaAt(playerAreas(moved.board, moved.players), token.x + token.width / 2, token.y + token.height / 2)?.playerId).toBe(CASH1981)
     const card = me(moved).items.find((item) => item.sheetName === 'HUTS')
     expect(moved.log.filter((entry) => entry.item?.id === card?.id && entry.logType === 'ITEM').every((entry) => entry.superseded === true && entry.undo === null)).toBe(true)
+  })
+})
+
+describe('scouts and relics', () => {
+  const travel = (state: GameState, pieceId: string, column: number, row: number, collectToken = false) =>
+    travelFigureCollecting(state, { playerId: CASH1981, pieceId, column, row, ...(collectToken ? { collectToken } : {}) })
+  const pieceOf = (state: GameState, assetId: string): BoardPiece => {
+    const found = state.board.pieces.find((piece) => piece.assetId === assetId)
+    if (found === undefined) throw new Error(`no ${assetId}`)
+    return found
+  }
+
+  it('keeps a scout off a hut or a village, and does not let it cross one to a square it could not otherwise reach', () => {
+    for (const marker of ['resources/hut', 'resources/village']) {
+      const state = put(put(START(), 'figures/redscout', 3, 2), marker, 3, 1)
+      const scout = pieceOf(state, 'figures/redscout')
+      expect(travel(state, scout.id, 3, 1).ok).toBe(false)
+      // Going round the marker takes four steps and the speed is 3
+      expect(travel(state, scout.id, 3, 0).ok).toBe(false)
+      expect(travel(state, scout.id, 2, 1).ok).toBe(true)
+    }
+  })
+
+  it('keeps a scout off a relic unless an army of its owner already stands there', () => {
+    const base = put(put(START(), 'figures/redscout', 3, 2), 'relics/atlantis', 3, 1)
+    const scout = pieceOf(base, 'figures/redscout')
+    expect(travel(base, scout.id, 3, 1).ok).toBe(false)
+    const accompanied = put(base, 'figures/redarmy', 3, 1)
+    expect(travel(accompanied, scout.id, 3, 1).ok).toBe(true)
+  })
+
+  it('lets an army end on a relic square, and removes the marker only when the player confirms', () => {
+    const state = put(put(START(), 'figures/redarmy', 3, 2), 'relics/atlantis', 3, 1)
+    const army = pieceOf(state, 'figures/redarmy')
+    const left = unwrap(travel(state, army.id, 3, 1))
+    expect(left.board.pieces.some((piece) => piece.category === 'relic')).toBe(true)
+    expect(left.board.pieces.find((piece) => piece.id === army.id)?.movement?.locked).toBe(false)
+
+    const taken = unwrap(travel(state, army.id, 3, 1, true))
+    expect(taken.board.pieces.some((piece) => piece.category === 'relic')).toBe(false)
+    const last = taken.board.history.at(-1)
+    expect(last?.change.kind).toBe('remove')
+    expect(last?.playerId).toBe(CASH1981)
+    // Taking the relic ends the army's movement for the turn
+    expect(taken.board.pieces.find((piece) => piece.id === army.id)?.movement?.locked).toBe(true)
+    expect(taken.log.some((entry) => entry.publicLog.includes('took the Atlantis relic on D2'))).toBe(true)
+
+    // Undo puts the marker back first, then takes the move back
+    const undone = unwrap(undoLastBoardChange(taken, CASH1981))
+    expect(undone.board.pieces.some((piece) => piece.category === 'relic')).toBe(true)
+    expect(undone.board.pieces.find((piece) => piece.id === army.id)?.movement?.locked).toBe(true)
+  })
+
+  it('does not take a relic for a scout that is allowed to stand on it', () => {
+    const state = put(put(put(START(), 'figures/redarmy', 3, 1), 'figures/redscout', 3, 2), 'relics/atlantis', 3, 1)
+    const scout = pieceOf(state, 'figures/redscout')
+    const moved = unwrap(travel(state, scout.id, 3, 1, true))
+    expect(moved.board.pieces.some((piece) => piece.category === 'relic')).toBe(true)
   })
 })
