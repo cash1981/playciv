@@ -11,6 +11,7 @@
  */
 
 import { performAssistedAction } from '../assisted.js'
+import { countLinesIn } from '../assisted-culture.js'
 import { IMMEDIATE_RELIC_CLAIMS } from '../assisted-relics.js'
 import { mapCellOf } from '../blockade.js'
 import { areaSlotRegion, boardAreas, nextFreeSlot } from '../board.js'
@@ -119,7 +120,7 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
     square: squareLabel(token.cell),
   }
   const holder = findPlayer(sealed, input.playerId)
-  const gained =
+  const written =
     culture === 0 || holder === undefined
       ? sealed
       : appendPublicLog(
@@ -128,6 +129,8 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
           holder.playerId,
           `gained ${culture} (${holder.stats.culture + culture}) culture from the hut on ${collection.square} as the Chinese`,
         )
+  // The line was written after the token's board entry: count it in, as the culture advance does
+  const gained = culture === 0 ? written : countLinesIn(written, [entry.id])
   return ok({ ...gained, tokenCollections: [...(gained.tokenCollections ?? []), collection] })
 }
 

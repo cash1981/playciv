@@ -562,6 +562,7 @@ describe("Spain's travel speed", () => {
     const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
     const undone = undoByVote(revealed, CASH1981)
     expect(mvmtOf(undone)).toBe('2')
+    expect(undone.log.at(-1)?.publicLog).toContain('movement went back to 2')
     expect(mvmtOf(revealHidden(undone, CASH1981))).toBe('2+1')
   })
 

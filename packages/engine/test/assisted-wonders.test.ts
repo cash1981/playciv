@@ -935,9 +935,29 @@ describe('the Romans and wonders', () => {
     const refused = unwrapErr(tryBuild(first, COLOSSUS, C2, 'req-2'))
     if (refused.kind !== 'ASSISTED_ACTION_REJECTED') throw new Error(`unexpected error ${refused.kind}`)
     expect(refused.reason).toMatch(/advance one space for free with every wonder, and that is stopped now/)
+    // The same pending choice does not stop a civilization without the free advance
+    const japanese = withCivilization(first, 'Japanese')
+    expect(tryBuild(japanese, COLOSSUS, C2, 'req-3').ok).toBe(true)
     // Nothing was placed or paid
     expect(piecesOf(first, COLOSSUS)[0]?.ownerId ?? null).toBeNull()
     expect(piecesOf(first, STONEHENGE)[0]?.ownerId ?? null).toBeNull()
+  })
+
+  it('leaves the free advance to the undo vote: the board Undo refuses and the marker stays', () => {
+    const built = build(roman(), STONEHENGE, C2)
+    const error = unwrapErr(undoLastBoardChange(built, CASH1981))
+    expect(error.kind).toBe('BOARD_UNDO_ASSISTED')
+    expect(markerStep(built)).toBe(10)
+  })
+
+  it('removes the wonder by hand as any other piece when the marker has moved on', () => {
+    const built = build(roman(), STONEHENGE, C2)
+    const marker = built.board.pieces.find((piece) => piece.assetId.startsWith('leaders/'))
+    const wonder = piecesOf(built, STONEHENGE)[0]
+    if (marker === undefined || wonder === undefined) throw new Error('missing piece')
+    const moved = unwrap(movePiece(built, { playerId: CASH1981, pieceId: marker.id, x: marker.x + 40, y: marker.y, snap: false }))
+    const result = takeBackOpenBuild(moved, { playerId: CASH1981, pieceId: wonder.id, at: AT })
+    expect(result).toBeUndefined()
   })
 
   it('takes the advance back with the wonder on undo, and refuses when the marker has moved on', () => {

@@ -61,7 +61,7 @@ export function gatheringFiguresOf(state: GameState, player: Playerhand): readon
 // Found a city
 // ---------------------------------------------------------------------------
 
-const ROMANS = 'Romans'
+export const ROMANS = 'Romans'
 const CITY_STATE_CULTURE = 3
 
 /**

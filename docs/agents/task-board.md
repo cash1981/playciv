@@ -15,7 +15,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Branch:** `feat/civ-abilities-romans-chinese-spain`
 - **Brief:** `docs/agents/tasks/civ-abilities-romans-chinese-spain.md`
 - **Status:** in progress
-- **Claimed paths:** `packages/engine/src/assisted.ts`, `assisted-city.ts`, `actions/token-collection.ts`, `actions/player.ts`, `actions/undo.ts`, `packages/engine/test/`, `docs/agents/decisions.md`
+- **Claimed paths:** `packages/engine/src/assisted.ts`, `assisted-city.ts`, `actions/token-collection.ts`, `actions/player.ts`, `actions/undo.ts`, `packages/engine/src/actions/tile-tokens.ts`, `actions/board.ts`, `state.ts`, `errors.ts`, `packages/engine/test/`, `docs/agents/decisions.md`
 - **Notes:** issue #368 first batch
 
 ## Format

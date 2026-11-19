@@ -57,7 +57,7 @@ import { DARWIN_NAME, darwinTradeOf, greatPersonActionIdOf, payKurosawa, takeBac
 import { playCard } from './assisted-cards.js'
 import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
 import { findResourceToken, parseResourcePayments, resourceAvailability, resourcePaymentOptions, returnedText, returnResource, spendActionResource, spendResource } from './assisted-resources.js'
-import { CITY_ACTIONS } from './assisted-city.js'
+import { CITY_ACTIONS, ROMANS } from './assisted-city.js'
 import { ABILITY_ACTIONS } from './assisted-abilities.js'
 import { SOT_ACTIONS } from './assisted-sot.js'
 import {
@@ -84,6 +84,7 @@ import { blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
   areaAt,
   areaSlotRegion,
+  cultureStepOf,
   findBoardAsset,
   isInWondersArea,
   nextFreeSlot,
@@ -805,7 +806,7 @@ const build: AssistedActionDefinition = {
     }
     // The Romans advance one space for free with every wonder (civilization sheet), so a wonder is refused
     // while that advance is stopped (a card choice waiting, a hand over its size); the end of the track stops nothing
-    const romanWonder = payload.item.kind === 'wonder' && player.civilization?.name === 'Romans'
+    const romanWonder = payload.item.kind === 'wonder' && player.civilization?.name === ROMANS
     if (romanWonder) {
       const status = freeAdvanceStatus(state, player)
       if (status.kind === 'blocked') {
@@ -2183,6 +2184,12 @@ export function takeBackOpenBuild(
   // with the build: the piece is removed as any other, which is what the player asked for
   if (record.effect.kind === 'build' && 'reserved' in record.effect && reservedUndoBlock(state, record.playerId, record.effect) !== undefined) {
     return undefined
+  }
+  // The Romans' free advance for this wonder cannot be taken back (the marker has moved on): the piece is removed as any other
+  if (record.effect.kind === 'build' && 'advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
+    const advance = record.effect.advance
+    const marker = state.board.pieces.find((piece) => piece.id === advance.markerPieceId)
+    if (marker === undefined || cultureStepOf(state.board, marker) !== advance.toStep) return undefined
   }
   // Military Tradition gave a free unit for this army: the army is removed as any other, and the unit stays
   if (militaryTraditionUndoBlock(state, record) !== undefined) return undefined

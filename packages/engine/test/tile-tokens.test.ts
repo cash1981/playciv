@@ -396,9 +396,10 @@ describe('the Chinese and huts', () => {
     const moved = collect(state, armyId)
     expect(me(moved).stats.culture).toBe(8)
     expect(moved.log.some((entry) => entry.publicLog === 'cash1981 gained 3 (8) culture from the hut on D2 as the Chinese')).toBe(true)
-    // Nothing about the card or the culture bookkeeping reaches another player's view
-    const other = JSON.stringify(toPlayerView(moved, KARANDRAS1))
-    expect(other).not.toContain('tokenCollections')
+    // The line is counted into the token's board entry, and no other player's view carries the card
+    expect(moved.board.history.at(-1)?.logLength).toBe(moved.log.length)
+    const drawn = me(moved).items.find((item) => item.sheetName === 'HUTS')
+    expect(JSON.stringify(toPlayerView(moved, KARANDRAS1))).not.toContain(drawn?.id ?? 'x')
 
     const roman = chinese('Romans')
     const plain = collect(roman.state, roman.armyId)
@@ -451,7 +452,7 @@ describe('the Chinese and huts', () => {
     }
     const refused = undoLastBoardChange(spent, CASH1981)
     expect(refused.ok).toBe(false)
-    if (!refused.ok) expect(refused.error.kind).toBe('BOARD_UNDO_TOKEN_CARD_GONE')
+    if (!refused.ok) expect(refused.error.kind).toBe('BOARD_UNDO_TOKEN_CULTURE_SPENT')
   })
 })
 

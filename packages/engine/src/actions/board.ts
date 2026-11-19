@@ -1138,7 +1138,13 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         ('walls' in effect && effect.walls.historyId === entry.id) ||
         effect.marker?.historyId === entry.id ||
         // and the caravan it used up
-        effect.caravan?.historyId === entry.id
+        effect.caravan?.historyId === entry.id ||
+        // and the Romans' free advance for a wonder: the marker's move, and the Great Person marker it placed
+        ('advance' in effect &&
+          effect.advance !== undefined &&
+          effect.advance !== null &&
+          ((change.kind === 'move' && effect.advance.historyId === entry.id) ||
+            (change.kind === 'place' && effect.advance.marker?.pieceId === change.piece.id)))
       )
     }
     // Khalid moved the start player marker: stepping that back alone would undo only half the card
@@ -1244,6 +1250,8 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   // because a redo would move the token without drawing again.
   const collection = state.tokenCollections?.find((candidate) => candidate.historyId === last.id)
   if (collection !== undefined) {
+    const holder = state.players.find((candidate) => candidate.playerId === collection.playerId)
+    if (holder !== undefined && holder.stats.culture < (collection.culture ?? 0)) return err({ kind: 'BOARD_UNDO_TOKEN_CULTURE_SPENT' })
     const returned = returnCollectedCard(state, collection)
     if (returned === undefined) return err({ kind: 'BOARD_UNDO_TOKEN_CARD_GONE' })
     return ok(

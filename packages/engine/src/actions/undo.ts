@@ -394,7 +394,8 @@ function undoCivReveal(
       'REVEAL',
       (name) =>
         `has undone ${current.username}'s reveal of ${name}. Its starting units, wonders, tile, ` +
-        `marker and white figure are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}. ` +
+        `marker and white figure are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}` +
+        `${setup.mvmt !== undefined && current.stats.mvmt === setup.mvmt.set ? `, and movement went back to ${setup.mvmt.before}` : ''}. ` +
         'Deck is reshuffled',
     ),
   )
