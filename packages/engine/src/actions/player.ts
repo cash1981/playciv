@@ -54,6 +54,7 @@ import {
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import { shuffle } from '../random.js'
+import { applyTechRevealAbilities, undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { CivRevealSetup, GameState, Playerhand, PlayerStats } from '../state.js'
@@ -203,7 +204,7 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
     },
   })
 
-  return ok(appendItemLog(next, 'REMOVED_TECH', player.username, player.playerId, tech))
+  return ok(appendItemLog(undoTechRevealAbilities(next, player.playerId, tech.name), 'REMOVED_TECH', player.username, player.playerId, tech))
 }
 
 /**
@@ -292,9 +293,11 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     researchedTurn !== undefined && turnStatus(logged).currentTurn > researchedTurn
       ? payArchimedesOnReveal(logged, player.playerId, tech.name, researchedTurn)
       : logged
-  if (grant === undefined) return ok(archimedes)
+  // Germans and Greeks: what the first reveal gives (never the starting tech, which does not come through here)
+  const abilities = tech.hidden ? applyTechRevealAbilities(archimedes, player.playerId, tech.name) : archimedes
+  if (grant === undefined) return ok(abilities)
   return ok(
-    appendLog(archimedes, {
+    appendLog(abilities, {
       username: player.username,
       playerId: player.playerId,
       publicLog: `${player.username} learned ${tech.name} with ${grant.source}`,

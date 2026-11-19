@@ -1220,6 +1220,14 @@ export interface UnderToken {
   readonly square?: string
 }
 
+/** What revealing a tech gave a civilization: culture, and free unit cards by their id and deck. */
+export interface TechRevealEffect {
+  readonly playerId: string
+  readonly techName: string
+  readonly culture: number
+  readonly units: readonly { readonly itemId: string; readonly sheetName: SheetName }[]
+}
+
 /** One hut or village a figure collected: the token's move into the player's area, and the card it gave. Server only. */
 export interface TokenCollection {
   /** The board history entry that moved the token into the player's area. */
@@ -1396,6 +1404,8 @@ export interface GameState {
    * back and return the card. Server only: it names the drawn card, so a projection must never carry it.
    */
   readonly tokenCollections?: readonly TokenCollection[]
+  /** What the first reveal of a tech gave its player (Germans, Greeks), so taking the tech back takes it back. Server only, never projected. */
+  readonly techRevealEffects?: readonly TechRevealEffect[]
   readonly players: readonly Playerhand[]
   /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]

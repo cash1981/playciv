@@ -1387,6 +1387,15 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   not already saved (`ArenaUnit.saved`); there is no unit choice yet. Both are kept on
   `endedBattle` and taken back by `undoEndBattle` (`actions/arena.ts`).
 
+- **Germans and Greeks (first reveal of a tech, `revealTech`):** never for the starting tech.
+  A German reveal of a tech in `UNIT_LEVEL_TECHS` (or Flight) draws one free unit card per unit
+  type it upgrades or unlocks, also when the type is already further up, and logs that they may
+  take one resource from the market; that resource is taken by hand, so it has no choice step.
+  A Greek reveal gives 1 culture for each other player who has not chosen (hidden or revealed)
+  that tech. The amount is public; players and hidden techs are never named. Both are kept in
+  `techRevealEffects` (server only) and taken back when the tech is taken back by the undo vote
+  or `removeTech` (`tech-reveal-abilities.ts`).
+
 Source: `assisted.ts` (`build`), `actions/token-collection.ts`, `actions/tile-tokens.ts`,
 `actions/player.ts`, `actions/undo.ts`; tests `assisted-wonders`, `tile-tokens`,
 `undo-civ-reveal`.

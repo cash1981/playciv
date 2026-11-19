@@ -41,6 +41,7 @@ import {
   withLogEntry,
   withPlayer,
 } from '../state.js'
+import { undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import { castVote, createUndo, resultOfVotes } from '../undo.js'
 
 import { removePieceAsSystem } from './board.js'
@@ -557,7 +558,7 @@ function putTechBack(
       },
     })
     return ok(
-      logUndo(next, player, tech, logType, (name) => `has removed ${name} from ${player.username}`),
+      logUndo(undoTechRevealAbilities(next, player.playerId, tech.name), player, tech, logType, (name) => `has removed ${name} from ${player.username}`),
     )
   }
 
