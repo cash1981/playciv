@@ -1402,8 +1402,10 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 - **Arabs:** the civ reveal puts one token of each resource kind (`RESOURCE_KINDS`) in the area, as
   pieces of the reveal, so its undo removes them; a kind out of supply is skipped and logged.
 - **Indians:** a token of any other resource (Spy and Uranium included) pays a request for
-  incense, iron, silk or wheat, after the real resource; Spy and Uranium requests get no
-  wildcard. The spend is recorded with `asResource` and the line says "spent 1 Silk as Iron".
+  incense, iron, silk or wheat, after the real resource and before a culture card (a card is
+  lost, a token is not); Spy and Uranium requests get no wildcard. An Any cost (and its picker)
+  has no wildcard options: it already tries every kind, and the named kinds are only a
+  preference. The spend is recorded with `asResource` and the line says "spent 1 Silk as Iron".
   Egyptians' free building is not modelled yet (needs its own action and UI).
 
 - **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, a German free unit

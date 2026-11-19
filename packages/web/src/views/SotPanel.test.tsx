@@ -586,7 +586,7 @@ describe('scouts and cities', () => {
 
   it('tells a Zulu player about the hut next to the new city', () => {
     renderChoices(viewOf(sotWith({ scouts: [scout({ found: { ok: true, reasons: [], zuluHuts: ['F5'] } })] as never })))
-    expect(screen.getByText(/The Zulu explore the hut next to the city \(F5\) at once/)).toBeTruthy()
+    expect(screen.getByText(/The Zulu explore the huts next to the city \(F5\) at once, when a hut card is left/)).toBeTruthy()
   })
 
   it('is hidden outside the Start of Turn', () => {

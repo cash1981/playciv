@@ -9,6 +9,14 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   the first build. The remaining production is computed from the first build's recorded cost and production, so a hand-set production
   changed between the two builds is not seen. Engineering is offered only when the build is the city's first action: a build that is
   itself an extra action (Atomic Theory, Lovelace, a confirmed repeat) cannot be split.
+- **Civilization abilities not automated (#368):** Chinese walls, American great person and Indian metropolis
+  (no capital exists at reveal; the player places it); Mongol loot (not modelled); French policy cap (no cap
+  exists); Russian sacrifice (no enemy-army-city model); Egyptian and Spanish free buildings (need new UI and
+  prompts); Arab +2 culture per spent resource (many spend paths); Roman and Chinese conquest triggers; Zulu
+  metropolis hut exploring; the German free resource is a log line only. Chinese villages give no culture, and a
+  Spanish player with Natural Religion gets army speed 3 where the cards may give 4 (`movement.ts` reads any `+`
+  in the typed Movement as the army bonus). The German free unit is per unit type (Logistics gives three), pending
+  the human's confirmation. The Chinese saved unit is the first killed one, with no choice step.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares

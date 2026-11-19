@@ -644,7 +644,7 @@ function FoundHere({
         Found a city here
       </button>
       {zuluHuts.length > 0 && (
-        <p className="muted">The Zulu explore the hut next to the city ({zuluHuts.join(', ')}) at once: its card goes to your hand.</p>
+        <p className="muted">The Zulu explore the huts next to the city ({zuluHuts.join(', ')}) at once, when a hut card is left.</p>
       )}
     </div>
   )

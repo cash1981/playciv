@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { findResourcePayment, resourceAvailability, resourcePaymentOptions, returnResource, spendEachResource, spendResource } from '../src/assisted-resources.js'
+import { spendAnyResources, findResourcePayment, resourceAvailability, resourcePaymentOptions, returnResource, spendEachResource, spendResource } from '../src/assisted-resources.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
@@ -58,7 +58,7 @@ describe('the Indians and resources', () => {
     expect(findResourcePayment(cardOnly, CASH1981, 'Iron')).toMatchObject({ kind: 'card' })
   })
 
-  it('give one of each of four kinds without a wildcard taking the token another kind needs', () => {
+  it('pay one of each of two named kinds without a wildcard taking the token another kind needs', () => {
     // Silk and Iron wanted, with a Silk and a Wheat token: Iron takes the Wheat, never the Silk that Silk needs
     const state = withPieceInArea(withToken('Indians', 'resources/silk'), 'resources/wheat').state
     const paid = unwrap(spendEachResource(state, CASH1981, ['Iron', 'Silk']))
@@ -66,6 +66,14 @@ describe('the Indians and resources', () => {
       ['Wheat', 'Iron'],
       ['Silk', undefined],
     ])
+  })
+
+  it('keep the named preference of an Any cost: the Silk token pays the Silk slot', () => {
+    const state = withPieceInArea(withToken('Indians', 'resources/silk'), 'resources/wheat').state
+    const paid = unwrap(spendAnyResources(state, CASH1981, ['Iron', 'Silk']))
+    expect(paid.spent.map((payment) => payment.resource).sort()).toEqual(['Silk', 'Wheat'])
+    expect(paid.spent.every((payment) => payment.kind === 'card' || payment.asResource === undefined)).toBe(true)
+    expect(paid.said).not.toContain(' as ')
   })
 
   it('list each token once for an Any cost, without wildcard copies', () => {

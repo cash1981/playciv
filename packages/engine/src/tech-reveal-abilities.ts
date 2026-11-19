@@ -5,7 +5,7 @@
  * - Germans: for each unit type the tech upgrades or unlocks, one free unit card of that type, and one resource of
  *   their choice from the market. The resource is taken from the market by hand, as every token is, so it only
  *   gets a public reminder line and nothing to undo.
- * - Greeks: 1 culture for each other player who does not know or research the tech (a hidden choice counts).
+ * - Greeks: 1 culture for each other player who has not chosen the tech (a hidden choice counts as knowing or researching it).
  *
  * Every effect is kept in `techRevealEffects` (server only) so that taking the tech back takes them back.
  */

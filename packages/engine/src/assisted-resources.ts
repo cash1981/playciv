@@ -534,8 +534,9 @@ export function spendAnyResources(
   }
   let current = state
   const slots: (SpentResource | undefined)[] = resources.map(() => undefined)
+  // No Indian wildcard here: an Any cost already tries every kind itself, and a wildcard in step 1 would take the token another name holds
   const pay = (index: number, resource: string, tokensOnly: boolean): boolean => {
-    const paid = spendResource(current, playerId, resource, at, tokensOnly)
+    const paid = spendResource(current, playerId, resource, at, tokensOnly, undefined, false)
     if (!paid.ok) return false
     current = paid.value.state
     slots[index] = paid.value.spent
