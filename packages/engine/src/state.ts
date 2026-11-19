@@ -878,6 +878,12 @@ export type AssistedEffect =
       readonly rewardId: string
       /** The card kept, or `null` when no candidate was left in the hand and the choice was only dropped. */
       readonly itemId: string | null
+      /**
+       * The cards discarded with the choice, as they were then (face and item number). The public history names
+       * them by this, not by the card's place now: it may have been reshuffled and renumbered since. Absent on
+       * records saved before this was kept.
+       */
+      readonly discarded?: readonly Item[]
     }
   | {
       readonly kind: 'build'
@@ -1376,11 +1382,6 @@ export interface GameState {
   readonly logSecret: string
   /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
-  /**
-   * The number a card had before it went back in the deck and got a new one, by card id (`deckWith`). The public
-   * Revealed/Discarded history names the number the card had when it was discarded. Server only, never in a view.
-   */
-  readonly previousItemNumbers?: Readonly<Record<string, number>>
   /**
    * Whether the start-of-game ancient wonders have been dealt onto the board.
    * The deal happens once, when the last civilization is revealed. This flag is

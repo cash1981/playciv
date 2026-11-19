@@ -16,9 +16,10 @@ import { revealedFeed } from '../src/actions/game.js'
 import { playerAreas, wondersArea } from '../src/board.js'
 import type { Item, ItemKind } from '../src/item.js'
 import { isUnit, itemImage, itemName, itemValueEquals } from '../src/item.js'
+import { deckWith } from '../src/item-number.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { SheetName } from '../src/sheet-name.js'
-import { findSheetName } from '../src/sheet-name.js'
+import { SHUFFLABLE_ITEMS, findSheetName } from '../src/sheet-name.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 
@@ -338,7 +339,7 @@ describe('reshuffle', () => {
     expect(after.discardedItems.map((i) => i.id)).toEqual([someHut.id])
   })
 
-  it('a discarded card comes back with a new item number, so the public discard cannot be matched to a later draw', () => {
+  it('a discarded card comes back with a number nobody can predict from the counter', () => {
     let state = firstCivGame()
     const aircrafts = countInDeck(state, 'AIRCRAFT')
     for (let i = 0; i < aircrafts; i++) {
@@ -353,9 +354,19 @@ describe('reshuffle', () => {
     const drawn = lastDrawn(after)
 
     expect(drawn.id).toBe(card.id)
-    expect(drawn.itemNumber).toBe(counterBefore + 1)
+    expect(drawn.itemNumber).not.toBe(card.itemNumber)
+    expect(drawn.itemNumber).not.toBe(counterBefore + 1)
+    expect(drawn.itemNumber).toBeGreaterThanOrEqual(100_000)
     expect(after.itemCounter).toBe(counterBefore + 1)
     expect(handOf(after, CASH1981).some((item) => item.itemNumber === card.itemNumber)).toBe(false)
+  })
+
+  it('gives every returned card its own number', () => {
+    const state = firstCivGame()
+    const cards = state.items.filter((item) => SHUFFLABLE_ITEMS.has(item.sheetName)).slice(0, 400)
+    const numbers = deckWith({ ...state, items: [] }, cards).items.map((item) => item.itemNumber)
+    expect(new Set(numbers).size).toBe(cards.length)
+    expect(Math.min(...numbers)).toBeGreaterThanOrEqual(100_000)
   })
 
   it('kinds outside SHUFFLABLE_ITEMS cannot be reshuffled', () => {

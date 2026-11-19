@@ -1126,7 +1126,12 @@ export const chooseReward: AssistedActionDefinition = {
     })
     return ok({
       state: countLinesIn(logged, [marker?.historyId]),
-      effect: { kind: 'chooseReward', rewardId: reward.id, itemId: kept.id },
+      effect: {
+        kind: 'chooseReward',
+        rewardId: reward.id,
+        itemId: kept.id,
+        discarded: others.map((item): Item => ({ ...item, hidden: true })),
+      },
       logId,
     })
   },
