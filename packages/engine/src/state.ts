@@ -481,6 +481,8 @@ export type AssistedActionKind =
   | `militaryTradition:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
   | `sot:${string}`
+  // The one-time ability of a relic that is claimed as soon as an army has taken it: `relic:<ability>` (assisted-relics.ts)
+  | `relic:${string}`
 
 /** The four investment cards, by the status-board counter that holds their markers. */
 export type InvestmentCard = 'infra' | 'efta' | 'mic' | 'pe'
@@ -854,6 +856,23 @@ export type AssistedEffect =
       readonly card: { readonly itemId: string; readonly sheetName: SheetName }
     }
   | {
+      /** The Great Person cards the School of Confucius gave, laid out like the Great Person space of the culture track. */
+      readonly kind: 'relicGreatPerson'
+      readonly subject: string
+      readonly drawn: readonly string[]
+      /** Cards discarded faceup because their marker type was out. */
+      readonly rejected: readonly string[]
+      readonly kept: string | null
+      readonly marker: GreatPersonMarker | null
+    }
+  | {
+      /** A free unit card from Attila's Village; an undo puts it back and shuffles that deck. Never projected. */
+      readonly kind: 'relicUnit'
+      readonly subject: string
+      readonly unitType: UnitType
+      readonly card: { readonly itemId: string; readonly sheetName: SheetName }
+    }
+  | {
       readonly kind: 'steamPower'
       readonly from: { readonly column: number; readonly row: number }
       readonly to: { readonly column: number; readonly row: number }
@@ -1199,6 +1218,20 @@ export interface UnderToken {
   readonly square?: string
 }
 
+/** One hut or village a figure collected: the token's move into the player's area, and the card it gave. Server only. */
+export interface TokenCollection {
+  /** The board history entry that moved the token into the player's area. */
+  readonly historyId: string
+  readonly playerId: string
+  readonly pieceId: string
+  /** The card that went to the hand. */
+  readonly itemId: string
+  /** What lay under the token (Zheng He's look) before the draw, to be put back under it. */
+  readonly under: UnderToken | null
+  /** "J6": where the token lay. */
+  readonly square: string
+}
+
 /** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
 export interface DrawTokenView {
   readonly pieceId: string
@@ -1352,6 +1385,11 @@ export interface GameState {
    * only: a projection must never carry it. Absent until a first look.
    */
   readonly underTokens?: readonly UnderToken[]
+  /**
+   * Hut and village tokens a figure collected by moving onto them (issue #364), so the board Undo can put the token
+   * back and return the card. Server only: it names the drawn card, so a projection must never carry it.
+   */
+  readonly tokenCollections?: readonly TokenCollection[]
   readonly players: readonly Playerhand[]
   /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]

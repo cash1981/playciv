@@ -3,17 +3,6 @@
 A rewrite of Sid Meier's Civilization: The Board Game (Fantasy Flight Games), with the *Fame and Fortune* and *Wisdom and
 Warfare* expansions.
 
-It replaces two old repositories:
-
-| Old | Stack | Replaced by |
-| --- | --- | --- |
-| `old-civ-rest` | Java 8, Dropwizard 0.8, MongoDB/MongoJack, Apache POI | `packages/engine` + `packages/server` |
-| `old-civ-web` | AngularJS 1, Bootstrap, Grunt/Bower | `packages/web` |
-
-The old solution ran on playciv.com and showed the board through a Google
-Presentation and a Google Spreadsheet in an iframe (`mapLink` / `assetLink`).
-That is gone and has not been ported; the board now lives in this codebase.
-
 ## Running the app
 
 Needs Node 24 or newer and pnpm 11.24.0, as pinned in `package.json`.
@@ -87,23 +76,20 @@ function:
 (state: GameState, action: DrawInput) => Result<GameState, EngineError>
 ```
 
-Nothing throws. The old Java actions threw `WebApplicationException` with an
-HTTP status straight from the domain logic; here errors are values, and the HTTP
-mapping belongs to the server package.
+Nothing throws: errors are values, and the HTTP mapping belongs to the server
+package.
 
 Randomness lives in the state as a seed (`state.rng`), so a game can be
-reproduced and replayed. Java used `Collections.shuffle` against a global
-source.
+reproduced and replayed.
 
 The engine separates state and projections (`src/state.ts`), game data, board
-geometry and action reducers. Legacy Java sources explain unchanged behavior;
-current decisions and tests document deliberate differences.
+geometry and action reducers. Current decisions and tests document deliberate
+rule and behavior choices.
 
 ### `packages/server`
 
 Hono on top of the engine, so the same HTTP code runs on Node (local
 development, JSON-file storage) and on Cloudflare Workers (production, D1).
-Java counterpart: `resource/*` and `application/*` under Dropwizard.
 
 | File | Responsibility |
 | --- | --- |

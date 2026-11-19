@@ -260,6 +260,20 @@ const hutAndVillageSquares = (board: Board): ReadonlySet<string> =>
   pieceSquares(board, (piece) => HUT_AND_VILLAGE_ASSETS.has(piece.assetId))
 
 /**
+ * The squares a scout may not enter (base rules p. 15 and 20, Fame and Fortune p. 9): a hut or village, and a relic
+ * square unless an army of the player already stands there. Flight and a Republic make no difference. A revealed
+ * Pacifism ("Your scouts can explore huts, but not villages") lets scouts onto huts; it does not help on relics,
+ * which the Wisdom and Warfare rules name expressly.
+ */
+function scoutForbiddenSquares(board: Board, player: MovementPlayer): ReadonlySet<string> {
+  const accompanied = pieceSquares(board, (piece) => figureBelongsTo(player, piece) && isArmy(piece))
+  const relics = pieceSquares(board, (piece) => piece.category === 'relic')
+  const huts = hasPolicy(player, 'Pacifism') && !inAnarchy(player) ? new Set<string>() : pieceSquares(board, (piece) => piece.assetId === 'resources/hut')
+  const villages = pieceSquares(board, (piece) => piece.assetId === 'resources/village')
+  return new Set([...huts, ...villages, ...[...relics].filter((key) => !accompanied.has(key))])
+}
+
+/**
  * The movement options for one of the player's figures, or `null` when the
  * piece is not their figure on the map.
  */
@@ -311,6 +325,7 @@ export function figureMovementOptions(
   const attacker = isArmy(piece)
   const hasRoom = (key: string): boolean => (occupancy.own.get(key) ?? 0) < limit
   const mustStop = hutAndVillageSquares(board)
+  const scoutForbidden = attacker ? new Set<string>() : scoutForbiddenSquares(board, player)
   const distances = new Map<string, number>([[keyOf(start), 0]])
   const queue: Cell[] = [start]
   const destinations: MovementDestination[] = []
@@ -356,6 +371,7 @@ export function figureMovementOptions(
       // A scout never attacks, so it does not enter another player's square at all without Flight.
       // A square at the stacking limit cannot be crossed either.
       if (occupancy.foreign.has(keyOf(next)) && !flight && !attacker) continue
+      if (scoutForbidden.has(keyOf(next))) continue
       if (!hasRoom(keyOf(next))) continue
       // Fog is not walked onto: it is explored first, from the square next to it.
       if (isUnexploredCell(board, next)) continue

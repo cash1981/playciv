@@ -85,6 +85,7 @@ export function statusFor(error: EngineError): number {
     case 'ASSISTED_ACTION_ALREADY_UNDONE':
     case 'ASSISTED_UNDO_BLOCKED':
     case 'BOARD_UNDO_ASSISTED':
+    case 'BOARD_UNDO_TOKEN_CARD_GONE':
       return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':

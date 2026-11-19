@@ -12,7 +12,6 @@ checking the current code.
 
 ## Architecture and authority
 
-- The Java/Angular systems are historical references, not the specification.
 - Engine reducers are pure and return errors as values.
 - Hono runs on Node with JSON storage locally and on a Cloudflare Worker with D1
   in production. Render/Mongo hosting is retired.
@@ -132,6 +131,10 @@ Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
   three-player saves with pieces and five-player saves keep their old rectangle
   so pieces do not move; see [legacy layout limitations](limitations.md#game-behavior).
 - Culture track: 21 positions with freely placed markers.
+- A civilization revealed before the table is full is laid out while every seat is still number 0, so its starting
+  tile lands in the first corner. When the game starts and seats are numbered, such tiles are moved and turned to
+  their owner's corner (a system board change, so nobody's Undo reverts it); otherwise a later player's tile
+  was drawn underneath it and looked missing.
 - Player status sidebar (#342): a view beside the map (under it at 900px and
   below) shows every status value per player with an icon whose `alt`/`title`
   names it. It reads only fields the old Player status panel showed (`username`,
@@ -441,7 +444,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   area)"); a moved piece with nothing under it is the same as a random draw and is not
   listed. The last button is "Random hut (not from a token)" (a card, a village marker).
   A chosen token gives the item under it (the top card when nobody has looked) and its
-  piece stays where it is, to be moved by hand (`DrawInput.fromPieceId`); a public line
+  piece stays where it is, to be moved by hand (`DrawInput.fromPieceId`; a token a figure ends its move on is collected automatically, see Figure movement); a public line
   says where. A draw with no piece never gives an item under a piece still on the board,
   and gives the item under a piece that was deleted from the board, one per draw, so every
   other item stays under its piece, out of reach of shuffles and of a board undo that
@@ -812,10 +815,11 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   investable); Cristo Redentor draws two events of a chosen level; Statue of
   Liberty, the Teacher hut and Atlantis grant a free tech chosen in the tech tree;
   Seven Cities of Gold ask which investment card gets 2 markers, with no coin and
-  no free Arab advance (human). Relics are taken in Movement by hand and claimed
+  no free Arab advance (human). Relics are taken by an army that ends its move on
+  the square (see "Relic markers" under Movement) or by hand, and claimed
   in any later Start of Turn by the player whose board history removed the marker,
-  once per game (`unavailable` afterwards, not `used`); only Atlantis and Seven
-  Cities have a button (human). Great Wall, Hanging Gardens, Taj Mahal, Big Ben,
+  once per game (`unavailable` afterwards, not `used`); Atlantis and Seven
+  Cities of Gold have a Start of Turn button, the other relics act as in "Relic markers" (human). Great Wall, Hanging Gardens, Taj Mahal, Big Ben,
   Machu Picchu, Plastics and Ecology only log, once per turn. Wonder obsolescence
   is not tracked (human).
 - **Judgements not settled with the human:** a card over the hand size can still
@@ -920,7 +924,9 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 - **Exploring:** a square with no tile is fog (tile back), never walked onto and
   never a card destination. A figure next to fog may `exploreSquare` (`POST
   .../pieces/:id/explore`): spends 1 movement, draws the next TILES card and lays
-  it in the covering slot (rotation 0, turned by hand). It neither moves nor
+  it in the covering slot, turned so its arrow (on the bottom edge of the art) is on the
+  side the figure explored from: figure south of the tile 0, west 90, north 180, east 270.
+  It can still be turned by hand. It neither moves nor
   locks the figure; any lock forbids exploring. It fails without spending when the
   card has no artwork. The tile card goes to the hand like any draw, so board Undo
   (two presses: tile, then movement) does not return it; explore-undo-explore to
@@ -955,10 +961,59 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   city of either kind; a later disband only removes the figure. The shared pool
   of 15 markers is not limited. Effects: City production (caravan) and Coins,
   wonders and blockade (fortification).
+- **Hut and village tokens on tiles** (#364): `data/tile-icons.json` records the hut and village icons of the exploration
+  tiles (`token`: `hut` or `village`, printed orientation, read by eye from the tile images and checked in a second pass; the
+  starting tiles have none). A tile laid on a map slot by exploration or a manual draw, or brought onto a slot from a player
+  area, gets one `resources/hut` or `resources/village` piece on each such square, centred, once (`seedTileTokens`; the tokens
+  carry `BoardPiece.tileId` and a tile counts as seeded while one of those placements is still in the history, so an undone
+  one seeds again). A tile that already lies on the map and is only set into another slot, or placed from the palette, gets
+  none; its tokens go with it when it is moved (`move` change `tokens`), also off the map and back. Seeding adds one board history entry per token after the tile's own, so board Undo takes the tokens off, then the tile,
+  then (for exploration) refunds the movement. Turning a tile turns the tokens on it with it (`rotate` change `tokens`), so
+  they stay on the same printed squares. Hut and village pieces are not a limited supply (#116). Tile 15a to 17a, 22b and 23b
+  show no hut or village: they carry a relic instead.
+- **Relic markers** (Fame and Fortune p. 9, Wisdom and Warfare): `data/tile-icons.json` `relics` gives each of tiles 15a
+  (Atlantis), 16a (School of Confucius), 17a (Seven Cities of Gold), 22b (Attila's Village) and 23b (Ark of the Covenant) its
+  relic and printed square, read from the tile image. A laid tile gets the matching `relics/…` marker on that square, seeded,
+  turned, carried and undone exactly as hut and village tokens (`tileTokenSquares`), unless that relic is already on the map.
+  Tile 17a's relic square is forest, as the rulebook says (the terrain was read as mountain). Scouts may not enter a hut or
+  village square (base rules p. 15 and 20; the rulebook names both, so a scout cannot cross one either, with or without
+  Flight; a revealed Pacifism, "Your scouts can explore huts, but not villages", lets them onto huts), nor a relic square unless one of the owner's armies already stands there (`scoutForbiddenSquares`; a Republic
+  makes no difference). An army that ends its move on a relic square and whose player confirms (`collectToken`, the same
+  prompt as a hut) has the marker removed as the next board history entry credited to the player, which is what the relic
+  claim reads, and its movement is over for the turn; board Undo puts the marker back and then takes the move back. A public
+  line names the ability. Passing through, declining, or moving onto another player's figures (the battle comes first) leaves the marker.
+  Atlantis (a free tech) and Seven Cities of Gold (two free investment markers) are Start of Turn buttons. The other three
+  are `relic:*` assisted actions in `assisted-relics.ts` (phase `ANY`, group "Relics", once the marker is off the map):
+  the **Ark of the Covenant** gives two free culture-track advances, one at a time (`performAdvance` with `free`, so
+  Mysticism, the culture hand limit, a waiting card choice and the end of the track still apply); the first is made by
+  `takeRelic` the moment the army takes the marker, the second is the button. **Attila's Village** gives two free units of
+  the types chosen (infantry, artillery, mounted, aircraft with Flight), drawn into the hand as for Military Tradition,
+  the public line naming the type only (button). The **School of Confucius** draws two Great Persons, one more for the
+  Greeks and one more for a revealed Organized Religion, which stack (Greeks with it draw four) (human: keep one of the
+  drawn; the rulebook's draw-two-then-two-more reading for the Greeks is not used); claimed at once by `takeRelic`, the
+  card chosen through the usual pending choice. A claim blocked at that moment (a full culture hand) leaves the button with its
+  reason. Undo of a claim is by vote. While a claim of the relic stands (Atlantis and Seven Cities included), the board
+  Undo refuses to put its marker back (`BOARD_UNDO_ASSISTED`, `relic-claims.ts`), so the move cannot be taken back
+  with the ability kept. Once the vote has taken back the Ark's advance or a School of Confucius claim whose Great Person
+  marker was placed, the board Undo stops there (`undoFloor`, as for Philosophy), since walking back past the reversal
+  would replay the forward move; the army and the marker are then put back by hand. Movement cards (Galileo,
+  culture events) do not apply the scout restrictions to the squares they cross: they cannot end on any marker square.
+  Tests: `assisted-relics.test.ts`, `tile-tokens.test.ts`.
+- **Collecting a token** (#364): `travelFigureCollecting` (the `/travel` route's `collectToken`) is `travelFigure` plus, when the
+  player confirmed in the web (a hut or village is the only reason a move ends on a square with no figures), the draw from that
+  piece (`draw` with `fromPieceId`, so what Zheng He saw under it is what is drawn), the token moved into the player's area
+  (next free slot) and a `TokenCollection` record (`GameState.tokenCollections`, never projected, it names the card). Board
+  Undo takes the token and the card back first (the card leaves the hand and is bound back under the piece, so the player's
+  knowledge of it never becomes the next card anyone draws; the draw's own log line can no longer be voted back; a public line
+  says so; the redo stack is cleared, as a redo would not draw again) and the move on the next press.
+  It is refused (`BOARD_UNDO_TOKEN_CARD_GONE`) once the card has left the hand. Without the confirmation, with another
+  player's figures on the square (the battle comes first, also for a direct API request), or when no hut or
+  village is left, the move stands and the token stays on its square, to be drawn by hand as before. Flight cannot end on a
+  hut or village, so it collects none. Tests: `tile-tokens`, `BoardView`.
 - **Not done:** automated battle, loot and figure removal.
 
 Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`), `actions/board.ts`
-(`travelFigure`), `disband.ts`, `explore.ts`, `actions/explore.ts`, `actions/draw.ts`
+(`travelFigure`), `actions/tile-tokens.ts`, `actions/token-collection.ts`, `tile-icons.ts`, `disband.ts`, `explore.ts`, `actions/explore.ts`, `actions/draw.ts`
 (`drawTileAt`), `communism.ts`, `assisted-communism.ts`, `brandenburg.ts`,
 `server/src/routes/board.ts`, `web/src/views/BoardView.tsx`; tests `movement`,
 `stacking-movement`, `explore`, `communism`, `brandenburg`, `assisted-gather`.

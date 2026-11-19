@@ -20,6 +20,7 @@ import {
   spendResource,
 } from '../src/assisted.js'
 import { ABILITY_KINDS } from '../src/assisted-abilities.js'
+import { RELIC_ACTIONS } from '../src/assisted-relics.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -92,6 +93,8 @@ describe('the registry', () => {
       'metalworking',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
+      // The relics claimed as soon as an army has taken them (assisted-relics.ts)
+      ...RELIC_ACTIONS.map((action) => action.kind),
     ].sort())
     expect(isAssistedActionKind('chivalry')).toBe(true)
     // Registered since the Currency and Metal Casting slice; Wheat and Silk are not
@@ -109,7 +112,7 @@ describe('the registry', () => {
       expect(action.phase).toBe(
         startOfTurn.includes(action.action) || action.action.startsWith('sot:')
           ? 'SOT'
-          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'animalHusbandryHeal' || action.action === 'biologyHeal' || action.action === 'metalworking' || action.action === 'atomicTheory' || action.action === 'agriculture'
+          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'animalHusbandryHeal' || action.action === 'biologyHeal' || action.action === 'metalworking' || action.action === 'atomicTheory' || action.action === 'agriculture' || action.action.startsWith('relic:')
             ? 'ANY'
             : action.action === 'writing' || action.action === 'civilService' || action.action === 'massMedia'
               ? 'ANY'

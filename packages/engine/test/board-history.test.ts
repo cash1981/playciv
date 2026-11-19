@@ -21,6 +21,7 @@ import {
 } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { mapTop, piecesAtStep } from '../src/board.js'
+import { tileTokenSquares } from '../src/tile-icons.js'
 import type { BoardPiece } from '../src/board.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -130,8 +131,11 @@ describe('recording', () => {
 
   it('automatic placements are recorded too', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'TILES' }))
-    expect(state.board.history).toHaveLength(1)
-    expect(state.board.history[0]?.change.kind).toBe('place')
+    // The tile, then one entry for each hut or village icon it shows (issue #364)
+    const tile = state.board.pieces.find((piece) => piece.category === 'tile')
+    expect(state.board.history).toHaveLength(1 + tileTokenSquares(tile?.assetId ?? '').length)
+    expect(state.board.history.every((entry) => entry.change.kind === 'place')).toBe(true)
+    expect(state.board.history[0]?.change).toMatchObject({ kind: 'place', piece: { category: 'tile' } })
   })
 })
 

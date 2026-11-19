@@ -45,6 +45,7 @@ import {
   cultureTrackHeight,
   CARAVAN_ASSET_ID,
   disbandOfferAt,
+  mapTokensOf,
   figureMovementOptions,
   findBoardAsset,
   locationOf,
@@ -1246,9 +1247,38 @@ export function BoardView({
                             : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
                                 'Disband it anyway? OK disbands it; Cancel just moves it there.',
                         )
+                      // A hut or village on the square: the figure's move ends there, and the token can be drawn at once
+                      const token =
+                        cell.contact === true || disband
+                          ? undefined
+                          : mapTokensOf(board).find((candidate) => candidate.cell.column === cell.column && candidate.cell.row === cell.row)
+                      const relic =
+                        cell.contact === true || disband || !selected.assetId.endsWith('army')
+                          ? undefined
+                          : board.pieces.find(
+                              (piece) =>
+                                piece.category === 'relic' &&
+                                Math.floor((piece.x + piece.width / 2) / board.squareSize) === cell.column &&
+                                Math.floor((piece.y + piece.height / 2 - mapStart) / board.squareSize) === cell.row,
+                            )
+                      const collectToken =
+                        (token !== undefined &&
+                          window.confirm(
+                            `${selected.label} ends its move on a ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} on ${cell.label}. ` +
+                              `Draw the ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} now? OK takes the token into your area and the card into your hand; ` +
+                              'Cancel just moves there and leaves the token.',
+                          )) ||
+                        // An army ending its move on a relic removes the marker and gains its one-time ability (Fame and Fortune p. 9)
+                        (relic !== undefined &&
+                          window.confirm(
+                            `${selected.label} ends its move on the ${relic.label} relic on ${cell.label}. ` +
+                              'OK removes the marker and ends the move; the Ark and the School of Confucius take effect at once, and the other abilities are buttons under Possible actions. Cancel just moves there and leaves the marker.',
+                          ))
                       setMoveModeId(null)
                       void run(() =>
-                        api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
+                        collectToken
+                          ? api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, true)
+                          : api.travelFigure(gameId, selected.id, cell.column, cell.row, disband),
                       )
                     }}
                     onPointerDown={(event) => event.stopPropagation()}

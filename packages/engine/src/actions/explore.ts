@@ -16,7 +16,7 @@ import { explorationSlotFor, exploreTargetsFrom, isExploredCell } from '../explo
 import { activeGreatPerson, stackingLimitOf } from '../great-person-effects.js'
 import { figureBelongsTo, figureMovementOptions, movementOf } from '../movement.js'
 import { columnLabel, slotOrigin, findPiece, locationOf } from '../board.js'
-import type { PieceMovement } from '../board.js'
+import type { PieceMovement, Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { Result } from '../result.js'
 import { err } from '../result.js'
@@ -100,13 +100,25 @@ export function exploreSquare(state: GameState, input: ExploreSquareInput): Resu
     ...(input.at === undefined ? {} : { at: input.at }),
   })
   if (spent === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
-  const drawn = drawTileAt(spent, input.playerId, slotOrigin(spent.board, slot))
+  const drawn = drawTileAt(spent, input.playerId, slotOrigin(spent.board, slot), arrowTowards(from, target))
   if (!drawn.ok) return drawn
   // A card with no tile artwork places nothing: do not spend the movement on fog that stays fog
   if (!explorationCovered(drawn.value, target)) {
     return err({ kind: 'FIGURE_MOVE_ILLEGAL', reason: 'The drawn tile could not be placed on the map.' })
   }
   return drawn
+}
+
+/**
+ * The turn that puts a tile's arrow on the edge the explorer came from. The
+ * art has its arrow on the bottom edge, so a figure south of the tile needs no
+ * turn; from the west the tile is turned 90, from the north 180, from the east 270.
+ */
+function arrowTowards(from: { column: number; row: number }, target: { column: number; row: number }): Rotation {
+  if (target.column > from.column) return 90
+  if (target.row > from.row) return 180
+  if (target.column < from.column) return 270
+  return 0
 }
 
 const explorationCovered = (state: GameState, target: { column: number; row: number }): boolean =>

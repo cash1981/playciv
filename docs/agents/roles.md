@@ -37,8 +37,7 @@ rounds, confirm earlier findings were resolved.
 ## Rules-checker
 
 Compare a rules, deck, log or projection change with the code, tests, decisions
-and rulebook, citing files or pages. Old Java is optional evidence, not the
-specification. Report unsupported rules and missing sources; never guess.
+and rulebook, citing files or pages. Report unsupported rules and missing sources; never guess.
 
 ## Orchestrator
 

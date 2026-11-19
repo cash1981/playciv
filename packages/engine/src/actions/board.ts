@@ -54,6 +54,7 @@ import type { EngineError } from '../errors.js'
 import { MAX_PRODUCTION_OVERRIDE } from '../limits.js'
 import { appendLog } from '../log.js'
 import { nextId } from '../random.js'
+import { claimsRelic } from '../relic-claims.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
@@ -68,6 +69,7 @@ import {
   movementOf,
 } from '../movement.js'
 import { startMarkerOf, startPlayerOf, turnStatus } from '../turn.js'
+import { carriedTileTokens, collectedTokenIds, returnCollectedCard, seedTileTokens, tileOnMap, turnedTileTokens } from './tile-tokens.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -225,6 +227,8 @@ export function placeUnchecked(
      * with the original placer; `null` keeps a piece with no placer unattributed.
      */
     readonly placedBy?: string | null
+    /** The map tile a hut or village was put on (issue #364): `BoardPiece.tileId`. */
+    readonly tileId?: string
   },
 ): GameState | undefined {
   const asset = findBoardAsset(input.assetId)
@@ -268,6 +272,7 @@ export function placeUnchecked(
     rotation: input.rotation ?? 0,
     placedBy: input.placedBy === undefined ? input.playerId : input.placedBy,
     ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
+    ...(input.tileId !== undefined ? { tileId: input.tileId } : {}),
   }
 
   // Map tiles go under everything else, or they would cover the pieces on them
@@ -319,7 +324,14 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   }
   // Only a marker that arrives on a square replaces what is there: a nudge or a re-drop on its own square leaves it alone
   const from = before === undefined ? null : mapCellOf(state.board, before)
-  return ok(replaceUnderGreatPerson(announceStartPlayer(state, moved, input.pieceId), input.pieceId, input, from))
+  const placed = replaceUnderGreatPerson(announceStartPlayer(state, moved, input.pieceId), input.pieceId, input, from)
+  // A tile that has just come onto a map slot from somewhere else (a player area) gets its hut and village
+  // tokens, once. Setting a tile that already lies on the map into another slot changes nothing (issue #364).
+  return ok(
+    before?.category === 'tile' && !tileOnMap(state.board, before)
+      ? seedTileTokens(placed, input.pieceId, input.playerId, ...(input.at === undefined ? [] : [input.at]))
+      : placed,
+  )
 }
 
 /**
@@ -374,16 +386,24 @@ export function movePieceUnchecked(
 
   const from = locationOf(state.board, areas, piece)
   const to = locationOf(state.board, areas, moved)
+  // The hut and village tokens on a map tile go with it (issue #364)
+  const carried = carriedTileTokens(state.board, piece, x, y, collectedTokenIds(state))
+  const shifted = new Map(carried.map((token) => [token.pieceId, token.to]))
+  const withTokens = pieces.map((other) => {
+    const to = shifted.get(other.id)
+    return to === undefined ? other : { ...other, x: to.x, y: to.y }
+  })
 
   return record(input, {
     state,
-    pieces,
+    pieces: withTokens,
     change: {
       kind: 'move',
       pieceId: piece.id,
       from: { x: piece.x, y: piece.y },
       to: { x, y },
       fromIndex,
+      ...(carried.length === 0 ? {} : { tokens: carried }),
     },
     description:
       from === to
@@ -407,6 +427,8 @@ export interface TravelFigureInput {
    * of the player's own city, for an army or a scout. The web asks first.
    */
   readonly disband?: boolean
+  /** The move ends the figure's movement for the turn whatever the square, as taking a relic does. */
+  readonly endsMove?: boolean
   readonly at?: string
 }
 
@@ -537,7 +559,7 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
   const used = (saved?.used ?? 0) + destination.distance
   // Movement is a pool: the figure may move again while it has speed left. It is locked once the pool is
   // spent, or at once when the move ended on a hut, a village or another player's figures.
-  const locked = destination.ends === true || used >= options.speed
+  const locked = destination.ends === true || input.endsMove === true || used >= options.speed
   const movement: PieceMovement = { turn: turnNumber, used, locked, reason: 'travel' }
   const areas = areasFor(state)
   const moved = moveFigureWithMovementUnchecked(state, {
@@ -830,22 +852,45 @@ export function rotatePiece(state: GameState, input: RotatePieceInput): ActionRe
   const denied = requireAccess(state, input.playerId)
   if (denied !== undefined) return err(denied)
 
+  const turned = rotatePieceUnchecked(state, input)
+  if (turned === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  return ok(turned)
+}
+
+/**
+ * The same as `rotatePiece`, but without the access check and without a Result:
+ * for a rule that turns a piece itself. Returns `undefined` when the piece does
+ * not exist.
+ */
+export function rotatePieceUnchecked(
+  state: GameState,
+  input: RotatePieceInput,
+): GameState | undefined {
   const piece = findPiece(state.board, input.pieceId)
-  if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  if (piece === undefined) return undefined
 
   const rotation = input.rotation ?? nextRotation(piece.rotation)
-  const pieces = state.board.pieces.map((other) =>
-    other.id === piece.id ? { ...other, rotation } : other,
-  )
+  // The hut and village tokens on a map tile stay on the same printed squares when it is turned (issue #364)
+  const tokens = piece.category === 'tile' ? turnedTileTokens(state.board, piece, rotation, collectedTokenIds(state)) : []
+  const turned = new Map(tokens.map((token) => [token.pieceId, token.to]))
+  const pieces = state.board.pieces.map((other) => {
+    if (other.id === piece.id) return { ...other, rotation }
+    const to = turned.get(other.id)
+    return to === undefined ? other : { ...other, x: to.x, y: to.y }
+  })
 
-  return ok(
-    record(input, {
-      state,
-      pieces,
-      change: { kind: 'rotate', pieceId: piece.id, from: piece.rotation, to: rotation },
-      description: `turned ${piece.label} to ${rotation} degrees`,
-    }),
-  )
+  return record(input, {
+    state,
+    pieces,
+    change: {
+      kind: 'rotate',
+      pieceId: piece.id,
+      from: piece.rotation,
+      to: rotation,
+      ...(tokens.length === 0 ? {} : { tokens }),
+    },
+    description: `turned ${piece.label} to ${rotation} degrees`,
+  })
 }
 
 /** Assigns or clears ownership of a wonder. Ownership changes are replayable and undoable. */
@@ -1068,6 +1113,15 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
   if (state.cancellations?.events.some((event) => event.keptHistoryIds?.includes(entry.id) === true) === true) return true
   return state.assistedActions.some((record) => {
     if (record.status !== 'applied') return false
+    // A relic whose ability this player claimed: the marker back on the map would leave them the ability as well
+    if (
+      change.kind === 'remove' &&
+      change.piece.category === 'relic' &&
+      record.playerId === entry.playerId &&
+      claimsRelic(change.piece.assetId, record.kind)
+    ) {
+      return true
+    }
     const effect = record.effect
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
     // A unit placed nothing, so only a marker is on the board; City Walls only turned the city marker over.
@@ -1149,6 +1203,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       if (change.kind === 'place' && advance.marker?.pieceId === change.piece.id) return true
       if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
+    // The Great Person marker the School of Confucius put in the player's area
+    if (effect.kind === 'relicGreatPerson' && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
     // Gunpowder pays several tokens, every other action one
     const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (
@@ -1183,6 +1239,22 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   }
   if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
   if (isAssistedBoardChange(state, last)) return err({ kind: 'BOARD_UNDO_ASSISTED' })
+
+  // A token a figure collected (issue #364): the card goes back with it. It is not offered for a redo,
+  // because a redo would move the token without drawing again.
+  const collection = state.tokenCollections?.find((candidate) => candidate.historyId === last.id)
+  if (collection !== undefined) {
+    const returned = returnCollectedCard(state, collection)
+    if (returned === undefined) return err({ kind: 'BOARD_UNDO_TOKEN_CARD_GONE' })
+    return ok(
+      withBoard(returned, {
+        ...returned.board,
+        pieces: revertChange(returned.board.pieces, last.change),
+        history: returned.board.history.slice(0, -1),
+        redo: [],
+      }),
+    )
+  }
 
   return ok(
     withBoard(state, {

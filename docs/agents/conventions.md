@@ -6,9 +6,7 @@ is the detail.
 ## The current code is the reference
 
 The new system has replaced the old one. What it does today, and what its tests
-pin down, is what players rely on. The old repositories (`old-civ-rest`,
-`old-civ-web`) are no longer the specification; read them only when you need to
-see where something came from.
+pin down, is what players rely on.
 
 - A change in behaviour comes with a test. When it changes a rule or a visible
   choice, it also goes in `decisions.md`, and in "Known differences" or
@@ -32,8 +30,7 @@ not in the rulebooks (`Civilization/`) or the code, ask.
 - No `Date.now()`, no `new Date()`, no `Math.random()`. Timestamps are passed
   in by the caller — that is why board history entries take an `at` string.
   Randomness comes from the seed in `state.rng`.
-- No mutation of the input. A read that mutates is a bug: Java had two
-  (`getRemaingTechsForPlayer`, `getAllPublicTurns`) and both are fixed here.
+- No mutation of the input. A read that mutates is a bug.
 - State is treated as immutable. Spread, do not assign.
 
 ## Hidden information
@@ -76,11 +73,10 @@ Vitest. A test earns its place by failing when something real breaks.
 
 ## Comments
 
-Comments explain *why*, and especially *why this looks odd*. The codebase is a
-port of something strange, and the strangeness needs recording:
+Comments explain *why*, and especially *why this looks odd*:
 
 ```ts
-// Java: DELIM is " - ", which gives the double space after "drew"
+// The log keeps the double space after "drew": saved games and tests rely on it
 ```
 
 Do not narrate what the code already says. Match the density of the file you

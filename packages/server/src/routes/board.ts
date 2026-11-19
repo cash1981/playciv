@@ -22,7 +22,7 @@ import {
   takeBackOpenBuild,
   sendToBack,
   exploreSquare,
-  travelFigure,
+  travelFigureCollecting,
   undoLastBoardChange,
 } from '@civ/engine'
 
@@ -113,14 +113,16 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'column and row are required whole numbers')
     }
     const disband = optionalBoolean(body, 'disband')
+    const collectToken = optionalBoolean(body, 'collectToken')
 
     return applyToGame(context, c, gameId, (state) =>
-      travelFigure(state, {
+      travelFigureCollecting(state, {
         playerId: currentPlayer(c).id,
         pieceId,
         column,
         row,
         ...(disband === true ? { disband } : {}),
+        ...(collectToken === true ? { collectToken } : {}),
         at: now(),
       }),
     )
