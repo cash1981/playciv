@@ -119,15 +119,31 @@ export function findResourcePayment(
 
   const curieSubstitute = resource === 'Uranium' ? player.curieSubstitute ?? undefined : undefined
   const paid = curieSubstitute ?? resource
-  const payment = physicalPayments(state, playerId, paid, tokensOnly)[0]
+  const payment = physicalPayments(state, playerId, paid, tokensOnly)[0] ?? (curieSubstitute === undefined ? indianPayments(state, playerId, resource)[0] : undefined)
   return payment === undefined ? undefined : { ...payment, ...(curieSubstitute === undefined ? {} : { curieSubstitute }) }
+}
+
+/** The resources the Indians may spend any resource as (civilization card); Spy and Uranium requests are not covered. */
+const INDIAN_RESOURCES: readonly string[] = ['Incense', 'Iron', 'Silk', 'Wheat']
+
+/** The tokens an Indian player may spend as `resource` although they are another resource: never a card, which pays by its own rule. */
+function indianPayments(state: GameState, playerId: string, resource: string): readonly SpentResource[] {
+  if (playerOf(state, playerId)?.civilization?.name !== 'Indians') return []
+  const wanted = INDIAN_RESOURCES.find((name) => normalize(name) === normalize(resource))
+  if (wanted === undefined) return []
+  return ANY_RESOURCES.filter((other) => normalize(other) !== normalize(wanted)).flatMap((other) =>
+    physicalPayments(state, playerId, other, true).flatMap((payment): SpentResource[] =>
+      payment.kind === 'card' ? [] : [{ ...payment, asResource: wanted }],
+    ),
+  )
 }
 
 const paymentId = (payment: SpentResource): string => payment.kind === 'piece' ? payment.piece.id : payment.itemId
 
 /** Explicit choices retain normal Uranium options as well as the armed, one-shot substitutes. */
 function selectablePayments(state: GameState, playerId: string, resource: string): readonly SpentResource[] {
-  const normal = physicalPayments(state, playerId, resource, false)
+  const direct = physicalPayments(state, playerId, resource, false)
+  const normal = [...direct, ...indianPayments(state, playerId, resource).filter((payment) => !direct.some((other) => other.kind === payment.kind && paymentId(other) === paymentId(payment)))]
   const substitute = resource === 'Uranium' ? playerOf(state, playerId)?.curieSubstitute : undefined
   if (substitute === undefined || substitute === null) return normal
   // A card that can pay Uranium directly needs no substitution. Its wire choice is the same either way.
@@ -145,7 +161,7 @@ export function resourcePaymentOptions(state: GameState, playerId: string, cost:
     const item = payment.kind === 'piece' ? undefined : player.items.find((candidate) => candidate.id === payment.itemId)
     const label = payment.kind === 'card'
       ? `${item === undefined ? 'Culture card' : itemName(item)} (as ${resource})`
-      : `${payment.resource} (${payment.kind === 'hut' ? 'hand' : payment.kind === 'village' ? 'village in hand' : 'player area'})${payment.curieSubstitute === undefined ? '' : ` (as ${resource})`}`
+      : `${payment.resource} (${payment.kind === 'hut' ? 'hand' : payment.kind === 'village' ? 'village in hand' : 'player area'})${payment.curieSubstitute === undefined && payment.asResource === undefined ? '' : ` (as ${resource})`}`
     return {
       choice: { resource, kind: payment.kind, id: paymentId(payment) },
       label,
@@ -180,9 +196,10 @@ export function paymentText(state: GameState, player: Playerhand, spent: SpentRe
 
 /** Held resources become public only when paid; board resources keep their plain resource wording. */
 function tokenText(state: GameState, player: Playerhand, spent: Exclude<SpentResource, { readonly kind: 'card' }>): string {
-  if (spent.kind === 'piece') return spent.resource
+  const as = spent.asResource === undefined ? '' : ` as ${spent.asResource}`
+  if (spent.kind === 'piece') return `${spent.resource}${as}`
   const item = player.items.find((candidate) => candidate.id === spent.itemId) ?? state.discardedItems.find((candidate) => candidate.id === spent.itemId)
-  return `${spent.resource} (${spent.kind})${item === undefined ? '' : ` ${itemNumberText(state.logSecret, player.username, item)}`}`
+  return `${spent.resource} (${spent.kind})${item === undefined ? '' : ` ${itemNumberText(state.logSecret, player.username, item)}`}${as}`
 }
 
 /** Shared by explicit, Any and each payments; repeated held items keep their separate numbers. */

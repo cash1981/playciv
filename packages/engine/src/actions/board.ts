@@ -1197,7 +1197,7 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     }
     // A city took the scout off the map, put the city (and the destroyed city-state) on it: all one action
     if (effect.kind === 'foundCity') {
-      if ([effect.figureHistoryId, effect.historyId, effect.cityState?.historyId].includes(entry.id)) return true
+      if ([effect.figureHistoryId, effect.historyId, effect.cityState?.historyId, ...(effect.huts ?? []).map((hut) => hut.historyId)].includes(entry.id)) return true
     }
     // The token a Feudalism harvest put in the player's area, and the coin a wonder was given
     if (effect.kind === 'feudalismHarvest' || effect.kind === 'sotCoin') {

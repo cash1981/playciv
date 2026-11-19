@@ -305,7 +305,30 @@ describe('founding a city', () => {
   it('names the huts a Zulu city is next to', () => {
     const state = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
     const result = unwrap(found(state, scoutOf(state).id))
-    expect(result.log.at(-1)?.publicLog).toContain('next to a hut they may explore (C2)')
+    expect(result.log.at(-1)?.publicLog).toContain('next to a hut they explore at once (C2)')
+  })
+
+  it('has the Zulu explore the huts next to the city at once, and the undo vote puts them back', () => {
+    const state = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
+    const hut = state.board.pieces.find((piece) => piece.assetId === 'resources/hut')
+    const handBefore = me(state).items.length
+    const result = unwrap(found(state, scoutOf(state).id))
+    expect(me(result).items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(1)
+    expect(me(result).items.length).toBe(handBefore + 1)
+    expect(result.tokenCollections).toHaveLength(1)
+    expect(mapCellOf(result.board, result.board.pieces.find((piece) => piece.id === hut?.id) as never)).toBeNull()
+    // No Chinese culture for a Zulu city, and the board Undo leaves it to the vote
+    expect(me(result).stats.culture).toBe(me(state).stats.culture)
+    expect(unwrapErr(undoLastBoardChange(result, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+
+    const undone = undoByVote(result, 'req-1')
+    expect(me(undone).items.some((item) => item.sheetName === 'HUTS')).toBe(false)
+    expect(undone.tokenCollections ?? []).toHaveLength(0)
+    const back = undone.board.pieces.find((piece) => piece.id === hut?.id)
+    expect(back).toMatchObject({ x: hut?.x, y: hut?.y })
+    // A Zulu city next to no hut collects nothing
+    const plain = withScout({ civ: 'Zulu' })
+    expect(unwrap(found(plain, scoutOf(plain).id)).tokenCollections).toBeUndefined()
   })
 
   it('gives the Romans a free advance on the culture track, and nobody else', () => {

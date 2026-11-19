@@ -11,26 +11,21 @@
  */
 
 import { performAssistedAction } from '../assisted.js'
-import { countLinesIn } from '../assisted-culture.js'
 import { IMMEDIATE_RELIC_CLAIMS } from '../assisted-relics.js'
 import { mapCellOf } from '../blockade.js'
-import { areaSlotRegion, boardAreas, nextFreeSlot } from '../board.js'
+import { boardAreas } from '../board.js'
 import { squareLabel } from '../build-options.js'
 import type { EngineError } from '../errors.js'
 import type { Result } from '../result.js'
 import { ok } from '../result.js'
-import type { GameState, TokenCollection } from '../state.js'
-import { findPlayer, withPlayer } from '../state.js'
+import type { GameState } from '../state.js'
+import { findPlayer } from '../state.js'
 import { appendPublicLog } from '../log.js'
 import { occupancyOf } from '../movement.js'
 import { mapTokensOf } from '../zheng-he.js'
-import { movePieceUnchecked, removePiece, travelFigure } from './board.js'
+import { removePiece, travelFigure } from './board.js'
+import { collectMapToken } from './collect-token.js'
 import type { TravelFigureInput } from './board.js'
-import { draw } from './draw.js'
-
-/** The Chinese gain this much culture each time a figure collects a hut. */
-const CHINESE = 'Chinese'
-const CHINESE_HUT_CULTURE = 3
 
 export interface TravelCollectingInput extends TravelFigureInput {
   /** The player agreed to draw the hut or village the figure ends on. Without it the token stays where it is. */
@@ -77,61 +72,8 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
   const area = boardAreas(moved.board, moved.players).find((candidate) => candidate.playerId === input.playerId)
   if (area === undefined) return travelled
 
-  const under = (moved.underTokens ?? []).find((candidate) => candidate.pieceId === token.piece.id) ?? null
-  const held = new Set(player.items.map((item) => item.id))
-  const drawn = draw(moved, {
-    playerId: input.playerId,
-    sheetName: token.sheet,
-    fromPieceId: token.piece.id,
-    confirmedOutOfTurn: true,
-  })
-  // No hut or village left in the deck: the move stands and the token stays on its square
-  if (!drawn.ok) return travelled
-  const card = findPlayer(drawn.value, input.playerId)?.items.find((item) => !held.has(item.id))
-  if (card === undefined) return travelled
-
-  // A full area still takes the token, at the area's first slot: it must leave the map either way
-  const region = areaSlotRegion(area)
-  const [x, y] = nextFreeSlot(drawn.value.board, area, drawn.value.board.pieces, { x: region.x, y: region.y })
-  const placed = movePieceUnchecked(drawn.value, {
-    playerId: input.playerId,
-    pieceId: token.piece.id,
-    x,
-    y,
-    snap: false,
-    ...(input.at === undefined ? {} : { at: input.at }),
-  })
-  // The draw's own log line cannot be voted back on its own: the board Undo returns the token and the card together
-  const sealed =
-    placed === undefined
-      ? undefined
-      : { ...placed, log: placed.log.map((line) => (line.item?.id === card.id && line.logType === 'ITEM' ? { ...line, undo: null, superseded: true } : line)) }
-  const entry = placed?.board.history.at(-1)
-  if (placed === undefined || sealed === undefined || entry === undefined) return travelled
-  // The Chinese gain 3 culture for a hut (civilization card); a village is not a hut, and a relic is handled above
-  const culture = token.sheet === 'HUTS' && player.civilization?.name === CHINESE ? CHINESE_HUT_CULTURE : 0
-  const collection: TokenCollection = {
-    ...(culture === 0 ? {} : { culture }),
-    historyId: entry.id,
-    playerId: input.playerId,
-    pieceId: token.piece.id,
-    itemId: card.id,
-    under,
-    square: squareLabel(token.cell),
-  }
-  const holder = findPlayer(sealed, input.playerId)
-  const written =
-    culture === 0 || holder === undefined
-      ? sealed
-      : appendPublicLog(
-          withPlayer(sealed, { ...holder, stats: { ...holder.stats, culture: holder.stats.culture + culture } }),
-          holder.username,
-          holder.playerId,
-          `gained ${culture} (${holder.stats.culture + culture}) culture from the hut on ${collection.square} as the Chinese`,
-        )
-  // The line was written after the token's board entry: count it in, as the culture advance does
-  const gained = culture === 0 ? written : countLinesIn(written, [entry.id])
-  return ok({ ...gained, tokenCollections: [...(gained.tokenCollections ?? []), collection] })
+  const collected = collectMapToken(moved, input.playerId, token, { at: input.at, chineseCulture: true })
+  return collected === undefined ? travelled : ok(collected)
 }
 
 /**

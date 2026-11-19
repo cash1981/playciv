@@ -512,8 +512,10 @@ export type SpentResource =
       /** The collected icon removed with the held item; absent in older saves or when no matching icon remained. */
       readonly tokenPiece?: BoardPiece
       readonly curieSubstitute?: string
+      /** The Indians spent this token as the named resource (incense, iron, silk or wheat); `resource` is what it really is. */
+      readonly asResource?: string
     }
-  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string }
+  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string; readonly asResource?: string }
   // A culture card played as the resource (A Gift from Afar, A Generous Gift, A Princely Gift), discarded like a played card
   | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
 
@@ -642,6 +644,13 @@ export type AssistedEffect =
       readonly cityState: { readonly piece: BoardPiece; readonly historyId: string } | null
       /** The culture the destroyed city-state gave. */
       readonly culture: number
+      /** The huts a Zulu city explored at once: the collection's board entry, the token and where it lay, and the card. */
+      readonly huts?: readonly {
+        readonly historyId: string
+        readonly pieceId: string
+        readonly from: { readonly x: number; readonly y: number }
+        readonly itemId: string
+      }[]
       /** The free advance the Romans get for a new city, or `null`. */
       readonly advance: CultureAdvanceEffect | null
     }

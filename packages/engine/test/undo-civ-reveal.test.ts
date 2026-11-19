@@ -584,3 +584,18 @@ describe("Spain's travel speed", () => {
     expect(mvmtOf(undoByVote(edited, CASH1981))).toBe('4')
   })
 })
+
+describe("the Arabs' starting resources", () => {
+  const resources = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId.startsWith('resources/') && piece.assetId !== 'resources/hut' && piece.assetId !== 'resources/village')
+
+  it('puts one token of each resource in the area on the reveal, and the undo takes them off again', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Arabs'), CASH1981)
+    expect(resources(revealed).map((piece) => piece.assetId).sort()).toEqual(['resources/incense', 'resources/iron', 'resources/silk', 'resources/wheat'])
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 starts with one of each resource from the market as the Arabs (wheat, silk, incense, iron)')).toBe(true)
+    expect(resources(undoByVote(revealed, CASH1981))).toHaveLength(0)
+  })
+
+  it('gives nothing to another civilization', () => {
+    expect(resources(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toHaveLength(0)
+  })
+})

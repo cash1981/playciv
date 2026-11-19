@@ -1396,6 +1396,16 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   `techRevealEffects` (server only) and taken back when the tech is taken back by the undo vote
   or `removeTech` (`tech-reveal-abilities.ts`).
 
+- **Zulu:** a city founded next to huts collects them at once (`actions/collect-token.ts`, shared
+  with figure moves; no Chinese culture). The undo vote returns the tokens and cards; the board
+  Undo leaves them to the vote. Metropolis growth next to huts is still by hand.
+- **Arabs:** the civ reveal puts one token of each resource kind (`RESOURCE_KINDS`) in the area, as
+  pieces of the reveal, so its undo removes them; a kind out of supply is skipped and logged.
+- **Indians:** a token of any other resource (Spy and Uranium included) pays a request for
+  incense, iron, silk or wheat, after the real resource; Spy and Uranium requests get no
+  wildcard. The spend is recorded with `asResource` and the line says "spent 1 Silk as Iron".
+  Egyptians' free building is not modelled yet (needs its own action and UI).
+
 Source: `assisted.ts` (`build`), `actions/token-collection.ts`, `actions/tile-tokens.ts`,
 `actions/player.ts`, `actions/undo.ts`; tests `assisted-wonders`, `tile-tokens`,
 `undo-civ-reveal`.

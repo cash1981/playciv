@@ -9,6 +9,7 @@
 import {
   areaSlotRegion,
   civTileAssetId,
+  nextFreeSlot,
   cultureCellCenter,
   cultureStepOf,
   cultureTrackHeight,
@@ -54,6 +55,7 @@ import {
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import { shuffle } from '../random.js'
+import { RESOURCE_KINDS } from '../tile-icons.js'
 import { applyTechRevealAbilities, undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
@@ -73,6 +75,7 @@ import { draw, drawWonderToBoard } from './draw.js'
 type ActionResult = Result<GameState, EngineError>
 
 /** Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). */
+const ARABS = 'Arabs'
 const SPANISH = 'Spanish'
 const SPANISH_MVMT = '2+1'
 
@@ -562,6 +565,7 @@ function revealCivilization(
   next = placeStartingTile(next, player, civ)
   next = placeLeaderMarker(next, player, civ)
   next = placeWhiteFigure(next, player, civ)
+  next = placeArabResources(next, player, civ)
   const ownPieces = newPieces(afterReveal, next)
   const ownWonders = wondersTakenFromDeck(afterReveal, next)
 
@@ -724,6 +728,43 @@ function placeWhiteFigure(
       x: region.x,
       y: region.y,
     }) ?? state
+  )
+}
+
+/**
+ * Arabs (civilization card): the game starts with one of each resource from the market. Each token is put in the
+ * player's area and counts as a piece of the reveal, so undoing the reveal takes them off again. A resource whose
+ * supply is used up is skipped and the log says so.
+ */
+function placeArabResources(state: GameState, player: Playerhand, civ: CivItem): GameState {
+  if (civ.name !== ARABS) return state
+  const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
+  if (area === undefined) return state
+  const region = areaSlotRegion(area)
+  let next = state
+  const taken: string[] = []
+  const missing: string[] = []
+  for (const kind of RESOURCE_KINDS) {
+    const asset = findBoardAsset(`resources/${kind}`)
+    if (asset === undefined || (remainingBoardAssetCount(asset, next.board.pieces, next.numOfPlayers) ?? Infinity) <= 0) {
+      missing.push(kind)
+      continue
+    }
+    const [x, y] = nextFreeSlot(next.board, area, next.board.pieces, { x: region.x, y: region.y })
+    const placed = placeUnchecked(next, { playerId: player.playerId, assetId: asset.id, x, y })
+    if (placed === undefined) {
+      missing.push(kind)
+      continue
+    }
+    next = placed
+    taken.push(kind)
+  }
+  return appendPublicLog(
+    next,
+    player.username,
+    player.playerId,
+    `starts with one of each resource from the market as the Arabs (${taken.join(', ') || 'none'})` +
+      (missing.length === 0 ? '' : `; the market has no ${missing.join(', ')} left`),
   )
 }
 

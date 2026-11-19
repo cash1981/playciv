@@ -8,7 +8,10 @@
  * Harvest. Its trade and coin icons are not in the map data and stay by hand.
  */
 
-import { placeUnchecked, removePiece } from './actions/board.js'
+import { movePieceUnchecked, placeUnchecked, removePiece } from './actions/board.js'
+import { collectMapToken } from './actions/collect-token.js'
+import { returnCollectedCard } from './actions/tile-tokens.js'
+import { mapTokensOf } from './zheng-he.js'
 import {
   blocked,
   lastLogId,
@@ -162,19 +165,30 @@ export const foundCity: AssistedActionDefinition = {
       working = withPlayerHand(working, { ...holder, stats: { ...holder.stats, culture: holder.stats.culture + culture } })
     }
 
+    // The Zulu explore the huts next to the city at once (civilization card): each token goes to their area and its card to the hand
+    const huts: { readonly historyId: string; readonly pieceId: string; readonly from: { readonly x: number; readonly y: number }; readonly itemId: string }[] = []
+    for (const token of mapTokensOf(working.board)) {
+      if (token.sheet !== 'HUTS' || !check.zuluHuts.includes(squareLabel(token.cell))) continue
+      const next = collectMapToken(working, player.playerId, token, { at: context.at, chineseCulture: false })
+      const collection = next?.tokenCollections?.at(-1)
+      if (next === undefined || collection === undefined) continue
+      working = next
+      huts.push({ historyId: collection.historyId, pieceId: token.piece.id, from: { x: token.piece.x, y: token.piece.y }, itemId: collection.itemId })
+    }
+
     // The new city counts towards the number of social policies a civilization may adopt
     const cities = ownCityPieces(working, player).length
     const holder = playerOf(working, player.playerId) ?? player
     const policyNote = holder.socialPolicies.length < cities ? ', and may now adopt another social policy' : ''
     const withFigure = figure.assetId.endsWith('army') ? 'an army' : 'a scout'
-    const lineIds = [figureEntry.id, cityEntry.id, destroyed?.historyId]
+    const lineIds = [figureEntry.id, cityEntry.id, destroyed?.historyId, ...huts.map((hut) => hut.historyId)]
     const founded = appendLog(working, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
         `${player.username} founded a city on ${square} with ${withFigure}` +
         (destroyed === null ? '' : `, destroying the city-state there (+${CITY_STATE_CULTURE} (${holder.stats.culture}) culture)`) +
-        (check.zuluHuts.length === 0 ? '' : `, next to a hut they may explore (${check.zuluHuts.join(', ')})`) +
+        (check.zuluHuts.length === 0 ? '' : `, next to a hut they ${huts.length === 0 ? 'may explore' : 'explore at once'} (${check.zuluHuts.join(', ')})`) +
         policyNote,
       privateLog: '',
       createdAt: context.at ?? null,
@@ -209,6 +223,7 @@ export const foundCity: AssistedActionDefinition = {
         square: { column: cell.column, row: cell.row, label: square },
         cityState: destroyed,
         culture,
+        ...(huts.length === 0 ? {} : { huts }),
         advance: advance !== null && advance.ok ? advance.value.effect : null,
       },
       logId,
@@ -248,6 +263,25 @@ export const foundCity: AssistedActionDefinition = {
 
     let working = state
     let current = player
+    // The huts the Zulu explored go back first: the token to its square, the card out of the hand
+    for (const hut of [...(effect.huts ?? [])].reverse()) {
+      const collection = working.tokenCollections?.find((candidate) => candidate.historyId === hut.historyId)
+      // A board Undo may already have put it back
+      if (collection === undefined) continue
+      const returned = returnCollectedCard(working, collection)
+      if (returned === undefined) return blockedBy(`The hut card from ${collection.square} has left the hand, so the city cannot be undone.`)
+      const moved = movePieceUnchecked(returned, {
+        playerId: player.playerId,
+        pieceId: hut.pieceId,
+        x: hut.from.x,
+        y: hut.from.y,
+        snap: false,
+        ...(at === null ? {} : { at }),
+      })
+      if (moved === undefined) return blockedBy(`The hut token of ${collection.square} could not be put back.`)
+      working = moved
+      current = playerOf(working, player.playerId) ?? player
+    }
     // The free advance goes first: it can refuse (the marker has moved on)
     if (effect.advance !== null) {
       const reversed = reverseAdvanceEffect(working, current, record, effect.advance, at)
