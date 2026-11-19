@@ -201,3 +201,33 @@ td .assisted-action {
   justify-content: flex-end;
   gap: 0.55rem;
 }
+
+/* The card beside an action (#367): smaller than in the hand, and the row wraps
+   under it at 320 px instead of forcing a horizontal scroll. */
+.assisted-actions > li.has-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.assisted-card-body {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.action-card-thumb {
+  flex: none;
+  width: 5.2rem;
+  padding: 0.2rem;
+  background: var(--card-art-bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.action-card-thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+}

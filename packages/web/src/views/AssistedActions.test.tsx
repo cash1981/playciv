@@ -1317,6 +1317,14 @@ describe('The actions of the open phase', () => {
     expect(possible.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  it('shows the card beside a tech action and none beside a policy action', () => {
+    const policy: Action = { action: 'expansionism', label: 'Expansionism', phase: 'CM', group: 'Social policies', status: 'ready', reason: 'Gain 2 trade.', repeatable: false }
+    const view = { ...viewWith([{ ...READY, techName: 'Chivalry' }, policy]), techs: [tech('Chivalry')] } as PlayerView
+    renderPanel(view)
+    expect(document.querySelectorAll('.action-card-thumb')).toHaveLength(1)
+    expect(document.querySelector('.assisted-actions > li.has-card')?.textContent).toContain('Chivalry')
+  })
+
   it('links a tech-backed action name to the Tech content in Research', async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
     const scrolled: Element[] = []
