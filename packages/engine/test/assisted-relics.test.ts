@@ -6,12 +6,14 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { removePiece } from '../src/actions/board.js'
+import { removePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { travelFigureCollecting } from '../src/actions/token-collection.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
-import { assistedAvailability, availableActionsFor, performAssistedAction } from '../src/assisted.js'
+import { ASSISTED_ACTIONS, assistedAvailability, availableActionsFor, performAssistedAction } from '../src/assisted.js'
 import { RELIC_ACTIONS } from '../src/assisted-relics.js'
+import { BOARD_ASSETS } from '../src/board.js'
 import { cultureMarkerOf } from '../src/culture-track.js'
+import { claimsRelic } from '../src/relic-claims.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { AssistedActionKind, GameState } from '../src/state.js'
 
@@ -216,5 +218,32 @@ describe("Attila's Village", () => {
     const used = unwrap(act(armyTakes(sotTurn(), ATTILA), 'relic:attila:infantry'))
     const line = used.log.find((entry) => entry.assistedActionId === 'req-1')
     expect(line?.publicLog).toContain('a free infantry unit')
+  })
+})
+
+describe('the board Undo of a claimed relic', () => {
+  const markerBack = (state: GameState, assetId: string) => state.board.pieces.some((piece) => piece.assetId === assetId)
+
+  it.each([
+    ['the School of Confucius, claimed by the move', CONFUCIUS, undefined],
+    ["Attila's Village, claimed from its button", ATTILA, 'relic:attila:infantry'],
+    ['Atlantis, claimed in Start of Turn', 'relics/atlantis', 'sot:atlantis'],
+  ] as const)('leaves the marker off the map while %s stands, and puts it back once the claim is undone', (_name, assetId, button) => {
+    const taken = armyTakes(sotTurn(), assetId)
+    const claimed = button === undefined ? taken : unwrap(act(taken, button, 'req-claim'))
+    const claim = claimed.assistedActions.find((record) => record.status === 'applied')
+    if (claim === undefined) throw new Error('nothing was claimed')
+    expect(unwrapErr(undoLastBoardChange(claimed, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+
+    const released = unwrap(undoLastBoardChange(undoByVote(claimed, claim.id), CASH1981))
+    expect(markerBack(released, assetId)).toBe(true)
+  })
+
+  it('names a claim for every relic on the board', () => {
+    const relics = BOARD_ASSETS.filter((asset) => asset.category === 'relic')
+    expect(relics).toHaveLength(5)
+    for (const relic of relics) {
+      expect(ASSISTED_ACTIONS.some((definition) => claimsRelic(relic.id, definition.kind)), relic.id).toBe(true)
+    }
   })
 })

@@ -54,6 +54,7 @@ import type { EngineError } from '../errors.js'
 import { MAX_PRODUCTION_OVERRIDE } from '../limits.js'
 import { appendLog } from '../log.js'
 import { nextId } from '../random.js'
+import { claimsRelic } from '../relic-claims.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
@@ -1112,6 +1113,15 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
   if (state.cancellations?.events.some((event) => event.keptHistoryIds?.includes(entry.id) === true) === true) return true
   return state.assistedActions.some((record) => {
     if (record.status !== 'applied') return false
+    // A relic whose ability this player claimed: the marker back on the map would leave them the ability as well
+    if (
+      change.kind === 'remove' &&
+      change.piece.category === 'relic' &&
+      record.playerId === entry.playerId &&
+      claimsRelic(change.piece.assetId, record.kind)
+    ) {
+      return true
+    }
     const effect = record.effect
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
     // A unit placed nothing, so only a marker is on the board; City Walls only turned the city marker over.

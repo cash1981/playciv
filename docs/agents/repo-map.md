@@ -16,9 +16,9 @@ on-demand map, not additional required startup reading.
 | `.opencode/` | yes | OpenCode agent definitions for the `coder` and `reviewer` roles under `agents/`. The reviewer is read-only, as in `.claude/agents/`; Skills load from `.claude/skills/`. |
 | `Civilization/` | **no** | Rulebooks, board templates (ODP/PPTX), piece and card artwork, a Mongo dump. Large binaries. |
 
-The three gitignored folders are reference material. They are on the human's
+The gitignored `Civilization/` folder is reference material. It is on the human's
 disk and will not be on a fresh clone, so nothing in the build may depend on
-them — only the generators in `tools/`, which are run deliberately.
+it — only the generators in `tools/`, which are run deliberately.
 
 ## packages/engine
 

@@ -982,7 +982,9 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   Greeks and one more for a revealed Organized Religion, which stack (Greeks with it draw four) (human: keep one of the
   drawn; the rulebook's draw-two-then-two-more reading for the Greeks is not used); claimed at once by `takeRelic`, the
   card chosen through the usual pending choice. A claim blocked at that moment (a full culture hand) leaves the button with its
-  reason. Undo of a claim is by vote; board Undo of the move waits until the claim is undone. Movement cards (Galileo,
+  reason. Undo of a claim is by vote. While a claim of the relic stands (Atlantis and Seven Cities included), the board
+  Undo refuses to put its marker back (`BOARD_UNDO_ASSISTED`, `relic-claims.ts`), so the move cannot be taken back
+  with the ability kept. Movement cards (Galileo,
   culture events) do not apply the scout restrictions to the squares they cross: they cannot end on any marker square.
   Tests: `assisted-relics.test.ts`, `tile-tokens.test.ts`.
 - **Collecting a token** (#364): `travelFigureCollecting` (the `/travel` route's `collectToken`) is `travelFigure` plus, when the
