@@ -1366,6 +1366,25 @@ The picture is decorative (empty alt) when the row names the card in text.
 Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 `PlayableCards.tsx` and their tests.
 
+### Civilization abilities: Romans, Chinese, Spanish (#368)
+
+- **Romans:** a wonder build advances the leader marker one space for free, as a city does
+  (`freeAdvanceStatus`, `performAdvance` with `free`). A wonder is refused before it is placed
+  while that advance is stopped (card choice waiting, hand over its size); the end of the
+  track stops nothing. The build's undo takes the advance back first and refuses if the marker
+  has moved on. Conquests stay manual.
+- **Chinese:** a figure that collects a hut (`travelFigureCollecting`) gives +3 culture and a
+  public line. Villages and relics give none (open question: the card also says "conquer a
+  village"). The culture is kept on the `TokenCollection`; the board Undo takes it back and is
+  refused once it is spent.
+- **Spanish:** the reveal sets `stats.mvmt` from `2` to `2+1` (the typed bonus `movement.ts`
+  reads) and logs it. A value the player already typed is left alone. The `civSetup` records
+  what it set, and the reveal undo restores it only if the value is still the one it set.
+
+Source: `assisted.ts` (`build`), `actions/token-collection.ts`, `actions/tile-tokens.ts`,
+`actions/player.ts`, `actions/undo.ts`; tests `assisted-wonders`, `tile-tokens`,
+`undo-civ-reveal`.
+
 ## Reopening a phase (2026-10-23)
 
 - **Reopen** marks the viewer's latest ended phase of the active turn not done

@@ -545,3 +545,41 @@ describe('undo of a civilization reveal', () => {
     })
   })
 })
+
+describe("Spain's travel speed", () => {
+  const mvmtOf = (state: GameState): string | undefined => findPlayer(state, CASH1981)?.stats.mvmt
+
+  it('adds +1 to the typed movement when the civilization is revealed, with a public line', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
+    expect(mvmtOf(revealed)).toBe('2+1')
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 gets +1 travel speed as the Spanish (movement 2+1)')).toBe(true)
+    // Nobody else's speed changes, and another civilization leaves it alone
+    expect(mvmtOf(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toBe('2')
+    expect(findPlayer(revealed, KARANDRAS1)?.stats.mvmt).toBe('2')
+  })
+
+  it('is restored by the undo of the reveal, so the next reveal does not add it twice', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
+    const undone = undoByVote(revealed, CASH1981)
+    expect(mvmtOf(undone)).toBe('2')
+    expect(mvmtOf(revealHidden(undone, CASH1981))).toBe('2+1')
+  })
+
+  it('leaves a value the player typed: not set on the reveal, and not restored by the undo', () => {
+    const base = giveCiv(firstCivGame(), CASH1981, 'Spanish')
+    const player = findPlayer(base, CASH1981)
+    if (player === undefined) throw new Error('no player')
+    const typed = withPlayer(base, { ...player, stats: { ...player.stats, mvmt: '3' } })
+    const revealed = revealHidden(typed, CASH1981)
+    expect(mvmtOf(revealed)).toBe('3')
+    expect(revealed.log.some((entry) => entry.publicLog.includes('travel speed as the Spanish'))).toBe(false)
+    expect(mvmtOf(undoByVote(revealed, CASH1981))).toBe('3')
+
+    // Typed after the reveal: the undo keeps it
+    const spanish = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
+    const holder = findPlayer(spanish, CASH1981)
+    if (holder === undefined) throw new Error('no player')
+    const edited = withPlayer(spanish, { ...holder, stats: { ...holder.stats, mvmt: '4' } })
+    expect(mvmtOf(undoByVote(edited, CASH1981))).toBe('4')
+  })
+})

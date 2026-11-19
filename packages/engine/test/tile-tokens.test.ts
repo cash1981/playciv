@@ -374,6 +374,87 @@ describe('collecting a token by ending a move on it', () => {
   })
 })
 
+describe('the Chinese and huts', () => {
+  const chinese = (civ: string, culture = 5) => {
+    const scene = put(put(START(), 'figures/redarmy', 3, 2), 'resources/hut', 3, 1)
+    const withCiv: GameState = {
+      ...scene,
+      players: scene.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { kind: 'civ', name: civ } as unknown as Playerhand['civilization'], stats: { ...player.stats, culture } }
+          : player,
+      ),
+    }
+    const army = withCiv.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
+    return { state: withCiv, armyId: army.id }
+  }
+  const collect = (state: GameState, armyId: string) =>
+    unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1, collectToken: true }))
+
+  it('gain 3 culture and say so publicly when a figure collects a hut, and nobody else does', () => {
+    const { state, armyId } = chinese('Chinese')
+    const moved = collect(state, armyId)
+    expect(me(moved).stats.culture).toBe(8)
+    expect(moved.log.some((entry) => entry.publicLog === 'cash1981 gained 3 (8) culture from the hut on D2 as the Chinese')).toBe(true)
+    // Nothing about the card or the culture bookkeeping reaches another player's view
+    const other = JSON.stringify(toPlayerView(moved, KARANDRAS1))
+    expect(other).not.toContain('tokenCollections')
+
+    const roman = chinese('Romans')
+    const plain = collect(roman.state, roman.armyId)
+    expect(me(plain).stats.culture).toBe(5)
+    expect(plain.log.some((entry) => entry.publicLog.includes('as the Chinese'))).toBe(false)
+  })
+
+  it('gain nothing when the figure does not collect, and nothing for a village or a relic', () => {
+    const { state, armyId } = chinese('Chinese')
+    const declined = unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1 }))
+    expect(me(declined).stats.culture).toBe(5)
+
+    const village = put(put(START(), 'figures/redarmy', 3, 2), 'resources/village', 3, 1)
+    const chineseVillage: GameState = {
+      ...village,
+      players: village.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { kind: 'civ', name: 'Chinese' } as unknown as Playerhand['civilization'], stats: { ...player.stats, culture: 5 } }
+          : player,
+      ),
+    }
+    const army = chineseVillage.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
+    expect(me(collect(chineseVillage, army.id)).stats.culture).toBe(5)
+
+    const relic = put(put(START(), 'figures/redarmy', 3, 2), 'relics/atlantis', 3, 1)
+    const chineseRelic: GameState = {
+      ...relic,
+      players: relic.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { kind: 'civ', name: 'Chinese' } as unknown as Playerhand['civilization'], stats: { ...player.stats, culture: 5 } }
+          : player,
+      ),
+    }
+    const relicArmy = chineseRelic.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
+    expect(me(collect(chineseRelic, relicArmy.id)).stats.culture).toBe(5)
+  })
+
+  it('lose the culture again when the board Undo returns the token, and the Undo is refused once it is spent', () => {
+    const { state, armyId } = chinese('Chinese')
+    const moved = collect(state, armyId)
+    const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(me(undone).stats.culture).toBe(5)
+    expect(undone.log.at(-1)?.publicLog).toContain('took back 3 (5) culture')
+
+    const spent: GameState = {
+      ...moved,
+      players: moved.players.map((player) =>
+        player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture: 1 } } : player,
+      ),
+    }
+    const refused = undoLastBoardChange(spent, CASH1981)
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.error.kind).toBe('BOARD_UNDO_TOKEN_CARD_GONE')
+  })
+})
+
 describe('scouts and relics', () => {
   const travel = (state: GameState, pieceId: string, column: number, row: number, collectToken = false) =>
     travelFigureCollecting(state, { playerId: CASH1981, pieceId, column, row, ...(collectToken ? { collectToken } : {}) })

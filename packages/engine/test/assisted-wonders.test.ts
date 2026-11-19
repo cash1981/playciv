@@ -28,7 +28,7 @@ import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction, takeBackOpenBuild } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
-import { SQUARE_SIZE, findBoardAsset, isInWondersArea, mapTop, slotOrigin, wonderAssetId, wondersArea } from '../src/board.js'
+import { SQUARE_SIZE, cultureStepOf, findBoardAsset, isInWondersArea, mapTop, slotOrigin, wonderAssetId, wondersArea } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { buildOptionsOf, buildSquareRefusal, marketWondersOf } from '../src/build-options.js'
 import type { BuildChoice, CityBuildOptions } from '../src/build-options.js'
@@ -37,6 +37,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { earnTechCoin } from '../src/tech-coins.js'
 import type { Item } from '../src/item.js'
 import { findPlayer } from '../src/state.js'
+import { withCivilization, withMarkerAt } from './culture-advance-fixture.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -889,5 +890,73 @@ describe('Education: a coin for a wonder, once per turn, max 4', () => {
     // The next turn it can be earned again
     const next = { ...first, players: first.players.map((p) => (p.playerId === CASH1981 ? { ...p, playerTurns: [] } : p)) }
     expect(coins(earnTechCoin(next, CASH1981, 'Education').state)).toBe(2)
+  })
+})
+
+describe('the Romans and wonders', () => {
+  /** The scene with cash1981 as the Romans, their leader marker on `step`, and Mysticism when a card choice is wanted. */
+  const roman = (step = 9, techs: readonly string[] = []): GameState =>
+    withMarkerAt(withCivilization(ready({ techs }), 'Romans'), step, 'Romans')
+  const markerStep = (state: GameState): number | null => {
+    const marker = state.board.pieces.find((piece) => piece.assetId.startsWith('leaders/'))
+    if (marker === undefined) throw new Error('no marker')
+    return cultureStepOf(state.board, marker)
+  }
+
+  it('advance one space for free with every wonder, and nobody else does', () => {
+    const state = roman()
+    const built = build(state, STONEHENGE, C2)
+    expect(markerStep(built)).toBe(10)
+    expect(built.log.some((entry) => entry.publicLog.startsWith('cash1981 advanced for free on the culture track to space 10'))).toBe(true)
+    // The advance's line is not a target of the undo vote: only the build's line is
+    expect(built.log.filter((entry) => entry.assistedActionId === 'req-1')).toHaveLength(1)
+    const record = built.assistedActions.at(-1)
+    expect(record?.effect).toMatchObject({ kind: 'build', advance: { kind: 'cultureAdvance', fromStep: 9, toStep: 10 } })
+
+    const japanese = withMarkerAt(withCivilization(ready(), 'Japanese'), 9, 'Japanese')
+    expect(markerStep(build(japanese, STONEHENGE, C2))).toBe(9)
+  })
+
+  it('does not stop a Roman at the end of the track', () => {
+    const built = build(roman(21), STONEHENGE, C2)
+    expect(markerStep(built)).toBe(21)
+    expect(piecesOf(built, STONEHENGE)[0]?.ownerId).toBe(CASH1981)
+  })
+
+  it('refuses the wonder before it is placed while the free advance is stopped by a waiting card choice', () => {
+    const after = me(build(roman(9, ['Mysticism']), STONEHENGE, C2))
+    const pending = after.pendingRewards
+    expect(pending).toHaveLength(1)
+    // A fresh scene with that choice still waiting: the city has not acted this turn
+    const first: GameState = {
+      ...roman(9, ['Mysticism']),
+      players: roman(9, ['Mysticism']).players.map((p) => (p.playerId === CASH1981 ? { ...p, pendingRewards: pending, items: after.items } : p)),
+    }
+    const refused = unwrapErr(tryBuild(first, COLOSSUS, C2, 'req-2'))
+    if (refused.kind !== 'ASSISTED_ACTION_REJECTED') throw new Error(`unexpected error ${refused.kind}`)
+    expect(refused.reason).toMatch(/advance one space for free with every wonder, and that is stopped now/)
+    // Nothing was placed or paid
+    expect(piecesOf(first, COLOSSUS)[0]?.ownerId ?? null).toBeNull()
+    expect(piecesOf(first, STONEHENGE)[0]?.ownerId ?? null).toBeNull()
+  })
+
+  it('takes the advance back with the wonder on undo, and refuses when the marker has moved on', () => {
+    const state = roman()
+    const built = build(state, STONEHENGE, C2)
+    const undone = undoByVote(built, 'req-1')
+    expect(markerStep(undone)).toBe(9)
+    expect(piecesOf(undone, STONEHENGE)[0]?.ownerId ?? null).toBeNull()
+    expect(undone.log.at(-1)?.publicLog).toContain('and the free advance was taken back')
+    // And it can be built again
+    expect(markerStep(build(undone, STONEHENGE, C2, 'req-2'))).toBe(10)
+
+    const marker = built.board.pieces.find((piece) => piece.assetId.startsWith('leaders/'))
+    if (marker === undefined) throw new Error('no marker')
+    const moved = unwrap(movePiece(built, { playerId: CASH1981, pieceId: marker.id, x: marker.x + 40, y: marker.y, snap: false }))
+    const entry = moved.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no line')
+    let next = unwrap(initiateUndo(moved, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of OTHERS.slice(0, 2)) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
+    expect(unwrapErr(vote(next, { logId: entry.id, playerId: OTHERS[2] as string, vote: true, at: AT })).kind).toBe('ASSISTED_UNDO_BLOCKED')
   })
 })

@@ -46,6 +46,7 @@ import {
   appendInfoLog,
   appendItemLog,
   appendLog,
+  appendPublicLog,
   appendRandomDiscardLog,
   createLogTexts,
   loggedItemNumber,
@@ -57,6 +58,7 @@ import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { CivRevealSetup, GameState, Playerhand, PlayerStats } from '../state.js'
 import {
+  DEFAULT_PLAYER_STATS,
   findPlayer,
   hasUserAccess,
   isCombatHandSizeValue,
@@ -68,6 +70,10 @@ import { placeUnchecked, setWonderCoinTokens } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
+
+/** Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). */
+const SPANISH = 'Spanish'
+const SPANISH_MVMT = '2+1'
 
 /** Java: `SecurityCheck.hasUserAccess` followed by a 403. */
 function requireAccess(
@@ -565,17 +571,33 @@ function revealCivilization(
     dealt = { wonders: wondersTakenFromDeck(beforeDeal, next), pieceIds: newPieces(beforeDeal, next) }
   }
 
+  // Spain: +1 travel speed, written as the typed bonus (`2` becomes `2+1`). A value the player typed is left alone.
+  let mvmt: CivRevealSetup['mvmt']
+  if (civ.name === SPANISH) {
+    const holder = findPlayer(next, player.playerId)
+    if (holder !== undefined && holder.stats.mvmt === DEFAULT_PLAYER_STATS.mvmt) {
+      mvmt = { before: holder.stats.mvmt, set: SPANISH_MVMT }
+      next = withPlayer(next, { ...holder, stats: { ...holder.stats, mvmt: SPANISH_MVMT } })
+    }
+  }
+
   const civSetup: CivRevealSetup = {
     unitIds,
     discardedCivIds,
     pieceIds: ownPieces,
     wonders: ownWonders,
     ...(dealt === undefined ? {} : { dealt }),
+    ...(mvmt === undefined ? {} : { mvmt }),
   }
-  return ok({
+  const withSetup: GameState = {
     ...next,
     log: next.log.map((entry, index) => (index === revealIndex ? { ...entry, civSetup } : entry)),
-  })
+  }
+  return ok(
+    mvmt === undefined
+      ? withSetup
+      : appendPublicLog(withSetup, player.username, player.playerId, `gets +1 travel speed as the Spanish (movement ${mvmt.set})`),
+  )
 }
 
 /** The ids of the board pieces that `after` has and `before` did not. */

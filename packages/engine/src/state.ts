@@ -959,6 +959,8 @@ export type AssistedEffect =
       readonly hensonWound?: true
       /** Education added a coin for this wonder (once per turn, max 4), so an undo takes it off again. */
       readonly educationCoin?: TechCoinGrant
+      /** The free culture advance the Romans get for a wonder, so an undo takes it back. Absent for other builds and civs. */
+      readonly advance?: CultureAdvanceEffect | null
     }
   | {
       readonly kind: 'build'
@@ -1230,6 +1232,8 @@ export interface TokenCollection {
   readonly under: UnderToken | null
   /** "J6": where the token lay. */
   readonly square: string
+  /** Culture the collection gave (the Chinese for a hut), taken back with the token. Absent when it gave none. */
+  readonly culture?: number
 }
 
 /** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
@@ -1355,6 +1359,8 @@ export interface CivRevealSetup {
     readonly wonders: readonly Item[]
     readonly pieceIds: readonly string[]
   }
+  /** The civilization's travel speed bonus (Spain) written into `stats.mvmt`: what it was and what the reveal set it to. */
+  readonly mvmt?: { readonly before: string; readonly set: string }
 }
 
 export interface GameState {

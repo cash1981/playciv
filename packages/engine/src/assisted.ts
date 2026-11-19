@@ -66,6 +66,9 @@ import {
   cultureAdvance,
   cultureAdvanceSkip,
   drawCandidates,
+  freeAdvanceStatus,
+  performAdvance,
+  reverseAdvanceEffect,
   shuffleSheetTwice,
 } from './assisted-culture.js'
 import type {
@@ -132,6 +135,7 @@ import type {
   AssistedActionRecord,
   AssistedEffect,
   AvailableAction,
+  CultureAdvanceEffect,
   CultureCardKind,
   DrawnWonder,
   GameLogEntry,
@@ -799,6 +803,15 @@ const build: AssistedActionDefinition = {
         ),
       )
     }
+    // The Romans advance one space for free with every wonder (civilization sheet), so a wonder is refused
+    // while that advance is stopped (a card choice waiting, a hand over its size); the end of the track stops nothing
+    const romanWonder = payload.item.kind === 'wonder' && player.civilization?.name === 'Romans'
+    if (romanWonder) {
+      const status = freeAdvanceStatus(state, player)
+      if (status.kind === 'blocked') {
+        return err(failed(`The Romans advance one space for free with every wonder, and that is stopped now: ${status.reason}`))
+      }
+    }
     const sharing = {
       cost: choice.cost,
       production: city.production,
@@ -981,6 +994,17 @@ const build: AssistedActionDefinition = {
         drawn = { item: card, pieceId: entry.change.piece.id, historyId: entry.id }
       }
     }
+    // The Romans' free advance for the wonder; its own line carries no action id, so only the build's line takes the undo vote
+    let advance: CultureAdvanceEffect | undefined
+    if (romanWonder) {
+      const holder = playerOf(refilled, player.playerId) ?? player
+      if (freeAdvanceStatus(refilled, holder).kind === 'ok') {
+        const taken = performAdvance(refilled, holder, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
+        if (!taken.ok) return taken
+        refilled = taken.value.state
+        advance = taken.value.effect
+      }
+    }
     return ok({
       state: refilled,
       effect: {
@@ -1005,12 +1029,27 @@ const build: AssistedActionDefinition = {
         ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
         ...(hensonWound ? { hensonWound: true as const } : {}),
         ...(educationCoin === undefined ? {} : { educationCoin }),
+        ...(advance === undefined ? {} : { advance }),
       },
       logId,
     })
   },
 
   reverse(state, player, record, at, pieceMayHaveMoved = false) {
+    const effect = record.effect
+    // The Romans' free advance goes first: it can refuse (the marker has moved on), and a refusal leaves the game as it was
+    if (effect.kind === 'build' && 'advance' in effect && effect.advance !== undefined && effect.advance !== null) {
+      const reversed = reverseAdvanceEffect(state, player, record, effect.advance, at)
+      if (!reversed.ok) return reversed
+      const back = reverseBuild(reversed.value.state, playerOf(reversed.value.state, player.playerId) ?? player, record, at, pieceMayHaveMoved)
+      if (!back.ok) return back
+      return ok({ state: back.value.state, text: `${back.value.text}, and the free advance was taken back` })
+    }
+    return reverseBuild(state, player, record, at, pieceMayHaveMoved)
+  },
+}
+
+const reverseBuild: AssistedActionDefinition['reverse'] = (state, player, record, at, pieceMayHaveMoved = false) => {
     const effect = record.effect
     if (effect.kind !== 'build') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const refused = (reason: string): EngineError => ({
@@ -1189,7 +1228,6 @@ const build: AssistedActionDefinition = {
         tradeText +
         markerText,
     })
-  },
 }
 
 // -- Start a Building Program -----------------------------------------------------

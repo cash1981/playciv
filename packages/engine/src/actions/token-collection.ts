@@ -19,13 +19,17 @@ import type { EngineError } from '../errors.js'
 import type { Result } from '../result.js'
 import { ok } from '../result.js'
 import type { GameState, TokenCollection } from '../state.js'
-import { findPlayer } from '../state.js'
+import { findPlayer, withPlayer } from '../state.js'
 import { appendPublicLog } from '../log.js'
 import { occupancyOf } from '../movement.js'
 import { mapTokensOf } from '../zheng-he.js'
 import { movePieceUnchecked, removePiece, travelFigure } from './board.js'
 import type { TravelFigureInput } from './board.js'
 import { draw } from './draw.js'
+
+/** The Chinese gain this much culture each time a figure collects a hut. */
+const CHINESE = 'Chinese'
+const CHINESE_HUT_CULTURE = 3
 
 export interface TravelCollectingInput extends TravelFigureInput {
   /** The player agreed to draw the hut or village the figure ends on. Without it the token stays where it is. */
@@ -103,7 +107,10 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
       : { ...placed, log: placed.log.map((line) => (line.item?.id === card.id && line.logType === 'ITEM' ? { ...line, undo: null, superseded: true } : line)) }
   const entry = placed?.board.history.at(-1)
   if (placed === undefined || sealed === undefined || entry === undefined) return travelled
+  // The Chinese gain 3 culture for a hut (civilization card); a village is not a hut, and a relic is handled above
+  const culture = token.sheet === 'HUTS' && player.civilization?.name === CHINESE ? CHINESE_HUT_CULTURE : 0
   const collection: TokenCollection = {
+    ...(culture === 0 ? {} : { culture }),
     historyId: entry.id,
     playerId: input.playerId,
     pieceId: token.piece.id,
@@ -111,7 +118,17 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
     under,
     square: squareLabel(token.cell),
   }
-  return ok({ ...sealed, tokenCollections: [...(sealed.tokenCollections ?? []), collection] })
+  const holder = findPlayer(sealed, input.playerId)
+  const gained =
+    culture === 0 || holder === undefined
+      ? sealed
+      : appendPublicLog(
+          withPlayer(sealed, { ...holder, stats: { ...holder.stats, culture: holder.stats.culture + culture } }),
+          holder.username,
+          holder.playerId,
+          `gained ${culture} (${holder.stats.culture + culture}) culture from the hut on ${collection.square} as the Chinese`,
+        )
+  return ok({ ...gained, tokenCollections: [...(gained.tokenCollections ?? []), collection] })
 }
 
 /**

@@ -352,6 +352,8 @@ function undoCivReveal(
       stats: {
         ...current.stats,
         coinSources: clearedCoinSources(current, civ, techsChosen),
+        // Spain's +1 travel speed goes with the reveal, unless the player typed another value since
+        ...(setup.mvmt !== undefined && current.stats.mvmt === setup.mvmt.set ? { mvmt: setup.mvmt.before } : {}),
       },
     },
   )
