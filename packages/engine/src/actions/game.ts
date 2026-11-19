@@ -428,7 +428,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     state.players.flatMap((player) => player.items).find((item) => item.id === id)
 
   const advanceOf = (record: (typeof state.assistedActions)[number]): { readonly drawn: readonly string[] } | undefined => {
-    if (record.effect.kind === 'cultureAdvance') return record.effect
+    if (record.effect.kind === 'cultureAdvance' || record.effect.kind === 'relicGreatPerson') return record.effect
     if ('advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
       return record.effect.advance
     }

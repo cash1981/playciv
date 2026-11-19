@@ -808,8 +808,8 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   no free Arab advance (human). Relics are taken by an army that ends its move on
   the square (see "Relic markers" under Movement) or by hand, and claimed
   in any later Start of Turn by the player whose board history removed the marker,
-  once per game (`unavailable` afterwards, not `used`); only Atlantis and Seven
-  Cities of Gold have a button (human). Great Wall, Hanging Gardens, Taj Mahal, Big Ben,
+  once per game (`unavailable` afterwards, not `used`); Atlantis and Seven
+  Cities of Gold have a Start of Turn button, the other relics act as in "Relic markers" (human). Great Wall, Hanging Gardens, Taj Mahal, Big Ben,
   Machu Picchu, Plastics and Ecology only log, once per turn. Wonder obsolescence
   is not tracked (human).
 - **Judgements not settled with the human:** a card over the hand size can still
@@ -971,10 +971,20 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   makes no difference). An army that ends its move on a relic square and whose player confirms (`collectToken`, the same
   prompt as a hut) has the marker removed as the next board history entry credited to the player, which is what the relic
   claim reads, and its movement is over for the turn; board Undo puts the marker back and then takes the move back. A public
-  line names the ability. Passing through, declining, or moving onto another player's figures (the battle comes first) leaves the marker. Only Atlantis and Seven Cities of Gold have a
-  Start of Turn button; Ark of the Covenant, Attila's Village and the School of Confucius (two great people, with the Greek
-  exception) are applied by hand. Movement cards (Galileo, culture events) do not apply the scout restrictions to the squares
-  they cross: they cannot end on any marker square.
+  line names the ability. Passing through, declining, or moving onto another player's figures (the battle comes first) leaves the marker.
+  Atlantis (a free tech) and Seven Cities of Gold (two free investment markers) are Start of Turn buttons. The other three
+  are `relic:*` assisted actions in `assisted-relics.ts` (phase `ANY`, group "Relics", once the marker is off the map):
+  the **Ark of the Covenant** gives two free culture-track advances, one at a time (`performAdvance` with `free`, so
+  Mysticism, the culture hand limit, a waiting card choice and the end of the track still apply); the first is made by
+  `takeRelic` the moment the army takes the marker, the second is the button. **Attila's Village** gives two free units of
+  the types chosen (infantry, artillery, mounted, aircraft with Flight), drawn into the hand as for Military Tradition,
+  the public line naming the type only (button). The **School of Confucius** draws two Great Persons, one more for the
+  Greeks and one more for a revealed Organized Religion, which stack (Greeks with it draw four) (human: keep one of the
+  drawn; the rulebook's draw-two-then-two-more reading for the Greeks is not used); claimed at once by `takeRelic`, the
+  card chosen through the usual pending choice. A claim blocked at that moment (a full culture hand) leaves the button with its
+  reason. Undo of a claim is by vote; board Undo of the move waits until the claim is undone. Movement cards (Galileo,
+  culture events) do not apply the scout restrictions to the squares they cross: they cannot end on any marker square.
+  Tests: `assisted-relics.test.ts`, `tile-tokens.test.ts`.
 - **Collecting a token** (#364): `travelFigureCollecting` (the `/travel` route's `collectToken`) is `travelFigure` plus, when the
   player confirmed in the web (a hut or village is the only reason a move ends on a square with no figures), the draw from that
   piece (`draw` with `fromPieceId`, so what Zheng He saw under it is what is drawn), the token moved into the player's area

@@ -1193,6 +1193,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       if (change.kind === 'place' && advance.marker?.pieceId === change.piece.id) return true
       if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
+    // The Great Person marker the School of Confucius put in the player's area
+    if (effect.kind === 'relicGreatPerson' && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
     // Gunpowder pays several tokens, every other action one
     const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (

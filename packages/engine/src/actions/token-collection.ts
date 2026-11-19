@@ -10,6 +10,8 @@
  * An army that ends on a relic and is confirmed takes the marker off the board instead (`takeRelic`).
  */
 
+import { performAssistedAction } from '../assisted.js'
+import { IMMEDIATE_RELIC_CLAIMS } from '../assisted-relics.js'
 import { mapCellOf } from '../blockade.js'
 import { areaSlotRegion, boardAreas, nextFreeSlot } from '../board.js'
 import { squareLabel } from '../build-options.js'
@@ -32,11 +34,11 @@ export interface TravelCollectingInput extends TravelFigureInput {
 
 /** What the owner gains by removing a relic marker (Fame and Fortune p. 9, Wisdom and Warfare). */
 const RELIC_GAINS: Readonly<Record<string, string>> = {
-  'relics/atlantis': 'a free tech of their choice at the start of the next turn',
-  'relics/school_of_confucius': 'two great people, drawn by hand',
-  'relics/seven_cities_of_gold': 'two investment markers for free at the start of the next turn',
-  'relics/ark_of_the_covenant': 'two free culture track advances, taken by hand',
-  'relics/attilas_village': 'two free units they have unlocked, built by hand',
+  'relics/atlantis': 'a free tech of their choice from the Start of Turn tab',
+  'relics/school_of_confucius': 'Great Persons',
+  'relics/seven_cities_of_gold': 'two investment markers for free from the Start of Turn tab',
+  'relics/ark_of_the_covenant': 'two free culture track advances',
+  'relics/attilas_village': 'two free units they have unlocked',
 }
 
 /** The relic marker on the map square an army moves to, or `undefined` for a scout or a square without one. */
@@ -110,8 +112,10 @@ export function travelFigureCollecting(state: GameState, input: TravelCollecting
 
 /**
  * An army ended its move on a relic: the marker leaves the board as the next history entry, credited to the
- * player (`relicBlock` reads that), so the first board Undo puts it back. The ability is claimed from Start of
- * Turn where the game has a button for it; the rest is by hand.
+ * player (`relicTakenBlock` reads that), so the first board Undo puts it back. Atlantis and the Seven Cities of
+ * Gold are claimed from the Start of Turn tab; the others are claimed from a button in any tab, and the one that
+ * needs no choice (the Ark's first advance, the School of Confucius) is claimed here, at once. A claim that is
+ * stopped, a hand over its size say, leaves its button with the reason.
  */
 function takeRelic(moved: GameState, input: TravelCollectingInput, relicId: string): Result<GameState, EngineError> {
   const relic = moved.board.pieces.find((piece) => piece.id === relicId)
@@ -121,5 +125,15 @@ function takeRelic(moved: GameState, input: TravelCollectingInput, relicId: stri
   if (!removed.ok) return ok(moved)
   const gain = RELIC_GAINS[relic.assetId]
   const said = `took the ${relic.label} relic on ${squareLabel({ column: input.column, row: input.row })}` + (gain === undefined ? '' : `, gaining ${gain}`)
-  return ok(appendPublicLog(removed.value, player.username, player.playerId, said))
+  const logged = appendPublicLog(removed.value, player.username, player.playerId, said)
+  const claim = IMMEDIATE_RELIC_CLAIMS[relic.assetId]
+  const takenAt = removed.value.board.history.at(-1)?.id
+  if (claim === undefined || takenAt === undefined) return ok(logged)
+  const claimed = performAssistedAction(logged, {
+    playerId: input.playerId,
+    action: claim,
+    requestId: `relic:${takenAt}`,
+    ...(input.at === undefined ? {} : { at: input.at }),
+  })
+  return ok(claimed.ok ? claimed.value : logged)
 }

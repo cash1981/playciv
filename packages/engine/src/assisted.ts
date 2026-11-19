@@ -1750,6 +1750,7 @@ import { TECH_ABILITY_ACTIONS } from './assisted-tech-abilities.js'
 import { atomicTheory } from './assisted-atomic-theory.js'
 import { bureaucracy } from './assisted-bureaucracy.js'
 import { agriculture } from './assisted-agriculture.js'
+import { RELIC_ACTIONS } from './assisted-relics.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 
 /** Every assisted action, in the order the projection lists them. */
@@ -1781,6 +1782,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   playCard,
   ...SOT_ACTIONS,
   ...ABILITY_ACTIONS,
+  ...RELIC_ACTIONS,
   ...CITY_ACTIONS,
 ]
 

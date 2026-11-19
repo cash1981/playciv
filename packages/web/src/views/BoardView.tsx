@@ -1272,7 +1272,7 @@ export function BoardView({
                         (relic !== undefined &&
                           window.confirm(
                             `${selected.label} ends its move on the ${relic.label} relic on ${cell.label}. ` +
-                              'OK removes the marker, which gives you its one-time ability, and ends the move; Cancel just moves there and leaves the marker.',
+                              'OK removes the marker and ends the move; the Ark and the School of Confucius take effect at once, and the other abilities are buttons under Possible actions. Cancel just moves there and leaves the marker.',
                           ))
                       setMoveModeId(null)
                       void run(() =>
