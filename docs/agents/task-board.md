@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### civ-abilities-romans-chinese-spain
+
+- **Owner:** orchestrator (Claude Sonnet 5.5)
+- **Branch:** `feat/civ-abilities-romans-chinese-spain`
+- **Brief:** `docs/agents/tasks/civ-abilities-romans-chinese-spain.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/assisted.ts`, `assisted-city.ts`, `actions/token-collection.ts`, `actions/player.ts`, `actions/undo.ts`, `packages/engine/test/`, `docs/agents/decisions.md`
+- **Notes:** issue #368 first batch
 
 ## Format
 
