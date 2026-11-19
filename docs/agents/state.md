@@ -58,7 +58,8 @@ deployment reports do not establish present health.
   Hannibal and movement culture cards; Communism and Brandenburg Gate.
   Disbanding on an own city centre leaves a caravan or fortification (F&F), and
   a battle for a city counts its defence bonus. Battle resolution, loot and
-  removal stay manual by the human's choice.
+  removal stay manual by the human's choice. Movement is previewed as a tapped
+  route with waypoints and recorded in board history (#362; Defection automation open).
 
 The matching topics in [decisions.md](decisions.md) give the rules and
 reasons; [limitations.md](limitations.md) lists known gaps.

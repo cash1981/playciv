@@ -308,6 +308,44 @@ describe('history over HTTP', () => {
     expect((await again.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
+  it('travels along an explicit route, records it and refuses a broken one (issue #362)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Route')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const placed = await place(gameId, starter, assetId, square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+    const travel = (payload: unknown) =>
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+        headers: bearer(starter),
+        payload: payload as Record<string, unknown>,
+      })
+
+    expect((await travel({ column: 2, row: 2, route: 'north' })).status).toBe(400)
+    const jump = await travel({ column: 2, row: 2, route: [{ column: 2, row: 2 }] })
+    expect(jump.status).toBe(400)
+    expect((await jump.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
+
+    const route = [{ column: 1, row: 2 }, { column: 2, row: 2 }]
+    const moved = await travel({ column: 2, row: 2, route })
+    expect(moved.status).toBe(200)
+    const view = await moved.json() as {
+      board: { history: { description: string; change: { route?: unknown } }[] }
+    }
+    expect(view.board.history.at(-1)?.change.route).toEqual(route)
+    expect(view.board.history.at(-1)?.description).toContain('via B3')
+  })
+
   it('disbands a figure that travels onto its own city centre when asked (F&F p. 7)', async () => {
     const { gameId, starter, starterName } = await startedGame('Disband')
     const state = await repo.findGame(gameId)

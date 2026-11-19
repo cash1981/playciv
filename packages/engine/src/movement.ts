@@ -283,9 +283,7 @@ export function figureMovementOptions(
   const locked = saved?.locked ?? false
   const speed = travelSpeedOf(player, piece, turnNumber)
   const remaining = Math.max(0, speed - used)
-  const lockedKeys = new Set(lockedCells.map(keyOf))
-  const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
-  const squareLocked = lockedKeys.has(keyOf(start))
+  const squareLocked = lockedCells.some((cell) => keyOf(cell) === keyOf(start))
   // A lock (a move that ended on a hut, village or enemy, a spent allowance, Galileo, Steam Power) means no more
   // movement this turn, and exploring is movement.
   const cardLocked = saved?.locked === true
@@ -300,17 +298,7 @@ export function figureMovementOptions(
   if (squareLocked) return { speed, used, remaining, locked, squareLocked: true, destinations: [], explore }
   if (locked || remaining === 0) return { speed, used, remaining, locked, destinations: [], explore }
 
-  const water = waterRulesOf(player)
-  const flight = hasRevealedTech(player, 'Flight')
-  const occupancy = occupancyOf(board, player)
-  const limit = Math.max(1, player.stackingLimit ?? 1)
-  // Stacking limit is absolute (rule 50): a square already at it cannot be crossed or ended on.
-  // An army may end its move on another player's figures: the move ends there and a battle starts, which
-  // (like loot) is settled by hand. A scout never attacks (rule 431). Without Flight another player's
-  // figures cannot be crossed (rule 52), so the move ends on their square.
-  const attacker = isArmy(piece)
-  const hasRoom = (key: string): boolean => (occupancy.own.get(key) ?? 0) < limit
-  const mustStop = hutAndVillageSquares(board)
+  const rules = figureRulesOf(board, player, piece, lockedCells, forbiddenCells)
   const distances = new Map<string, number>([[keyOf(start), 0]])
   const queue: Cell[] = [start]
   const destinations: MovementDestination[] = []
@@ -319,49 +307,14 @@ export function figureMovementOptions(
     const cell = queue.shift() as Cell
     const distance = distances.get(keyOf(cell)) ?? 0
     if (distance > 0) {
-      const [x, y] = centreOf(board, cell)
-      const terrain = terrainAt(board, x, y)
-      const waterHere = terrain === 'water'
-      const mayEndHere = waterHere ? water.end : true
-      if (
-        mayEndHere &&
-        (attacker || !occupancy.foreign.has(keyOf(cell))) &&
-        !forbiddenKeys.has(keyOf(cell)) &&
-        hasRoom(keyOf(cell)) &&
-        !(flight && mustStop.has(keyOf(cell)))
-      ) {
-        destinations.push({
-          column: cell.column,
-          row: cell.row,
-          label: `${columnLabel(cell.column)}${cell.row + 1}`,
-          distance,
-          ...(occupancy.foreign.has(keyOf(cell)) ? { contact: true } : {}),
-          ...(occupancy.foreign.has(keyOf(cell)) || mustStop.has(keyOf(cell)) ? { ends: true } : {}),
-        })
-      }
+      const destination = rules.endingAt(cell, distance)
+      if (destination !== undefined) destinations.push(destination)
     }
     // The allowance left, not the whole speed: exploring spends 1 without locking the figure
     if (distance >= remaining) continue
-    // A figure may enter a Communism-locked square but never leave it.
-    if (distance > 0 && lockedKeys.has(keyOf(cell))) continue
-    // A hut or village ends the move: the figure may land there but not pass it.
-    // A revealed Flight flies over, so it neither stops nor blocks the squares beyond,
-    // but rule 283 still forbids ending the move on the marker square.
-    if (distance > 0 && !flight && mustStop.has(keyOf(cell))) continue
-    // Landing on another player's figures ends the move unless Flight flies over them (rule 52)
-    if (distance > 0 && !flight && occupancy.foreign.has(keyOf(cell))) continue
-    for (const [dc, dr] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
-      const next = { column: cell.column + dc, row: cell.row + dr }
-      if (!isMapCell(board, next.column, next.row)) continue
-      // A scout never attacks, so it does not enter another player's square at all without Flight.
-      // A square at the stacking limit cannot be crossed either.
-      if (occupancy.foreign.has(keyOf(next)) && !flight && !attacker) continue
-      if (!hasRoom(keyOf(next))) continue
-      // Fog is not walked onto: it is explored first, from the square next to it.
-      if (isUnexploredCell(board, next)) continue
-      const [x, y] = centreOf(board, next)
-      if (terrainAt(board, x, y) === 'water' && !water.cross) continue
-      if (distances.has(keyOf(next))) continue
+    if (distance > 0 && !rules.canLeave(cell)) continue
+    for (const next of neighboursOf(cell)) {
+      if (distances.has(keyOf(next)) || !rules.canEnter(next)) continue
       distances.set(keyOf(next), distance + 1)
       queue.push(next)
     }
@@ -369,6 +322,245 @@ export function figureMovementOptions(
 
   destinations.sort((a, b) => a.distance - b.distance || a.row - b.row || a.column - b.column)
   return { speed, used, remaining, locked, destinations, explore }
+}
+
+const NEIGHBOUR_STEPS = [[0, -1], [-1, 0], [1, 0], [0, 1]] as const
+
+const neighboursOf = (cell: Cell): readonly Cell[] =>
+  NEIGHBOUR_STEPS.map(([dc, dr]) => ({ column: cell.column + dc, row: cell.row + dr }))
+
+/** The per-square rules of one figure's travel, shared by the reachable-square search and route checks. */
+interface FigureRules {
+  /** Whether the figure may step onto the square (not necessarily end there). */
+  readonly canEnter: (cell: Cell) => boolean
+  /** Whether a figure that has already travelled onto the square may carry on from it. */
+  readonly canLeave: (cell: Cell) => boolean
+  /** The destination the figure may end its move on after `distance` squares, or `undefined` when it may not end there. */
+  readonly endingAt: (cell: Cell, distance: number) => MovementDestination | undefined
+}
+
+function figureRulesOf(
+  board: Board,
+  player: MovementPlayer,
+  piece: BoardPiece,
+  lockedCells: readonly Cell[],
+  forbiddenCells: readonly Cell[],
+): FigureRules {
+  const water = waterRulesOf(player)
+  const flight = hasRevealedTech(player, 'Flight')
+  const occupancy = occupancyOf(board, player)
+  const limit = Math.max(1, player.stackingLimit ?? 1)
+  const lockedKeys = new Set(lockedCells.map(keyOf))
+  const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
+  // Stacking limit is absolute (rule 50): a square already at it cannot be crossed or ended on.
+  // An army may end its move on another player's figures: the move ends there and a battle starts, which
+  // (like loot) is settled by hand. A scout never attacks (rule 431). Without Flight another player's
+  // figures cannot be crossed (rule 52), so the move ends on their square.
+  const attacker = isArmy(piece)
+  const hasRoom = (key: string): boolean => (occupancy.own.get(key) ?? 0) < limit
+  const mustStop = hutAndVillageSquares(board)
+
+  return {
+    canEnter: (next) => {
+      if (!isMapCell(board, next.column, next.row)) return false
+      // A scout never attacks, so it does not enter another player's square at all without Flight.
+      // A square at the stacking limit cannot be crossed either.
+      if (occupancy.foreign.has(keyOf(next)) && !flight && !attacker) return false
+      if (!hasRoom(keyOf(next))) return false
+      // Fog is not walked onto: it is explored first, from the square next to it.
+      if (isUnexploredCell(board, next)) return false
+      const [x, y] = centreOf(board, next)
+      return !(terrainAt(board, x, y) === 'water' && !water.cross)
+    },
+    canLeave: (cell) => {
+      // A figure may enter a Communism-locked square but never leave it.
+      if (lockedKeys.has(keyOf(cell))) return false
+      // A hut or village ends the move: the figure may land there but not pass it.
+      // A revealed Flight flies over, so it neither stops nor blocks the squares beyond. It may also land
+      // there instead: that ends the move like any landing. Ruling 283 (cross but never end) belongs to the
+      // Migrants, Colonists and Immigrants cards, whose moves are `cardMoveDestinations`, not to ordinary travel.
+      if (!flight && mustStop.has(keyOf(cell))) return false
+      // Landing on another player's figures ends the move unless Flight flies over them (rule 52)
+      return flight || !occupancy.foreign.has(keyOf(cell))
+    },
+    endingAt: (cell, distance) => {
+      const [x, y] = centreOf(board, cell)
+      const mayEndHere = terrainAt(board, x, y) === 'water' ? water.end : true
+      const key = keyOf(cell)
+      if (
+        !mayEndHere ||
+        !(attacker || !occupancy.foreign.has(key)) ||
+        forbiddenKeys.has(key) ||
+        !hasRoom(key)
+      ) {
+        return undefined
+      }
+      return {
+        column: cell.column,
+        row: cell.row,
+        label: `${columnLabel(cell.column)}${cell.row + 1}`,
+        distance,
+        ...(occupancy.foreign.has(key) ? { contact: true } : {}),
+        ...(occupancy.foreign.has(key) || mustStop.has(key) ? { ends: true } : {}),
+      }
+    },
+  }
+}
+
+/** The result of checking or planning a route: the full square list and where it ends, or why it is not legal. */
+export type RouteResult =
+  | {
+      readonly ok: true
+      /** The squares entered, in order, excluding the start. Its length is the movement charged. */
+      readonly route: readonly Cell[]
+      readonly destination: MovementDestination
+    }
+  | { readonly ok: false; readonly reason: string }
+
+const labelOf = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
+
+/** What stops a figure from travelling at all this turn, or `null` when it may set off. */
+function travelBlock(
+  board: Board,
+  player: MovementPlayer,
+  piece: BoardPiece,
+  turnNumber: number,
+  lockedCells: readonly Cell[],
+): { readonly start: Cell; readonly remaining: number } | string {
+  if (!figureBelongsTo(player, piece)) return `${piece.label} is not one of your figures on the map.`
+  const start = mapCellOf(board, piece)
+  if (start === null) return `${piece.label} is not on the map.`
+  const saved = movementOf(piece, turnNumber)
+  if (lockedCells.some((cell) => keyOf(cell) === keyOf(start))) {
+    return `${piece.label} is locked on ${labelOf(start)} and may not leave its square this turn.`
+  }
+  if (saved?.locked === true) {
+    return `${piece.label} has no movement left this turn. Undo a move on the board to move it again.`
+  }
+  const remaining = Math.max(0, travelSpeedOf(player, piece, turnNumber) - (saved?.used ?? 0))
+  if (remaining === 0) return `${piece.label} has no movement left this turn.`
+  return { start, remaining }
+}
+
+/**
+ * Checks an explicit route: the squares a figure enters, one cardinal step at a time, ending on its
+ * destination. Every square is held to the rule travel applies (crossing differs from ending: a hut,
+ * water for England or another player's figures may be crossed or not, but not ended on), no square
+ * repeats, and the route's own length, not the shortest distance, must fit the movement left.
+ */
+export function checkRoute(
+  board: Board,
+  player: MovementPlayer,
+  piece: BoardPiece,
+  turnNumber: number,
+  route: readonly Cell[],
+  lockedCells: readonly Cell[] = [],
+  forbiddenCells: readonly Cell[] = [],
+): RouteResult {
+  const blocked = travelBlock(board, player, piece, turnNumber, lockedCells)
+  if (typeof blocked === 'string') return { ok: false, reason: blocked }
+  if (route.length === 0) return { ok: false, reason: 'A route needs at least one square.' }
+  if (route.length > blocked.remaining) {
+    return {
+      ok: false,
+      reason: `That route takes ${route.length} movement, but ${piece.label} has ${blocked.remaining} left this turn.`,
+    }
+  }
+  const rules = figureRulesOf(board, player, piece, lockedCells, forbiddenCells)
+  const seen = new Set<string>([keyOf(blocked.start)])
+  let previous = blocked.start
+  for (const [index, cell] of route.entries()) {
+    if (
+      !Number.isInteger(cell.column) ||
+      !Number.isInteger(cell.row) ||
+      Math.abs(cell.column - previous.column) + Math.abs(cell.row - previous.row) !== 1
+    ) {
+      return { ok: false, reason: `${labelOf(cell)} is not next to ${labelOf(previous)}: a route moves one square north, west, south or east at a time.` }
+    }
+    if (seen.has(keyOf(cell))) return { ok: false, reason: `The route passes ${labelOf(cell)} twice.` }
+    if (!rules.canEnter(cell)) return { ok: false, reason: `${piece.label} cannot enter ${labelOf(cell)}.` }
+    if (index > 0 && !rules.canLeave(previous)) {
+      return { ok: false, reason: `${piece.label}'s move ends on ${labelOf(previous)}: it cannot carry on from there.` }
+    }
+    seen.add(keyOf(cell))
+    previous = cell
+  }
+  const destination = rules.endingAt(previous, route.length)
+  if (destination === undefined) {
+    return { ok: false, reason: `${piece.label} cannot end its move on ${labelOf(previous)}.` }
+  }
+  return { ok: true, route: route.map(({ column, row }) => ({ column, row })), destination }
+}
+
+/**
+ * The shortest legal route to `to` that passes through each of `via` in order, for the preview the
+ * player confirms. Each leg is the shortest path that keeps the whole route free of repeated squares;
+ * a waypoint that forces a longer detour is allowed while the movement left covers it.
+ */
+export function planRoute(
+  board: Board,
+  player: MovementPlayer,
+  piece: BoardPiece,
+  turnNumber: number,
+  via: readonly Cell[],
+  to: Cell,
+  lockedCells: readonly Cell[] = [],
+  forbiddenCells: readonly Cell[] = [],
+): RouteResult {
+  const blocked = travelBlock(board, player, piece, turnNumber, lockedCells)
+  if (typeof blocked === 'string') return { ok: false, reason: blocked }
+  const rules = figureRulesOf(board, player, piece, lockedCells, forbiddenCells)
+  const targets = [...via, to]
+  const route: Cell[] = []
+  const used = new Set<string>([keyOf(blocked.start)])
+  let from = blocked.start
+  for (const [index, target] of targets.entries()) {
+    // The squares still to be reached are kept free, so an early leg cannot take the square a later one needs
+    const taken = new Set([...used, ...targets.slice(index + 1).map(keyOf)])
+    const leg = shortestLeg(rules, from, target, taken, route.length, blocked.remaining)
+    if (leg === undefined) {
+      return { ok: false, reason: `${piece.label} has no legal way to ${labelOf(target)} within ${blocked.remaining} movement${via.length > 0 ? ' through those waypoints' : ''}.` }
+    }
+    for (const cell of leg) {
+      route.push(cell)
+      used.add(keyOf(cell))
+    }
+    from = target
+  }
+  return checkRoute(board, player, piece, turnNumber, route, lockedCells, forbiddenCells)
+}
+
+/** Breadth-first path from `from` to `target` over squares not yet `used`, within the movement left after `travelled`. */
+function shortestLeg(
+  rules: FigureRules,
+  from: Cell,
+  target: Cell,
+  used: ReadonlySet<string>,
+  travelled: number,
+  remaining: number,
+): readonly Cell[] | undefined {
+  if (used.has(keyOf(target))) return undefined
+  const parents = new Map<string, Cell | null>([[keyOf(from), null]])
+  const queue: { readonly cell: Cell; readonly distance: number }[] = [{ cell: from, distance: 0 }]
+  while (queue.length > 0) {
+    const { cell, distance } = queue.shift() as { cell: Cell; distance: number }
+    if (keyOf(cell) === keyOf(target)) {
+      const path: Cell[] = []
+      for (let at: Cell | null | undefined = cell; at !== null && at !== undefined && keyOf(at) !== keyOf(from); at = parents.get(keyOf(at))) {
+        path.unshift({ column: at.column, row: at.row })
+      }
+      return path
+    }
+    if (travelled + distance >= remaining) continue
+    // Squares already travelled (not the start of the whole route) may not be carried on from
+    if (travelled + distance > 0 && !rules.canLeave(cell)) continue
+    for (const next of neighboursOf(cell)) {
+      if (parents.has(keyOf(next)) || used.has(keyOf(next)) || !rules.canEnter(next)) continue
+      parents.set(keyOf(next), cell)
+      queue.push({ cell: next, distance: distance + 1 })
+    }
+  }
+  return undefined
 }
 
 /** The map cells holding at least one figure of `owner`. */

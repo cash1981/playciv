@@ -402,6 +402,11 @@ export type BoardChange =
         readonly from: PieceMovement | null
         readonly to: PieceMovement | null
       }
+      /**
+       * The map squares an enforced move entered, in order and excluding the start (issue #362). Absent on a
+       * move recorded with only its endpoints: such a route is never reconstructed, because several were possible.
+       */
+      readonly route?: readonly { readonly column: number; readonly row: number }[]
     }
   | {
       readonly kind: 'rotate'

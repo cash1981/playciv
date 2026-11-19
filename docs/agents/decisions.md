@@ -904,10 +904,31 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   while speed is left. It locks when the pool is spent or the move ends on a hut,
   village or another player's figures (`MovementDestination.ends`). Board Undo
   takes moves back one at a time.
+- **Routes** (#362): the web preview (tap a destination, then Move or tap the same square again, with optional waypoints and Cancel/Escape) sends the
+  explicit squares to enter. `checkRoute` validates them with the same per-square rules as the search (`figureRulesOf`:
+  crossing versus ending, huts, foreign figures, stacking, fog, Communism lock, Brandenburg), allows no repeated square and
+  charges the route's own length, so a detour costs more than the shortest way; the route must end on the requested square.
+  `planRoute` plans the preview: a shortest leg per waypoint, later targets reserved. It is greedy, so a first leg can
+  take squares a later leg needs. The server re-validates against the current board, which is what rejects a stale
+  preview. The route is stored on the `move` board change (`route`) and shown as ` via …` in the log when longer than one square, and one Undo
+  takes the whole move back. `/travel` without a route keeps the old behaviour (shortest distance charged, no route
+  recorded): the way taken is unknown and is never reconstructed, for moves before #362 either. Tests: `movement.test.ts`
+  (routes), `board-api.test.ts`, `BoardView.test.tsx`.
+- **Route playback** (#362, `web/src/lib/moveReplay.ts`): when a newer board arrives (auto refresh, Forward, or Live after a
+  replay) the figure steps through the squares of each recorded route, one square per 320 ms, before it rests on its real
+  position. Display only: the board is never changed. Plays the newest 4 route moves of what arrived, also for the
+  viewer's own move and for redo; figures waiting their turn are held on their start square; a reload that leaves the
+  history unchanged does not cut playback short; a figure that is still walking offers no move targets and cannot be grabbed until it arrives; moves without a recorded route, undo and jumps back never animate; off for `prefers-reduced-motion`.
+  Tests: `moveReplay.test.tsx`.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
   England crosses but cannot end there. An unknown (tile-back) square is not water.
-- **Huts and villages:** a move must stop on one; with Flight it flies over, but
-  may not end there (rule 283).
+- **Huts and villages:** a move must stop on one; with Flight it may fly over or land
+  on it (human, 2026-11-17). Landing ends the move like any landing (`ends`). Ruling 283
+  ("cross but not end on a hut or village with Flight") belongs to the Migrants, Colonists and
+  Immigrants cards (rulings 278-287), not to ordinary travel; the engine used it for travel by mistake.
+  Not automated: a village is entered only after winning a barbarian battle (Zulu take villages free,
+  ruling 113), and a scout may not enter a hut or village (core rules), except with Pacifism for huts.
+  Culture-card moves (Migrants, Colonists, Immigrants) keep ruling 283: they may cross but need an empty square.
 - **Stacking:** travel may cross or end on a square with fewer of the player's
   own figures than `stackingLimitOf` (Pasteur included); the limit is absolute
   (rule 50) and counts only the player's own figures (rule 51).

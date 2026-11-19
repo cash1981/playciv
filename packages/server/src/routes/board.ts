@@ -113,6 +113,22 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'column and row are required whole numbers')
     }
     const disband = optionalBoolean(body, 'disband')
+    const rawRoute = body['route']
+    let route: { column: number; row: number }[] | undefined
+    if (rawRoute !== undefined) {
+      const squares = Array.isArray(rawRoute) ? rawRoute.map(asRecord) : undefined
+      const parsed = squares?.map((square) => ({ column: optionalNumber(square, 'column'), row: optionalNumber(square, 'row') }))
+      if (
+        parsed === undefined ||
+        !parsed.every(
+          (square): square is { column: number; row: number } =>
+            Number.isInteger(square.column) && Number.isInteger(square.row),
+        )
+      ) {
+        return sendError(c, 400, 'BAD_REQUEST', 'route must be a list of squares with whole number column and row')
+      }
+      route = parsed
+    }
 
     return applyToGame(context, c, gameId, (state) =>
       travelFigure(state, {
@@ -120,6 +136,7 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
         pieceId,
         column,
         row,
+        ...(route === undefined ? {} : { route }),
         ...(disband === true ? { disband } : {}),
         at: now(),
       }),

@@ -1002,6 +1002,16 @@ ul.list.vote-needed {
   touch-action: manipulation;
 }
 
+.board-piece.board-piece-stepping {
+  transition: left 0.3s linear, top 0.3s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-piece.board-piece-stepping {
+    transition: none;
+  }
+}
+
 .board-piece:active {
   cursor: grabbing;
 }
@@ -1070,6 +1080,82 @@ ul.list.vote-needed {
 
 .board-contact-cell:hover {
   background: rgba(235, 70, 60, 0.5);
+}
+
+/* The route preview (issue #362): numbered squares that ignore taps, and the chosen destination ringed twice so
+   neither depends on colour alone. */
+.board-route-step {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--text);
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel);
+}
+
+.board-route-step.via {
+  border-style: dashed;
+}
+
+.board-route-step.end {
+  outline: 3px solid var(--text);
+  outline-offset: -6px;
+}
+
+.board-move-cell.chosen {
+  outline: 3px solid var(--text);
+  outline-offset: -5px;
+  font-weight: 700;
+}
+
+.board-waypoint-cell {
+  border: 2px dashed var(--text);
+  background: rgba(70, 200, 150, 0.3);
+}
+
+/* Cancel, Move and the waypoint buttons stay at the bottom of the window, clear of the notch, while the map scrolls. */
+.route-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+  padding-right: calc(0.75rem + env(safe-area-inset-right));
+  padding-left: calc(0.75rem + env(safe-area-inset-left));
+  background: var(--panel);
+  border-top: 2px solid var(--accent);
+  box-shadow: var(--shadow);
+  overflow-wrap: anywhere;
+}
+
+.route-bar p {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.route-bar-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.route-bar-buttons button,
+.route-bar-hint button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+/* Room under the board for the bar, so the squares can be scrolled clear of it */
+.board-panel.route-previewing {
+  padding-bottom: 10rem;
 }
 
 .board-explore-cell {
