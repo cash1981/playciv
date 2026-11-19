@@ -239,6 +239,28 @@ describe('the board Undo of a claimed relic', () => {
     expect(markerBack(released, assetId)).toBe(true)
   })
 
+  it("does not advance the leader marker again once the vote took the Ark's advance back", () => {
+    const before = sotTurn({ step: 9 })
+    const taken = armyTakes(before, ARK)
+    const claim = taken.assistedActions.find((record) => record.kind === 'relic:ark')
+    if (claim === undefined) throw new Error('the army did not claim the advance')
+    const undone = undoByVote(taken, claim.id)
+    const after = undoLastBoardChange(undone, CASH1981)
+    expect(step(after.ok ? after.value : undone)).toBe(step(before))
+    expect(status(after.ok ? after.value : undone, 'relic:ark').status).toBe('ready')
+  })
+
+  it('does not bring the Great Person marker back once the vote took the School of Confucius back', () => {
+    const base = sotTurn()
+    const kept = keep(armyTakes(base, CONFUCIUS), 'req-choose')
+    const claim = kept.assistedActions.find((record) => record.kind === 'relic:confucius')
+    if (claim === undefined) throw new Error('the army did not claim the Great Persons')
+    const undone = undoByVote(kept, claim.id)
+    const after = undoLastBoardChange(undone, CASH1981)
+    const markers = (state: GameState) => state.board.pieces.filter((piece) => piece.category === 'greatperson').length
+    expect(markers(after.ok ? after.value : undone)).toBe(markers(base))
+  })
+
   it('names a claim for every relic on the board', () => {
     const relics = BOARD_ASSETS.filter((asset) => asset.category === 'relic')
     expect(relics).toHaveLength(5)

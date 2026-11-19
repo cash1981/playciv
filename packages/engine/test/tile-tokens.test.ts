@@ -241,6 +241,15 @@ describe('collecting a token by ending a move on it', () => {
     expect(moved.tokenCollections).toBeUndefined()
   })
 
+  it("leaves the token while another player's figures stand on its square: the battle comes first", () => {
+    const { state, armyId } = scene()
+    const contested = put(state, 'figures/bluearmy', 3, 1)
+    const moved = go(contested, armyId, true)
+    expect(mapTokensOf(moved.board)).toHaveLength(1)
+    expect(me(moved).items).toHaveLength(me(contested).items.length)
+    expect(moved.tokenCollections).toBeUndefined()
+  })
+
   it('moves the token into the area, draws the card privately and logs only that a hut was drawn', () => {
     const { state, armyId, hutId } = scene()
     const topHut = state.items.find((item) => item.sheetName === 'HUTS')

@@ -2080,6 +2080,9 @@ export function reverseAssistedAction(
     effect.kind === 'agriculture' ||
     (effect.kind === 'monarchy' && effect.wonder !== undefined) ||
     (effect.kind === 'philosophy' && effect.marker !== null) ||
+    // The Ark moved the leader marker back, and the School of Confucius took its Great Person marker off
+    record.kind === 'relic:ark' ||
+    (effect.kind === 'relicGreatPerson' && effect.marker !== null) ||
     (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined)) ||
     (effect.kind === 'combustion' && (effect.building !== undefined || effect.unwalled !== undefined))
   ) {

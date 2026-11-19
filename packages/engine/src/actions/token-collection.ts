@@ -41,13 +41,16 @@ const RELIC_GAINS: Readonly<Record<string, string>> = {
   'relics/attilas_village': 'two free units they have unlocked',
 }
 
+/** Another player's figures on the square: a battle comes first, so nothing is collected or taken until it is settled. */
+function contested(state: GameState, input: TravelCollectingInput): boolean {
+  const player = findPlayer(state, input.playerId)
+  return player !== undefined && occupancyOf(state.board, player).foreign.has(`${input.column},${input.row}`)
+}
+
 /** The relic marker on the map square an army moves to, or `undefined` for a scout or a square without one. */
 function relicForArmyAt(state: GameState, input: TravelCollectingInput) {
   const mover = state.board.pieces.find((piece) => piece.id === input.pieceId)
-  const player = findPlayer(state, input.playerId)
-  if (mover === undefined || player === undefined || !mover.assetId.endsWith('army')) return undefined
-  // Another player's figures on the square mean a battle first: the marker stays until it is settled
-  if (occupancyOf(state.board, player).foreign.has(`${input.column},${input.row}`)) return undefined
+  if (mover === undefined || !mover.assetId.endsWith('army')) return undefined
   return state.board.pieces.find((piece) => {
     const cell = piece.category === 'relic' ? mapCellOf(state.board, piece) : null
     return cell !== null && cell.column === input.column && cell.row === input.row
@@ -55,10 +58,11 @@ function relicForArmyAt(state: GameState, input: TravelCollectingInput) {
 }
 
 export function travelFigureCollecting(state: GameState, input: TravelCollectingInput): Result<GameState, EngineError> {
-  const relic = input.collectToken === true && input.disband !== true ? relicForArmyAt(state, input) : undefined
+  const collecting = input.collectToken === true && input.disband !== true && !contested(state, input)
+  const relic = collecting ? relicForArmyAt(state, input) : undefined
   const travelled = travelFigure(state, relic === undefined ? input : { ...input, endsMove: true })
   if (relic !== undefined) return travelled.ok ? takeRelic(travelled.value, input, relic.id) : travelled
-  if (!travelled.ok || input.collectToken !== true || input.disband === true) return travelled
+  if (!travelled.ok || !collecting) return travelled
   const moved = travelled.value
   const player = findPlayer(moved, input.playerId)
   const token = mapTokensOf(moved.board).find(

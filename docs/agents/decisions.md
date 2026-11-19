@@ -984,7 +984,9 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   card chosen through the usual pending choice. A claim blocked at that moment (a full culture hand) leaves the button with its
   reason. Undo of a claim is by vote. While a claim of the relic stands (Atlantis and Seven Cities included), the board
   Undo refuses to put its marker back (`BOARD_UNDO_ASSISTED`, `relic-claims.ts`), so the move cannot be taken back
-  with the ability kept. Movement cards (Galileo,
+  with the ability kept. Once the vote has taken back the Ark's advance or a School of Confucius claim whose Great Person
+  marker was placed, the board Undo stops there (`undoFloor`, as for Philosophy), since walking back past the reversal
+  would replay the forward move; the army and the marker are then put back by hand. Movement cards (Galileo,
   culture events) do not apply the scout restrictions to the squares they cross: they cannot end on any marker square.
   Tests: `assisted-relics.test.ts`, `tile-tokens.test.ts`.
 - **Collecting a token** (#364): `travelFigureCollecting` (the `/travel` route's `collectToken`) is `travelFigure` plus, when the
@@ -994,7 +996,8 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   Undo takes the token and the card back first (the card leaves the hand and is bound back under the piece, so the player's
   knowledge of it never becomes the next card anyone draws; the draw's own log line can no longer be voted back; a public line
   says so; the redo stack is cleared, as a redo would not draw again) and the move on the next press.
-  It is refused (`BOARD_UNDO_TOKEN_CARD_GONE`) once the card has left the hand. Without the confirmation, or when no hut or
+  It is refused (`BOARD_UNDO_TOKEN_CARD_GONE`) once the card has left the hand. Without the confirmation, with another
+  player's figures on the square (the battle comes first, also for a direct API request), or when no hut or
   village is left, the move stands and the token stays on its square, to be drawn by hand as before. Flight cannot end on a
   hut or village, so it collects none. Tests: `tile-tokens`, `BoardView`.
 - **Not done:** automated battle, loot and figure removal.
