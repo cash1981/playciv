@@ -49,6 +49,7 @@ import { endTurnState } from './EndTurn.js'
 import { HelpHint } from './HelpHint.js'
 import { useMapPicker } from './mapPick.js'
 import { ActionCardThumb } from './ActionCardThumb.js'
+import { TECH_TEXT } from './techText.js'
 import { ItemCard } from './ItemCard.js'
 import { paymentStillAvailable, ResourcePaymentPicker, resourcePaymentSelection } from './ResourcePaymentPicker.js'
 import { goToHandItem, goToPanel } from './PhaseSummary.js'
@@ -187,6 +188,13 @@ function cardOf(
   if (candidate.techName !== undefined) return view.techs?.find((tech) => tech.name === candidate.techName)
   if (candidate.group === 'Great Persons') return view.you?.items?.find((item) => itemName(item) === candidate.label)
   return undefined
+}
+
+/** The card's own text for its `?` button: the tech reference text, or the hand card's effect text. */
+function cardText(card: Item | undefined, view: PlayerView): string | undefined {
+  if (card === undefined) return undefined
+  if (card.kind === 'tech') return TECH_TEXT[card.name]
+  return view.you?.playableCards?.find((playable) => playable.itemId === card.id)?.description
 }
 
 /**
@@ -1234,7 +1242,7 @@ export function AssistedActionGroups({
                   const card = cardOf(candidate, view)
                   return (
                     <li key={candidate.action} className={card === undefined ? undefined : 'has-card'}>
-                      <ActionCardThumb item={card} decorative={BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined} />
+                      <ActionCardThumb item={card} help={cardText(card, view)} decorative={BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined} />
                       <div className={card === undefined ? undefined : 'assisted-card-body'}>
                       {/* A button with its own text (Advance culture) names the row itself. */}
                       {BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined && (

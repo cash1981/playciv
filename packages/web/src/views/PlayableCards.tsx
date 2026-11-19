@@ -908,7 +908,7 @@ export function PlayableCardList({
           const thumb = view.you?.items?.find((item) => item.id === card.itemId)
           return (
           <li key={card.itemId} className={`playable-card${thumb === undefined ? '' : ' has-card'}`}>
-            <ActionCardThumb item={thumb} decorative />
+            <ActionCardThumb item={thumb} decorative help={card.description} />
             <div className="playable-card-body">
             <button
               type="button"

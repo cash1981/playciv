@@ -20,13 +20,20 @@ const tech = {
 describe('ActionCardThumb', () => {
   it('shows the card art with the card name as alt text', () => {
     const markup = renderToStaticMarkup(<ActionCardThumb item={tech} />)
-    expect(markup).toContain('class="action-card-thumb"')
+    expect(markup).toContain('action-card-thumb')
+    expect(markup).not.toContain('help-button')
     expect(markup).toContain('alt="Currency"')
     expect(markup).toContain('/items/Currency')
   })
 
   it('has empty alt text when the row already names the card', () => {
     expect(renderToStaticMarkup(<ActionCardThumb item={tech} decorative />)).toContain('alt=""')
+  })
+
+  it('puts the card text behind a ? button, and has no button without text', () => {
+    const markup = renderToStaticMarkup(<ActionCardThumb item={tech} help="Trade in a coin for culture." />)
+    expect(markup).toContain('aria-label="Help: Currency"')
+    expect(renderToStaticMarkup(<ActionCardThumb item={tech} help="" />)).not.toContain('help-button')
   })
 
   it('renders nothing when there is no card', () => {

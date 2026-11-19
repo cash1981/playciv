@@ -217,12 +217,28 @@ td .assisted-action {
 }
 
 .action-card-thumb {
+  position: relative;
   flex: none;
   width: 5.2rem;
   padding: 0.2rem;
   background: var(--card-art-bg);
   border: 1px solid var(--line);
   border-radius: 4px;
+}
+
+.action-card-help {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+}
+
+.action-card-help .help-button {
+  background: var(--panel);
+}
+
+/* Tech cards are printed landscape: at the portrait width they are too small to read. */
+.action-card-thumb.landscape {
+  width: 8.5rem;
 }
 
 .action-card-thumb img {
