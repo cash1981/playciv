@@ -3,9 +3,11 @@
 A rewrite of Sid Meier's Civilization: The Board Game (Fantasy Flight Games), with the *Fame and Fortune* and *Wisdom and
 Warfare* expansions.
 
-## Running the app
+Live at https://playciv.app.
 
-Needs Node 24 or newer and pnpm 11.24.0, as pinned in `package.json`.
+## Running locally
+
+Needs Node 24 or newer and the pnpm version pinned in `package.json`.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -28,42 +30,16 @@ The client is on http://localhost:5173 and proxies `/api` to the server on port
 8787. Register a user, create a game, and let the other players join — the game
 starts by itself once the last seat is filled.
 
-Choose a board color when creating or joining a game. The join list offers only
-colors available for that seat. If you replace a player who withdrew, you take
-over their hand and its existing color. The server rejects invalid or occupied
-color choices; older requests that omit a color still get an automatic choice.
-
 Set `TOKEN_SECRET` before starting the server if logins should survive a
 restart. Without it a random secret is made on every start.
+
+## Verifying
 
 ```bash
 pnpm -r typecheck
 pnpm -r test
 pnpm -r build
 ```
-
-See [AGENTS.md](AGENTS.md) for agent workflow and
-[current decisions](docs/agents/decisions.md) for enduring constraints.
-[Historical documentation](docs/history/README.md) is reference material, not an active backlog.
-
-## Cancellations
-
-Mark Twain, Jousting Tourney, Primetime TV and Bread and Circuses cancel an
-eligible recorded action at once. Playing the card scrolls to the log, where a
-red **Cancel** button sits on each line the card can cancel. Nothing pauses and
-nobody is asked to respond: players are trusted to wait for each other before
-they play on. A culture cancellation can be undone the same way by another
-culture reaction, and Dr. Martin Luther King's **Protect** button on the
-cancellation line undoes a cancellation of his holder's city action and **keeps
-Twain in hand**.
-
-A cancellation rewinds interleaved gameplay across phases and turns. Later
-actions remain as superseded history; notes and order versions are kept, with
-affected phases reopened and orders flagged for revision. A cancellation seals
-the log through itself, so a later rewind cannot refund the cards it spent.
-Missing exact history, roster changes, abilities without a record and
-unstructured card targets require a table-agreed manual correction. Card
-eligibility is checked both before the original target and in the current hand.
 
 ## Packages
 
@@ -82,36 +58,24 @@ package.
 Randomness lives in the state as a seed (`state.rng`), so a game can be
 reproduced and replayed.
 
-The engine separates state and projections (`src/state.ts`), game data, board
-geometry and action reducers. Current decisions and tests document deliberate
-rule and behavior choices.
-
 ### `packages/server`
 
 Hono on top of the engine, so the same HTTP code runs on Node (local
 development, JSON-file storage) and on Cloudflare Workers (production, D1).
-
-| File | Responsibility |
-| --- | --- |
-| `src/routes/auth.ts` | `AuthResource` — registration, login and password reset |
-| `src/routes/games.ts` | `GameResource` — create, list, join, withdraw, end, log, chat |
-| `src/routes/play.ts` | `DrawResource` + `PlayerResource` — draws, battle, tech, reveals, trade, turns, undo |
-| `src/errors.ts` | `EngineError` → HTTP status |
-| `src/auth.ts` | scrypt passwords, HMAC-signed bearer tokens and the reset-link signer |
-| `src/routes/board.ts` | the board — place, move, rotate, front, back, remove, undo, redo, history |
-| `src/routes/arena.ts` | battle arena — initiate, place units, move, return to hand, set stats, rotate, kill, end turn, end battle |
-| `src/store/` | the storage interface, `D1Repository` (production) and `JsonFileRepository` (local dev) |
-| `src/migrate/` | the one-off mapping from the old Mongo export to D1 rows |
 
 The server holds no game rules. Every route loads the state, calls one pure
 function from the engine, saves the result and answers with
 `toPlayerView(state, you)`. Routes must preserve this projection boundary;
 privacy tests cover public and historical responses.
 
-
 ### `packages/web`
 
-React and Vite. 
+React and Vite. The client imports its types from `@civ/engine`, so it cannot
+drift out of step with what the server actually sends.
 
-The client imports its types from `@civ/engine`, so it cannot drift out of step
-with what the server actually sends.
+## More
+
+- [Repo map](docs/agents/repo-map.md) — where things live, file by file.
+- [Current decisions](docs/agents/decisions.md) — rules and behavior choices.
+- [AGENTS.md](AGENTS.md) — agent workflow.
+- [Historical documentation](docs/history/README.md) is reference material, not an active backlog.
