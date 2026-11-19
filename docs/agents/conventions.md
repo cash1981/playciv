@@ -9,8 +9,8 @@ The new system has replaced the old one. What it does today, and what its tests
 pin down, is what players rely on.
 
 - A change in behaviour comes with a test. When it changes a rule or a visible
-  choice, it also goes in `decisions.md`, and in "Known differences" or
-  "Deliberate improvements" in `README.md` if a player would notice.
+  choice, it also goes in `decisions.md`. Do not add rule-level notes to
+  `README.md`.
 - Never change behaviour silently as a side effect of a refactor.
 - Current `decisions.md` is organized by topic. Replace superseded guidance
   rather than accumulating contradictory entries; preserve why current behavior

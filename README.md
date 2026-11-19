@@ -115,25 +115,3 @@ React and Vite.
 
 The client imports its types from `@civ/engine`, so it cannot drift out of step
 with what the server actually sends.
-
-## Deliberate improvements
-
-Stacking checks automatically add Russia's +1 and active Louis Pasteur's +1
-to the higher of the typed base and revealed technology limit. Opponent-group
-movement pickers use that same effective limit. The saved stacking value remains
-a base override: if you manually included Russia's bonus, remove that workaround
-to avoid counting it twice.
-
-Agriculture growth overbuilds buildings and wonders, returns Great Persons to
-reserve, and lets you choose a neighbouring outskirts square for displaced
-figures, using the stacking limit after overbuilding (including any lost
-Louis Pasteur bonus). An unclaimed relic in the new outskirts blocks growth. Under the house
-rule, Military Docks count as Shipyards for Navy army placement.
-
-Technology resource abilities offer only usable payments actually held in your
-hand or player area. You can explicitly choose a resource culture card such as
-A Generous Gift instead of a token. Multi-resource payments cannot reuse the
-same token or card, and fixed costs only offer payments for the required kind.
-Spending a resource hut or village from your hand also removes one matching
-icon from your player area. The log names its origin and item number, and undo
-restores both the hand item and the removed icon.
