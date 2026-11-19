@@ -118,6 +118,7 @@ import { activeGreatPerson } from './great-person-effects.js'
 import type { EngineError } from './errors.js'
 import { MAX_DEVOTE_CULTURE } from './limits.js'
 import { itemName } from './item.js'
+import { deckWith } from './item-number.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
 import type { Result } from './result.js'
@@ -1045,7 +1046,7 @@ const build: AssistedActionDefinition = {
       const withoutCard: Playerhand = { ...refunded, items: refunded.items.filter((candidate) => candidate.id !== found.id) }
       const returned: GameState = {
         ...withPlayerHand(state, withoutCard),
-        items: [...state.items, { ...found, hidden: true, ownerId: null }],
+        ...deckWith(state, [found]),
       }
       const restored = shuffleSheetTwice(returned, effect.card.sheetName)
       const withMarker =

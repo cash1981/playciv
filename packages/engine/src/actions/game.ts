@@ -387,6 +387,12 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     state.discardedItems.find((item) => item.id === id) ??
     state.players.flatMap((player) => player.items).find((item) => item.id === id)
 
+  // A card reshuffled into the deck has a new number; the history names it as the discard did
+  const asDiscarded = (item: Item): Item => {
+    const before = state.previousItemNumbers?.[item.id]
+    const inPile = state.discardedItems.some((candidate) => candidate.id === item.id)
+    return before === undefined || inPile ? item : { ...item, itemNumber: before }
+  }
   const advanceOf = (record: (typeof state.assistedActions)[number]): { readonly drawn: readonly string[] } | undefined => {
     if (record.effect.kind === 'cultureAdvance') return record.effect
     if ('advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
@@ -451,7 +457,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     for (const id of advance.drawn) {
       if (id === effect.itemId) continue
       const item = itemById(id)
-      if (item !== undefined) rememberDiscard(item, record, false)
+      if (item !== undefined) rememberDiscard(asDiscarded(item), record, false)
     }
   }
 

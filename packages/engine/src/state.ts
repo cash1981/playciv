@@ -1377,6 +1377,11 @@ export interface GameState {
   /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
   /**
+   * The number a card had before it went back in the deck and got a new one, by card id (`deckWith`). The public
+   * Revealed/Discarded history names the number the card had when it was discarded. Server only, never in a view.
+   */
+  readonly previousItemNumbers?: Readonly<Record<string, number>>
+  /**
    * Whether the start-of-game ancient wonders have been dealt onto the board.
    * The deal happens once, when the last civilization is revealed. This flag is
    * the authority for that — a wonder *piece* on the board is not, because a
@@ -1649,8 +1654,11 @@ export interface OpaquePlayerhand {
   readonly numberOfTechsChosen: number
   readonly numberOfBarbarians: number
   readonly numberOfSocialPolicies: number
-  /** The battlehand is revealed explicitly in battle, so it is shown as it is. */
-  readonly battlehand: readonly UnitItem[]
+  /**
+   * How many units are drawn for a battle. Which ones stay hidden until they are placed in the arena or the
+   * battlehand is revealed.
+   */
+  readonly numberOfBattlehandUnits: number
   /**
    * Revealed techs only. Java: `getTechsForAllPlayers` filtered on
    * `!isHidden()`, which is how the tech pyramid becomes public.
@@ -1714,7 +1722,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     numberOfTechsChosen: player.techsChosen.length,
     numberOfBarbarians: player.barbarians.length,
     numberOfSocialPolicies: player.socialPolicies.length,
-    battlehand: player.battlehand,
+    numberOfBattlehandUnits: player.battlehand.length,
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
     pyramidPlacements: player.pyramidPlacements.map((placement) => ({ slot: placement.slot })),

@@ -17,6 +17,7 @@ import {
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll, revealPublic } from '../item.js'
+import { deckWith } from '../item-number.js'
 import {
   appendInfoLog,
   appendItemLog,
@@ -438,7 +439,7 @@ export function reshuffleItems(state: GameState, sheetName: SheetName): DrawResu
   const next: GameState = {
     ...state,
     rng,
-    items: [...state.items, ...shuffled],
+    ...deckWith(state, shuffled),
     discardedItems: toKeep,
   }
 
@@ -469,7 +470,14 @@ export function drawUnitsForBattle(state: GameState, input: BattlehandInput): Dr
   const unitsInHand = player.items.filter(isUnit)
 
   if (unitsInHand.length === 0) {
-    return ok(withPlayer(state, { ...player, battlehand: [] }))
+    return ok(
+      appendPublicLog(
+        withPlayer(state, { ...player, battlehand: [] }),
+        player.username,
+        player.playerId,
+        'has drawn 0 units from his battlehand',
+      ),
+    )
   }
 
   if (unitsInHand.length <= input.numberOfDraws) {

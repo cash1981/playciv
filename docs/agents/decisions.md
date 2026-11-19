@@ -50,6 +50,14 @@ Source: `packages/engine/src/`, `packages/server/src/app.ts`,
   culture advance names what it spent ("spending 5 (7) culture"); a free advance spends nothing.
 - Never reconstruct historical revealed cards by matching display names to a
   current hand: duplicate names and redraws can reveal private cards.
+- The battlehand is hidden (human, 2026-11-19): opponents and spectators get the number of units drawn
+  (`numberOfBattlehandUnits`), never the units, until a unit is placed in the arena or the hand is revealed.
+  Redrawing is allowed without revealing, because a draw can have the wrong number; each draw and redraw,
+  also of 0 units, is a public log line so a redraw shows. Leonidas counts the number drawn.
+- A card of a shuffled deck that goes back in the deck (a reshuffled discard, an undone draw or build) gets a
+  new item number from `itemCounter` (`deckWith`, no random numbers used), so a public discard or reveal
+  cannot be matched to a later hidden draw or trade line. `previousItemNumbers` keeps the old number for the
+  Revealed and Discarded history; it is server only.
 
 Source: `state.ts`, `log.ts`, `coins.ts`, `combat-bonus.ts`, `culture-hand.ts`
 under `packages/engine/src/`; privacy and projection tests under `test/`.
