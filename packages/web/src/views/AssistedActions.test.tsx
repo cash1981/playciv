@@ -1325,6 +1325,18 @@ describe('The actions of the open phase', () => {
     expect(document.querySelector('.assisted-actions > li.has-card')?.textContent).toContain('Chivalry')
   })
 
+  it('shows the card and its text for a Techs action without a techName, and for a hand card that is not playable', () => {
+    const plastics: Action = { action: 'plastics', label: 'Plastics', phase: 'SOT', group: 'Techs', status: 'ready', reason: 'Ready.', repeatable: false } as unknown as Action
+    const turing: Action = { action: 'alanTuring', label: 'Alan Turing', phase: 'SOT', group: 'Great Persons', status: 'ready', reason: 'Ready.', repeatable: false } as unknown as Action
+    const turingCard = { kind: 'greatperson', sheetName: 'GREAT_PERSON', id: 'gp-turing', name: 'Alan Turing', itemNumber: 1, description: 'Start of Turn: look at a card.', used: false, hidden: false, ownerId: 'me', type: null }
+    const base = viewWith([plastics, turing])
+    const view = { ...base, techs: [{ ...tech('Plastics'), level: 4 }], you: { ...base.you, items: [turingCard] } } as unknown as PlayerView
+    render(<PhaseActionsPanel gameId="game-1" view={view} initialPhase="SOT" busy={false} readOnly={false} run={run} />)
+    expect(document.querySelectorAll('.action-card-thumb')).toHaveLength(2)
+    // The Great Person has card text from its hand item; the tech has TECH_TEXT only for its own entry
+    expect(document.querySelector('.action-card-help [aria-label="Help: Alan Turing"]')).not.toBeNull()
+  })
+
   it('links a tech-backed action name to the Tech content in Research', async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
     const scrolled: Element[] = []

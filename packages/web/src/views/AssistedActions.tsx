@@ -186,6 +186,8 @@ function cardOf(
   view: PlayerView,
 ): Item | undefined {
   if (candidate.techName !== undefined) return view.techs?.find((tech) => tech.name === candidate.techName)
+  // A Start of Turn tech action (Plastics, Ecology) has the group but no `techName`: match on its label.
+  if (candidate.group === 'Techs') return view.techs?.find((tech) => tech.name === candidate.label)
   if (candidate.group === 'Great Persons') return view.you?.items?.find((item) => itemName(item) === candidate.label)
   return undefined
 }
@@ -194,7 +196,9 @@ function cardOf(
 function cardText(card: Item | undefined, view: PlayerView): string | undefined {
   if (card === undefined) return undefined
   if (card.kind === 'tech') return TECH_TEXT[card.name]
-  return view.you?.playableCards?.find((playable) => playable.itemId === card.id)?.description
+  // Lorenzo de' Medici, Alan Turing and Jim Henson have their own buttons and are not playable cards:
+  // their text is the hand item's own.
+  return view.you?.playableCards?.find((playable) => playable.itemId === card.id)?.description ?? card.description ?? undefined
 }
 
 /**
