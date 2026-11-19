@@ -67,3 +67,16 @@
   flex-wrap: wrap;
   gap: 0.4rem;
 }
+
+/* The card beside its play controls (#367); see .action-card-thumb in AssistedActions.css. */
+.playable-card.has-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.playable-card-body {
+  flex: 1 1 12rem;
+  min-width: 0;
+}

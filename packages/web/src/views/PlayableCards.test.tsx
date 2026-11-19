@@ -1270,6 +1270,18 @@ describe('the list of cards in a phase tab', () => {
     expect(screen.queryByText('We Love the Despot Day!')).toBeNull()
   })
 
+  it('shows the hand card beside a playable card, and only when the card is in the hand', () => {
+    const item = { kind: 'cultureI', id: 'c2', name: 'Bread and Circuses', sheetName: 'CULTURE_I', itemNumber: 1, description: null, used: false, hidden: false, ownerId: 'me' }
+    const base = viewWith([sot, anyTime])
+    list('SOT', { ...base, you: { ...base.you, items: [item] } } as unknown as PlayerView)
+    const rows = within(screen.getByRole('list')).getAllByRole('listitem')
+    const byName = (name: string) => rows.find((row) => row.querySelector('.playable-card-name')?.textContent === name)
+    expect(byName('Bread and Circuses')?.classList.contains('has-card')).toBe(true)
+    expect(byName('Bread and Circuses')?.querySelector('.action-card-thumb img')?.getAttribute('alt')).toBe('')
+    expect(byName('Counterfeiters')?.classList.contains('has-card')).toBe(false)
+    expect(byName('Counterfeiters')?.querySelector('.action-card-thumb')).toBeNull()
+  })
+
   it('shows where a card is played but not its long text', () => {
     list('SOT')
     expect(screen.queryByText(/^Start of Turn: Choose another player/)).toBeNull()

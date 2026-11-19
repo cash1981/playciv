@@ -1355,6 +1355,17 @@ the prop. A spectator's board has no replay outline or wording.
 Source: `web/src/views/GameView.tsx` (`BattlePanel`), `SocialPolicyPanel.tsx`,
 `BoardView.tsx` and their tests.
 
+### Card pictures in the action panel (#367)
+
+"Possible actions" shows a small picture of the card beside a tech or Great
+Person action, and "Cards you can play" beside a culture card or Great Person.
+Techs are looked up in the public `view.techs`, hand cards in `view.you.items`
+only, so nothing hidden is read. The description stays behind the `?` button.
+The picture is decorative (empty alt) when the row names the card in text.
+
+Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
+`PlayableCards.tsx` and their tests.
+
 ## Reopening a phase (2026-10-23)
 
 - **Reopen** marks the viewer's latest ended phase of the active turn not done
