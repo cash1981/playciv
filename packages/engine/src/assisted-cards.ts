@@ -96,6 +96,7 @@ import type { CardTiming, HarborChoice, PlayableCard } from './card-timing.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import { itemName } from './item.js'
+import { deckWith } from './item-number.js'
 import type { Item } from './item.js'
 import { appendLog, itemNumberText, numberedItemName } from './log.js'
 import type { AssistedEffect, GameState, PendingReward, Playerhand, PlayerStats } from './state.js'
@@ -1565,7 +1566,7 @@ export const playCard: AssistedActionDefinition = {
     if (effect.drew !== undefined && drewCard !== undefined) {
       current = {
         ...withPlayerHand(current, { ...hand, items: hand.items.filter((candidate) => candidate.id !== drewCard.id) }),
-        items: [...current.items, { ...drewCard, hidden: true, ownerId: null }],
+        ...deckWith(current, [drewCard]),
       }
       current = shuffleSheetTwice(current, effect.drew.sheetName)
       hand = playerOf(current, player.playerId) ?? hand
@@ -1586,7 +1587,7 @@ export const playCard: AssistedActionDefinition = {
           pendingRewards: hand.pendingRewards.filter((reward) => !ownsChoice(reward.id)),
         }),
         discardedItems: current.discardedItems.filter((candidate) => !drawn.includes(candidate.id)),
-        items: [...current.items, ...returning.map((card) => ({ ...card, hidden: true, ownerId: null }))],
+        ...deckWith(current, returning),
       }
       const restored = discarded.map((card) => card.id)
       hand = playerOf(current, player.playerId) ?? hand

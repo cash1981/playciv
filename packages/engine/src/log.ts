@@ -94,7 +94,7 @@ export function deriveLogSecret(seed: number, gameId: string): string {
 }
 
 /** cyrb53: a 53-bit string hash. Not cryptographic; the secret is what protects. */
-function keyedHash(text: string): number {
+export function keyedHash(text: string): number {
   let h1 = 0xdeadbeef
   let h2 = 0x41c6ce57
   for (let i = 0; i < text.length; i++) {

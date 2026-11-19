@@ -29,6 +29,7 @@ import { UNIT_TYPES } from './build-item.js'
 import type { UnitType } from './build-item.js'
 import { unitCardAvailable, unitSheetOf } from './build-options.js'
 import type { Item } from './item.js'
+import { deckWith } from './item-number.js'
 import { appendLog, itemNumberText, numberedItemName } from './log.js'
 import { err, ok } from './result.js'
 import { SHEET_LABEL } from './sheet-name.js'
@@ -172,7 +173,7 @@ function militaryTradition(unitType: UnitType): AssistedActionDefinition {
       // Back in its deck, and that deck alone shuffled again, as a unit build's undo does
       const returned: GameState = {
         ...withPlayerHand(state, { ...player, items: player.items.filter((candidate) => candidate.id !== found.id) }),
-        items: [...state.items, { ...found, hidden: true, ownerId: null }],
+        ...deckWith(state, [found]),
       }
       return ok({
         state: shuffleSheetTwice(returned, effect.card.sheetName),

@@ -40,8 +40,8 @@ export function forceOf(battle: Battle, side: BattleSideId): number {
 
 /**
  * The units a side has in the battle for Leonidas: the units drawn for it (the battlehand, or the barbarians), or the
- * ones put in the arena if that is more. The battlehand is public, so both sides can count it before a unit is placed
- * (human, 2026-11-03: 5 units against 3 is enough).
+ * ones put in the arena if that is more. The number of units drawn is public (the units themselves are not), so both
+ * sides can count it before a unit is placed (human, 2026-11-03: 5 units against 3 is enough).
  */
 export function unitsInBattle(state: GameState, battle: Battle, side: BattleSideId): number {
   const sideOf = side === 'attacker' ? battle.attacker : battle.defender

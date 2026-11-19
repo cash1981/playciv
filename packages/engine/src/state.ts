@@ -878,6 +878,12 @@ export type AssistedEffect =
       readonly rewardId: string
       /** The card kept, or `null` when no candidate was left in the hand and the choice was only dropped. */
       readonly itemId: string | null
+      /**
+       * The cards discarded with the choice, as they were then (face and item number). The public history names
+       * them by this, not by the card's place now: it may have been reshuffled and renumbered since. Absent on
+       * records saved before this was kept.
+       */
+      readonly discarded?: readonly Item[]
     }
   | {
       readonly kind: 'build'
@@ -1649,8 +1655,11 @@ export interface OpaquePlayerhand {
   readonly numberOfTechsChosen: number
   readonly numberOfBarbarians: number
   readonly numberOfSocialPolicies: number
-  /** The battlehand is revealed explicitly in battle, so it is shown as it is. */
-  readonly battlehand: readonly UnitItem[]
+  /**
+   * How many units are drawn for a battle. Which ones stay hidden until they are placed in the arena or the
+   * battlehand is revealed.
+   */
+  readonly numberOfBattlehandUnits: number
   /**
    * Revealed techs only. Java: `getTechsForAllPlayers` filtered on
    * `!isHidden()`, which is how the tech pyramid becomes public.
@@ -1714,7 +1723,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     numberOfTechsChosen: player.techsChosen.length,
     numberOfBarbarians: player.barbarians.length,
     numberOfSocialPolicies: player.socialPolicies.length,
-    battlehand: player.battlehand,
+    numberOfBattlehandUnits: player.battlehand.length,
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
     pyramidPlacements: player.pyramidPlacements.map((placement) => ({ slot: placement.slot })),

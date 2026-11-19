@@ -51,6 +51,7 @@ import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } fr
 import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
 import type { Item } from './item.js'
+import { deckWith } from './item-number.js'
 import { appendLog, itemNumbersText, numberedItemName } from './log.js'
 import { shuffle } from './random.js'
 import type { Result } from './result.js'
@@ -584,7 +585,7 @@ export function restoreDrawnCards(
       pendingRewards: player.pendingRewards.filter((reward) => reward.id !== recordId),
     }),
     discardedItems: state.discardedItems.filter((item) => !returnedIds.has(item.id)),
-    items: [...state.items, ...toDeck.map((item): Item => ({ ...item, hidden: true, ownerId: null }))],
+    ...deckWith(state, toDeck),
   }
   return ok(toDeck.length === 0 ? withCards : shuffleDeckTwice(withCards))
 }
@@ -1125,7 +1126,12 @@ export const chooseReward: AssistedActionDefinition = {
     })
     return ok({
       state: countLinesIn(logged, [marker?.historyId]),
-      effect: { kind: 'chooseReward', rewardId: reward.id, itemId: kept.id },
+      effect: {
+        kind: 'chooseReward',
+        rewardId: reward.id,
+        itemId: kept.id,
+        discarded: others.map((item): Item => ({ ...item, hidden: true })),
+      },
       logId,
     })
   },

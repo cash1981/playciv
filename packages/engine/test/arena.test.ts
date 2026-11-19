@@ -1823,8 +1823,8 @@ describe('hidden information: battle arena', () => {
 
     // Strengthen: none of CASH1981's private items (hand, not battlehand) appear
     // in the arena or anywhere in KARANDRAS1's view.
-    // Note: battlehand IS intentionally exposed to opponents during battle
-    // (see opaque() in state.ts), so only the private items field is checked here.
+    // Note: the battlehand is not exposed to opponents (opaque() in state.ts gives a count), so only the private
+    // items field is checked here.
     const viewJson = JSON.stringify(view)
     const cashPrivateOnlyItems = findPlayer(state, CASH1981)!.items.filter(
       (i) => !cashPlayer.battlehand.some((u) => u.id === i.id) && i.id !== placed!.id,
@@ -2177,7 +2177,7 @@ describe('ending a battle and the projection', () => {
     const last = toPlayerView(ended, KARANDRAS1).lastBattle!
     expect(last.arena).toHaveLength(1)
     expect(last.arena[0]).toMatchObject({ attack: 2, health: 2 })
-    // The card ids stay out of `lastBattle` only: a battlehand is public anyway.
+    // The card ids stay out of `lastBattle` only; the battlehand is a count in the opponent view.
     const json = JSON.stringify(toPlayerView(ended, KARANDRAS1))
     expect(json).not.toContain(departed[0]!.id)
     expect(JSON.stringify(last)).not.toContain(first!.id)

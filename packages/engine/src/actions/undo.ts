@@ -20,6 +20,7 @@ import type { EngineError } from '../errors.js'
 import { DEFAULT_GOVERNMENT } from '../government.js'
 import type { CivItem, Item, TechItem } from '../item.js'
 import { isUnit, itemName } from '../item.js'
+import { deckWith } from '../item-number.js'
 import {
   appendAssistedUndoRequestLog,
   appendAssistedVoteLog,
@@ -382,7 +383,7 @@ function undoCivReveal(
     ...next,
     board: { ...next.board, redo: [], undoFloor: next.board.history.length },
   }
-  next = shuffleDeckTwice({ ...next, items: [...next.items, ...toDeck] })
+  next = shuffleDeckTwice({ ...next, ...deckWith(next, toDeck) })
   return ok(
     logUndo(
       next,
@@ -583,8 +584,6 @@ function returnToDeck(
   item: Item,
   logType: GameLogEntry['logType'],
 ): GameState {
-  const hidden: Item = { ...item, hidden: true, ownerId: null }
-
   const cleaned: GameState = {
     ...withPlayer(state, {
       ...player,
@@ -593,7 +592,7 @@ function returnToDeck(
     discardedItems: state.discardedItems.filter((candidate) => candidate.id !== item.id),
   }
 
-  const withItem: GameState = { ...cleaned, items: [...cleaned.items, hidden] }
+  const withItem: GameState = { ...cleaned, ...deckWith(cleaned, [item]) }
   const shuffled = shuffleDeckTwice(withItem)
 
   return logUndo(

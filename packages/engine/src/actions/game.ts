@@ -387,6 +387,9 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     state.discardedItems.find((item) => item.id === id) ??
     state.players.flatMap((player) => player.items).find((item) => item.id === id)
 
+  // A record from before the discards were kept (`effect.discarded`) names its cards by where they are now. A card
+  // that has left the pile may have been renumbered since, so only one still in the pile is named.
+  const inPile = (item: Item): boolean => state.discardedItems.some((candidate) => candidate.id === item.id)
   const advanceOf = (record: (typeof state.assistedActions)[number]): { readonly drawn: readonly string[] } | undefined => {
     if (record.effect.kind === 'cultureAdvance') return record.effect
     if ('advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
@@ -446,12 +449,16 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
       (candidate) => candidate.id === effect.rewardId || effect.rewardId.startsWith(`${candidate.id}:`),
     )
     if (origin === undefined || origin.status === 'undone') continue
+    if (effect.discarded !== undefined) {
+      for (const item of effect.discarded) rememberDiscard(item, record, false)
+      continue
+    }
     const advance = advanceOf(origin)
     if (advance === undefined) continue
     for (const id of advance.drawn) {
       if (id === effect.itemId) continue
       const item = itemById(id)
-      if (item !== undefined) rememberDiscard(item, record, false)
+      if (item !== undefined && inPile(item)) rememberDiscard(item, record, false)
     }
   }
 
