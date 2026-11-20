@@ -1,13 +1,15 @@
 /**
- * The conquest rewards of the civ cards (issue #368). The Romans advance one space on the culture track for free each time
- * they conquer a city (another player's) or a village; the Chinese gain 3 culture when they conquer a village. The human
- * wants a prompt, never an automatic gain, so a conquest only ever creates an offer the player answers
- * (`claimConquest`, `assisted-conquest.ts`).
+ * The conquests of the game (issue #368). A village is got by fighting the barbarians for it, for every civilization: after
+ * a won battle with the army still on the square the player is offered the village (its token goes to their area and its
+ * card into their hand), plus the civ's extra. The Romans advance one space on the culture track for free each time they
+ * conquer a city (another player's) or a village; the Chinese gain 3 culture when they conquer a village. The human wants a
+ * prompt, never an automatic gain, so a conquest only ever creates an offer the player answers (`claimConquest`,
+ * `assisted-conquest.ts`).
  *
  * The game does not model a conquest, so it is recognised from what it can see, in two steps:
  *
- * 1. An own army of a Roman or Chinese player ends its move (`travelFigureCollecting`) on a village token, or (Romans only)
- *    on a centre square of another player's city. That is recorded as the player's pending conquest, one per player.
+ * 1. An own army ends its move (`travelFigureCollecting`) on a village token, or (Romans only) on a centre square of another
+ *    player's city. That is recorded as the player's pending conquest, one per player.
  * 2. When a battle ends (`endBattleAction`) and that player won it with that army still on the recorded square, against the
  *    matching side (the barbarians for a village, the city's owner for a city), an offer is made. The pending conquests of
  *    the combatants are used up whatever the outcome.
@@ -54,14 +56,14 @@ function foreignCityAt(state: GameState, player: Playerhand, cell: Cell) {
 
 /**
  * The conquest the move of `pieceId` to `cell` makes, judged on the board as it stood before the move (a village token
- * that is collected on the move is still there then). `undefined` unless the piece is an army of a Roman or Chinese player
- * and the square holds a village token, or (Romans) a city of another player. A scout never conquers.
+ * that is collected on the move is still there then). `undefined` unless the piece is an army and the square holds a village
+ * token, or (Romans) a city of another player. A scout never conquers.
  */
 export function pendingConquestOf(state: GameState, playerId: string, pieceId: string, cell: Cell): PendingConquest | undefined {
   const player = state.players.find((candidate) => candidate.playerId === playerId)
   const civ = conquestCivOf(player)
   const piece = findPiece(state.board, pieceId)
-  if (player === undefined || civ === undefined || piece === undefined || figureKindOf(piece) !== 'army') return undefined
+  if (player === undefined || piece === undefined || figureKindOf(piece) !== 'army') return undefined
   const where = { playerId, pieceId, column: cell.column, row: cell.row, square: squareLabel(cell) }
   if (mapTokensOf(state.board).some((token) => token.sheet === 'VILLAGES' && sameCell(token.cell, cell))) {
     return { ...where, kind: 'village' }
@@ -111,7 +113,7 @@ function stillStandsOn(state: GameState, player: Playerhand, entry: PendingConqu
 }
 
 /** Whether the beaten side is the one this conquest is over: the barbarians for a village, the city's owner for a city. */
-function beatenMatches(state: GameState, entry: PendingConquest, civ: ConquestCiv, loser: Combatant): boolean {
+function beatenMatches(state: GameState, entry: PendingConquest, civ: ConquestCiv | undefined, loser: Combatant): boolean {
   if (entry.kind === 'village') return loser.kind === 'barbarians'
   if (civ !== 'Romans' || loser.kind !== 'player' || loser.playerId === entry.playerId) return false
   const colour = state.players.find((candidate) => candidate.playerId === loser.playerId)?.color?.toLowerCase()
@@ -140,12 +142,11 @@ export function settleConquests(
   for (const entry of used) {
     if (winner === undefined || loser === undefined || winner.kind !== 'player' || winner.playerId !== entry.playerId) continue
     const player = state.players.find((candidate) => candidate.playerId === entry.playerId)
-    const civ = conquestCivOf(player)
-    if (player === undefined || civ === undefined || !stillStandsOn(state, player, entry)) continue
-    if (!beatenMatches(state, entry, civ, loser)) continue
+    if (player === undefined || !stillStandsOn(state, player, entry)) continue
+    if (!beatenMatches(state, entry, conquestCivOf(player), loser)) continue
     const [id, next] = nextId(rng)
     rng = next
-    offers.push({ id, playerId: entry.playerId, kind: entry.kind, square: entry.square, civ })
+    offers.push({ id, playerId: entry.playerId, kind: entry.kind, square: entry.square, civ: player.civilization?.name ?? '' })
   }
   const rest = (state.pendingConquests ?? []).filter((entry) => !used.includes(entry))
   return {
@@ -176,7 +177,7 @@ export function takeBackConquest(state: GameState, conquest: NonNullable<EndedBa
       kind: 'ASSISTED_UNDO_BLOCKED',
       logId: answered.logId,
       reason: accepted
-        ? `The conquest of the ${what} on ${offer.square} was taken (${offer.civ === 'Romans' ? 'the free advance' : 'the 3 culture'}). Undo that first, then undo the end of the battle.`
+        ? `The conquest of the ${what} on ${offer.square} was taken${offer.civ === 'Romans' ? ' (the free advance)' : offer.civ === 'Chinese' ? ' (the 3 culture)' : ''}. Undo that first, then undo the end of the battle.`
         : `The offer for the ${what} on ${offer.square} was declined. Undo that first, then undo the end of the battle.`,
     })
   }

@@ -45,6 +45,19 @@ export const levelSheet = (level: CultureLevel): SheetName =>
 export const playerOf = (state: GameState, playerId: string): Playerhand | undefined =>
   state.players.find((player) => player.playerId === playerId)
 
+/** The civilization whose Great Persons give free units (`assisted-aztecs.ts`), and how many each one gives. */
+export const AZTEC_CIVILIZATION = 'Aztecs'
+export const AZTEC_UNIT_CREDITS = 2
+
+/** The free-unit credits a player holds (server only, never projected). */
+export const aztecCreditsOf = (state: GameState, playerId: string): number => state.aztecFreeUnits?.[playerId] ?? 0
+
+/** The state with the player's credits set, never below 0. */
+export const withAztecCredits = (state: GameState, playerId: string, credits: number): GameState => ({
+  ...state,
+  aztecFreeUnits: { ...state.aztecFreeUnits, [playerId]: Math.max(0, credits) },
+})
+
 export const withPlayerHand = (state: GameState, player: Playerhand): GameState => ({
   ...state,
   players: state.players.map((existing) =>

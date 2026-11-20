@@ -27,6 +27,7 @@ import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { CoinsPanel } from './CoinsPanel.js'
+import { ConquestPrompt } from './ConquestPrompt.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
@@ -1702,6 +1703,10 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   return (
     <CollapsiblePanel id="battle" title="Battle" defaultOpen={false}>
+      {/* The conquest offer a won battle makes, here where the arena is (it is also in "Your actions", far from it) */}
+      {battle === null && (
+        <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Conquest (battle)" />
+      )}
 
       {/* — Hand management — */}
       <div className="row">

@@ -22,6 +22,7 @@ import {
   initiateBattle,
   leaderAssetId,
   killArenaUnit,
+  mapTokensOf,
   mapTop,
   placePiece,
   placeUnitInArena,
@@ -54,6 +55,7 @@ interface View {
       readonly civ: string
       readonly blocked: string | null
       readonly nothing: string | null
+      readonly villageGone: boolean
     }[]
   } | null
 }
@@ -142,15 +144,21 @@ const stored = async (table: Table): Promise<GameState> => {
 }
 
 /** The army marches onto the village over HTTP, then the battle against the barbarians is set up with the other side wiped out. */
-async function marchAndFight(table: Table): Promise<void> {
-  const marched = await post(table.starter, `/api/games/${table.gameId}/board/pieces/${table.armyId}/travel`, { column: 2, row: 1 })
+async function marchAndFight(table: Table, fightVillage = false): Promise<void> {
+  const marched = await post(table.starter, `/api/games/${table.gameId}/board/pieces/${table.armyId}/travel`, {
+    column: 2,
+    row: 1,
+    ...(fightVillage ? { fightVillage } : {}),
+  })
   expect(marched.status).toBe(200)
   let state = await stored(table)
   expect(state.pendingConquests).toHaveLength(1)
+  // The fight for the village started the battle with the move itself
+  expect(state.battle !== null).toBe(fightVillage)
   let next = state
   for (let i = 0; i < 2; i++) next = unwrap(draw(next, { playerId: table.starterId, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
   next = unwrap(drawUnitsForBattle(next, { playerId: table.starterId, numberOfDraws: 2 }))
-  next = unwrap(initiateBattle(next, { initiatorId: table.starterId, opponentId: 'barbarians' }))
+  if (next.battle === null) next = unwrap(initiateBattle(next, { initiatorId: table.starterId, opponentId: 'barbarians' }))
   const controller = next.battle?.defender.playerId ?? ''
   for (const [index, unit] of (findPlayer(next, table.starterId)?.battlehand ?? []).entries()) {
     next = unwrap(placeUnitInArena(next, { playerId: table.starterId, unitId: unit.id, side: 'attacker', position: index, attack: 1, health: 3 }))
@@ -178,9 +186,9 @@ const claimBody = (offerId: string, accept: unknown, requestId: string, rev: num
 })
 
 /** A table where the battle has been won and ended, with the offer open. */
-async function offered(name: string, civ = 'Chinese', leaderStep?: number): Promise<{ table: Table; offerId: string }> {
+async function offered(name: string, civ = 'Chinese', leaderStep?: number, fightVillage = false): Promise<{ table: Table; offerId: string }> {
   const table = await buildTable(name, civ, leaderStep)
-  await marchAndFight(table)
+  await marchAndFight(table, fightVillage)
   expect((await endBattle(table)).status).toBe(200)
   const offerId = (await view(table.gameId, table.starter)).you?.conquestOffers?.[0]?.id
   if (offerId === undefined) throw new Error('no offer was made')
@@ -200,7 +208,7 @@ describe('the offer in the projection', () => {
 
     expect((await endBattle(table)).status).toBe(200)
     const mine = await view(table.gameId, table.starter)
-    expect(mine.you?.conquestOffers).toEqual([{ id: expect.any(String), kind: 'village', square: 'C2', civ: 'Chinese', blocked: null, nothing: null }])
+    expect(mine.you?.conquestOffers).toEqual([{ id: expect.any(String), kind: 'village', square: 'C2', civ: 'Chinese', blocked: null, nothing: null, villageGone: false }])
     const offerId = mine.you?.conquestOffers?.[0]?.id ?? ''
 
     const asOther = await inject(app, { url: `/api/games/${table.gameId}`, headers: bearer(table.other) })
@@ -377,5 +385,61 @@ describe('taking it back over HTTP', () => {
     const undone = await post(table.starter, `/api/games/${table.gameId}/battle/arena/end/undo`, { rev: reopened.rev })
     expect(undone.status).toBe(200)
     expect((await undone.json<View>()).you?.conquestOffers).toEqual([])
+  })
+})
+
+describe('fighting for a village over HTTP', () => {
+  const villageTokenCount = (state: GameState): number => mapTokensOf(state.board).filter((token) => token.sheet === 'VILLAGES').length
+
+  it('starts the battle with the move, leaves the village on the map', async () => {
+    const table = await buildTable('Fight-move', 'Japanese')
+    const url = `/api/games/${table.gameId}/board/pieces/${table.armyId}/travel`
+    const moved = await post(table.starter, url, { column: 2, row: 1, fightVillage: true })
+    expect(moved.status).toBe(200)
+    const state = await stored(table)
+    expect(state.battle).toMatchObject({ attacker: { kind: 'player', playerId: table.starterId }, defender: { kind: 'barbarians' } })
+    expect(villageTokenCount(state)).toBe(1)
+    expect(state.tokenCollections).toBeUndefined()
+    expect(state.pendingConquests).toHaveLength(1)
+  })
+
+  it('offers a civ without an extra the village after the win, takes it on accept and puts it back on the vote', async () => {
+    const { table, offerId } = await offered('Fight-japanese', 'Japanese', undefined, true)
+    const before = await view(table.gameId, table.starter)
+    expect(before.you?.conquestOffers?.[0]).toMatchObject({ civ: 'Japanese', kind: 'village', villageGone: false })
+    expect((await post(table.starter, `/api/games/${table.gameId}/actions`, claimBody(offerId, true, 'claim-1', before.rev))).status).toBe(200)
+    const taken = await stored(table)
+    expect(taken.tokenCollections).toHaveLength(1)
+    expect(villageTokenCount(taken)).toBe(0)
+    expect(findPlayer(taken, table.starterId)?.items.filter((item) => item.kind === 'village')).toHaveLength(1)
+    expect(findPlayer(taken, table.starterId)?.stats.culture).toBe(5)
+
+    const logId = taken.log.find((entry) => entry.assistedActionId === 'claim-1')?.id ?? ''
+    expect((await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})).status).toBe(200)
+    expect((await post(table.starter, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })).status).toBe(200)
+    const back = await stored(table)
+    expect(villageTokenCount(back)).toBe(1)
+    expect(findPlayer(back, table.starterId)?.items.filter((item) => item.kind === 'village')).toHaveLength(0)
+    expect(back.conquestOffers).toHaveLength(1)
+  })
+
+  it('refuses the take-back with a 409 and the reason while the village card is not in the hand', async () => {
+    const { table, offerId } = await offered('Fight-gone', 'Japanese', undefined, true)
+    const rev = (await view(table.gameId, table.starter)).rev
+    expect((await post(table.starter, `/api/games/${table.gameId}/actions`, claimBody(offerId, true, 'claim-1', rev))).status).toBe(200)
+    const taken = await stored(table)
+    const gone: GameState = {
+      ...taken,
+      players: taken.players.map((player) => (player.playerId === table.starterId ? { ...player, items: player.items.filter((item) => item.kind !== 'village') } : player)),
+    }
+    await repo.saveGame(gone)
+    const logId = gone.log.find((entry) => entry.assistedActionId === 'claim-1')?.id ?? ''
+    expect((await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})).status).toBe(200)
+    const refused = await post(table.starter, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+    expect(refused.status).toBe(409)
+    const body = await refused.json<{ error: string; message: string }>()
+    expect(body.error).toBe('ASSISTED_UNDO_BLOCKED')
+    expect(body.message).toContain('The village card from C2 has left the hand')
+    expect(villageTokenCount(await stored(table))).toBe(0)
   })
 })

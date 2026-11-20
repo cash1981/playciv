@@ -89,6 +89,10 @@ describe('the registry', () => {
       'writing',
       // Batch 2: Metalworking, Atomic Theory, Bureaucracy
       'atomicTheory',
+      'aztecs:aircraft',
+      'aztecs:artillery',
+      'aztecs:infantry',
+      'aztecs:mounted',
       'bureaucracy',
       'metalworking',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
@@ -112,7 +116,7 @@ describe('the registry', () => {
       expect(action.phase).toBe(
         startOfTurn.includes(action.action) || action.action.startsWith('sot:')
           ? 'SOT'
-          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'animalHusbandryHeal' || action.action === 'biologyHeal' || action.action === 'metalworking' || action.action === 'atomicTheory' || action.action === 'agriculture' || action.action.startsWith('relic:')
+          : action.action === 'mathematics' || action.action === 'ballistics' || action.action === 'animalHusbandryHeal' || action.action === 'biologyHeal' || action.action === 'metalworking' || action.action === 'atomicTheory' || action.action === 'agriculture' || action.action.startsWith('relic:') || action.action.startsWith('aztecs:')
             ? 'ANY'
             : action.action === 'writing' || action.action === 'civilService' || action.action === 'massMedia'
               ? 'ANY'

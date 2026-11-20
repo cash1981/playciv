@@ -1123,6 +1123,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       return true
     }
     const effect = record.effect
+    // A conquest claim took the village token into the player's area: the claim's own undo gives it back with the card
+    if (effect.kind === 'conquestClaim' && effect.village?.historyId === entry.id) return true
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
     // A unit placed nothing, so only a marker is on the board; City Walls only turned the city marker over.
     if (effect.kind === 'build') {

@@ -23,9 +23,10 @@ afterEach(() => {
 
 type Offer = NonNullable<PlayerView['you']>['conquestOffers'][number]
 
-const romanVillage: Offer = { id: 'offer-1', kind: 'village', square: 'B4', civ: 'Romans', blocked: null, nothing: null }
-const chineseVillage: Offer = { id: 'offer-2', kind: 'village', square: 'C2', civ: 'Chinese', blocked: null, nothing: null }
-const romanCity: Offer = { id: 'offer-3', kind: 'city', square: 'D4', civ: 'Romans', blocked: null, nothing: null }
+const romanVillage: Offer = { id: 'offer-1', kind: 'village', square: 'B4', civ: 'Romans', blocked: null, nothing: null, villageGone: false }
+const chineseVillage: Offer = { id: 'offer-2', kind: 'village', square: 'C2', civ: 'Chinese', blocked: null, nothing: null, villageGone: false }
+const romanCity: Offer = { id: 'offer-3', kind: 'city', square: 'D4', civ: 'Romans', blocked: null, nothing: null, villageGone: false }
+const japaneseVillage: Offer = { id: 'offer-4', kind: 'village', square: 'E5', civ: 'Japanese', blocked: null, nothing: null, villageGone: false }
 
 const viewWith = (offers: readonly Offer[], rev = 7): PlayerView =>
   ({
@@ -61,16 +62,20 @@ describe('the conquest prompt', () => {
   it('asks the Romans about a village in words, with Advance and No thanks', () => {
     renderPrompt(viewWith([romanVillage]))
     expect(
-      screen.getByText('You conquered the village on B4. As the Romans you may advance one space on the culture track.'),
+      screen.getByText(
+        'You conquered the village on B4. Take it: its token goes to your area and its card into your hand. As the Romans you may also advance one space on the culture track.',
+      ),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Advance' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Take village and advance' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'No thanks' })).toBeTruthy()
   })
 
   it('asks the Chinese about 3 culture, and the Romans about a city as a city', () => {
     renderPrompt(viewWith([chineseVillage, romanCity]))
-    expect(screen.getByText('You conquered the village on C2. As the Chinese you gain 3 culture.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Take 3 culture' })).toBeTruthy()
+    expect(
+      screen.getByText('You conquered the village on C2. Take it: its token goes to your area and its card into your hand. As the Chinese you also gain 3 culture.'),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Take village and 3 culture' })).toBeTruthy()
     expect(
       screen.getByText('You conquered the city on D4. As the Romans you may advance one space on the culture track.'),
     ).toBeTruthy()
@@ -81,7 +86,7 @@ describe('the conquest prompt', () => {
   it('sends one claim to accept, with the offer and the revision the viewer saw', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     renderPrompt(viewWith([romanVillage], 9))
-    fireEvent.click(screen.getByRole('button', { name: 'Advance' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Take village and advance' }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send).toHaveBeenCalledWith('game-1', 'claimConquest', expect.any(String), 9, { offerId: 'offer-1', accept: true })
   })
@@ -99,7 +104,7 @@ describe('the conquest prompt', () => {
     let finish: (view: PlayerView) => void = () => undefined
     const send = vi.spyOn(api, 'actionWithArgs').mockReturnValue(new Promise<PlayerView>((resolve) => { finish = resolve }))
     renderPrompt(viewWith([chineseVillage]))
-    const accept = screen.getByRole('button', { name: 'Take 3 culture' })
+    const accept = screen.getByRole('button', { name: 'Take village and 3 culture' })
     fireEvent.click(accept)
     fireEvent.click(accept)
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
@@ -110,7 +115,7 @@ describe('the conquest prompt', () => {
     const stopped: Offer = { ...romanVillage, blocked: 'Choose the card to keep from your last advance first.' }
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     renderPrompt(viewWith([stopped]))
-    const advance = screen.getByRole('button', { name: 'Advance' }) as HTMLButtonElement
+    const advance = screen.getByRole('button', { name: 'Take village and advance' }) as HTMLButtonElement
     expect(advance.disabled).toBe(true)
     expect(screen.getByText('Not now: Choose the card to keep from your last advance first.')).toBeTruthy()
     fireEvent.click(advance)
@@ -130,7 +135,7 @@ describe('the conquest prompt', () => {
       }
     }
     render(<ConquestPrompt gameId="game-1" view={viewWith([chineseVillage])} busy={false} readOnly={false} run={reporting} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Take 3 culture' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Take village and 3 culture' }))
     await waitFor(() => expect(caught).toEqual([refusal]))
     // The page shows the error (GameView's `run`); the prompt adds no second copy of it
     expect(screen.queryByRole('alert')).toBeNull()
@@ -142,13 +147,45 @@ describe('the conquest prompt', () => {
     const nothing: Offer = { ...romanVillage, nothing: 'Your marker is already on the Culture Victory space.' }
     renderPrompt(viewWith([nothing]))
     expect(
-      screen.getByText('Nothing to advance: your marker is already on the Culture Victory space. Accepting only closes this.'),
+      screen.getByText('Nothing to advance: your marker is already on the Culture Victory space. Accepting still takes the village.'),
     ).toBeTruthy()
+    cleanup()
+    renderPrompt(viewWith([{ ...nothing, villageGone: true }]))
+    expect(screen.getByText(/Accepting only closes this\./)).toBeTruthy()
+    cleanup()
+    renderPrompt(viewWith([nothing]))
     // It can still be answered: accepting closes the offer
-    const advance = screen.getByRole('button', { name: 'Advance' }) as HTMLButtonElement
+    const advance = screen.getByRole('button', { name: 'Take village and advance' }) as HTMLButtonElement
     expect(advance.disabled).toBe(false)
     fireEvent.click(advance)
     await waitFor(() => expect(send).toHaveBeenCalledWith('game-1', 'claimConquest', expect.any(String), 7, { offerId: 'offer-1', accept: true }))
+  })
+
+  it('offers a civ without an extra just the village, in words and on the button', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    renderPrompt(viewWith([japaneseVillage]))
+    expect(
+      screen.getByText('You conquered the village on E5. Take it: its token goes to your area and its card into your hand.'),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Take the village' }))
+    await waitFor(() => expect(send).toHaveBeenCalledWith('game-1', 'claimConquest', expect.any(String), 7, { offerId: 'offer-4', accept: true }))
+    expect(screen.queryByText(/As the/)).toBeNull()
+  })
+
+  it('says that the village token is gone from the square, and offers only the extra the civ has', () => {
+    renderPrompt(
+      viewWith([
+        { ...romanVillage, villageGone: true },
+        { ...chineseVillage, villageGone: true },
+        { ...japaneseVillage, villageGone: true },
+      ]),
+    )
+    expect(
+      screen.getByText('You conquered the village on B4, but its token is no longer on the map. As the Romans you may advance one space on the culture track.'),
+    ).toBeTruthy()
+    expect(screen.getByText('You conquered the village on C2, but its token is no longer on the map. As the Chinese you gain 3 culture.')).toBeTruthy()
+    expect(screen.getByText('You conquered the village on E5, but its token is no longer on the map. There is nothing to take.')).toBeTruthy()
+    for (const name of ['Advance', 'Take 3 culture', 'Close']) expect(screen.getByRole('button', { name })).toBeTruthy()
   })
 
   it('has no such note for an advance that can be made, or for the Chinese', () => {
@@ -170,7 +207,7 @@ describe('the conquest prompt', () => {
     for (const props of [{ busy: true }, { readOnly: true }]) {
       cleanup()
       renderPrompt(viewWith([chineseVillage]), props)
-      for (const name of ['Take 3 culture', 'No thanks']) {
+      for (const name of ['Take village and 3 culture', 'No thanks']) {
         expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled, `${name} ${JSON.stringify(props)}`).toBe(true)
       }
     }

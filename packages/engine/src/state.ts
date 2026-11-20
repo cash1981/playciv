@@ -483,6 +483,8 @@ export type AssistedActionKind =
   | 'agriculture'
   // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
   | `militaryTradition:${UnitType}`
+  // The Aztecs' free unit for a Great Person gained, one button per unit type (assisted-aztecs.ts)
+  | `aztecs:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
   | `sot:${string}`
   // The one-time ability of a relic that is claimed as soon as an army has taken it: `relic:<ability>` (assisted-relics.ts)
@@ -536,6 +538,11 @@ export interface GreatPersonMarker {
   readonly pieceId: string
   readonly position: { readonly x: number; readonly y: number }
   readonly historyId: string
+  /**
+   * The free-unit credits this Great Person gave its owner as the Aztecs (`aztecFreeUnits`), so an undo takes back
+   * exactly these, as far as they are unused. Absent for every other civilization. Never projected.
+   */
+  readonly aztecCredits?: number
 }
 
 /**
@@ -670,6 +677,16 @@ export type AssistedEffect =
       readonly culture: number
       /** The free advance the Romans took, or `null` (declined, or no space left to advance to). */
       readonly advance: CultureAdvanceEffect | null
+      /**
+       * The village token the answer took into the player's area: its board entry, the token and where it lay, and the card.
+       * `null` when nothing was drawn (declined, a city, or the token was no longer on the square); absent in older saves.
+       */
+      readonly village?: {
+        readonly historyId: string
+        readonly pieceId: string
+        readonly from: { readonly x: number; readonly y: number }
+        readonly itemId: string
+      } | null
     }
   | {
       /** A scout's square sent to a city for the turn, or `cityPieceId: null` to stop sending it. */
@@ -1294,7 +1311,7 @@ export interface PendingConquest {
   readonly kind: 'village' | 'city'
 }
 
-/** The civilizations whose conquests give a reward the player may take (the civ cards, issue #368). */
+/** The civilizations whose conquests give an extra reward (the civ cards, issue #368). Any other civ only gets the village. */
 export type ConquestCiv = 'Romans' | 'Chinese'
 
 /**
@@ -1306,7 +1323,8 @@ export interface ConquestOffer {
   readonly playerId: string
   readonly kind: 'village' | 'city'
   readonly square: string
-  readonly civ: ConquestCiv
+  /** The player's civilization name (`''` before one is chosen); only the Romans and the Chinese have an extra reward. */
+  readonly civ: string
 }
 
 /**
@@ -1317,6 +1335,8 @@ export interface ConquestOffer {
 export interface ConquestOfferView extends Omit<ConquestOffer, 'playerId'> {
   readonly blocked: string | null
   readonly nothing: string | null
+  /** A village offer whose token is no longer on the square: accepting then gives only the civ's extra (if it has one). */
+  readonly villageGone: boolean
 }
 
 /** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
@@ -1513,6 +1533,12 @@ export interface GameState {
    * or the numbers could be matched against the tech list again.
    */
   readonly logSecret: string
+  /**
+   * The free-unit credits an Aztec player holds, by player id: two for every Great Person gained, one spent per free
+   * unit drawn (`assisted-aztecs.ts`). Absent or missing for a player means none. Server only: a projection must never
+   * carry it; the owner sees only the "N of M left" of the buttons.
+   */
+  readonly aztecFreeUnits?: Readonly<Record<string, number>>
   /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
   /**

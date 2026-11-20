@@ -350,6 +350,46 @@ describe('history over HTTP', () => {
     expect((await repo.findGame(gameId))?.tokenCollections ?? []).toHaveLength(0)
   })
 
+  it.each([
+    ['resources/village', true, true],
+    ['resources/village', false, false],
+    ['resources/hut', true, false],
+  ])('starts the battle against the barbarians when an army ends on a %s with fightVillage %s, and never draws the token (%s battle)', async (marker, fight, battles) => {
+    const { gameId, starter, starterName } = await startedGame(`Fight-${marker.slice(10)}-${fight}`)
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    await place(gameId, starter, marker, 2 * square + 20, top + square + 20)
+    const placed = await place(gameId, starter, assetId, square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+
+    const travelled = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+      headers: bearer(starter),
+      payload: { column: 2, row: 1, fightVillage: fight, collectToken: true },
+    })
+    expect(travelled.status).toBe(200)
+    const saved = await repo.findGame(gameId)
+    expect(saved?.battle !== null).toBe(battles)
+    if (battles) {
+      expect(saved?.battle?.defender.kind).toBe('barbarians')
+      // The move never drew the token, though it asked to
+      expect(saved?.tokenCollections).toBeUndefined()
+    } else if (marker === 'resources/hut' || !fight) {
+      // A hut is not fought for, and without fightVillage the token is drawn as asked
+      expect(saved?.tokenCollections).toHaveLength(1)
+    }
+  })
+
   it('refuses the board Undo of a Chinese hut once its 3 culture is spent, with a 409, and keeps the card and the token', async () => {
     const { gameId, starter, starterName } = await startedGame('Collect-chinese')
     const state = await repo.findGame(gameId)

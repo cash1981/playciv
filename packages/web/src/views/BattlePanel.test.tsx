@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PlayerView } from '../lib/api.js'
@@ -1017,5 +1017,45 @@ describe('BattlePanel Chinese save picker', () => {
       expect((getByText('End battle') as HTMLButtonElement).disabled).toBe(false)
       cleanup()
     }
+  })
+})
+
+describe('BattlePanel conquest offer', () => {
+  const offer = { id: 'offer-1', kind: 'village', square: 'C2', civ: 'Japanese', blocked: null, nothing: null, villageGone: false }
+  const ended = (conquestOffers: readonly unknown[], battle: unknown = null) =>
+    ({
+      you: { playerId: 'me', battlehand: [], barbarians: [], items: [], conquestOffers },
+      opponents: [],
+      battle,
+      battleSummary: [],
+      rev: 4,
+    }) as unknown as PlayerView
+
+  beforeEach(() => localStorage.setItem('civ.panel.battle', 'true'))
+  afterEach(() => {
+    cleanup()
+    localStorage.removeItem('civ.panel.battle')
+    vi.clearAllMocks()
+  })
+
+  it('shows the offer a won battle made in the battle panel once the battle has ended, and answers it from there', async () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue({} as PlayerView)
+    render(<BattlePanel gameId="game" busy={false} run={run} view={ended([offer])} />)
+    expect(screen.getByRole('region', { name: 'Conquest (battle)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Take the village' }))
+    await waitFor(() =>
+      expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'claimConquest', expect.any(String), 4, { offerId: 'offer-1', accept: true }),
+    )
+  })
+
+  it('shows no offer while a battle is active, without an offer, or to a viewer without a seat', () => {
+    render(<BattlePanel gameId="game" busy={false} run={run} view={{ ...ended([offer]), battle: view.battle } as PlayerView} />)
+    expect(screen.queryByRole('region', { name: 'Conquest (battle)' })).toBeNull()
+    cleanup()
+    render(<BattlePanel gameId="game" busy={false} run={run} view={ended([])} />)
+    expect(screen.queryByRole('region', { name: 'Conquest (battle)' })).toBeNull()
+    cleanup()
+    render(<BattlePanel gameId="game" busy={false} run={run} view={{ rev: 1, you: null, opponents: [], battle: null, battleSummary: [] } as unknown as PlayerView} />)
+    expect(screen.queryByRole('region', { name: 'Conquest (battle)' })).toBeNull()
   })
 })

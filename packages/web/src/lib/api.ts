@@ -994,12 +994,13 @@ export const api = {
       ...(snap === undefined ? {} : { snap }),
     }),
   /** Moves a figure by the Movement rules (issue #302) to a map square. */
-  travelFigure: (gameId: string, pieceId: string, column: number, row: number, disband = false, collectToken = false) =>
+  travelFigure: (gameId: string, pieceId: string, column: number, row: number, disband = false, collectToken = false, fightVillage = false) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/travel`, {
       column,
       row,
       ...(disband ? { disband } : {}),
       ...(collectToken ? { collectToken } : {}),
+      ...(fightVillage ? { fightVillage } : {}),
     }),
   /** A figure spends 1 movement to explore the fog next to it: the next map tile is laid there (issue #302). */
   exploreSquare: (gameId: string, pieceId: string, column: number, row: number) =>

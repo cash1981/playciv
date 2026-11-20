@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import { endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, undoEndBattle } from '../src/actions/arena.js'
 import { movePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { mapTokensOf } from '../src/zheng-he.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { travelFigureCollecting } from '../src/actions/token-collection.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -91,7 +92,8 @@ function fight(state: GameState, opponent: 'barbarians' | string, health = 3): G
   }
   next = prepare(CASH1981)
   if (opponent !== 'barbarians') next = prepare(opponent)
-  next = unwrap(initiateBattle(next, { initiatorId: CASH1981, opponentId: opponent }))
+  // The move of a village fight has started the battle already
+  if (next.battle === null) next = unwrap(initiateBattle(next, { initiatorId: CASH1981, opponentId: opponent }))
   const place = (playerId: string, side: 'attacker' | 'defender', first: number, hp: number, from: 'battlehand' | 'barbarians'): void => {
     for (const [index, unit] of (findPlayer(next, playerId)?.[from] ?? []).entries()) {
       next = unwrap(placeUnitInArena(next, { playerId, unitId: unit.id, side, position: first + index, attack: 1, health: hp }))
@@ -148,6 +150,15 @@ function undoByVote(state: GameState, requestId: string): GameState {
   return next
 }
 
+/** The vote on the action's line as far as it goes: the result of the last vote, which carries out the undo. */
+function voteAll(state: GameState, requestId: string) {
+  const entry = state.log.find((candidate) => candidate.assistedActionId === requestId)
+  if (entry === undefined) throw new Error('no log line for the action')
+  let next = unwrap(initiateUndo(state, { logId: entry.id, playerId: CASH1981 }))
+  for (const playerId of OTHERS.slice(0, -1)) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
+  return vote(next, { logId: entry.id, playerId: OTHERS.at(-1) ?? '', vote: true, at: AT })
+}
+
 const reasonOf = (result: ReturnType<typeof claim>): string => {
   const error = unwrapErr(result)
   if (error.kind !== 'ASSISTED_ACTION_REJECTED') throw new Error(`unexpected error ${error.kind}`)
@@ -174,6 +185,16 @@ describe('what an army move records as a pending conquest', () => {
     expect(city.pendingConquests).toBeUndefined()
   })
 
+  it('records the army of any civ on a village, and a collected village only for a civ with an extra', () => {
+    const japanese = march(villageScene({ civ: 'Japanese' }))
+    expect(japanese.pendingConquests?.map((entry) => entry.kind)).toEqual(['village'])
+    // Drawn on the move (a Zulu army), nothing is left to offer a civ without an extra; the Chinese still have their +3
+    expect(march(villageScene({ civ: 'Zulu' }), true).pendingConquests).toBeUndefined()
+    expect(march(villageScene({ civ: 'Chinese' }), true).pendingConquests?.map((entry) => entry.kind)).toEqual(['village'])
+    // Another player's city is for the Romans alone
+    expect(march(cityScene({ civ: 'Japanese' })).pendingConquests).toBeUndefined()
+  })
+
   it('records a Roman army that ends on another player’s city', () => {
     const moved = march(cityScene())
     expect(moved.pendingConquests?.map((entry) => ({ kind: entry.kind, square: entry.square }))).toEqual([{ kind: 'city', square: 'C2' }])
@@ -186,8 +207,6 @@ describe('what an army move records as a pending conquest', () => {
     const scouted = march(scout, false, CASH1981, 'figures/redscout')
     expect(mapCellOf(scouted.board, pieceOf(scouted, 'figures/redscout'))).toEqual(C2)
     expect(scouted.pendingConquests).toBeUndefined()
-    // Another civilization
-    expect(march(villageScene({ civ: 'Japanese' })).pendingConquests).toBeUndefined()
     // The Romans' own city
     const own = put(put(withAmerica(sotTurn({ civ: 'Romans', step: 9 })), CASH1981, 'cities/redcity2', C2.column, C2.row), CASH1981, 'figures/redarmy', C3.column, C3.row)
     expect(march(own).pendingConquests).toBeUndefined()
@@ -397,7 +416,7 @@ describe('taking the answer back', () => {
     expect(stepOf(undone)).toBe(9)
     expect(offersOf(undone)).toEqual(offersOf(state))
     expect(undone.log.at(-1)?.publicLog).toBe(
-      "System: cash1981's answer to the conquest of the village on C2 was undone: the free advance was taken back, the offer is open again",
+      "System: cash1981's answer to the conquest of the village on C2 was undone: the village token is back on the map, the free advance was taken back, the offer is open again",
     )
     expect(undone.assistedActions.at(-1)?.status).toBe('undone')
     // The board Undo cannot walk the marker forward again past the take-back
@@ -406,25 +425,29 @@ describe('taking the answer back', () => {
     expect(stepOf(unwrap(claim(undone, id, true, 'claim-2')))).toBe(10)
   })
 
-  it('takes the Chinese culture back as far as it is still there, never below 0, and says how much', () => {
+  it('takes the Chinese culture back when all of it is still there, and says how much is left', () => {
     const state = offered({ civ: 'Chinese', culture: 5 })
     const accepted = unwrap(claim(state, idOf(state), true))
-    const spend = (culture: number): GameState => ({
-      ...accepted,
-      players: accepted.players.map((player) => (player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture } } : player)),
-    })
+    expect(me(accepted).stats.culture).toBe(8)
     const whole = undoByVote(accepted, 'claim-1')
     expect(me(whole).stats.culture).toBe(5)
-    expect(whole.log.at(-1)?.publicLog).toContain('took back 3 (5) culture, the offer is open again')
-    const partly = undoByVote(spend(1), 'claim-1')
-    expect(me(partly).stats.culture).toBe(0)
-    expect(partly.log.at(-1)?.publicLog).toContain('took back 1 of 3 (0) culture')
-    const none = undoByVote(spend(0), 'claim-1')
-    expect(me(none).stats.culture).toBe(0)
-    expect(none.log.at(-1)?.publicLog).toContain('took back 0 of 3 (0) culture')
-    expect(offersOf(none)).toHaveLength(1)
+    expect(whole.log.at(-1)?.publicLog).toContain('took back 3 (5) culture')
+    expect(whole.log.at(-1)?.publicLog).toContain('the offer is open again')
     // Earned since: only the 3 goes
-    expect(me(undoByVote(spend(10), 'claim-1')).stats.culture).toBe(7)
+    const earned: GameState = { ...accepted, players: accepted.players.map((player) => (player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture: 10 } } : player)) }
+    expect(me(undoByVote(earned, 'claim-1')).stats.culture).toBe(7)
+  })
+
+  it('refuses to take the Chinese culture back once it is spent, changes nothing, and so cannot be farmed', () => {
+    const state = offered({ civ: 'Chinese', culture: 5 })
+    const accepted = unwrap(claim(state, idOf(state), true))
+    const spent: GameState = { ...accepted, players: accepted.players.map((player) => (player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture: 1 } } : player)) }
+    const refused = unwrapErr(voteAll(spent, 'claim-1'))
+    expect(refused.kind).toBe('ASSISTED_UNDO_BLOCKED')
+    expect(describeError(refused)).toContain('Only 1 culture is left')
+    // The offer stays closed, so the village and the 3 culture cannot be had again
+    expect(offersOf(spent)).toEqual([])
+    expect(spent.assistedActions.at(-1)?.status).toBe('applied')
   })
 
   it('opens a declined offer again', () => {
@@ -504,7 +527,7 @@ describe('what the views show', () => {
   it('shows the owner their open offer, with nothing that names a piece or a pending conquest', () => {
     const state = offered()
     const view = toPlayerView(state, CASH1981)
-    expect(view.you?.conquestOffers).toEqual([{ id: offersOf(state)[0]?.id, kind: 'village', square: 'C2', civ: 'Romans', blocked: null, nothing: null }])
+    expect(view.you?.conquestOffers).toEqual([{ id: offersOf(state)[0]?.id, kind: 'village', square: 'C2', civ: 'Romans', blocked: null, nothing: null, villageGone: false }])
     expect(JSON.stringify(view)).not.toContain('pendingConquests')
     // The offer is shown to its owner alone, so it does not carry the owner's id
     expect(view.you?.conquestOffers[0]).not.toHaveProperty('playerId')
@@ -563,5 +586,207 @@ describe('a conquest does not change the huts', () => {
     expect(lines(moved)).toContain('cash1981 gained 3 (8) culture from the hut on C2 as the Chinese')
     expect(moved.pendingConquests).toBeUndefined()
     expect(mapCellOf(moved.board, pieceOf(moved, 'figures/redarmy'))).toEqual(C2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The village is got by fighting the barbarians for it, and taken from the offer after a won battle, for every civ
+
+/** The army ends its move on the village and fights the barbarians for it. */
+const fightMarch = (state: GameState): GameState =>
+  unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: pieceOf(state, 'figures/redarmy').id, column: C2.column, row: C2.row, fightVillage: true }))
+
+const villageTokens = (state: GameState) => mapTokensOf(state.board).filter((token) => token.sheet === 'VILLAGES')
+const villageCards = (state: GameState) => me(state).items.filter((item) => item.kind === 'village')
+const armyCell = (state: GameState) => mapCellOf(state.board, pieceOf(state, 'figures/redarmy'))
+/** The village fight, won, with the army still on the village. */
+const wonVillage = (options: Options = {}): GameState =>
+  unwrap(endBattleAction(killSide(fight(fightMarch(villageScene(options)), 'barbarians'), 'defender'), { playerId: CASH1981 }))
+
+describe('fighting for a village', () => {
+  it('moves the army onto the village, starts the battle against the barbarians and leaves the token and the hand alone', () => {
+    const scene = villageScene()
+    const fighting = fightMarch(scene)
+    expect(armyCell(fighting)).toEqual(C2)
+    expect(fighting.battle).toMatchObject({ attacker: { kind: 'player', playerId: CASH1981 }, defender: { kind: 'barbarians' } })
+    expect(lines(fighting).some((line) => line.startsWith('cash1981 has initiated a battle against the Barbarians (controlled by '))).toBe(true)
+    // The token stays where it is, no card is drawn, and the conquest is recorded for the won battle
+    expect(villageTokens(fighting)).toHaveLength(1)
+    expect(villageCards(fighting)).toHaveLength(0)
+    expect(me(fighting).items).toHaveLength(me(scene).items.length)
+    expect(fighting.tokenCollections).toBeUndefined()
+    expect(fighting.pendingConquests?.map((entry) => entry.kind)).toEqual(['village'])
+  })
+
+  it('never collects the token, even when the move also asks to', () => {
+    const scene = villageScene()
+    const both = unwrap(
+      travelFigureCollecting(scene, { playerId: CASH1981, pieceId: pieceOf(scene, 'figures/redarmy').id, column: C2.column, row: C2.row, fightVillage: true, collectToken: true }),
+    )
+    expect(villageTokens(both)).toHaveLength(1)
+    expect(both.tokenCollections).toBeUndefined()
+    expect(both.battle).not.toBeNull()
+  })
+
+  it('is just a move without a village, while a battle is active, or with another player’s figures on the square', () => {
+    const start = (state: GameState, column = C2.column, row = C2.row) =>
+      unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: pieceOf(state, 'figures/redarmy').id, column, row, fightVillage: true }))
+    // An empty square
+    const empty = withAmerica(sotTurn({ civ: 'Romans', step: 9 }))
+    const onEmpty = start(put(empty, CASH1981, 'figures/redarmy', C3.column, C3.row))
+    expect(onEmpty.battle).toBeNull()
+    expect(armyCell(onEmpty)).toEqual(C2)
+    // A battle that is already on: no second battle, and the move is made
+    const scene = villageScene()
+    const busy = unwrap(initiateBattle(scene, { initiatorId: KARANDRAS1, opponentId: ITCHI }))
+    const during = start(busy)
+    expect(during.battle?.attacker.playerId).toBe(KARANDRAS1)
+    expect(armyCell(during)).toEqual(C2)
+    // A blue army on the village: the move ends in contact, which the players settle by hand
+    const contested = start(put(scene, KARANDRAS1, 'figures/bluearmy', C2.column, C2.row))
+    expect(contested.battle).toBeNull()
+    expect(contested.pendingConquests?.map((entry) => entry.kind) ?? []).toEqual(['village'])
+    expect(villageTokens(contested)).toHaveLength(1)
+  })
+
+  it('offers the village to every civ after a won battle, and gains nothing before the answer', () => {
+    for (const civ of ['Romans', 'Chinese', 'Japanese', 'Zulu']) {
+      const ended = wonVillage({ civ })
+      expect(offersOf(ended), civ).toMatchObject([{ playerId: CASH1981, kind: 'village', square: 'C2', civ }])
+      expect(villageTokens(ended), civ).toHaveLength(1)
+      expect(villageCards(ended), civ).toHaveLength(0)
+      expect(toPlayerView(ended, CASH1981).you?.conquestOffers[0], civ).toMatchObject({ villageGone: false })
+    }
+  })
+
+  it('gives a civ without an extra the token in its area and the card in its hand, and nothing else', () => {
+    const ended = wonVillage({ civ: 'Japanese' })
+    const before = me(ended)
+    const accepted = unwrap(claim(ended, offersOf(ended)[0]?.id ?? '', true))
+    expect(offersOf(accepted)).toEqual([])
+    expect(villageTokens(accepted)).toHaveLength(0)
+    expect(villageCards(accepted)).toHaveLength(1)
+    expect(me(accepted).stats.culture).toBe(before.stats.culture)
+    expect(lines(accepted)).toContain('cash1981 conquered the village on C2 as the Japanese')
+    expect(lines(accepted)).toContain('cash1981 took the village token on C2 into their area')
+    expect(accepted.tokenCollections).toHaveLength(1)
+    expect(accepted.assistedActions.at(-1)).toMatchObject({ effect: { kind: 'conquestClaim', accepted: true, culture: 0, advance: null, village: { itemId: villageCards(accepted)[0]?.id } } })
+    // The card is private: the public lines never name it
+    expect(toPlayerView(accepted, KARANDRAS1).you?.items ?? []).not.toContainEqual(expect.objectContaining({ id: villageCards(accepted)[0]?.id }))
+  })
+
+  it('gives the Romans the village and the advance, and the Chinese the village and 3 culture', () => {
+    const roman = wonVillage()
+    const advanced = unwrap(claim(roman, offersOf(roman)[0]?.id ?? '', true))
+    expect(villageCards(advanced)).toHaveLength(1)
+    expect(villageTokens(advanced)).toHaveLength(0)
+    expect(stepOf(advanced)).toBe(10)
+    const chinese = wonVillage({ civ: 'Chinese', culture: 5 })
+    const gained = unwrap(claim(chinese, offersOf(chinese)[0]?.id ?? '', true))
+    expect(villageCards(gained)).toHaveLength(1)
+    expect(villageTokens(gained)).toHaveLength(0)
+    expect(me(gained).stats.culture).toBe(8)
+  })
+
+  it('leaves the token on the map when the offer is declined, so it can still be drawn by hand', () => {
+    for (const civ of ['Japanese', 'Romans', 'Chinese']) {
+      const ended = wonVillage({ civ })
+      const declined = unwrap(claim(ended, offersOf(ended)[0]?.id ?? '', false))
+      expect(villageTokens(declined), civ).toHaveLength(1)
+      expect(villageCards(declined), civ).toHaveLength(0)
+      expect(declined.tokenCollections, civ).toBeUndefined()
+      expect(stepOf(declined), civ).toBe(9)
+      expect(me(declined).stats.culture, civ).toBe(5)
+      // By hand, from the draw panel
+      const token = villageTokens(declined)[0]
+      if (token === undefined) throw new Error('no token')
+      const drawn = unwrap(draw(declined, { playerId: CASH1981, sheetName: 'VILLAGES', fromPieceId: token.piece.id, confirmedOutOfTurn: true }))
+      expect(villageCards(drawn), civ).toHaveLength(1)
+    }
+  })
+
+  it('says that the token is gone when it left the square, and still gives the extra', () => {
+    const withoutToken = (state: GameState): GameState => ({
+      ...state,
+      board: { ...state.board, pieces: state.board.pieces.filter((piece) => !villageTokens(state).some((token) => token.piece.id === piece.id)) },
+    })
+    for (const [civ, offerText] of [['Chinese', 'gained 3 (8) culture'], ['Romans', 'took the free advance'], ['Japanese', 'conquered the village']] as const) {
+      const ended = withoutToken(wonVillage({ civ, culture: 5 }))
+      expect(toPlayerView(ended, CASH1981).you?.conquestOffers[0], civ).toMatchObject({ villageGone: true })
+      const accepted = unwrap(claim(ended, offersOf(ended)[0]?.id ?? '', true))
+      expect(lines(accepted).some((line) => line.includes(offerText)), civ).toBe(true)
+      expect(lines(accepted), civ).toContain('cash1981 could not take the village: its token on C2 is no longer there')
+      expect(villageCards(accepted), civ).toHaveLength(0)
+      expect(accepted.assistedActions.at(-1)?.effect, civ).toMatchObject({ village: null })
+    }
+    const chinese = unwrap(claim(withoutToken(wonVillage({ civ: 'Chinese', culture: 5 })), offersOf(wonVillage({ civ: 'Chinese' }))[0]?.id ?? '', true))
+    expect(me(chinese).stats.culture).toBe(8)
+  })
+})
+
+describe('taking back the village', () => {
+  const accepted = (options: Options = {}): GameState => {
+    const ended = wonVillage(options)
+    return unwrap(claim(ended, offersOf(ended)[0]?.id ?? '', true))
+  }
+
+  it('puts the token back on its square and the card back, opens the offer again and ends in the starting state', () => {
+    for (const civ of ['Japanese', 'Romans', 'Chinese']) {
+      const ended = wonVillage({ civ, culture: 5 })
+      const taken = unwrap(claim(ended, offersOf(ended)[0]?.id ?? '', true))
+      const undone = undoByVote(taken, 'claim-1')
+      expect(villageTokens(undone), civ).toHaveLength(1)
+      expect(villageTokens(undone)[0]?.cell, civ).toEqual(C2)
+      expect(villageCards(undone), civ).toHaveLength(0)
+      expect(me(undone).stats.culture, civ).toBe(5)
+      expect(stepOf(undone), civ).toBe(9)
+      expect(offersOf(undone), civ).toEqual(offersOf(ended))
+      expect(undone.tokenCollections ?? [], civ).toEqual([])
+      expect(undone.log.at(-1)?.publicLog, civ).toContain('the village token is back on the map')
+      // The board Undo cannot walk past it into the forward move
+      expect(undoLastBoardChange(undone, CASH1981).ok, civ).toBe(false)
+    }
+  })
+
+  it('cannot be farmed: answering again after an undo gives the village and the extra once, not twice', () => {
+    const ended = wonVillage({ civ: 'Chinese', culture: 5 })
+    const id = offersOf(ended)[0]?.id ?? ''
+    const again = unwrap(claim(undoByVote(unwrap(claim(ended, id, true)), 'claim-1'), id, true, 'claim-2'))
+    expect(me(again).stats.culture).toBe(8)
+    expect(villageCards(again)).toHaveLength(1)
+    expect(villageTokens(again)).toHaveLength(0)
+  })
+
+  it('is refused, with a reason, while the village card has left the hand, and changes nothing', () => {
+    for (const civ of ['Japanese', 'Romans']) {
+      const taken = accepted({ civ })
+      const card = villageCards(taken)[0]
+      if (card === undefined) throw new Error('no card')
+      const gone: GameState = { ...taken, players: taken.players.map((player) => (player.playerId === CASH1981 ? { ...player, items: player.items.filter((item) => item.id !== card.id) } : player)) }
+      const refused = unwrapErr(voteAll(gone, 'claim-1'))
+      expect(refused.kind, civ).toBe('ASSISTED_UNDO_BLOCKED')
+      expect(describeError(refused), civ).toContain('The village card from C2 has left the hand')
+      expect(offersOf(gone), civ).toEqual([])
+      expect(gone.assistedActions.at(-1)?.status, civ).toBe('applied')
+      expect(villageTokens(gone), civ).toHaveLength(0)
+    }
+  })
+
+  it('keeps the token and the card out of reach of the board Undo: only the claim undo gives them back', () => {
+    const taken = accepted({ civ: 'Japanese' })
+    expect(undoLastBoardChange(taken, CASH1981).ok).toBe(false)
+    const undone = undoByVote(taken, 'claim-1')
+    expect(villageTokens(undone)).toHaveLength(1)
+    expect(villageCards(undone)).toHaveLength(0)
+    expect(offersOf(undone)).toHaveLength(1)
+  })
+
+  it('refuses to undo the end of the battle while the village was taken, and allows it after the take-back', () => {
+    const ended = wonVillage({ civ: 'Japanese' })
+    const taken = unwrap(claim(ended, offersOf(ended)[0]?.id ?? '', true))
+    expect(undoEndBattle(taken, { playerId: CASH1981 }).ok).toBe(false)
+    const undone = unwrap(undoEndBattle(undoByVote(taken, 'claim-1'), { playerId: CASH1981 }))
+    expect(undone.conquestOffers).toBeUndefined()
+    expect(villageTokens(undone)).toHaveLength(1)
   })
 })
