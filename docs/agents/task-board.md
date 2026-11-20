@@ -33,8 +33,8 @@ Rewritten wholesale, so only one task may own each at a time. Claim by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | civ-abilities-feedback |
-| `packages/web/src/lib/api.ts` | civ-abilities-feedback |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
+| `packages/web/src/lib/api.ts` | free |
 
 ## Queue
 
