@@ -1467,7 +1467,8 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
     ("Advanced Arabia") value; the printed card says 2. Every spend funnels through `spendResource`
     (`assisted-resources.ts`: single, any N, one of each, chosen payments, event cards, the Spy of a
     cancellation), so a spend counts once however it was reached; a token, a hut or village in hand and a culture
-    card played as a resource all count. The line is `gained 1 (N) culture for spending <resource> as the Arabs`, and
+    card played as a resource all count. The line is `gained 1 (N) culture for spending <resource> as the Arabs`, naming the resource really spent (a substitute
+    token of Marie Curie or an Indian wildcard is named the same in the gain and in its take-back), and
     the amount is kept on the `SpentResource` (`arabCulture`). `returnResource` takes back what is still there (never
     below 0) and says how much. A resource a cancelled ability spent stays spent, so does its culture. Not covered:
     taking a token off the board by hand is not a spend, a hut used as a hut (a Start of Turn free tech) is not a

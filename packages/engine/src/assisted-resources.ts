@@ -283,7 +283,7 @@ export function spendResource(
   wildcard = true,
 ): Result<SpendOutcome, 'NO_RESOURCE'> {
   const paid = payResource(state, playerId, resource, at, tokensOnly, choice, wildcard)
-  return paid.ok ? ok(withArabCulture(paid.value, playerId, resource)) : paid
+  return paid.ok ? ok(withArabCulture(paid.value, playerId)) : paid
 }
 
 /**
@@ -292,15 +292,17 @@ export function spendResource(
  * reached, and the amount is kept on the `SpentResource` for `returnResource`. A scratch spend (an availability check)
  * is discarded with its state. Taking a token off the board by hand is not a spend.
  */
-function withArabCulture(outcome: SpendOutcome, playerId: string, resource: string): SpendOutcome {
+function withArabCulture(outcome: SpendOutcome, playerId: string): SpendOutcome {
   const holder = playerOf(outcome.state, playerId)
   if (holder?.civilization?.name !== ARABS) return outcome
   const total = holder.stats.culture + ARAB_RESOURCE_CULTURE
+  // The resource really spent, as `returnResource` names it: a token spent in place of another (Marie Curie's substitute,
+  // an Indian wildcard) is named the same in the gain line and in its take-back
   const state = appendPublicLog(
     withPlayerHand(outcome.state, { ...holder, stats: { ...holder.stats, culture: total } }),
     holder.username,
     holder.playerId,
-    `gained ${ARAB_RESOURCE_CULTURE} (${total}) culture for spending ${resource} as the Arabs`,
+    `gained ${ARAB_RESOURCE_CULTURE} (${total}) culture for spending ${outcome.spent.resource} as the Arabs`,
   )
   return { ...outcome, state, spent: { ...outcome.spent, arabCulture: ARAB_RESOURCE_CULTURE } }
 }

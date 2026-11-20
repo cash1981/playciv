@@ -26,7 +26,7 @@ import { toPlayerView } from '../src/state.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
-import { player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { chivalryTurn, player, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { withCivilization, withStats } from './culture-advance-fixture.js'
 import { CASH1981 as A, CHUL as D, ITCHI as C, KARANDRAS1 as B, firstCivGame } from './fixture.js'
 
@@ -147,12 +147,17 @@ describe('through the assisted actions', () => {
     expect(player(undone).stats.coinSources.pottery).toBe(0)
   })
 
-  it('keeps the culture an earlier gain left when the undo comes after culture was spent', () => {
+  it('keeps the culture an earlier gain left when the undo comes after culture was spent, one exact line for each resource', () => {
     const used = unwrap(performAssistedAction(potteryTurn(), { playerId: A, action: 'pottery', requestId: 'req-1', at: AT, payload: { resources: ['Iron', 'Wheat'] } }))
+    // 12 culture before; 11 are spent, 1 is left for the 2 the Arabs were given
     const spentSince = withStats(used, { culture: 1 })
     const undone = undoByVote(spentSince, 'req-1')
     expect(culture(undone)).toBe(0)
-    expect(lines(undone).some((line) => line.includes('took back 1 of 1') || line.includes('took back 0 of 1'))).toBe(true)
+    // The last paid goes back first: the Wheat's 1 is still there, the Iron's is already spent
+    expect(lines(undone).filter((line) => line.includes('took back'))).toEqual([
+      'cash1981 took back 1 (0) culture gained for spending Wheat as the Arabs',
+      'cash1981 took back 0 of 1 (0) culture gained for spending Iron as the Arabs (the rest is spent)',
+    ])
   })
 
   it('works for a single resource of a Start of Turn ability (Ecology)', () => {
@@ -162,11 +167,72 @@ describe('through the assisted actions', () => {
     expect(culture(undoByVote(used, 'req-1'))).toBe(10)
   })
 
-  it('does not leak anything private: the line names the kind, never the card', () => {
+  it('writes its lines as public text only: the kind of resource, never the card or a private note', () => {
     const { state } = withHutInHand(arabs(), 'Iron')
-    const spent = unwrap(spendResource(state, A, 'Iron'))
     const hut = player(state).items.find((item) => item.kind === 'hut')
-    expect(JSON.stringify(toPlayerView(spent.state, B))).not.toContain(hut?.id ?? 'x')
+    const spent = unwrap(spendResource(state, A, 'Iron'))
+    const back = unwrap(returnResource(spent.state, player(spent.state), spent.spent, null))
+    const arabLines = back.log.filter((entry) => entry.publicLog.includes('as the Arabs'))
+    expect(arabLines).toHaveLength(2)
+    for (const entry of arabLines) {
+      // Neither line carries the card or a private text, so no view of anyone has anything to leak
+      expect(entry.item).toBeNull()
+      expect(entry.privateLog).toBe('')
+      expect(entry.publicLog).not.toContain(hut?.id ?? 'missing')
+    }
+    expect(JSON.stringify(toPlayerView(back, B).log)).not.toContain(hut?.id ?? 'missing')
+  })
+})
+
+describe('Marie Curie’s substitute', () => {
+  it('is named the same in the gain line and in its take-back', () => {
+    // Curie armed with Iron: the Uranium the player owes is paid with an Iron token
+    const { state } = withHutInHand(arabs(), 'Iron')
+    const armed: GameState = { ...state, players: state.players.map((p) => (p.playerId === A ? { ...p, curieSubstitute: 'Iron' } : p)) }
+    const spent = unwrap(spendResource(armed, A, 'Uranium'))
+    expect(spent.spent.curieSubstitute).toBe('Iron')
+    expect(lines(spent.state).at(-1)).toBe('cash1981 gained 1 (11) culture for spending Iron as the Arabs')
+    const back = unwrap(returnResource(spent.state, player(spent.state), spent.spent, null))
+    expect(lines(back).at(-1)).toBe('cash1981 took back 1 (10) culture gained for spending Iron as the Arabs')
+  })
+})
+
+describe('undoing a resource culture card', () => {
+  const chivalry = (culture: number): GameState => {
+    const base = withStats(withCivilization(chivalryTurn(), 'Arabs'), { culture })
+    return unwrap(performAssistedAction(withPieceInArea(base, 'resources/incense').state, { playerId: A, action: 'chivalry', requestId: 'req-1', at: AT }))
+  }
+
+  it('says the true total in the card line, after the Arabs’ culture for the spend has come off too', () => {
+    const used = chivalry(10)
+    expect(lines(used).filter((line) => line.includes('used Chivalry') || line.includes('as the Arabs'))).toEqual([
+      'cash1981 gained 1 (11) culture for spending Incense as the Arabs',
+      'cash1981 used Chivalry: spent 1 Incense and gained 5 (16) culture',
+    ])
+    const undone = undoByVote(used, 'req-1')
+    expect(culture(undone)).toBe(10)
+    expect(lines(undone).filter((line) => line.includes('took back') || line.includes('was undone'))).toEqual([
+      'cash1981 took back 1 (10) culture gained for spending Incense as the Arabs',
+      "System: cash1981's Chivalry was undone: 5 (10) culture removed and the Incense token returned",
+    ])
+  })
+
+  it('says how much really went back when the culture was spent in between, and the total that is left', () => {
+    // 16 after the card; 14 spent, 2 left: the card's 5 comes back as 2, the Arabs' 1 as 0
+    const spent = withStats(chivalry(10), { culture: 2 })
+    const undone = undoByVote(spent, 'req-1')
+    expect(culture(undone)).toBe(0)
+    expect(lines(undone).filter((line) => line.includes('took back') || line.includes('was undone'))).toEqual([
+      'cash1981 took back 0 of 1 (0) culture gained for spending Incense as the Arabs (the rest is spent)',
+      "System: cash1981's Chivalry was undone: 2 of 5 (0) culture removed and the Incense token returned",
+    ])
+  })
+
+  it('is unchanged for a civilization that gains nothing for the spend', () => {
+    const base = withStats(chivalryTurn(), { culture: 10 })
+    const used = unwrap(performAssistedAction(withPieceInArea(base, 'resources/incense').state, { playerId: A, action: 'chivalry', requestId: 'req-1', at: AT }))
+    const undone = undoByVote(used, 'req-1')
+    expect(lines(undone).at(-1)).toBe("System: cash1981's Chivalry was undone: 5 (10) culture removed and the Incense token returned")
   })
 })
 

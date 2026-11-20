@@ -241,7 +241,8 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
     reverse(state, player, record, at) {
       const effect = record.effect
       if (effect.kind !== card.kind) return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-      const stats = { ...player.stats, culture: Math.max(0, player.stats.culture - effect.culture) }
+      const removed = Math.min(player.stats.culture, effect.culture)
+      const stats = { ...player.stats, culture: player.stats.culture - removed }
       const returned = returnResource(
         withPlayerHand(state, { ...player, stats }),
         { ...player, stats },
@@ -250,9 +251,12 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         record.logId,
       )
       if (!returned.ok) return returned
+      // The total is read once the resource is back: for the Arabs that also takes the culture they were given for the
+      // spend off, and says so in its own line
+      const total = playerOf(returned.value, player.playerId)?.stats.culture ?? stats.culture
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and ${returnedText(effect.spent)} returned`,
+        text: `${player.username}'s ${card.techName} was undone: ${removed === effect.culture ? removed : `${removed} of ${effect.culture}`} (${total}) culture removed and ${returnedText(effect.spent)} returned`,
       })
     },
   }
