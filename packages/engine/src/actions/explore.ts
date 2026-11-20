@@ -23,6 +23,10 @@ import { err } from '../result.js'
 import type { GameState } from '../state.js'
 import { findPlayer, hasUserAccess } from '../state.js'
 import { turnStatus } from '../turn.js'
+import { appendLog } from '../log.js'
+import { ok } from '../result.js'
+import { spanishCreditsOf, withSpanishGrant } from '../spanish-credit.js'
+import { SPANISH } from './player.js'
 import { areasFor, moveFigureWithMovementUnchecked } from './board.js'
 import { drawTileAt } from './draw.js'
 
@@ -106,7 +110,27 @@ export function exploreSquare(state: GameState, input: ExploreSquareInput): Resu
   if (!explorationCovered(drawn.value, target)) {
     return err({ kind: 'FIGURE_MOVE_ILLEGAL', reason: 'The drawn tile could not be placed on the map.' })
   }
-  return drawn
+  return ok(grantSpanishBuilding(drawn.value, spent.board.history.length, input.playerId, square, input.at))
+}
+
+/**
+ * The Spanish ability: the tile this exploration laid gives its explorer one free basic building (`spanish-credit.ts`),
+ * tied to the board entry that placed the tile so that undoing the exploration takes it back. Nothing for any other
+ * civilization, and nothing when no tile was laid. The public line says no number, the private one the amount and the total.
+ */
+function grantSpanishBuilding(state: GameState, historyBefore: number, playerId: string, square: string, at: string | undefined): GameState {
+  const player = findPlayer(state, playerId)
+  if (player?.civilization?.name !== SPANISH) return state
+  const tile = state.board.history.slice(historyBefore).find((entry) => entry.change.kind === 'place' && entry.change.piece.category === 'tile')
+  if (tile === undefined) return state
+  const granted = withSpanishGrant(state, playerId, tile.id)
+  return appendLog(granted, {
+    username: player.username,
+    playerId,
+    publicLog: `${player.username} may build a free basic building for discovering ${square} as the Spanish`,
+    privateLog: `${player.username} gained 1 free building as the Spanish, ${spanishCreditsOf(granted, playerId)} free buildings left`,
+    createdAt: at ?? null,
+  })
 }
 
 /**

@@ -364,7 +364,7 @@ function parseInvest(args: Record<string, unknown>): InvestPayload | string {
 
 function parseGianniniBuild(args: Record<string, unknown>): GianniniBuildPayload | string {
   const extra = extraKeys(args, ['cityPieceId', 'assetId', 'column', 'row'])
-  if (extra.length > 0) return `gianniniBuild takes only cityPieceId, assetId, column and row, not ${extra.join(', ')}`
+  if (extra.length > 0) return `a free building takes only cityPieceId, assetId, column and row, not ${extra.join(', ')}`
   const { cityPieceId, assetId, column, row } = args
   if (!isId(cityPieceId)) return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
   if (typeof assetId !== 'string' || !BUILDABLE_BUILDING_IDS.includes(assetId)) return 'assetId must be one of the buildings'
@@ -437,6 +437,7 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['gianniniBuild', parseGianniniBuild],
+  ['spanishBuild', parseGianniniBuild],
   ['feudalismHarvest', parseHarvest],
   ['foundCity', parseFoundCity],
   ['assignScout', parseAssignScout],

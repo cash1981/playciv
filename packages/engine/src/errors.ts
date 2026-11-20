@@ -101,6 +101,8 @@ export type EngineError =
   /** The card drawn from a hut or village token is no longer in the player's hand, so collecting it cannot be undone (issue #364). */
   | { readonly kind: 'BOARD_UNDO_TOKEN_CARD_GONE' }
   | { readonly kind: 'BOARD_UNDO_TOKEN_CULTURE_SPENT' }
+  /** The free building the Spanish got for exploring that tile has been used, so the exploration cannot be undone. */
+  | { readonly kind: 'BOARD_UNDO_SPANISH_BUILDING_USED' }
   /** Nothing has been undone since the last board change, so there is nothing to redo */
   | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
   /** The game has not started: there is no player to the left of the caller yet (barbarians) */
@@ -283,6 +285,8 @@ export function describeError(error: EngineError): string {
       return 'The card drawn from that token has left the hand, so collecting it cannot be undone'
     case 'BOARD_UNDO_TOKEN_CULTURE_SPENT':
       return 'The culture the hut gave has been spent, so collecting it cannot be undone'
+    case 'BOARD_UNDO_SPANISH_BUILDING_USED':
+      return 'The free building that tile gave has been used, so exploring it cannot be undone. Undo the building first'
     case 'NOTHING_TO_REDO_ON_BOARD':
       return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':

@@ -15,6 +15,7 @@
  * log would drown.
  */
 
+import { spanishCreditsOf, spanishGrantAt, withoutSpanishGrant } from '../spanish-credit.js'
 import type {
   Board,
   BoardArea,
@@ -1261,6 +1262,21 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
         ...returned.board,
         pieces: revertChange(returned.board.pieces, last.change),
         history: returned.board.history.slice(0, -1),
+        redo: [],
+      }),
+    )
+  }
+
+  // A tile that gave the Spanish a free building: taken back with it while the building is unbuilt, refused once it stands.
+  // No redo either, which would lay the tile again without the credit.
+  const grant = spanishGrantAt(state, last.id)
+  if (grant !== undefined) {
+    if (spanishCreditsOf(state, grant.playerId) <= 0) return err({ kind: 'BOARD_UNDO_SPANISH_BUILDING_USED' })
+    return ok(
+      withBoard(withoutSpanishGrant(state, last.id), {
+        ...state.board,
+        pieces: revertChange(state.board.pieces, last.change),
+        history: state.board.history.slice(0, -1),
         redo: [],
       }),
     )

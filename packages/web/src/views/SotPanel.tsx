@@ -55,7 +55,22 @@ export function StartOfTurnChoices({ gameId, view, busy, readOnly, run }: Props)
       <GovernmentChange {...common} />
       {sot.feudalism !== null && <FeudalismHarvest {...common} feudalism={sot.feudalism} />}
       <Invest {...common} />
-      <GianniniBuild {...common} />
+      <FreeBuildPicker
+        {...common}
+        answer={sot.giannini}
+        action="gianniniBuild"
+        title={GIANNINI_TITLE}
+        className="sot-giannini"
+        showUnavailable={false}
+      />
+      <FreeBuildPicker
+        {...common}
+        answer={sot.spanish}
+        action="spanishBuild"
+        title={SPANISH_TITLE}
+        className="sot-spanish"
+        showUnavailable
+      />
       <ScoutsAndCities {...common} />
       <MetropolisGrowth gameId={gameId} view={view} busy={common.busy} run={run} />
     </>
@@ -356,18 +371,30 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
 }
 
 const GIANNINI_TITLE = 'A. P. Giannini: a free building'
+const SPANISH_TITLE = 'Spanish: a free building'
+
+interface FreeBuildPickerProps extends ChoiceProps {
+  /** The engine's answer for this free building, `null` when it does not apply to the viewer. */
+  readonly answer: StartOfTurn['giannini']
+  /** The assisted action the choice is sent to. Both take the same payload. */
+  readonly action: 'gianniniBuild' | 'spanishBuild'
+  readonly title: string
+  readonly className: string
+  /** Show the reason when nothing can be built now (the Spanish keep their credit), instead of hiding the section or tagging it as used. */
+  readonly showUnavailable: boolean
+}
 
 /**
- * A. P. Giannini's free building after an invest: one building he has unlocked, on a square of one of the player's
- * cities. A choice that a refresh takes away is dropped, not sent.
+ * A free building: one building, on a square of one of the player's cities, from the choices the engine lists. A. P.
+ * Giannini's (a building he has unlocked, after an invest) and the Spanish one (a basic building for a tile explored)
+ * share it. A choice that a refresh takes away is dropped, not sent.
  */
-function GianniniBuild({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
-  const { giannini } = sot
+function FreeBuildPicker({ gameId, view, busy, run, answer: giannini, action, title, className, showUnavailable }: FreeBuildPickerProps): React.JSX.Element | null {
   const [assetId, setAssetId] = useState('')
   const [squareKey, setSquareKey] = useState('')
   const squareId = useId()
   const playerId = view.you?.playerId ?? ''
-  if (giannini === null || (giannini.status !== 'ready' && giannini.status !== 'used')) return null
+  if (giannini === null || (!showUnavailable && giannini.status !== 'ready' && giannini.status !== 'used')) return null
 
   const chosen = giannini.choices.find((choice) => choice.assetId === assetId)
   const keyOf = (square: { readonly cityPieceId: string; readonly column: number; readonly row: number }): string =>
@@ -377,12 +404,12 @@ function GianniniBuild({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX
 
   const press = (): void => {
     if (chosen === undefined || square === undefined) return
-    const key = `${gameId}:${playerId}:gianniniBuild:${chosen.assetId}:${keyOf(square)}`
+    const key = `${gameId}:${playerId}:${action}:${chosen.assetId}:${keyOf(square)}`
     void pressOnce(
       key,
       run,
       (requestId) =>
-        api.actionWithArgs(gameId, 'gianniniBuild', requestId, view.rev, {
+        api.actionWithArgs(gameId, action, requestId, view.rev, {
           cityPieceId: square.cityPieceId,
           assetId: chosen.assetId,
           column: square.column,
@@ -398,8 +425,8 @@ function GianniniBuild({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX
   }
 
   return (
-    <section className="phase-group sot-giannini" aria-label={GIANNINI_TITLE}>
-      <h3 className="phase-group-title">{GIANNINI_TITLE}</h3>
+    <section className={`phase-group ${className}`} aria-label={title}>
+      <h3 className="phase-group-title">{title}</h3>
       {giannini.status === 'ready' ? (
         <form
           className="sot-form"
@@ -455,8 +482,9 @@ function GianniniBuild({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX
           <button type="button" className="small" disabled title={giannini.reason}>
             Build for free
           </button>
-          <span className="tag">Used</span>
-          <HelpHint label={GIANNINI_TITLE}>{giannini.reason}</HelpHint>
+          {giannini.status === 'used' && <span className="tag">Used</span>}
+          <HelpHint label={title}>{giannini.reason}</HelpHint>
+          {giannini.status === 'unavailable' && showUnavailable && <p className="muted">{giannini.reason}</p>}
         </div>
       )}
     </section>

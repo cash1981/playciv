@@ -748,15 +748,34 @@ export function freeBuildingSquaresOf(
  * a building can only replace one of the same supply. A building with no legal square is left out.
  */
 export function freeBuildingChoicesOf(state: GameState, player: Playerhand): readonly FreeBuildingChoice[] {
-  if (player.color === null) return []
   const techs = techViewOf(player)
+  return legalFreeBuildings(state, player, (assetId) => {
+    const upgrade = BUILDING_UPGRADES[assetId]
+    return !(upgrade !== undefined && isUnlocked(techs, upgrade)) && isUnlocked(techs, assetId)
+  })
+}
+
+/**
+ * The buildings the Spanish may build for free after exploring a tile: the basic (non-upgraded) form of any building,
+ * whether or not it is unlocked. An upgraded form (a University, a Bank) is not offered, nor is anything that is not a
+ * building. The squares are the same as {@link freeBuildingChoicesOf}'s, star limit and replacement included.
+ */
+export function basicBuildingChoicesOf(state: GameState, player: Playerhand): readonly FreeBuildingChoice[] {
+  const upgraded = new Set(Object.values(BUILDING_UPGRADES))
+  return legalFreeBuildings(state, player, (assetId) => !upgraded.has(assetId))
+}
+
+function legalFreeBuildings(
+  state: GameState,
+  player: Playerhand,
+  eligible: (assetId: string) => boolean,
+): readonly FreeBuildingChoice[] {
+  if (player.color === null) return []
   const footprints = cityFootprintsOf(state, player.color.toLowerCase())
   const scene = sceneOf(state)
   const choices: FreeBuildingChoice[] = []
   for (const { assetId, label } of BUILDABLE_BUILDINGS) {
-    const upgrade = BUILDING_UPGRADES[assetId]
-    if (upgrade !== undefined && isUnlocked(techs, upgrade)) continue
-    if (!isUnlocked(techs, assetId)) continue
+    if (!eligible(assetId)) continue
     const asset = findBoardAsset(assetId)
     if (asset === undefined) continue
     const item = { kind: 'building', assetId } as const

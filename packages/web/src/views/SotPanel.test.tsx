@@ -47,6 +47,7 @@ function sotWith(overrides: Partial<StartOfTurn> = {}): StartOfTurn {
       totalCoins: 2,
     },
     giannini: null,
+    spanish: null,
     cityLimit: { have: 2, max: 2 },
     cities: [
       { pieceId: 'c1', label: 'Capital B3' },
@@ -900,5 +901,49 @@ describe('A. P. Giannini', () => {
     expect(button.disabled).toBe(true)
     expect(within(section()).getByText('Used')).toBeTruthy()
     expect(within(section()).queryByRole('combobox')).toBeNull()
+  })
+})
+
+describe('Spanish free building', () => {
+  const choices = [
+    { assetId: 'buildings/bank', label: 'Bank', squares: [{ cityPieceId: 'c1', cityLabel: 'Capital B3', column: 2, row: 2, label: 'C3' }] },
+    {
+      assetId: 'buildings/market',
+      label: 'Market',
+      squares: [{ cityPieceId: 'c1', cityLabel: 'Capital B3', column: 1, row: 3, label: 'B4', replaces: { kind: 'building', assetId: 'buildings/temple', label: 'Temple' } }],
+    },
+  ]
+  const spanish = (status: string, reason: string, list: readonly unknown[] = choices) =>
+    sotWith({ spanish: { status, reason, choices: list } } as unknown as Partial<StartOfTurn>)
+  const READY_TEXT = 'Build one basic building in one of your cities for free, unlocked or not (1 of 1 left).'
+  const section = () => screen.getByRole('region', { name: 'Spanish: a free building' })
+
+  it('has no section for another civilization or without a credit', () => {
+    renderChoices(viewOf(sotWith()))
+    expect(screen.queryByRole('region', { name: 'Spanish: a free building' })).toBeNull()
+  })
+
+  it('sends the choice to spanishBuild with the same payload as Giannini', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    renderChoices(viewOf(spanish('ready', READY_TEXT)))
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/bank' } })
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Square' }), { target: { value: 'c1:2:2' } })
+    fireEvent.click(within(section()).getByRole('button', { name: 'Build for free' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'spanishBuild', expect.any(String), 6, {
+      cityPieceId: 'c1',
+      assetId: 'buildings/bank',
+      column: 2,
+      row: 2,
+    })
+  })
+
+  it('shows a missing legal square as unavailable with its reason, not as used', () => {
+    const reason = 'No basic building has an empty legal square in the outskirts of your cities. Your free building is kept (1 left).'
+    renderChoices(viewOf(spanish('unavailable', reason, [])))
+    const button = within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(within(section()).queryByText('Used')).toBeNull()
+    expect(section().textContent).toContain(reason)
   })
 })

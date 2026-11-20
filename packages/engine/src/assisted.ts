@@ -1832,6 +1832,7 @@ import { bureaucracy } from './assisted-bureaucracy.js'
 import { agriculture } from './assisted-agriculture.js'
 import { RELIC_ACTIONS } from './assisted-relics.js'
 import { AZTEC_ACTIONS } from './assisted-aztecs.js'
+import { SPANISH_ACTIONS } from './assisted-spanish.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 import { CONQUEST_ACTIONS } from './assisted-conquest.js'
 
@@ -1866,6 +1867,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ...ABILITY_ACTIONS,
   ...RELIC_ACTIONS,
   ...AZTEC_ACTIONS,
+  ...SPANISH_ACTIONS,
   ...CITY_ACTIONS,
   ...CONQUEST_ACTIONS,
 ]

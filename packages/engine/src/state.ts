@@ -450,6 +450,8 @@ export type AssistedActionKind =
   | 'switchGovernment'
   | 'invest'
   | 'gianniniBuild'
+  // The Spanish free basic building for a tile explored (assisted-spanish.ts); its effect is `gianniniBuild`'s
+  | 'spanishBuild'
   | 'foundCity'
   | 'assignScout'
   // The answer to a conquest offer (the Romans' free advance, the Chinese 3 culture, or no thanks): `conquest.ts`
@@ -1546,6 +1548,12 @@ export interface GameState {
    * carry it; the owner sees only the "N of M left" of the buttons.
    */
   readonly aztecFreeUnits?: Readonly<Record<string, number>>
+  /**
+   * The free buildings a Spanish player was given for exploring, one per tile: the board entry that laid the tile and who
+   * explored it (`spanish-credit.ts`). What is left is these minus the applied `spanishBuild` records. Server only: a
+   * projection must never carry it; the owner sees only the "N of M left" of the availability text.
+   */
+  readonly spanishFreeBuildings?: readonly { readonly playerId: string; readonly historyId: string }[]
   /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
   /**
@@ -2060,6 +2068,12 @@ export interface StartOfTurnView {
    * name the viewer's own cities and the buildings they have unlocked: own view only.
    */
   readonly giannini: (NowAnswer & { readonly choices: readonly FreeBuildingChoice[] }) | null
+  /**
+   * The Spanish free basic building for a tile explored: `null` unless the viewer is Spanish and holds a credit. Its
+   * reason says "N of M left"; the credit itself is server-only. Own view only, like the choices, which are basic
+   * buildings (unlocked or not) with every legal square of the viewer's cities.
+   */
+  readonly spanish: (NowAnswer & { readonly choices: readonly FreeBuildingChoice[] }) | null
   /** The cities the player has and may have: building one needs fewer than the limit. */
   readonly cityLimit: { readonly have: number; readonly max: number }
   /** The player's own cities on the map, for choosing where a scout sends its square. */

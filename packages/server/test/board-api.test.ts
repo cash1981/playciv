@@ -523,6 +523,61 @@ describe('history over HTTP', () => {
     expect(bad.status).toBe(400)
   })
 
+  it('gives a Spanish explorer a free building, keeps the credit out of every view, and refuses the explore undo once it is spent', async () => {
+    const { gameId, starter, starterName } = await startedGame('SpanishExplore')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const placed = await place(gameId, starter, assetId, 3 * square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+    const placedState = await repo.findGame(gameId)
+    if (placedState === undefined) throw new Error('missing game')
+    await repo.saveGame({
+      ...placedState,
+      players: placedState.players.map((candidate) =>
+        candidate.username === starterName
+          ? { ...candidate, civilization: { kind: 'civ', name: 'Spanish' } as unknown as typeof candidate.civilization }
+          : candidate,
+      ),
+    })
+
+    const explored = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/explore`,
+      headers: bearer(starter),
+      payload: { column: 4, row: 1 },
+    })
+    expect(explored.status).toBe(200)
+    expect(JSON.stringify(await explored.json())).not.toContain('spanishFreeBuildings')
+    const stored = await repo.findGame(gameId)
+    expect(stored?.spanishFreeBuildings).toHaveLength(1)
+
+    // The credit is spent: the board Undo of the tile must not take it back and let the tile be explored again
+    if (stored === undefined) throw new Error('missing game')
+    await repo.saveGame({
+      ...stored,
+      assistedActions: [
+        ...stored.assistedActions,
+        { kind: 'spanishBuild', status: 'applied', playerId: player.playerId, effect: { kind: 'harvest', historyId: 'none' } } as unknown as (typeof stored.assistedActions)[number],
+      ],
+    })
+    let refused: { status: number; error?: string } | undefined
+    for (let step = 0; step < 8 && refused === undefined; step += 1) {
+      const undone = await inject(app, { method: 'POST', url: `/api/games/${gameId}/board/undo`, headers: bearer(starter) })
+      if (undone.status !== 200) refused = { status: undone.status, error: (await undone.json() as { error: string }).error }
+    }
+    expect(refused).toEqual({ status: 409, error: 'BOARD_UNDO_SPANISH_BUILDING_USED' })
+    expect((await repo.findGame(gameId))?.spanishFreeBuildings).toHaveLength(1)
+  })
+
   it('keeps a piece moved in a player area at the requested spot (issue #100)', async () => {
     const { gameId, starter } = await startedGame('AreaMove')
     const view = await inject(app, {
