@@ -1384,6 +1384,8 @@ export interface EndBattleInput {
   /**
    * The Chinese player's choice: the arena unit id of the killed unit of their side to save. Without it nothing is saved.
    * Refused (`CHINESE_SAVE_INVALID`) when it is not a killed, unsaved unit of the Chinese side, or when no Chinese player fights.
+   * Only the Chinese player chooses: while a killed unit could be saved, anyone else pressing End battle is refused
+   * (`CHINESE_SAVE_PENDING`); with no such unit the battle ends for either as for any other.
    */
   readonly chineseSave?: string
 }
@@ -1527,6 +1529,11 @@ export function endBattleAction(
   if (chinese !== undefined) {
     const sideId = chinese === battle.attacker ? 'attacker' : 'defender'
     const hand = findPlayer(nextState, chinese.playerId)
+    const candidates = [...announcedBattle.arena, ...announcedBattle.departedUnits].some(
+      (unit) => unit.side === sideId && unit.killed && unit.saved !== true,
+    )
+    // The Chinese player chooses the saved unit: the opponent, or the controller of the barbarians, may not end the battle for them
+    if (candidates && input.playerId !== chinese.playerId) return err({ kind: 'CHINESE_SAVE_PENDING' })
     if (input.chineseSave !== undefined) {
       const chosen = [...announcedBattle.arena, ...announcedBattle.departedUnits].find(
         (unit) => unit.id === input.chineseSave && unit.side === sideId && unit.killed && unit.saved !== true,
@@ -1540,9 +1547,6 @@ export function endBattleAction(
       }
     } else if (hand !== undefined) {
       // Only a choice not made is worth a line: with no killed unit to save there was nothing to choose
-      const candidates = [...announcedBattle.arena, ...announcedBattle.departedUnits].some(
-        (unit) => unit.side === sideId && unit.killed && unit.saved !== true,
-      )
       if (candidates) nextState = appendPublicLog(nextState, hand.username, hand.playerId, 'saves no unit as the Chinese')
     }
   } else if (input.chineseSave !== undefined) {

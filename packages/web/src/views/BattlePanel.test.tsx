@@ -946,10 +946,44 @@ describe('BattlePanel Chinese save picker', () => {
     expect(api.endBattleArena).toHaveBeenCalledWith('game', 4, undefined)
   })
 
-  it('also asks when the opponent is the Chinese player', () => {
-    const { getByLabelText, getByText } = open(chineseView([arenaUnit('d1', 'defender', true)], false))
-    expect(getByLabelText('Chinese: save a killed unit')).toBeTruthy()
+  const WAIT = 'A killed Chinese unit could be saved: the Chinese player chooses it and must end the battle.'
+
+  it('shows no picker to the opponent of the Chinese player, and keeps End battle disabled with the reason', () => {
+    const { queryByLabelText, getByText } = open(chineseView([arenaUnit('d1', 'defender', true)], false))
+    expect(queryByLabelText('Chinese: save a killed unit')).toBeNull()
+    const endButton = getByText('End battle') as HTMLButtonElement
+    expect(endButton.disabled).toBe(true)
+    expect(endButton.title).toBe(WAIT)
+    // The reason is on the page too, not only in a tooltip
+    expect(getByText(WAIT)).toBeTruthy()
+    fireEvent.click(endButton)
+    expect(api.endBattleArena).not.toHaveBeenCalled()
+  })
+
+  it('does the same for the player who controls the barbarians the Chinese player fights', () => {
+    // The Chinese player attacks and I move the barbarians on the defender side
+    const base = chineseView([arenaUnit('a1', 'attacker', true)], false)
+    const controller = {
+      ...base,
+      battle: {
+        ...base.battle,
+        attacker: { playerId: 'other', kind: 'player' },
+        defender: { playerId: 'me', kind: 'barbarians' },
+      },
+    } as unknown as PlayerView
+    const { queryByLabelText, getByText } = open(controller)
+    expect(queryByLabelText('Chinese: save a killed unit')).toBeNull()
     expect((getByText('End battle') as HTMLButtonElement).disabled).toBe(true)
+    expect(getByText(WAIT)).toBeTruthy()
+  })
+
+  it('leaves End battle to the opponent when nothing killed could be saved, and says nothing', () => {
+    for (const units of [[arenaUnit('d1', 'defender', false)], [arenaUnit('d1', 'defender', true, true)]]) {
+      const { getByText, queryByText } = open(chineseView(units, false))
+      expect((getByText('End battle') as HTMLButtonElement).disabled).toBe(false)
+      expect(queryByText(WAIT)).toBeNull()
+      cleanup()
+    }
   })
 
   it('shows no picker, and leaves End battle enabled, without a Chinese side, a killed unit or an unsaved one', () => {

@@ -1373,6 +1373,8 @@ interface BattlePanelProps extends PanelProps {
 
 /** The picker's value for "Save none": nothing is sent, so the engine saves no unit. */
 const CHINESE_SAVE_NONE = 'none'
+/** Why End battle waits for the Chinese player: they alone choose the unit that is saved. */
+const CHINESE_SAVE_WAIT = 'A killed Chinese unit could be saved: the Chinese player chooses it and must end the battle.'
 
 export function BattlePanel({ gameId, busy, run, view, readOnly = false }: BattlePanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
@@ -1600,7 +1602,11 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
     battle === null || chineseSide === null
       ? []
       : [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === chineseSide && unit.killed && unit.saved !== true)
-  const askChineseSave = mySideInBattle !== null && chineseCandidates.length > 0
+  // Only the Chinese player chooses. The other combatant (the opponent, or the controller of the barbarians) waits for them:
+  // the engine refuses their End battle while a killed Chinese unit could be saved
+  const iAmChinese = battle !== null && chineseSide !== null && battle[chineseSide].playerId === myId
+  const askChineseSave = iAmChinese && chineseCandidates.length > 0
+  const waitForChinese = mySideInBattle !== null && !iAmChinese && chineseCandidates.length > 0
   // A choice that is no longer possible (the kill was undone) counts as none made
   const chineseChoiceValid =
     chineseChoice === CHINESE_SAVE_NONE || chineseCandidates.some((unit) => unit.id === chineseChoice)
@@ -1942,11 +1948,18 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                 </select>
               </label>
             )}
+            {waitForChinese && <span className="muted">{CHINESE_SAVE_WAIT}</span>}
             {mySideInBattle !== null && (
               <button
                 className="small danger"
-                disabled={busy || noMutations || (askChineseSave && !chineseChoiceValid)}
-                title={askChineseSave && !chineseChoiceValid ? 'Choose which killed Chinese unit to save, or Save none' : undefined}
+                disabled={busy || noMutations || waitForChinese || (askChineseSave && !chineseChoiceValid)}
+                title={
+                  waitForChinese
+                    ? CHINESE_SAVE_WAIT
+                    : askChineseSave && !chineseChoiceValid
+                      ? 'Choose which killed Chinese unit to save, or Save none'
+                      : undefined
+                }
                 onClick={() =>
                   runBattleAction(() =>
                     api.endBattleArena(gameId, rev, askChineseSave && chineseChoice !== CHINESE_SAVE_NONE && chineseChoiceValid ? (chineseChoice ?? undefined) : undefined),

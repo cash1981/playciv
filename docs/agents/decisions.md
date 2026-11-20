@@ -1423,9 +1423,12 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   - The saved unit is the player's choice: `EndBattleInput.chineseSave` is the arena unit id, validated as a killed,
     not yet saved unit of the Chinese side (`CHINESE_SAVE_INVALID`, 400), and marked `saved`. Without it nothing
     is saved and the line says "saves no unit", only when a killed unsaved unit could have been saved (with no
-    candidate nothing is logged). The Battle panel asks next to End battle (a unit, or "Save none")
-    and keeps the button disabled until one is chosen. Kept on `endedBattle.chineseSaved` and taken back by
-    `undoEndBattle`.
+    candidate nothing is logged). The Chinese player alone chooses: while the Chinese side has a killed unsaved unit,
+    End battle pressed by anyone else (the opponent, or the player who controls the barbarians) is refused with
+    `CHINESE_SAVE_PENDING` (409) and changes nothing; the Chinese player must end the battle. With no such unit either
+    side ends it as any battle. The Battle panel shows the picker (a unit, or "Save none") to the Chinese player only and
+    keeps their End battle button disabled until one is chosen; the other combatant's button is disabled with that
+    reason. Kept on `endedBattle.chineseSaved` and taken back by `undoEndBattle`.
 - **Spanish:** the reveal sets `stats.mvmt` from `2` to `2+1` (the typed bonus `movement.ts`
   reads) and logs it. A value the player already typed is left alone. The `civSetup` records
   what it set, and the reveal undo restores it only if the value is still the one it set. With Natural Religion

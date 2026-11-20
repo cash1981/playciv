@@ -10,7 +10,21 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { SQUARE_SIZE, activeTurnStatus, findBoardAsset, itemName, mapTop, placePiece, unwrap } from '@civ/engine'
+import {
+  SQUARE_SIZE,
+  activeTurnStatus,
+  draw,
+  drawUnitsForBattle,
+  findBoardAsset,
+  findPlayer,
+  initiateBattle,
+  itemName,
+  killArenaUnit,
+  mapTop,
+  placePiece,
+  placeUnitInArena,
+  unwrap,
+} from '@civ/engine'
 import type { CoinSources, GameState } from '@civ/engine'
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
@@ -2262,6 +2276,60 @@ describe('end battle with a Chinese choice', () => {
       payload: { rev: view.rev },
     })
     expect(ended.status).toBe(200)
+  })
+})
+
+describe('end battle with a killed Chinese unit', () => {
+  /** The starter is Chinese and fights the barbarians (the other player controls them); one of their units is killed. */
+  async function chineseLoss(name: string) {
+    const { gameId, starter, waiting } = await startedGame(name)
+    let state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const starterId = state.players.find((player) => player.yourTurn)?.playerId ?? ''
+    state = {
+      ...state,
+      players: state.players.map((player) =>
+        player.playerId === starterId ? { ...player, civilization: { kind: 'civ', name: 'Chinese' } as unknown as typeof player.civilization } : player,
+      ),
+    }
+    state = unwrap(draw(state, { playerId: starterId, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+    state = unwrap(drawUnitsForBattle(state, { playerId: starterId, numberOfDraws: 1 }))
+    state = unwrap(initiateBattle(state, { initiatorId: starterId, opponentId: 'barbarians' }))
+    const controllerId = state.battle?.defender.playerId ?? ''
+    const own = findPlayer(state, starterId)?.battlehand[0]
+    const barbarian = findPlayer(state, controllerId)?.barbarians[0]
+    if (own === undefined || barbarian === undefined) throw new Error('no units')
+    state = unwrap(placeUnitInArena(state, { playerId: starterId, unitId: own.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
+    state = unwrap(placeUnitInArena(state, { playerId: controllerId, unitId: barbarian.id, side: 'defender', position: 0, attack: 1, health: 3 }))
+    const mine = state.battle?.arena.find((unit) => unit.side === 'attacker')
+    if (mine === undefined) throw new Error('no attacker')
+    state = unwrap(killArenaUnit(state, { playerId: starterId, arenaUnitId: mine.id }))
+    await repo.saveGame(state)
+    return { gameId, starter, waiting, unitId: mine.id, rev: state.rev }
+  }
+
+  it('refuses the player who controls the barbarians with a 409, and lets the Chinese player choose', async () => {
+    const { gameId, starter, waiting, unitId } = await chineseLoss('Chinese-pending')
+    const refused = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(waiting),
+      payload: { chineseSave: unitId },
+    })
+    expect(refused.status).toBe(409)
+    const body = (await refused.json()) as { error: string; message: string }
+    expect(body.error).toBe('CHINESE_SAVE_PENDING')
+    expect(body.message).toContain('the Chinese player chooses')
+    // The battle is still on, and the Chinese player ends it with their choice
+    expect((await repo.findGame(gameId))?.battle).not.toBeNull()
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { chineseSave: unitId },
+    })
+    expect(ended.status).toBe(200)
+    expect((await repo.findGame(gameId))?.endedBattle?.chineseSaved).toBe(unitId)
   })
 })
 

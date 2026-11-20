@@ -164,6 +164,8 @@ export type EngineError =
   | { readonly kind: 'ARENA_UNIT_NOT_FOUND'; readonly arenaUnitId: string }
   /** The unit the Chinese chose to save is not a killed, unsaved unit of their side of this battle */
   | { readonly kind: 'CHINESE_SAVE_INVALID'; readonly arenaUnitId: string }
+  /** A Chinese unit was killed and could be saved, and someone other than the Chinese player (the opponent, the controller of the barbarians) pressed End battle: the Chinese player chooses */
+  | { readonly kind: 'CHINESE_SAVE_PENDING' }
   /** An arena stat value is not a non-negative integer */
   | { readonly kind: 'INVALID_ARENA_STAT_VALUE'; readonly value: number }
   /** A player cannot initiate a battle against themselves */
@@ -326,6 +328,8 @@ export function describeError(error: EngineError): string {
       return `No arena unit with id ${error.arenaUnitId}`
     case 'CHINESE_SAVE_INVALID':
       return `The unit ${error.arenaUnitId} cannot be saved: only a killed unit of the Chinese side in this battle, not yet saved, can`
+    case 'CHINESE_SAVE_PENDING':
+      return 'A killed unit of the Chinese could be saved: the Chinese player chooses which one (or none) and must end the battle'
     case 'INVALID_ARENA_STAT_VALUE':
       return `Arena stat must be a non-negative whole number, got ${error.value}`
     case 'CANNOT_BATTLE_YOURSELF':
