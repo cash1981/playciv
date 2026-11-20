@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### civ-abilities-feedback
+
+- **Owner:** coder (Claude Sonnet 5.5)
+- **Branch:** `feat/civ-abilities-romans-chinese-spain`
+- **Brief:** `docs/agents/tasks/civ-abilities-feedback.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/collect-token.ts, actions/player.ts, actions/tile-tokens.ts, assisted-resources.ts, assisted-tech-abilities.ts, cancellation.ts, assisted.ts, movement.ts, errors.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes), `packages/server/test/`, `packages/web/src/lib/api.ts`, `packages/web/src/views/GameView.tsx` and its tests, `docs/agents/decisions.md`, `docs/agents/limitations.md`
+- **Notes:** PR #373 human review feedback (issue #368)
 
 ## Format
 
@@ -34,7 +41,7 @@ Rewritten wholesale, so only one task may own each at a time. Claim by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free |
+| `packages/web/src/lib/api.ts` | civ-abilities-feedback |
 
 ## Queue
 
