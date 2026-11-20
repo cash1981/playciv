@@ -26,6 +26,7 @@ import { cityMarkerMayReturn } from '../disband.js'
 import { settleConquests, takeBackConquest } from '../conquest.js'
 import { SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, healOwed, playerSideOf, techWoundsOwed, zhukovOwed } from '../battle-cards.js'
 import { blockadedGreatPersonTypes } from '../blockade.js'
+import { tradeCeilingOf } from '../limits.js'
 import { earnTechCoin, returnTechCoin } from '../tech-coins.js'
 import type { TechCoinGrant } from '../tech-coins.js'
 
@@ -1383,7 +1384,8 @@ export interface EndBattleInput {
   readonly at?: string
   /**
    * The Chinese player's choice: the arena unit id of the killed unit of their side to save. Without it nothing is saved.
-   * Refused (`CHINESE_SAVE_INVALID`) when it is not a killed, unsaved unit of the Chinese side, or when no Chinese player fights.
+   * Refused (`CHINESE_SAVE_INVALID`) when it is not a killed, unsaved unit of the Chinese side whose card is still in their
+   * hand (a card that was discarded or removed has nothing left to save), or when no Chinese player fights.
    * Only the Chinese player chooses: while a killed unit could be saved, anyone else pressing End battle is refused
    * (`CHINESE_SAVE_PENDING`); with no such unit the battle ends for either as for any other.
    */
@@ -1491,14 +1493,17 @@ export function endBattleAction(
   }
 
   // Aztecs (civilization card): 3 trade for winning a battle, and 1 culture for each unit killed in a battle they fought,
-  // killed units of both sides counted. A side the barbarians fight on is not a player's own army, so it never counts
+  // killed units of both sides counted. A side the barbarians fight on is not a player's own army, so it never counts.
+  // The trade stops at the ceiling: only what fits is gained, and `aztecs` records that, so the undo takes back the same
   let aztecs: { readonly playerId: string; readonly trade: number; readonly culture: number } | undefined
   const aztec = [battle.attacker, battle.defender].find(
     (side) => side.kind === 'player' && findPlayer(nextState, side.playerId)?.civilization?.name === AZTECS,
   )
   const aztecHand = aztec === undefined ? undefined : findPlayer(nextState, aztec.playerId)
   if (aztec !== undefined && aztecHand !== undefined) {
-    const trade = outcome !== null && outcome.winner.kind === 'player' && outcome.winner.playerId === aztec.playerId ? AZTEC_WIN_TRADE : 0
+    const won = outcome !== null && outcome.winner.kind === 'player' && outcome.winner.playerId === aztec.playerId
+    const room = Math.max(0, tradeCeilingOf(aztecHand.civilization?.name) - aztecHand.stats.trade)
+    const trade = won ? Math.min(AZTEC_WIN_TRADE, room) : 0
     const culture = [...battle.arena, ...battle.departedUnits].filter((unit) => unit.killed).length
     if (trade > 0 || culture > 0) {
       const gained = [
@@ -1529,14 +1534,15 @@ export function endBattleAction(
   if (chinese !== undefined) {
     const sideId = chinese === battle.attacker ? 'attacker' : 'defender'
     const hand = findPlayer(nextState, chinese.playerId)
-    const candidates = [...announcedBattle.arena, ...announcedBattle.departedUnits].some(
-      (unit) => unit.side === sideId && unit.killed && unit.saved !== true,
-    )
+    // A killed unit can be saved while its card is still in the hand: one that was discarded or removed has nothing left to keep
+    const savable = (unit: ArenaUnit): boolean =>
+      unit.side === sideId && unit.killed && unit.saved !== true && hand?.items.some((item) => item.id === unit.unit.id) === true
+    const candidates = [...announcedBattle.arena, ...announcedBattle.departedUnits].some(savable)
     // The Chinese player chooses the saved unit: the opponent, or the controller of the barbarians, may not end the battle for them
     if (candidates && input.playerId !== chinese.playerId) return err({ kind: 'CHINESE_SAVE_PENDING' })
     if (input.chineseSave !== undefined) {
       const chosen = [...announcedBattle.arena, ...announcedBattle.departedUnits].find(
-        (unit) => unit.id === input.chineseSave && unit.side === sideId && unit.killed && unit.saved !== true,
+        (unit) => unit.id === input.chineseSave && savable(unit),
       )
       if (chosen === undefined) return err({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: input.chineseSave })
       if (hand !== undefined) {
@@ -1650,9 +1656,13 @@ function lockArenaUnitCard(
  * `initiateUndo` treats any entry with an `item` as undoable (see
  * `appendRollingArenaLog`). The earlier "ends the battle" line stays.
  *
+ * The trade and culture the Aztecs gained for the battle go back with it, exactly as recorded in `endedBattle.aztecs`. When
+ * they no longer hold all of it the undo is refused (`END_BATTLE_UNDO_AZTEC_SPENT`) and nothing changes: the ender undoes
+ * alone, so a partial take-back would let a spent reward be earned again.
+ *
  * Errors: a battle is already active (`BATTLE_ALREADY_ACTIVE`), nothing was
- * ended (`NO_BATTLE_ACTIVE`), or the caller is not who ended it
- * (`NOT_IN_THIS_BATTLE`).
+ * ended (`NO_BATTLE_ACTIVE`), the caller is not who ended it
+ * (`NOT_IN_THIS_BATTLE`), or the Aztec reward was spent (`END_BATTLE_UNDO_AZTEC_SPENT`).
  */
 export function undoEndBattle(
   state: GameState,
@@ -1667,6 +1677,14 @@ export function undoEndBattle(
   if (ended === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
   if (ended.endedBy !== input.playerId) {
     return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+  }
+
+  // What the Aztecs gained for this battle must still be there: the ender may undo alone, so a reward that was spent
+  // cannot be taken back in part (and the loop of spend, undo and win again is closed). Nothing has changed at this point
+  const aztecs = ended.aztecs
+  const aztecHand = aztecs === undefined ? undefined : findPlayer(state, aztecs.playerId)
+  if (aztecs !== undefined && aztecHand !== undefined && (aztecHand.stats.trade < aztecs.trade || aztecHand.stats.culture < aztecs.culture)) {
+    return err({ kind: 'END_BATTLE_UNDO_AZTEC_SPENT' })
   }
 
   // The unit the Chinese saved is killed and unsaved again, as it stood in the battle
@@ -1703,22 +1721,16 @@ export function undoEndBattle(
   const coinBack = ended.codeOfLawsCoin !== undefined
   if (ended.codeOfLawsCoin !== undefined) nextState = returnTechCoin(nextState, ended.codeOfLawsCoin)
 
-  // What the Aztecs gained goes back with it
-  const aztecs = ended.aztecs
-  const aztecHand = aztecs === undefined ? undefined : findPlayer(nextState, aztecs.playerId)
+  // What the Aztecs gained goes back with it: all of it, as checked above, and exactly what was recorded
   let aztecNote = ''
-  if (aztecs !== undefined && aztecHand !== undefined) {
-    // As much as is still there goes back: what the Aztecs have spent since stays spent
-    const tradeBack = Math.min(aztecHand.stats.trade, aztecs.trade)
-    const cultureBack = Math.min(aztecHand.stats.culture, aztecs.culture)
-    nextState = withPlayer(nextState, {
-      ...aztecHand,
-      stats: { ...aztecHand.stats, trade: aztecHand.stats.trade - tradeBack, culture: aztecHand.stats.culture - cultureBack },
-    })
+  const aztecNow = aztecs === undefined ? undefined : findPlayer(nextState, aztecs.playerId)
+  if (aztecs !== undefined && aztecNow !== undefined) {
+    const trade = aztecNow.stats.trade - aztecs.trade
+    const culture = aztecNow.stats.culture - aztecs.culture
+    nextState = withPlayer(nextState, { ...aztecNow, stats: { ...aztecNow.stats, trade, culture } })
     // The amount and, in parentheses, the total that is left, as every gain line says it
-    const part = (word: string, back: number, gained: number, left: number): string | undefined =>
-      gained === 0 ? undefined : `${back === gained ? back : `${back} of ${gained}`} (${left}) ${word}`
-    aztecNote = ` and takes back ${[part('trade', tradeBack, aztecs.trade, aztecHand.stats.trade - tradeBack), part('culture', cultureBack, aztecs.culture, aztecHand.stats.culture - cultureBack)].filter((x) => x !== undefined).join(' and ')} the Aztecs gained`
+    const part = (word: string, back: number, left: number): string | undefined => (back === 0 ? undefined : `${back} (${left}) ${word}`)
+    aztecNote = ` and takes back ${[part('trade', aztecs.trade, trade), part('culture', aztecs.culture, culture)].filter((x) => x !== undefined).join(' and ')} the Aztecs gained`
   }
 
   nextState = appendPublicLog(

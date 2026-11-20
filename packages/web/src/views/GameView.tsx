@@ -1598,13 +1598,18 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
           const seat = sideOf.playerId === myId ? view.you : view.opponents.find((o) => o.playerId === sideOf.playerId)
           return seat?.civilization?.name === 'Chinese'
         }) ?? null
+  const iAmChinese = battle !== null && chineseSide !== null && battle[chineseSide].playerId === myId
+  // The Chinese player is offered only the units whose card is still in their hand: a discarded or removed card has nothing
+  // left to save, and the engine refuses it. The other combatant cannot see the hand, so they go by the arena alone
+  const myCardIds = new Set((view.you?.items ?? []).map((item) => item.id))
   const chineseCandidates =
     battle === null || chineseSide === null
       ? []
-      : [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === chineseSide && unit.killed && unit.saved !== true)
+      : [...battle.arena, ...battle.departedUnits].filter(
+          (unit) => unit.side === chineseSide && unit.killed && unit.saved !== true && (!iAmChinese || myCardIds.has(unit.unit.id)),
+        )
   // Only the Chinese player chooses. The other combatant (the opponent, or the controller of the barbarians) waits for them:
   // the engine refuses their End battle while a killed Chinese unit could be saved
-  const iAmChinese = battle !== null && chineseSide !== null && battle[chineseSide].playerId === myId
   const askChineseSave = iAmChinese && chineseCandidates.length > 0
   const waitForChinese = mySideInBattle !== null && !iAmChinese && chineseCandidates.length > 0
   // A choice that is no longer possible (the kill was undone) counts as none made

@@ -16,8 +16,9 @@ import type { TeslaEffect } from './tesla.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
 import { boardAreas } from './board.js'
-import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
+import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
+import { ownCityPieces } from './city-founding.js'
 import { cityDefenceOf } from './city-defence.js'
 import { stackingLimitOf } from './great-person-effects.js'
 import { brandenburgZonesOf } from './brandenburg.js'
@@ -744,6 +745,8 @@ export type AssistedEffect =
       /** The players the card named, in the order they were chosen. */
       readonly targets: readonly string[]
       readonly resource: string | null
+      /** The culture an Arab player was given for playing the card as `resource` (`awardArabCulture`), so an undo takes it back as far as it is still there. Absent for any other player. */
+      readonly arabCulture?: number
       /** The card's name as the line printed it. */
       readonly name: string
       /** What the game did for the card besides logging it: trade and culture gained, as actually added. Negative for what Albert Einstein spent. */
@@ -1708,19 +1711,17 @@ export function cultureMarkerLevelOf(state: GameState, playerId: string): number
 /**
  * How many city pieces (capital, city or metropolis, walled or not) belong to a
  * player. A city's colour is read off its asset id — for example "cities/redcity2"
- * belongs to Red (see `pieceColorOf`). There is no equivalent for `building`
- * pieces: the manifest has one generic image per building type, with no
- * per-colour artwork, so `buildingCountOf` below falls back to `placedBy`
- * instead.
+ * belongs to Red (see `pieceColorOf`). A city piece still lying in a player area
+ * is a marker waiting to be placed (the Chinese walled capital, the Indian
+ * metropolis), not a city, and is not counted (see `ownCityPieces`). There is no
+ * equivalent for `building` pieces: the manifest has one generic image per building
+ * type, with no per-colour artwork, so `buildingCountOf` below falls back to
+ * `placedBy` instead.
  */
 export function cityCountOf(state: GameState, playerId: string): number {
   const player = findPlayer(state, playerId)
   if (player === undefined || player.color === null) return 0
-
-  const colour = player.color.toLowerCase()
-  return state.board.pieces.filter(
-    (piece) => piece.category === 'city' && pieceColorOf(piece) === colour,
-  ).length
+  return ownCityPieces(state, player).length
 }
 
 /**

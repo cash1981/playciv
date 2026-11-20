@@ -293,18 +293,36 @@ export function spendResource(
  * is discarded with its state. Taking a token off the board by hand is not a spend.
  */
 function withArabCulture(outcome: SpendOutcome, playerId: string): SpendOutcome {
-  const holder = playerOf(outcome.state, playerId)
-  if (holder?.civilization?.name !== ARABS) return outcome
-  const total = holder.stats.culture + ARAB_RESOURCE_CULTURE
   // The resource really spent, as `returnResource` names it: a token spent in place of another (Marie Curie's substitute,
   // an Indian wildcard) is named the same in the gain line and in its take-back
-  const state = appendPublicLog(
-    withPlayerHand(outcome.state, { ...holder, stats: { ...holder.stats, culture: total } }),
-    holder.username,
-    holder.playerId,
-    `gained ${ARAB_RESOURCE_CULTURE} (${total}) culture for spending ${outcome.spent.resource} as the Arabs`,
-  )
-  return { ...outcome, state, spent: { ...outcome.spent, arabCulture: ARAB_RESOURCE_CULTURE } }
+  const awarded = awardArabCulture(outcome.state, playerId, outcome.spent.resource)
+  if (awarded.culture === 0) return outcome
+  return { ...outcome, state: awarded.state, spent: { ...outcome.spent, arabCulture: awarded.culture } }
+}
+
+/**
+ * Gives the Arabs their culture for one resource (`ARAB_RESOURCE_CULTURE`) with the public line carrying the amount and
+ * the new total. Nothing for another civilization (`culture` 0, the state as it was). The one place the gain and its
+ * line are written: `spendResource` and a card played as a resource (`playCard`) both call it. The caller keeps the
+ * `culture` it returns, and gives it to `takeBackArabCulture` when the action is undone.
+ */
+export function awardArabCulture(
+  state: GameState,
+  playerId: string,
+  resource: string,
+): { readonly state: GameState; readonly culture: number } {
+  const holder = playerOf(state, playerId)
+  if (holder?.civilization?.name !== ARABS) return { state, culture: 0 }
+  const total = holder.stats.culture + ARAB_RESOURCE_CULTURE
+  return {
+    state: appendPublicLog(
+      withPlayerHand(state, { ...holder, stats: { ...holder.stats, culture: total } }),
+      holder.username,
+      holder.playerId,
+      `gained ${ARAB_RESOURCE_CULTURE} (${total}) culture for spending ${resource} as the Arabs`,
+    ),
+    culture: ARAB_RESOURCE_CULTURE,
+  }
 }
 
 function payResource(
@@ -388,15 +406,15 @@ export function returnResource(
   logId = '',
 ): Result<GameState, EngineError> {
   const restored = restoreResource(state, player, spent, at, logId)
-  return restored.ok ? ok(takeBackArabCulture(restored.value, player.playerId, spent)) : restored
+  return restored.ok ? ok(takeBackArabCulture(restored.value, player.playerId, spent.arabCulture ?? 0, spent.resource)) : restored
 }
 
 /**
- * The culture the Arabs were given for the spend goes back with the resource, as far as it is still there: culture
- * spent since stays spent, and the line says how much really went back. Never below 0.
+ * The culture the Arabs were given for a resource goes back with it, as far as it is still there: culture spent since
+ * stays spent, and the line says how much really went back. Never below 0. `given` is what `awardArabCulture` returned;
+ * 0 changes nothing and writes nothing.
  */
-function takeBackArabCulture(state: GameState, playerId: string, spent: SpentResource): GameState {
-  const given = spent.arabCulture ?? 0
+export function takeBackArabCulture(state: GameState, playerId: string, given: number, resource: string): GameState {
   const holder = playerOf(state, playerId)
   if (given === 0 || holder === undefined) return state
   const taken = Math.min(holder.stats.culture, given)
@@ -405,7 +423,7 @@ function takeBackArabCulture(state: GameState, playerId: string, spent: SpentRes
     withPlayerHand(state, { ...holder, stats: { ...holder.stats, culture: left } }),
     holder.username,
     holder.playerId,
-    `took back ${taken === given ? given : `${taken} of ${given}`} (${left}) culture gained for spending ${spent.resource} as the Arabs${taken === given ? '' : ' (the rest is spent)'}`,
+    `took back ${taken === given ? given : `${taken} of ${given}`} (${left}) culture gained for spending ${resource} as the Arabs${taken === given ? '' : ' (the rest is spent)'}`,
   )
 }
 

@@ -960,6 +960,62 @@ describe('the Romans and wonders', () => {
     expect(result).toBeUndefined()
   })
 
+  it('removes the wonder by hand as any other piece when the Great Person marker its advance placed has left the player area', () => {
+    // From space 2 the free advance reaches the Great Person space 3, which puts a marker in the player's area
+    const built = build(roman(2), STONEHENGE, C2)
+    const wonder = piecesOf(built, STONEHENGE)[0]
+    const effect = built.assistedActions.at(-1)?.effect
+    const advance = effect?.kind === 'build' && 'advance' in effect ? effect.advance : undefined
+    const placed = advance?.marker
+    if (wonder === undefined || placed === undefined || placed === null) throw new Error('the advance placed no marker')
+    // The marker is on the map now: the advance cannot be taken back, so neither can the build
+    const marker = built.board.pieces.find((piece) => piece.id === placed.pieceId) as BoardPiece
+    const away = unwrap(
+      movePiece(built, { playerId: CASH1981, pieceId: marker.id, x: 6 * SQUARE_SIZE, y: mapTop(built.board) + 6 * SQUARE_SIZE, snap: false }),
+    )
+    expect(takeBackOpenBuild(away, { playerId: CASH1981, pieceId: wonder.id, at: AT })).toBeUndefined()
+    // The board route then removes the wonder as an ordinary piece: the build stays applied and nothing is refunded
+    expect(away.assistedActions.at(-1)?.status).toBe('applied')
+    // With the marker where it was, the same take-back works
+    const back = takeBackOpenBuild(built, { playerId: CASH1981, pieceId: wonder.id, at: AT })
+    if (back === undefined) throw new Error('not an open build')
+    expect(unwrap(back).assistedActions.at(-1)?.status).toBe('undone')
+    expect(markerStep(unwrap(back))).toBe(2)
+  })
+
+  it('removes the wonder by hand as any other piece when a card its advance drew has left the hand', () => {
+    const built = build(roman(), STONEHENGE, C2)
+    const wonder = piecesOf(built, STONEHENGE)[0]
+    const effect = built.assistedActions.at(-1)?.effect
+    const kept = effect?.kind === 'build' && 'advance' in effect ? effect.advance?.kept : undefined
+    if (wonder === undefined || kept === undefined || kept === null) throw new Error('the advance kept no card')
+    const spent: GameState = {
+      ...built,
+      players: built.players.map((p) => (p.playerId === CASH1981 ? { ...p, items: p.items.filter((item) => item.id !== kept) } : p)),
+    }
+    expect(takeBackOpenBuild(spent, { playerId: CASH1981, pieceId: wonder.id, at: AT })).toBeUndefined()
+    expect(takeBackOpenBuild(built, { playerId: CASH1981, pieceId: wonder.id, at: AT })).toBeDefined()
+  })
+
+  it.each([
+    ['replaces the wonder in the market', DECK, true],
+    ['finds no wonder left to draw', { only: [] }, false],
+  ])('after the vote undo of a Roman wonder that %s, the board Undo cannot walk past the reversal and Redo is empty', (_name, deck, drawsReplacement) => {
+    const built = build(withMarkerAt(withCivilization(ready({ deck }), 'Romans'), 9, 'Romans'), STONEHENGE, C2)
+    const effect = built.assistedActions.at(-1)?.effect
+    expect(effect?.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined).toBe(drawsReplacement)
+    const undone = undoByVote(built, 'req-1')
+    expect(markerStep(undone)).toBe(9)
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.board.redo).toEqual([])
+    // A later ordinary change can still be taken back, and only that one
+    const marker = undone.board.pieces.find((piece) => piece.assetId.startsWith('leaders/')) as BoardPiece
+    const moved = unwrap(movePiece(undone, { playerId: CASH1981, pieceId: marker.id, x: marker.x + 40, y: marker.y, snap: false }))
+    const back = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(back.board.history).toHaveLength(undone.board.history.length)
+    expect(unwrapErr(undoLastBoardChange(back, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+  })
+
   it('takes the advance back with the wonder on undo, and refuses when the marker has moved on', () => {
     const state = roman()
     const built = build(state, STONEHENGE, C2)

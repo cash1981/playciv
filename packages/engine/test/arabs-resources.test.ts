@@ -236,6 +236,92 @@ describe('undoing a resource culture card', () => {
   })
 })
 
+describe('a card played as a resource from the hand', () => {
+  const play = (state: GameState, itemId: string, resource?: string) =>
+    unwrap(
+      performAssistedAction(state, {
+        playerId: A,
+        action: 'playCard',
+        requestId: 'req-1',
+        at: AT,
+        payload: { itemId, targets: [], ...(resource === undefined ? {} : { resource }) },
+      }),
+    )
+  const generous = (civ: string, culture = 10): { readonly state: GameState; readonly itemId: string } =>
+    withCardInHand(withStats(withCivilization(firstCivGame(), civ), { culture }), 'A Generous Gift')
+  const effectOf = (state: GameState) => {
+    const effect = state.assistedActions.find((record) => record.id === 'req-1')?.effect
+    if (effect?.kind !== 'playCard') throw new Error('no playCard record')
+    return effect
+  }
+
+  it('gives an Arab 1 culture, with a public line carrying the amount and the new total, and keeps the amount on the record', () => {
+    const { state, itemId } = generous('Arabs')
+    const played = play(state, itemId, 'Iron')
+    expect(culture(played)).toBe(11)
+    expect(effectOf(played).arabCulture).toBe(ARAB_RESOURCE_CULTURE)
+    // The card's own line stays the one the undo vote finds; the gain is a line of its own after it
+    const playLine = played.log.find((entry) => entry.assistedActionId === 'req-1')
+    expect(playLine?.publicLog).toContain('played A Generous Gift')
+    expect(playLine?.publicLog).toContain(' as Iron')
+    expect(lines(played).at(-1)).toBe('cash1981 gained 1 (11) culture for spending Iron as the Arabs')
+    expect(played.log.at(-1)?.assistedActionId).toBeUndefined()
+    // Public text only: no card, no private note
+    expect(played.log.at(-1)?.item).toBeNull()
+    expect(played.log.at(-1)?.privateLog).toBe('')
+    expect(JSON.stringify(toPlayerView(played, B).log)).not.toContain(itemId)
+  })
+
+  it('takes the culture back in the undo of the play, with the new total in the line', () => {
+    const { state, itemId } = generous('Arabs')
+    const undone = undoByVote(play(state, itemId, 'Iron'), 'req-1')
+    expect(culture(undone)).toBe(10)
+    expect(lines(undone).filter((line) => line.includes('took back') || line.includes('was undone'))).toEqual([
+      'cash1981 took back 1 (10) culture gained for spending Iron as the Arabs',
+      "System: cash1981's A Generous Gift was undone: the card is back in their hand",
+    ])
+    expect(player(undone).items.some((item) => item.id === itemId)).toBe(true)
+  })
+
+  it('takes back only what is still there when the culture was spent since, never below 0, and says so', () => {
+    const { state, itemId } = generous('Arabs')
+    const spentSince = withStats(play(state, itemId, 'Iron'), { culture: 0 })
+    const undone = undoByVote(spentSince, 'req-1')
+    expect(culture(undone)).toBe(0)
+    expect(lines(undone).filter((line) => line.includes('took back'))).toEqual([
+      'cash1981 took back 0 of 1 (0) culture gained for spending Iron as the Arabs (the rest is spent)',
+    ])
+  })
+
+  it('gives another civilization nothing, and writes no Arab line in the play or in the undo', () => {
+    const { state, itemId } = generous('Romans')
+    const played = play(state, itemId, 'Iron')
+    expect(culture(played)).toBe(10)
+    expect(effectOf(played).arabCulture).toBeUndefined()
+    expect(lines(played).some((line) => line.includes('as the Arabs'))).toBe(false)
+    const undone = undoByVote(played, 'req-1')
+    expect(culture(undone)).toBe(10)
+    expect(lines(undone).some((line) => line.includes('as the Arabs'))).toBe(false)
+  })
+
+  it('gives an Arab nothing for a card that is not played as a resource', () => {
+    const { state, itemId } = withCardInHand(withStats(withCivilization(firstCivGame(), 'Arabs'), { culture: 10 }), 'Drought')
+    const played = play(state, itemId)
+    expect(culture(played)).toBe(10)
+    expect(effectOf(played).arabCulture).toBeUndefined()
+    expect(effectOf(played).resource).toBeNull()
+  })
+
+  it('counts a card that pays for an ability once, through the spend and not through a play', () => {
+    const { state } = withCardInHand(arabs(), 'A Generous Gift')
+    const spent = unwrap(spendResource(state, A, 'Iron'))
+    expect(spent.spent.kind).toBe('card')
+    expect(culture(spent.state)).toBe(11)
+    expect(lines(spent.state).filter((line) => line.includes('as the Arabs'))).toEqual(['cash1981 gained 1 (11) culture for spending Iron as the Arabs'])
+    expect(spent.state.assistedActions).toEqual([])
+  })
+})
+
 describe('in a cancellation', () => {
   const scene = (): GameState => {
     let state = firstCivGame()

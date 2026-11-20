@@ -60,6 +60,7 @@ export function statusFor(error: EngineError): number {
     case 'BOARD_ASSET_LIMIT_REACHED':
     case 'BATTLE_ALREADY_ACTIVE':
     case 'CHINESE_SAVE_PENDING':
+    case 'END_BATTLE_UNDO_AZTEC_SPENT':
     case 'CULTURE_HAND_OVER':
     case 'UNIT_ALREADY_IN_BATTLE':
     case 'ARENA_POSITION_OCCUPIED':

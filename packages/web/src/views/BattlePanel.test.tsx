@@ -911,9 +911,14 @@ describe('BattlePanel Chinese save picker', () => {
     id, side, position: 0, unit: { ...infantry, id: `card-${id}`, inBattle: true },
     attack: 1, health: killed ? 0 : 3, placedBy: 'me', rotation: 0, killed, ...(saved ? { saved: true } : {}),
   })
-  const chineseView = (units: readonly ReturnType<typeof arenaUnit>[], mine = true): PlayerView => ({
+  // `inHand` says which units still have their card in the Chinese player's hand (the others were discarded or removed)
+  const chineseView = (
+    units: readonly ReturnType<typeof arenaUnit>[],
+    mine = true,
+    inHand: (unit: ReturnType<typeof arenaUnit>) => boolean = () => true,
+  ): PlayerView => ({
     ...view,
-    you: { ...view.you, civilization: mine ? { name: 'Chinese' } : null },
+    you: { ...view.you, civilization: mine ? { name: 'Chinese' } : null, items: mine ? units.filter(inHand).map((unit) => unit.unit) : [] },
     opponents: [{ playerId: 'other', username: 'Other', civilization: mine ? null : { name: 'Chinese' } }],
     battle: { ...view.battle, arena: units, departedUnits: [] },
   }) as unknown as PlayerView
@@ -935,6 +940,21 @@ describe('BattlePanel Chinese save picker', () => {
     expect(endButton.disabled).toBe(false)
     fireEvent.click(endButton)
     expect(api.endBattleArena).toHaveBeenCalledWith('game', 4, 'a2')
+  })
+
+  it('offers only the killed units whose card is still in the hand, and no picker when none is left', () => {
+    const units = [arenaUnit('a1', 'attacker', true), arenaUnit('a2', 'attacker', true)]
+    // The card of a1 was discarded before End battle: only a2 can be saved
+    const first = open(chineseView(units, true, (unit) => unit.id === 'a2'))
+    const picker = first.getByLabelText('Chinese: save a killed unit') as HTMLSelectElement
+    expect(Array.from(picker.options).map((option) => option.value)).toEqual(['', 'a2', 'none'])
+    cleanup()
+    // Every card has left the hand: nothing to choose, and End battle is open
+    const none = open(chineseView(units, true, () => false))
+    expect(none.queryByLabelText('Chinese: save a killed unit')).toBeNull()
+    expect((none.getByText('End battle') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(none.getByText('End battle'))
+    expect(api.endBattleArena).toHaveBeenCalledWith('game', 4, undefined)
   })
 
   it('sends no unit for Save none', () => {

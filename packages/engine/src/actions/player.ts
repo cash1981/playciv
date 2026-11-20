@@ -87,9 +87,12 @@ const CIV_CITY_MARKER: Readonly<Record<string, { readonly suffix: string; readon
   Indians: { suffix: 'metropolis2', label: 'metropolis marker' },
 }
 
-/** Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). */
-const SPANISH = 'Spanish'
-const SPANISH_MVMT = '2+1'
+/**
+ * Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). Exported
+ * for `migrateGameState`, which gives it to a Spanish player revealed before the reveal set it.
+ */
+export const SPANISH = 'Spanish'
+export const SPANISH_MVMT = '2+1'
 
 /** Java: `SecurityCheck.hasUserAccess` followed by a 403. */
 function requireAccess(

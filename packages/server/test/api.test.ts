@@ -2279,6 +2279,43 @@ describe('end battle with a Chinese choice', () => {
   })
 })
 
+describe('end battle with a malformed chineseSave', () => {
+  it('answers 400 BAD_REQUEST for a number, null or an empty string, ends nothing, and still ends the battle without it', async () => {
+    const { gameId, starter } = await startedGame('Arena-chinese-save-malformed')
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: 'barbarians' },
+    })
+    expect(initiated.status).toBe(200)
+    const view = await initiated.json() as { rev: number }
+    for (const chineseSave of [7, null, '']) {
+      const refused = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/battle/arena/end`,
+        headers: bearer(starter),
+        payload: { rev: view.rev, chineseSave },
+      })
+      expect(refused.status).toBe(400)
+      expect(((await refused.json()) as { error: string }).error).toBe('BAD_REQUEST')
+      // The battle is still on and its revision unchanged
+      const after = await repo.findGame(gameId)
+      expect(after?.battle).not.toBeNull()
+      expect(after?.rev).toBe(view.rev)
+    }
+    // Absent still means none
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { rev: view.rev },
+    })
+    expect(ended.status).toBe(200)
+    expect((await repo.findGame(gameId))?.battle).toBeNull()
+  })
+})
+
 describe('end battle with a killed Chinese unit', () => {
   /** The starter is Chinese and fights the barbarians (the other player controls them); one of their units is killed. */
   async function chineseLoss(name: string) {
@@ -2495,6 +2532,86 @@ describe('undo end battle', () => {
     })
     expect(response.status).toBe(404)
     expect((await response.json() as { error: string }).error).toBe('NO_BATTLE_ACTIVE')
+  })
+})
+
+describe('undo of End battle after the Aztecs spent what they gained', () => {
+  /** The starter is Aztec, beats the barbarians (the other player controls them) and ends the battle: 3 trade and 1 culture. */
+  async function aztecWin(name: string) {
+    const { gameId, starter } = await startedGame(name)
+    let state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const starterId = state.players.find((player) => player.yourTurn)?.playerId ?? ''
+    state = {
+      ...state,
+      players: state.players.map((player) =>
+        player.playerId === starterId
+          ? { ...player, civilization: { kind: 'civ', name: 'Aztecs' } as unknown as typeof player.civilization, stats: { ...player.stats, trade: 0, culture: 0 } }
+          : player,
+      ),
+    }
+    state = unwrap(draw(state, { playerId: starterId, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+    state = unwrap(drawUnitsForBattle(state, { playerId: starterId, numberOfDraws: 1 }))
+    state = unwrap(initiateBattle(state, { initiatorId: starterId, opponentId: 'barbarians' }))
+    const controllerId = state.battle?.defender.playerId ?? ''
+    const own = findPlayer(state, starterId)?.battlehand[0]
+    const barbarian = findPlayer(state, controllerId)?.barbarians[0]
+    if (own === undefined || barbarian === undefined) throw new Error('no units')
+    state = unwrap(placeUnitInArena(state, { playerId: starterId, unitId: own.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
+    state = unwrap(placeUnitInArena(state, { playerId: controllerId, unitId: barbarian.id, side: 'defender', position: 0, attack: 1, health: 3 }))
+    const theirs = state.battle?.arena.find((unit) => unit.side === 'defender')
+    if (theirs === undefined) throw new Error('no defender')
+    state = unwrap(killArenaUnit(state, { playerId: starterId, arenaUnitId: theirs.id }))
+    await repo.saveGame(state)
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(ended.status).toBe(200)
+    return { gameId, starter, starterId }
+  }
+
+  it('answers 409 END_BATTLE_UNDO_AZTEC_SPENT with the game unchanged, and takes the whole gain back when it is there', async () => {
+    const { gameId, starter, starterId } = await aztecWin('Aztec-undo')
+    const won = await repo.findGame(gameId)
+    expect(findPlayer(won as GameState, starterId)?.stats).toMatchObject({ trade: 3, culture: 1 })
+    // Everything spent since: the undo is refused
+    await repo.saveGame({
+      ...(won as GameState),
+      players: (won as GameState).players.map((player) => (player.playerId === starterId ? { ...player, stats: { ...player.stats, trade: 1, culture: 0 } } : player)),
+    })
+    const before = await repo.findGame(gameId)
+    const refused = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end/undo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(refused.status).toBe(409)
+    const body = (await refused.json()) as { error: string; message: string }
+    expect(body.error).toBe('END_BATTLE_UNDO_AZTEC_SPENT')
+    expect(body.message).toContain('has been spent')
+    const after = await repo.findGame(gameId)
+    expect(after?.rev).toBe(before?.rev)
+    expect(after?.battle).toBeNull()
+    expect(after?.endedBattle).not.toBeNull()
+    expect(findPlayer(after as GameState, starterId)?.stats).toMatchObject({ trade: 1, culture: 0 })
+
+    // With the gain back in the hand the same request succeeds and takes exactly it back
+    await repo.saveGame({
+      ...(after as GameState),
+      players: (after as GameState).players.map((player) => (player.playerId === starterId ? { ...player, stats: { ...player.stats, trade: 4, culture: 1 } } : player)),
+    })
+    const undone = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end/undo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(undone.status).toBe(200)
+    expect(findPlayer((await repo.findGame(gameId)) as GameState, starterId)?.stats).toMatchObject({ trade: 1, culture: 0 })
   })
 })
 

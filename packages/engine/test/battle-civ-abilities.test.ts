@@ -107,25 +107,118 @@ describe('the Aztecs after a battle', () => {
     expect(ended.endedBattle?.aztecs).toBeUndefined()
   })
 
-  it('are put back as far as it is still there when it was spent, and the line says how much', () => {
+  /** What the Aztecs (Cash by default) hold after spending: the totals are replaced, nothing else is touched. */
+  const spentTo = (ended: GameState, trade: number, culture: number, playerId = CASH1981): GameState =>
+    withStats(ended, { trade, culture }, playerId)
+
+  it('refuse the undo of the end of the battle when the trade or the culture they gained is spent, and change nothing', () => {
     const state = kill(kill(aztecFight(), KARANDRAS1, 1, CASH1981), CASH1981, 2, KARANDRAS1)
     const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
     expect(me(ended).stats).toMatchObject({ trade: 8, culture: 8 })
-    // The Aztecs have spent 6 trade and 7 culture since
-    const spent: GameState = {
-      ...ended,
-      players: ended.players.map((p) => (p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, trade: 2, culture: 1 } } : p)),
+    // 3 trade and 3 culture were gained: a total below either means part of it was spent
+    for (const [trade, culture] of [[2, 8], [8, 2], [0, 0], [2, 1]] as const) {
+      const spent = spentTo(ended, trade, culture)
+      const before = structuredClone(spent)
+      const refused = undoEndBattle(spent, { playerId: CASH1981 })
+      expect(refused.ok).toBe(false)
+      if (!refused.ok) {
+        expect(refused.error).toEqual({ kind: 'END_BATTLE_UNDO_AZTEC_SPENT' })
+        expect(describeError(refused.error)).toContain('has been spent')
+      }
+      // The state the caller passed in is untouched: the battle stays ended, with its totals and log
+      expect(spent).toEqual(before)
     }
-    const undone = unwrap(undoEndBattle(spent, { playerId: CASH1981 }))
+  })
+
+  it('check only what was gained: culture alone when only culture came, trade alone when only trade came', () => {
+    // Only culture: the Aztecs lose and 2 units are killed
+    const lost = unwrap(endBattleAction(kill(aztecFight(), CASH1981, 2, CASH1981), { playerId: KARANDRAS1 }))
+    expect(lost.endedBattle?.aztecs).toEqual({ playerId: CASH1981, trade: 0, culture: 2 })
+    expect(undoEndBattle(spentTo(lost, 5, 1), { playerId: KARANDRAS1 }).ok).toBe(false)
+    // No trade was gained, so having none left does not block the undo
+    const noTrade = unwrap(undoEndBattle(spentTo(lost, 0, 7), { playerId: KARANDRAS1 }))
+    expect(me(noTrade).stats).toMatchObject({ trade: 0, culture: 5 })
+
+    // Only trade: the Aztecs defend, nobody is killed, and a draw goes to the defender
+    const won = unwrap(endBattleAction(withCivilization(fight(), 'Aztecs', KARANDRAS1), { playerId: KARANDRAS1 }))
+    expect(won.endedBattle?.aztecs).toEqual({ playerId: KARANDRAS1, trade: 3, culture: 0 })
+    const traded = me(won, KARANDRAS1).stats
+    expect(undoEndBattle(spentTo(won, traded.trade - 1, traded.culture, KARANDRAS1), { playerId: KARANDRAS1 }).ok).toBe(false)
+    const noCulture = unwrap(undoEndBattle(spentTo(won, traded.trade, 0, KARANDRAS1), { playerId: KARANDRAS1 }))
+    expect(me(noCulture, KARANDRAS1).stats).toMatchObject({ trade: traded.trade - 3, culture: 0 })
+  })
+
+  it('take back all of it, and the amounts and new totals are in the log, when it is still there', () => {
+    const state = kill(kill(aztecFight(), KARANDRAS1, 1, CASH1981), CASH1981, 2, KARANDRAS1)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    // More than was gained is held (they earned some more since): exactly the gain goes back
+    const richer = spentTo(ended, 11, 9)
+    const undone = unwrap(undoEndBattle(richer, { playerId: CASH1981 }))
+    expect(me(undone).stats).toMatchObject({ trade: 8, culture: 6 })
+    expect(lines(undone).at(-1)).toContain('takes back 3 (8) trade and 3 (6) culture the Aztecs gained')
+    // Exactly the gain held is enough
+    const exact = unwrap(undoEndBattle(spentTo(ended, 3, 3), { playerId: CASH1981 }))
+    expect(me(exact).stats).toMatchObject({ trade: 0, culture: 0 })
+    expect(lines(exact).at(-1)).toContain('takes back 3 (0) trade and 3 (0) culture the Aztecs gained')
+  })
+
+  it('cannot farm the reward: spend it and the undo is refused, so the battle never comes back to be won again', () => {
+    // Start with nothing, win with 3 units killed: 3 trade and 3 culture, all of it spent at once
+    const state = kill(kill(withStats(aztecFight(), { trade: 0, culture: 0 }), KARANDRAS1, 1, CASH1981), CASH1981, 2, KARANDRAS1)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(me(ended).stats).toMatchObject({ trade: 3, culture: 3 })
+    const spent = spentTo(ended, 0, 0)
+    const refused = undoEndBattle(spent, { playerId: CASH1981 })
+    expect(refused.ok).toBe(false)
+    // Nothing reopens the battle, and pressing End battle again finds none: no second reward
+    expect(spent.battle).toBeNull()
+    const again = unwrap(endBattleAction(spent, { playerId: CASH1981 }))
+    expect(me(again).stats).toMatchObject({ trade: 0, culture: 0 })
+    expect(lines(again).filter((line) => line.includes('as the Aztecs'))).toHaveLength(1)
+    // With the whole gain still there the undo takes it back first, so a second end pays once and not twice
+    const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
     expect(me(undone).stats).toMatchObject({ trade: 0, culture: 0 })
-    expect(lines(undone).at(-1)).toContain('takes back 2 of 3 (0) trade and 1 of 3 (0) culture the Aztecs gained')
-    const partly: GameState = {
-      ...ended,
-      players: ended.players.map((p) => (p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, trade: 4, culture: 2 } } : p)),
-    }
-    const some = unwrap(undoEndBattle(partly, { playerId: CASH1981 }))
-    expect(me(some).stats).toMatchObject({ trade: 1, culture: 0 })
-    expect(lines(some).at(-1)).toContain('takes back 3 (1) trade and 2 of 3 (0) culture the Aztecs gained')
+    const endedTwice = unwrap(endBattleAction(undone, { playerId: CASH1981 }))
+    expect(me(endedTwice).stats).toMatchObject({ trade: 3, culture: 3 })
+  })
+
+  it('gain only the trade that fits under the ceiling, say so, and take back exactly that', () => {
+    // 25 of 27: 3 trade for winning leaves room for 2
+    const state = kill(withStats(aztecFight(), { trade: 25 }), CASH1981, 2, KARANDRAS1)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(me(ended).stats.trade).toBe(27)
+    expect(ended.endedBattle?.aztecs).toEqual({ playerId: CASH1981, trade: 2, culture: 2 })
+    expect(lines(ended)).toContain('cash1981 gains 2 (27) trade for winning and 2 (7) culture for the units killed as the Aztecs')
+    const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(me(undone).stats).toMatchObject({ trade: 25, culture: 5 })
+    expect(lines(undone).at(-1)).toContain('takes back 2 (25) trade and 2 (5) culture the Aztecs gained')
+  })
+
+  it('gain one trade when one fits, and keep the culture when the room is none', () => {
+    const one = unwrap(endBattleAction(kill(withStats(aztecFight(), { trade: 26 }), CASH1981, 2, KARANDRAS1), { playerId: CASH1981 }))
+    expect(me(one).stats.trade).toBe(27)
+    expect(lines(one)).toContain('cash1981 gains 1 (27) trade for winning and 2 (7) culture for the units killed as the Aztecs')
+    expect(one.endedBattle?.aztecs).toEqual({ playerId: CASH1981, trade: 1, culture: 2 })
+
+    const full = unwrap(endBattleAction(kill(withStats(aztecFight(), { trade: 27 }), CASH1981, 2, KARANDRAS1), { playerId: CASH1981 }))
+    expect(me(full).stats).toMatchObject({ trade: 27, culture: 7 })
+    expect(lines(full)).toContain('cash1981 gains 2 (7) culture for the units killed as the Aztecs')
+    expect(lines(full).some((line) => line.includes('trade for winning'))).toBe(false)
+    expect(full.endedBattle?.aztecs).toEqual({ playerId: CASH1981, trade: 0, culture: 2 })
+    // The undo takes back the culture only, and leaves the trade at the ceiling
+    const undone = unwrap(undoEndBattle(full, { playerId: CASH1981 }))
+    expect(me(undone).stats).toMatchObject({ trade: 27, culture: 5 })
+    expect(lines(undone).at(-1)).toContain('takes back 2 (5) culture the Aztecs gained')
+    expect(lines(undone).at(-1)).not.toContain('trade')
+  })
+
+  it('gain nothing, and record nothing, when they win at the ceiling with no unit killed', () => {
+    // The defender wins a draw: Karandras1 is the Aztec player here, at the ceiling
+    const state = withStats(withCivilization(fight(), 'Aztecs', KARANDRAS1), { trade: 27 }, KARANDRAS1)
+    const ended = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    expect(me(ended, KARANDRAS1).stats.trade).toBe(27)
+    expect(ended.endedBattle?.aztecs).toBeUndefined()
+    expect(lines(ended).some((line) => line.includes('as the Aztecs'))).toBe(false)
   })
 
   it('are put back by undoing the end of the battle, and the log names no unit', () => {
@@ -279,6 +372,81 @@ describe('the Chinese after a battle', () => {
     }
     const ended = unwrap(endBattleAction(saved, { playerId: CASH1981 }))
     expect(lines(ended).some((line) => line.includes('as the Chinese'))).toBe(false)
+  })
+
+  /** The card of an arena unit leaves the player's hand before the battle ends (discarded, or removed some other way). */
+  const withoutCard = (state: GameState, arenaUnitId: string, playerId = CASH1981): GameState => {
+    const cardId = [...(state.battle?.arena ?? []), ...(state.battle?.departedUnits ?? [])].find((unit) => unit.id === arenaUnitId)?.unit.id
+    if (cardId === undefined) throw new Error('no such arena unit')
+    const player = me(state, playerId)
+    const card = player.items.find((item) => item.id === cardId)
+    if (card === undefined) throw new Error('card not in hand')
+    return {
+      ...state,
+      players: state.players.map((p) => (p.playerId === playerId ? { ...p, items: p.items.filter((item) => item.id !== cardId) } : p)),
+      discardedItems: [...state.discardedItems, { ...card, hidden: true }],
+    }
+  }
+
+  it('cannot save a killed unit whose card has left the hand, and the choice is refused with its id', () => {
+    const killed = kill(chineseFight(), KARANDRAS1, 2, CASH1981)
+    const [gone, kept] = unitsOf(killed, CASH1981)
+    if (gone === undefined || kept === undefined) throw new Error('no units')
+    const state = withoutCard(killed, gone.id)
+    const refused = endBattleAction(state, { playerId: CASH1981, chineseSave: gone.id })
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) {
+      expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: gone.id })
+      expect(describeError(refused.error)).toContain('whose card is still in the hand')
+    }
+    // The battle is untouched by the refusal, and the unit whose card is still there can be saved
+    expect(state.battle).not.toBeNull()
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981, chineseSave: kept.id }))
+    expect(ended.endedBattle?.chineseSaved).toBe(kept.id)
+    expect(ended.endedBattle?.battle.arena.filter((unit) => unit.saved === true).map((unit) => unit.id)).toEqual([kept.id])
+    // The discarded card is still where it was put: saving did not bring it back
+    expect(me(ended).items.some((item) => item.id === gone.unit.id)).toBe(false)
+  })
+
+  it('cannot save a departed killed unit whose card has left the hand either, but can while it is there', () => {
+    const killed = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
+    const victim = unitsOf(killed, CASH1981).find((unit) => unit.killed)
+    if (victim === undefined || killed.battle === null) throw new Error('no unit')
+    // The unit was moved off its front by a reinforcement: it is among the departed units
+    const departed: GameState = {
+      ...killed,
+      battle: { ...killed.battle, arena: killed.battle.arena.filter((unit) => unit.id !== victim.id), departedUnits: [...killed.battle.departedUnits, victim] },
+    }
+    expect(endBattleAction(departed, { playerId: CASH1981, chineseSave: victim.id }).ok).toBe(true)
+    const refused = endBattleAction(withoutCard(departed, victim.id), { playerId: CASH1981, chineseSave: victim.id })
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: victim.id })
+  })
+
+  it('is no candidate for the Chinese choice when its card has left the hand: the opponent may end, and no line says nothing was saved', () => {
+    const killed = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
+    const victim = unitsOf(killed, CASH1981).find((unit) => unit.killed)
+    if (victim === undefined) throw new Error('no unit')
+    const state = withoutCard(killed, victim.id)
+    // Nothing could be saved, so nobody waits for the Chinese player
+    const byOpponent = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    expect(byOpponent.endedBattle?.chineseSaved).toBeUndefined()
+    expect(lines(byOpponent).some((line) => line.includes('as the Chinese'))).toBe(false)
+    // The Chinese player ending it with no choice does not get the "saves no unit" line either
+    const byChinese = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(lines(byChinese).some((line) => line.includes('as the Chinese'))).toBe(false)
+  })
+
+  it('still wait for the Chinese player, and say that no unit was saved, while another killed unit has its card in the hand', () => {
+    const killed = kill(chineseFight(), KARANDRAS1, 2, CASH1981)
+    const [gone] = unitsOf(killed, CASH1981)
+    if (gone === undefined) throw new Error('no unit')
+    const state = withoutCard(killed, gone.id)
+    const refused = endBattleAction(state, { playerId: KARANDRAS1 })
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_PENDING' })
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(lines(ended)).toContain('cash1981 saves no unit as the Chinese')
   })
 
   it('is taken back by undoing the end of the battle: the unit is killed and unsaved again', () => {

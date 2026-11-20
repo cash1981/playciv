@@ -364,7 +364,7 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
 
   /**
    * End the battle entirely. Body: `{ rev: number, chineseSave?: string }`. `chineseSave` is the arena unit id the
-   * Chinese choose to save; without it nothing is saved.
+   * Chinese choose to save; without it nothing is saved. Present but not a non-empty string is a 400.
    * Clears the arena and resets `inBattle` on all involved units.
    * If no battle is active, falls back to clearing `inBattle` on the
    * caller's own hand (the existing standalone behaviour).
@@ -374,6 +374,10 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
     const body = asRecord(await c.req.json().catch(() => ({})))
     const clientRev = optionalNumber(body, 'rev')
     const chineseSave = optionalString(body, 'chineseSave')
+    // A choice that is present but not a unit id (a number, null, an empty string) is a malformed request, not "save none"
+    if ('chineseSave' in body && chineseSave === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'chineseSave must be a non-empty string (the arena unit id), or left out')
+    }
 
     return applyToGame(
       context,

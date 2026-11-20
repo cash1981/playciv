@@ -162,8 +162,13 @@ export type EngineError =
   | { readonly kind: 'UNIT_ALREADY_IN_BATTLE'; readonly unitId: string }
   /** No arena unit with the given id was found */
   | { readonly kind: 'ARENA_UNIT_NOT_FOUND'; readonly arenaUnitId: string }
-  /** The unit the Chinese chose to save is not a killed, unsaved unit of their side of this battle */
+  /** The unit the Chinese chose to save is not a killed, unsaved unit of their side of this battle whose card is still in their hand */
   | { readonly kind: 'CHINESE_SAVE_INVALID'; readonly arenaUnitId: string }
+  /**
+   * Undoing End battle would take back what the Aztecs gained, and they no longer hold all of it (they spent it): the ender
+   * alone may undo, so the take-back is refused instead of paying out a reward that was already used.
+   */
+  | { readonly kind: 'END_BATTLE_UNDO_AZTEC_SPENT' }
   /** A Chinese unit was killed and could be saved, and someone other than the Chinese player (the opponent, the controller of the barbarians) pressed End battle: the Chinese player chooses */
   | { readonly kind: 'CHINESE_SAVE_PENDING' }
   /** An arena stat value is not a non-negative integer */
@@ -327,7 +332,9 @@ export function describeError(error: EngineError): string {
     case 'ARENA_UNIT_NOT_FOUND':
       return `No arena unit with id ${error.arenaUnitId}`
     case 'CHINESE_SAVE_INVALID':
-      return `The unit ${error.arenaUnitId} cannot be saved: only a killed unit of the Chinese side in this battle, not yet saved, can`
+      return `The unit ${error.arenaUnitId} cannot be saved: only a killed unit of the Chinese side in this battle, not yet saved and whose card is still in the hand, can`
+    case 'END_BATTLE_UNDO_AZTEC_SPENT':
+      return 'The trade or culture the Aztecs gained for that battle has been spent, so ending it cannot be undone'
     case 'CHINESE_SAVE_PENDING':
       return 'A killed unit of the Chinese could be saved: the Chinese player chooses which one (or none) and must end the battle'
     case 'INVALID_ARENA_STAT_VALUE':

@@ -61,6 +61,7 @@ import { CITY_ACTIONS, ROMANS } from './assisted-city.js'
 import { ABILITY_ACTIONS } from './assisted-abilities.js'
 import { SOT_ACTIONS } from './assisted-sot.js'
 import {
+  advanceEffectOf,
   chooseReward,
   countLinesIn,
   cultureAdvance,
@@ -84,7 +85,6 @@ import { blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
   areaAt,
   areaSlotRegion,
-  cultureStepOf,
   findBoardAsset,
   isInWondersArea,
   nextFreeSlot,
@@ -2118,6 +2118,13 @@ export function reverseAssistedAction(
   // Galileo's (and Cousteau's, and Giannini's free building's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
   // the forward moves, which would teleport the already-restored figures to the destination again.
   if (
+    // A free culture advance another action holds (the Romans' wonder and city, the Arabs' coin, Mother Teresa, Sydney
+    // Opera House, a conquest) was taken back by moving the leader marker, and a Great Person marker it placed was
+    // removed: the board Undo must not move the marker forward again with the price refunded and the cards back in the deck.
+    // A plain advance of the Advance button is not sealed: its own tests keep the board Undo of the older entries working
+    (effect.kind !== 'cultureAdvance' && advanceEffectOf(record) !== undefined) ||
+    // A Zulu city explored huts: the reversal moved the tokens back to their squares and the cards back to the deck
+    (effect.kind === 'foundCity' && effect.huts !== undefined && effect.huts.length > 0) ||
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
       (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
@@ -2128,8 +2135,6 @@ export function reverseAssistedAction(
     (effect.kind === 'philosophy' && effect.marker !== null) ||
     // The Ark moved the leader marker back, and the School of Confucius took its Great Person marker off
     record.kind === 'relic:ark' ||
-    // The same for the Romans' advance for a conquest: the reverse move must not be undone by the board Undo
-    (effect.kind === 'conquestClaim' && effect.advance !== null) ||
     (effect.kind === 'relicGreatPerson' && effect.marker !== null) ||
     (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined)) ||
     (effect.kind === 'combustion' && (effect.building !== undefined || effect.unwalled !== undefined))
@@ -2193,11 +2198,12 @@ export function takeBackOpenBuild(
   if (record.effect.kind === 'build' && 'reserved' in record.effect && reservedUndoBlock(state, record.playerId, record.effect) !== undefined) {
     return undefined
   }
-  // The Romans' free advance for this wonder cannot be taken back (the marker has moved on): the piece is removed as any other
+  // The Romans' free advance for this wonder cannot be taken back (the marker has moved on, a Great Person marker it placed has
+  // left the player's area, or a reward card is gone): the piece is removed as any other. The advance is reversed on a copy of the
+  // game, exactly as the take-back below will, so its every refusal is met here and none comes up after the build is half undone.
   if (record.effect.kind === 'build' && 'advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
-    const advance = record.effect.advance
-    const marker = state.board.pieces.find((piece) => piece.id === advance.markerPieceId)
-    if (marker === undefined || cultureStepOf(state.board, marker) !== advance.toStep) return undefined
+    const holder = playerOf(state, record.playerId)
+    if (holder === undefined || !reverseAdvanceEffect(state, holder, record, record.effect.advance, input.at ?? null).ok) return undefined
   }
   // Military Tradition gave a free unit for this army: the army is removed as any other, and the unit stays
   if (militaryTraditionUndoBlock(state, record) !== undefined) return undefined

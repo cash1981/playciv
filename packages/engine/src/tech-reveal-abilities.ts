@@ -5,9 +5,14 @@
  * - Germans: for each unit type the tech upgrades or unlocks, one free unit card of that type, and one resource of
  *   their choice from the market. The resource is taken from the market by hand, as every token is, so it only
  *   gets a public reminder line and nothing to undo.
- * - Greeks: 1 culture for each other player who has not chosen the tech (a hidden choice counts as knowing or researching it).
+ * - Greeks: 1 culture for each other player who does not have the tech revealed. Only what is public counts: a hidden
+ *   choice of another player is not counted, so the amount never tells whether they are researching the same tech (the
+ *   Greeks may get one more than the card says when another player chose the tech and has not revealed it yet).
  *
- * Every effect is kept in `techRevealEffects` (server only) so that taking the tech back takes them back.
+ * Every effect is kept in `techRevealEffects` (server only) so that taking the tech back takes them back. The reward is
+ * paid once per reveal chain: when a take-back cannot recover all of it (culture that is spent, a unit card that left
+ * the hand) a `paid` record stays, and revealing the tech again pays nothing more. A complete take-back leaves no
+ * record, so the next reveal pays again.
  */
 
 import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
@@ -15,7 +20,7 @@ import { UNIT_LEVEL_TECHS } from './build-item.js'
 import type { UnitType } from './build-item.js'
 import { unitSheetOf } from './build-options.js'
 import { deckWith } from './item-number.js'
-import { itemName } from './item.js'
+import { isUnit, itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog, appendPublicLog } from './log.js'
 import { SHEET_LABEL } from './sheet-name.js'
@@ -33,19 +38,29 @@ export function unitTypesOfTech(techName: string): readonly UnitType[] {
   return techName === 'Flight' ? [...types, 'aircraft'] : types
 }
 
+/** Whether the player's reward for the tech stays paid: an earlier take-back could not recover all of it (see `undoTechRevealAbilities`). */
+const isPaid = (state: GameState, playerId: string, techName: string): boolean =>
+  (state.techRevealEffects ?? []).some((effect) => effect.paid === true && effect.playerId === playerId && effect.techName === techName)
+
 /** Applies the civilization's effect of the first reveal of `techName`. */
 export function applyTechRevealAbilities(state: GameState, playerId: string, techName: string): GameState {
   const player = findPlayer(state, playerId)
   if (player === undefined) return state
   const civ = player.civilization?.name
+  if (civ !== GREEKS && civ !== GERMANS) return state
+  // An earlier take-back could not recover all of the reward: it was paid once and stays paid
+  if (isPaid(state, playerId, techName)) {
+    return appendPublicLog(state, player.username, player.playerId, `gets nothing for ${techName} as the ${civ}: the ability was already paid when the tech was revealed before`)
+  }
   let next = state
 
   if (civ === GREEKS) {
-    // Players who know the tech, or have it chosen (hidden or not, which is what researching is), are not counted; the other players only
+    // Only what is public counts: another player who has the tech revealed. A hidden choice is not counted, so the
+    // amount does not tell whether another player is researching the same tech
     const culture = state.players.filter(
       (other) =>
         other.playerId !== playerId &&
-        !other.techsChosen.some((tech) => tech.name === techName),
+        !other.techsChosen.some((tech) => tech.name === techName && tech.hidden === false),
     ).length
     if (culture === 0) return state
     const holder = findPlayer(next, playerId) ?? player
@@ -92,16 +107,22 @@ const recorded = (state: GameState, effect: TechRevealEffect): GameState => ({
 /**
  * Takes back what the first reveal of the tech gave, when the tech is taken back. The culture goes back as far as it is
  * still there (never below 0), and a free unit card still in the hand or the battle hand goes back to its deck, which is
- * shuffled again. A line says what was really taken back: a gain that is spent, or a card that has left the hand, stays.
+ * shuffled again; a unit card that stood in the arena comes back without its battle lock. A line says what was really
+ * taken back: a gain that is spent, or a card that has left the hand, stays.
+ *
+ * When not everything could be taken back, a `paid` record is left: the reward was paid once, so revealing the tech again
+ * pays nothing more (otherwise the player could farm it by spending the gain and removing the tech). A `paid` record is
+ * never removed by a later take-back. A complete take-back leaves no record, so the next reveal pays again.
  */
 export function undoTechRevealAbilities(state: GameState, playerId: string, techName: string): GameState {
-  const effects = (state.techRevealEffects ?? []).filter((effect) => effect.playerId === playerId && effect.techName === techName)
+  const effects = (state.techRevealEffects ?? []).filter((effect) => effect.playerId === playerId && effect.techName === techName && effect.paid !== true)
   if (effects.length === 0) return state
   let next: GameState = {
     ...state,
     techRevealEffects: (state.techRevealEffects ?? []).filter((effect) => !effects.includes(effect)),
   }
   const said: string[] = []
+  let complete = true
   for (const effect of effects) {
     const holder = findPlayer(next, playerId)
     if (holder === undefined) continue
@@ -109,6 +130,7 @@ export function undoTechRevealAbilities(state: GameState, playerId: string, tech
     // The card is in the hand, and a unit drawn for a battle is a copy in the battle hand: both go
     const back = holder.items.filter((item) => wanted.has(item.id))
     const taken = Math.min(holder.stats.culture, effect.culture)
+    if (taken < effect.culture || back.length < effect.units.length) complete = false
     next = withPlayer(next, {
       ...holder,
       items: holder.items.filter((item) => !wanted.has(item.id)),
@@ -116,7 +138,14 @@ export function undoTechRevealAbilities(state: GameState, playerId: string, tech
       stats: { ...holder.stats, culture: holder.stats.culture - taken },
     })
     if (back.length > 0) {
-      next = { ...next, ...deckWith(next, back.map((item) => ({ ...item, hidden: true, ownerId: null }))) }
+      next = {
+        ...next,
+        ...deckWith(
+          next,
+          // A unit placed in the arena was flagged `inBattle`: the card must not keep the lock in the deck
+          back.map((item) => ({ ...item, hidden: true, ownerId: null, ...(isUnit(item) ? { inBattle: false } : {}) })),
+        ),
+      }
       for (const sheetName of new Set(back.map((item) => item.sheetName))) next = shuffleSheetTwice(next, sheetName)
     }
     if (effect.culture > 0) {
@@ -133,7 +162,15 @@ export function undoTechRevealAbilities(state: GameState, playerId: string, tech
     }
   }
   const owner = findPlayer(next, playerId)
+  if (!complete && !isPaid(next, playerId, techName)) {
+    next = recorded(next, { playerId, techName, culture: 0, units: [], paid: true })
+  }
   return owner === undefined || said.length === 0
     ? next
-    : appendPublicLog(next, owner.username, owner.playerId, `${said.join(' and ')}: the ${owner.civilization?.name ?? 'civilization'} ability for ${techName} goes with the tech`)
+    : appendPublicLog(
+        next,
+        owner.username,
+        owner.playerId,
+        `${said.join(' and ')}: the ${owner.civilization?.name ?? 'civilization'} ability for ${techName} goes with the tech${complete ? '' : ' (it is not paid again if the tech is revealed again)'}`,
+      )
 }

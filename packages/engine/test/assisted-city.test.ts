@@ -21,7 +21,7 @@ import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
 import { describeError } from '../src/errors.js'
-import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
+import { SQUARE_SIZE, findBoardAsset, mapTop, playerAreas } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
 import { foundCity, scoutViewsOf } from '../src/assisted-city.js'
 import { cityActionsOf } from '../src/city-actions.js'
@@ -171,6 +171,32 @@ describe('where a city can be founded', () => {
     expect(check(irrigated).ok).toBe(true)
     const fourth = put(irrigated, CASH1981, 'cities/redcity2', 12, 8)
     expect(check(fourth).reasons).toEqual(['You have 3 cities, the most you can have.'])
+  })
+
+  it.each([
+    ['Chinese', 'cities/redcapitalwalled2'],
+    ['Indians', 'cities/redmetropolis2'],
+  ])('does not count the %s city marker waiting in the own area: the second city can be founded, and the marker counts once placed', (civ, markerAsset) => {
+    const capital = put(withScout({ civ }), CASH1981, 'cities/redcapital2', 8, 8)
+    const area = playerAreas(capital.board, capital.players).find((candidate) => candidate.playerId === CASH1981)
+    if (area === undefined) throw new Error('no area')
+    const waiting = unwrap(placePiece(capital, { playerId: CASH1981, assetId: markerAsset, x: area.x + 20, y: area.y + 20 }))
+    const marker = waiting.board.pieces.find((piece) => piece.assetId === markerAsset)
+    if (marker === undefined) throw new Error('no marker')
+
+    // One capital on the map: the marker in the area is not the second city
+    expect(toPlayerView(waiting, CASH1981).you?.cityCount).toBe(1)
+    expect(check(waiting)).toMatchObject({ ok: true, reasons: [] })
+    const founded = unwrap(found(waiting, scoutOf(waiting).id))
+    expect(cityAt(founded, 1, 1)?.assetId).toBe('cities/redcity2')
+    expect(toPlayerView(founded, CASH1981).you?.cityCount).toBe(2)
+
+    // Placed on the map, the marker is a city: the limit is reached and the scout cannot found a second one
+    const placed = unwrap(
+      movePiece(waiting, { playerId: CASH1981, pieceId: marker.id, x: 12 * SQUARE_SIZE, y: mapTop(waiting.board) + 12 * SQUARE_SIZE, snap: false }),
+    )
+    expect(toPlayerView(placed, CASH1981).you?.cityCount).toBe(2)
+    expect(check(placed).reasons).toEqual(['You have 2 cities, the most you can have without Irrigation.'])
   })
 
   it('refuses a square next to a relic or a city-state, and one with a building on it', () => {
@@ -384,6 +410,36 @@ describe('founding a city', () => {
     // A Zulu city next to no hut collects nothing
     const plain = withScout({ civ: 'Zulu' })
     expect(unwrap(found(plain, scoutOf(plain).id)).tokenCollections).toBeUndefined()
+  })
+
+  it('seals the board Undo after the vote undo of a Zulu city that explored huts, so the tokens cannot be taken off again with their cards in the deck', () => {
+    const state = put(put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1), CASH1981, 'resources/hut', 1, 2)
+    const founded = unwrap(found(state, scoutOf(state).id))
+    expect(founded.tokenCollections).toHaveLength(2)
+    const undone = undoByVote(founded, 'req-1')
+    expect(me(undone).items.some((item) => item.sheetName === 'HUTS')).toBe(false)
+    // The vote's own moves (the tokens back on their squares, the city off, the scout back) cannot be undone one by one, and nothing is left to redo
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.board.redo).toEqual([])
+    const huts = (board: GameState['board']) => board.pieces.filter((piece) => piece.assetId === 'resources/hut').map((piece) => [piece.x, piece.y]).sort()
+    expect(huts(undone.board)).toEqual(huts(state.board))
+    // A later ordinary change is still the board Undo's, and only that one
+    const scout = scoutOf(undone)
+    const moved = unwrap(movePiece(undone, { playerId: CASH1981, pieceId: scout.id, x: scout.x + SQUARE_SIZE, y: scout.y, snap: false }))
+    const back = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(back.board.history).toHaveLength(undone.board.history.length)
+    expect(unwrapErr(undoLastBoardChange(back, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+  })
+
+  it('seals the board Undo after the vote undo of a Roman city, and leaves a plain city as it was', () => {
+    const roman = withScout({ civ: 'Romans', step: 9 })
+    const undone = undoByVote(unwrap(found(roman, scoutOf(roman).id)), 'req-1')
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.board.redo).toEqual([])
+    // A city that took no free advance and explored no hut keeps its ordinary board history after the vote
+    const plain = withScout({ civ: 'Japanese' })
+    const plainUndone = undoByVote(unwrap(found(plain, scoutOf(plain).id)), 'req-1')
+    expect(undoLastBoardChange(plainUndone, CASH1981).ok).toBe(true)
   })
 
   it('gives the Romans a free advance on the culture track, and nobody else', () => {

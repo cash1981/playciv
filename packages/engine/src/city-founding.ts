@@ -10,7 +10,7 @@
  */
 
 import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
-import { isMapCell, mapTop, whiteFigureCivilization } from './board.js'
+import { areaAt, isMapCell, mapTop, playerAreas, whiteFigureCivilization } from './board.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import type { GameState, Playerhand } from './state.js'
@@ -26,11 +26,21 @@ export const cityLimitOf = (player: Playerhand): number =>
     ? MAX_CITIES_WITH_IRRIGATION
     : MAX_CITIES
 
-/** The player's city pieces on the board: a capital, a city or a metropolis is one each. */
+/**
+ * The player's city pieces on the board: a capital, a city or a metropolis is one each. A city piece that lies in a
+ * player area is not on the map yet: the walled capital and the metropolis marker of the Chinese and the Indians wait there
+ * until the player places them (`placeCivCityMarker`), and a marker in the area is not a city. The piece's centre decides,
+ * as it does for `locationOf`.
+ */
 export function ownCityPieces(state: GameState, player: Playerhand): readonly BoardPiece[] {
   const colour = player.color?.toLowerCase()
+  if (colour === undefined) return []
+  const areas = playerAreas(state.board, state.players)
   return state.board.pieces.filter(
-    (piece) => piece.category === 'city' && colour !== undefined && pieceColorOf(piece) === colour,
+    (piece) =>
+      piece.category === 'city' &&
+      pieceColorOf(piece) === colour &&
+      areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2) === undefined,
   )
 }
 

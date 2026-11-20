@@ -12,8 +12,9 @@ import { createBoard, createBoardForPlayers } from './board.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { CancellationHistory } from './cancellation.js'
 import type { SocialPolicyItem } from './item.js'
-import type { GameState, Playerhand, PlayerStats, TradeOffer } from './state.js'
+import type { GameLogEntry, GameState, Playerhand, PlayerStats, TradeOffer } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
+import { SPANISH, SPANISH_MVMT } from './actions/player.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
 import type { PlayerTurn } from './turn.js'
 import { TURN_PHASES, migratePlayerTurn, startPlayerOf, turnStatus } from './turn.js'
@@ -135,6 +136,39 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   hensonWounds: player.hensonWounds ?? 0,
   curieSubstitute: player.curieSubstitute ?? null,
 })
+
+/**
+ * A Spanish player whose civilization was revealed before the reveal set Spain's +1 travel speed still has the default
+ * Movement (`2`) and no `civSetup.mvmt` on their reveal line. They get `2+1` once, written the way the reveal writes it:
+ * the stat, and `civSetup.mvmt` on the line so that undoing the reveal restores `2` and a second load finds the entry
+ * and does nothing. Any other value is left alone (a typed `3`, `2+1`, `3+1`), as is any other civilization, and so is
+ * a player whose reveal line already holds a `mvmt` entry: they typed `2` back on purpose. A reveal line with no
+ * `civSetup` (a reveal saved before the setup was recorded) gets only the stat.
+ */
+function withSpanishMovement(
+  players: readonly Playerhand[],
+  log: readonly GameLogEntry[],
+): { readonly players: readonly Playerhand[]; readonly log: readonly GameLogEntry[] } {
+  let nextLog = log
+  const nextPlayers = players.map((player) => {
+    if (player.civilization?.name !== SPANISH || player.stats.mvmt !== DEFAULT_PLAYER_STATS.mvmt) return player
+    // The reveal that handed out the civilization held now: the latest one, so a reveal undone and made again counts once
+    const civId = player.civilization.id
+    const reveal = [...nextLog]
+      .reverse()
+      .find(
+        (entry) =>
+          entry.logType === 'REVEAL' && entry.item?.kind === 'civ' && entry.item.id === civId && entry.playerId === player.playerId,
+      )
+    if (reveal?.civSetup?.mvmt !== undefined) return player
+    if (reveal?.civSetup !== undefined) {
+      const setup = { ...reveal.civSetup, mvmt: { before: DEFAULT_PLAYER_STATS.mvmt, set: SPANISH_MVMT } }
+      nextLog = nextLog.map((entry) => (entry.id === reveal.id ? { ...entry, civSetup: setup } : entry))
+    }
+    return { ...player, stats: { ...player.stats, mvmt: SPANISH_MVMT } }
+  })
+  return { players: nextPlayers, log: nextLog }
+}
 
 /** A board from before the player areas, history, redo stack or shapes existed. */
 type MaybeOlderBoard = Omit<
@@ -311,6 +345,13 @@ export function migrateGameState(state: GameState): GameState {
     return { ...piece, coinTokens: legacyPanamaCoins }
   })
 
+  // Spain's travel speed for a player revealed before the reveal set it
+  const spanishLog = withSpanishMovement(
+    migratedPlayers,
+    older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
+  )
+  const spanishWithdrawn = withSpanishMovement((older.withdrawnPlayers ?? []).map(withPlayerDefaults), spanishLog.log)
+
   const migrated: GameState = {
     ...older,
     createdAt: older.createdAt ?? null,
@@ -329,8 +370,8 @@ export function migrateGameState(state: GameState): GameState {
       chosenId: offer.chosenId ?? (offer.status === 'accepted' && recipientId !== undefined ? recipientId : null),
       transitionRequests: offer.transitionRequests ?? [],
     })),
-    log: older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
-    players: migratedPlayers,
+    log: spanishWithdrawn.log,
+    players: spanishLog.players,
     board:
       board === undefined
         ? fresh
@@ -345,7 +386,7 @@ export function migrateGameState(state: GameState): GameState {
             redo: board.redo ?? [],
           },
     socialPolicies: correctSocialPolicyFlipsides(older.socialPolicies),
-    withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
+    withdrawnPlayers: spanishWithdrawn.players,
     publicTurns: Object.fromEntries(
       Object.entries(older.publicTurns ?? {}).map(([key, turn]) => [key, migratePlayerTurn(turn)]),
     ),

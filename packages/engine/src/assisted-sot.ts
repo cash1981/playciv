@@ -48,9 +48,10 @@ import { AREA_LABEL_HEIGHT, findBoardAsset, playerAreas, remainingBoardAssetCoun
 import type { BoardPiece } from './board.js'
 import { cityLimitView, scoutViewsOf } from './assisted-city.js'
 import { cityActionsOf } from './city-actions.js'
+import { ownCityPieces } from './city-founding.js'
 import { RESOURCE_KINDS, resourceName } from './tile-icons.js'
 import type { ResourceKind } from './tile-icons.js'
-import { mapCellOf, pieceColorOf } from './blockade.js'
+import { mapCellOf } from './blockade.js'
 import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
 import { buildSquareRefusal, freeBuildingChoicesOf, squareCentre, squareLabel } from './build-options.js'
 import { activeGreatPerson } from './great-person-effects.js'
@@ -154,12 +155,7 @@ const governmentBlock = (player: Playerhand, government: Government): BlockedAva
     ? undefined
     : blocked('not-owned', `Your government is ${player.government}, not ${government}.`)
 
-const cityPiecesOf = (state: GameState, player: Playerhand) => {
-  const colour = player.color?.toLowerCase()
-  return state.board.pieces.filter(
-    (piece) => piece.category === 'city' && colour !== undefined && pieceColorOf(piece) === colour,
-  )
-}
+const cityPiecesOf = ownCityPieces
 
 // ---------------------------------------------------------------------------
 // Abilities that add trade or culture
