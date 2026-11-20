@@ -719,6 +719,8 @@ the engine; the browser decides no rule.
 - **Turn warning:** a request sent from a phase tab asks "It is not your turn…"
   when the header's player (`focusPlayer`) is not the viewer; navigation, Cancel,
   `?` hints and End turn never ask.
+  The same question is asked before a board figure move or explore (the highlighted
+  squares); a raw drag of a piece does not ask. The engine still allows it.
 - **Page layout** (human): board, Your actions, Your cards, then the rest; the
   piece palette sits below the board (unconfirmed, reversible in `styles.css`).
   Shortcuts: Board, Actions (only when the panel is shown), Your cards, Tech tree.
