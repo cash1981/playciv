@@ -503,6 +503,8 @@ export type AssistedStatus =
  * The resource an action paid, exactly, so an undo puts back the same
  * one: a hut/village from the hand (moved to `discardedItems`) with its collected
  * icon if present, the board resource with its position, or the culture card played as the resource.
+ * `arabCulture` is the culture the Arabs were given for this spend, taken back as far as it is still there when the
+ * resource is returned.
  */
 export type SpentResource =
   | {
@@ -514,10 +516,11 @@ export type SpentResource =
       readonly curieSubstitute?: string
       /** The Indians spent this token as the named resource (incense, iron, silk or wheat); `resource` is what it really is. */
       readonly asResource?: string
+      readonly arabCulture?: number
     }
-  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string; readonly asResource?: string }
+  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string; readonly asResource?: string; readonly arabCulture?: number }
   // A culture card played as the resource (A Gift from Afar, A Generous Gift, A Princely Gift), discarded like a played card
-  | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
+  | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string; readonly arabCulture?: number }
 
 /**
  * The Great Person marker a culture advance put in the player's area: which piece, where it

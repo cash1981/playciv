@@ -20,10 +20,18 @@ import { cardPlayRuleOf } from './card-timing.js'
 import type { EngineError } from './errors.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
-import { itemNumberText } from './log.js'
+import { appendPublicLog, itemNumberText } from './log.js'
 import type { Result } from './result.js'
 import { err, ok } from './result.js'
 import type { GameState, Playerhand, SpentResource } from './state.js'
+
+const ARABS = 'Arabs'
+
+/**
+ * The culture the Arabs gain for each resource they spend. The civilization card prints 2; the human chose 1, which is
+ * the value of the FAQ 2.0 ("Advanced Arabia"). Change it here only.
+ */
+export const ARAB_RESOURCE_CULTURE = 1
 
 const normalize = (name: string): string => name.trim().toLowerCase()
 
@@ -274,6 +282,38 @@ export function spendResource(
   choice?: ResourcePaymentChoice,
   wildcard = true,
 ): Result<SpendOutcome, 'NO_RESOURCE'> {
+  const paid = payResource(state, playerId, resource, at, tokensOnly, choice, wildcard)
+  return paid.ok ? ok(withArabCulture(paid.value, playerId, resource)) : paid
+}
+
+/**
+ * The Arabs gain culture for every resource they spend. This is the one place every spend goes through (single, any N,
+ * one of each, chosen payments, event cards, the Spy of a cancellation), so a spend is counted once however it was
+ * reached, and the amount is kept on the `SpentResource` for `returnResource`. A scratch spend (an availability check)
+ * is discarded with its state. Taking a token off the board by hand is not a spend.
+ */
+function withArabCulture(outcome: SpendOutcome, playerId: string, resource: string): SpendOutcome {
+  const holder = playerOf(outcome.state, playerId)
+  if (holder?.civilization?.name !== ARABS) return outcome
+  const total = holder.stats.culture + ARAB_RESOURCE_CULTURE
+  const state = appendPublicLog(
+    withPlayerHand(outcome.state, { ...holder, stats: { ...holder.stats, culture: total } }),
+    holder.username,
+    holder.playerId,
+    `gained ${ARAB_RESOURCE_CULTURE} (${total}) culture for spending ${resource} as the Arabs`,
+  )
+  return { ...outcome, state, spent: { ...outcome.spent, arabCulture: ARAB_RESOURCE_CULTURE } }
+}
+
+function payResource(
+  state: GameState,
+  playerId: string,
+  resource: string,
+  at: string | undefined,
+  tokensOnly: boolean,
+  choice: ResourcePaymentChoice | undefined,
+  wildcard: boolean,
+): Result<SpendOutcome, 'NO_RESOURCE'> {
   const player = playerOf(state, playerId)
   const token = choice === undefined
     ? findResourcePayment(state, playerId, resource, tokensOnly, wildcard)
@@ -344,6 +384,35 @@ export function returnResource(
   spent: SpentResource,
   at: string | null,
   logId = '',
+): Result<GameState, EngineError> {
+  const restored = restoreResource(state, player, spent, at, logId)
+  return restored.ok ? ok(takeBackArabCulture(restored.value, player.playerId, spent)) : restored
+}
+
+/**
+ * The culture the Arabs were given for the spend goes back with the resource, as far as it is still there: culture
+ * spent since stays spent, and the line says how much really went back. Never below 0.
+ */
+function takeBackArabCulture(state: GameState, playerId: string, spent: SpentResource): GameState {
+  const given = spent.arabCulture ?? 0
+  const holder = playerOf(state, playerId)
+  if (given === 0 || holder === undefined) return state
+  const taken = Math.min(holder.stats.culture, given)
+  const left = holder.stats.culture - taken
+  return appendPublicLog(
+    withPlayerHand(state, { ...holder, stats: { ...holder.stats, culture: left } }),
+    holder.username,
+    holder.playerId,
+    `took back ${taken === given ? given : `${taken} of ${given}`} (${left}) culture gained for spending ${spent.resource} as the Arabs${taken === given ? '' : ' (the rest is spent)'}`,
+  )
+}
+
+function restoreResource(
+  state: GameState,
+  player: Playerhand,
+  spent: SpentResource,
+  at: string | null,
+  logId: string,
 ): Result<GameState, EngineError> {
   const blocked = resourceRestoreBlock(state, [spent])
   if (blocked !== undefined) return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId, reason: blocked })
