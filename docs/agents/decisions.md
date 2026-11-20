@@ -23,7 +23,7 @@ Source: `packages/engine/src/`, `packages/server/src/app.ts`,
 
 - Only owners receive private hands, notes and logs; opponents see counts and
   revealed information.
-- Great Person pyramid placement exposes an anonymous slot, not the card name.
+- Great Person placement exposes an anonymous slot, not the card name.
 - Publicly derived coins/combat/culture limits use revealed information even for
   the owner, so private research cannot leak through a total. Public totals never
   include hidden bonuses.
@@ -220,7 +220,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 `actions/player.ts`; tests `white-figures.test.ts`, `undo-civ-reveal.test.ts`,
 `player-action.test.ts`.
 
-## Coins, wonders and blockade
+## Coins, cards, wonders and blockade
 
 - Wonder ownership/bonuses do not depend on the piece staying in the shared
   Wonders area. Disabling a wonder clears its owner, keeps the piece, marks it
