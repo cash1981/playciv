@@ -1063,7 +1063,7 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 
-  it('offers to explore the fog next to the viewer’s figure for 1 movement (issue #302)', async () => {
+  async function openExploreFixture(outOfTurnQuestion: string | null) {
     vi.spyOn(api, 'boardAssets').mockResolvedValue([])
     const explore = vi.spyOn(api, 'exploreSquare').mockResolvedValue({} as PlayerView)
     const army = findBoardAsset('figures/redarmy')
@@ -1115,6 +1115,7 @@ describe('BoardView mobile placement', () => {
         busy={false}
         movementPlayer={movementPlayer}
         movementTurn={1}
+        outOfTurnQuestion={outOfTurnQuestion}
         run={async action => { await action() }}
       />,
     )
@@ -1132,11 +1133,30 @@ describe('BoardView mobile placement', () => {
     })) Object.defineProperty(event, name, { value })
     tile.dispatchEvent(event)
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const fog = await screen.findByRole('button', { name: /Explore E2 with Red army for 1 movement/ })
+    return { explore, fog }
+  }
+
+  it('offers to explore the fog next to the viewer’s figure for 1 movement (issue #302)', async () => {
+    const { explore, fog } = await openExploreFixture(null)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(fog)
 
     await waitFor(() => expect(explore).toHaveBeenCalledWith('game', 'army-1', 4, 1))
+    explore.mockRestore()
+    cleanup()
+  })
+
+  it('asks before moving a figure out of turn and moves nothing when declined', async () => {
+    const question = 'It is not your turn. Karandras1 is up. Do it anyway?'
+    const { explore, fog } = await openExploreFixture(question)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    fireEvent.click(fog)
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm).toHaveBeenCalledWith(question)
+    expect(explore).not.toHaveBeenCalled()
+    confirm.mockRestore()
     explore.mockRestore()
     cleanup()
   })
