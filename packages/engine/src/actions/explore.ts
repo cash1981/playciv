@@ -128,7 +128,7 @@ function grantSpanishBuilding(state: GameState, historyBefore: number, playerId:
     username: player.username,
     playerId,
     publicLog: `${player.username} may build a free basic building for discovering ${square} as the Spanish`,
-    privateLog: `${player.username} gained 1 free building as the Spanish, ${spanishCreditsOf(granted, playerId)} free buildings left`,
+    privateLog: `${player.username} gains 1 (${spanishCreditsOf(granted, playerId)}) free building as the Spanish`,
     createdAt: at ?? null,
   })
 }

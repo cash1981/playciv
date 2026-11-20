@@ -33,7 +33,7 @@ import type { Run } from './GameView.js'
 import { turnTitle } from './ChatOrdersPanel.js'
 import { goToPanel } from './PhaseSummary.js'
 import { PlayableCardList } from './PlayableCards.js'
-import { StartOfTurnChoices } from './SotPanel.js'
+import { SpanishFreeBuild, StartOfTurnChoices } from './SotPanel.js'
 import { focusPlayer } from './turnFocus.js'
 import { TechPanel } from './TechPanel.js'
 import { TradeCollected, TradeOffers } from './TradeOffers.js'
@@ -160,7 +160,12 @@ export function PhaseActionsPanel({
 
   if (view.you === null || !hasActionsPanel(view)) return null
   // A collapsed panel must not hide the choice, so the title says it is waiting; a conquest offer and the Chinese save wait too
-  const choices = waiting + (view.you.conquestOffers?.length ?? 0) + ((view.you.chineseSave?.units.length ?? 0) > 0 ? 1 : 0)
+  const choices =
+    waiting +
+    (view.you.conquestOffers?.length ?? 0) +
+    ((view.you.chineseSave?.units.length ?? 0) > 0 ? 1 : 0) +
+    // A free building the Spanish earned by exploring: asked for here, in any phase
+    (view.you.startOfTurn?.spanish != null ? 1 : 0)
   const title =
     choices > 0
       ? `Your actions (${choices} ${choices === 1 ? 'choice' : 'choices'} waiting)`
@@ -226,6 +231,7 @@ export function PhaseActionsPanel({
 
         <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
         <ChineseSavePrompt gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+        <SpanishFreeBuild gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={askOutOfTurn} />
 
         <div className="phase-tabs" role="tablist" aria-label="Phases of the turn">
           {TURN_PHASES.map((phase) => {

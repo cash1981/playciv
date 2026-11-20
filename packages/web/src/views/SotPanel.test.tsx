@@ -11,7 +11,7 @@ import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { MapPickerContext } from './mapPick.js'
 import type { MapPicker } from './mapPick.js'
-import { StartOfTurnChoices } from './SotPanel.js'
+import { SpanishFreeBuild, StartOfTurnChoices } from './SotPanel.js'
 
 beforeEach(() => {
   resetPendingRequestIds()
@@ -904,6 +904,9 @@ describe('A. P. Giannini', () => {
   })
 })
 
+const renderSpanish = (view: PlayerView) =>
+  render(<SpanishFreeBuild gameId="g1" view={view} busy={false} readOnly={false} run={run} />)
+
 describe('Spanish free building', () => {
   const choices = [
     { assetId: 'buildings/bank', label: 'Bank', squares: [{ cityPieceId: 'c1', cityLabel: 'Capital B3', column: 2, row: 2, label: 'C3' }] },
@@ -919,13 +922,18 @@ describe('Spanish free building', () => {
   const section = () => screen.getByRole('region', { name: 'Spanish: a free building' })
 
   it('has no section for another civilization or without a credit', () => {
-    renderChoices(viewOf(sotWith()))
+    renderSpanish(viewOf(sotWith()))
+    expect(screen.queryByRole('region', { name: 'Spanish: a free building' })).toBeNull()
+  })
+
+  it('is not in the Start of Turn choices, which would show it twice beside the picker above the tabs', () => {
+    renderChoices(viewOf(spanish('ready', READY_TEXT)))
     expect(screen.queryByRole('region', { name: 'Spanish: a free building' })).toBeNull()
   })
 
   it('sends the choice to spanishBuild with the same payload as Giannini', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
-    renderChoices(viewOf(spanish('ready', READY_TEXT)))
+    renderSpanish(viewOf(spanish('ready', READY_TEXT)))
     fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/bank' } })
     fireEvent.change(within(section()).getByRole('combobox', { name: 'Square' }), { target: { value: 'c1:2:2' } })
     fireEvent.click(within(section()).getByRole('button', { name: 'Build for free' }))
@@ -940,10 +948,11 @@ describe('Spanish free building', () => {
 
   it('shows a missing legal square as unavailable with its reason, not as used', () => {
     const reason = 'No basic building has an empty legal square in the outskirts of your cities. Your free building is kept (1 left).'
-    renderChoices(viewOf(spanish('unavailable', reason, [])))
+    renderSpanish(viewOf(spanish('unavailable', reason, [])))
     const button = within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     expect(within(section()).queryByText('Used')).toBeNull()
-    expect(section().textContent).toContain(reason)
+    // Said once, in the text: no second copy in a hint beside the button
+    expect(screen.getAllByText(reason)).toHaveLength(1)
   })
 })

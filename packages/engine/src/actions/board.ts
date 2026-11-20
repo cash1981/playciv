@@ -1213,7 +1213,7 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
     // The Great Person marker the School of Confucius put in the player's area
-    if (effect.kind === 'relicGreatPerson' && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
+    if ((effect.kind === 'relicGreatPerson' || effect.kind === 'philosophy') && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
     // Gunpowder pays several tokens, every other action one
     const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (
@@ -1272,12 +1272,20 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   const grant = spanishGrantAt(state, last.id)
   if (grant !== undefined) {
     if (spanishCreditsOf(state, grant.playerId) <= 0) return err({ kind: 'BOARD_UNDO_SPANISH_BUILDING_USED' })
+    const taken = withBoard(withoutSpanishGrant(state, last.id), {
+      ...state.board,
+      pieces: revertChange(state.board.pieces, last.change),
+      history: state.board.history.slice(0, -1),
+      redo: [],
+    })
+    const holder = findPlayer(taken, grant.playerId)
+    if (holder === undefined) return ok(taken)
+    // Only the owner sees the total, as the line that gave the credit
     return ok(
-      withBoard(withoutSpanishGrant(state, last.id), {
-        ...state.board,
-        pieces: revertChange(state.board.pieces, last.change),
-        history: state.board.history.slice(0, -1),
-        redo: [],
+      appendLog(taken, {
+        username: holder.username,
+        playerId: holder.playerId,
+        privateLog: `${holder.username} loses 1 (${spanishCreditsOf(taken, holder.playerId)}) free building as the Spanish with the tile that was taken back`,
       }),
     )
   }

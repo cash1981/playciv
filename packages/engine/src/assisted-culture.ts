@@ -1058,7 +1058,7 @@ function withKeptCard(
   const effect = record.effect
   const extra = marker === null ? {} : { marker }
   if (effect.kind === 'cultureAdvance') return { ...record, effect: { ...effect, kept, ...extra } }
-  if (effect.kind === 'relicGreatPerson') return { ...record, effect: { ...effect, kept, ...extra } }
+  if (effect.kind === 'relicGreatPerson' || effect.kind === 'philosophy') return { ...record, effect: { ...effect, kept, ...extra } }
   if (effect.kind === 'patronage') return { ...record, effect: { ...effect, kept } }
   if (effect.kind === 'sotDraw') return { ...record, effect: { ...effect, kept: [...(effect.kept ?? []), kept] } }
   if (effect.kind === 'playCard' && effect.frida !== undefined) {
@@ -1131,7 +1131,7 @@ export const chooseReward: AssistedActionDefinition = {
     const originAdvance = origin === undefined ? undefined : advanceEffectOf(origin)
     const takesMarker =
       reward.kind === 'greatPerson' &&
-      ((originAdvance !== undefined && originAdvance.rejected !== undefined) || origin?.effect.kind === 'relicGreatPerson')
+      ((originAdvance !== undefined && originAdvance.rejected !== undefined) || origin?.effect.kind === 'relicGreatPerson' || origin?.effect.kind === 'philosophy')
     let board = state
     let marker: GreatPersonMarker | null = null
     if (takesMarker) {

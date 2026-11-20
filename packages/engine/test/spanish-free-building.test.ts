@@ -102,7 +102,8 @@ describe('the credit for a tile', () => {
     const line = state.log.find((entry) => entry.publicLog.includes('free basic building'))
     expect(line?.publicLog).toBe('cash1981 may build a free basic building for discovering E2 as the Spanish')
     expect(line?.publicLog).not.toMatch(/\d+ free/)
-    expect(line?.privateLog).toBe('cash1981 gained 1 free building as the Spanish, 1 free buildings left')
+    expect(line?.playerId).toBe(CASH1981)
+    expect(line?.privateLog).toBe('cash1981 gains 1 (1) free building as the Spanish')
   })
 
   it('is one for a Spanish scout that explores', () => {
@@ -113,7 +114,7 @@ describe('the credit for a tile', () => {
     const first = explored()
     const second = unwrap(explore(first, 'figures/redscout'))
     expect(credits(second)).toBe(2)
-    expect(second.log.some((entry) => entry.privateLog === 'cash1981 gained 1 free building as the Spanish, 2 free buildings left')).toBe(true)
+    expect(second.log.some((entry) => entry.playerId === CASH1981 && entry.privateLog === 'cash1981 gains 1 (2) free building as the Spanish')).toBe(true)
   })
 
   it('is none for another civilization', () => {
@@ -179,7 +180,9 @@ describe('building it', () => {
     expect(credits(built)).toBe(0)
     const line = built.log.find((entry) => entry.assistedActionId === 'sp-1')
     expect(line?.publicLog).toMatch(/^cash1981 built a Library on [A-Z]\d+ for free as the Spanish$/)
-    expect(built.log.some((entry) => entry.privateLog === 'cash1981 used 1 free building as the Spanish, 0 free buildings left')).toBe(true)
+    const used = built.log.find((entry) => entry.privateLog === 'cash1981 uses 1 (0 left) free building as the Spanish')
+    expect(used?.playerId).toBe(CASH1981)
+    expect(JSON.stringify(toPlayerView(built, KARANDRAS1))).not.toContain('(0 left) free building')
     // Nothing was paid or counted as a city action
     expect(me(built).stats).toEqual(me(state).stats)
   })
@@ -188,7 +191,7 @@ describe('building it', () => {
     const state = explored()
     expect(JSON.stringify(unwrapErr(build(scene(), squareOf(state, 'buildings/library'))))).toContain('no free building left')
     const library = squareOf(state, 'buildings/library')
-    expect(JSON.stringify(unwrapErr(build(state, { ...library, assetId: 'buildings/university' })))).toBeTruthy()
+    expect(JSON.stringify(unwrapErr(build(state, { ...library, assetId: 'buildings/university' })))).toContain('it must be a basic building')
     expect(build(state, { ...library, column: 9, row: 9 }).ok).toBe(false)
     expect(build(state, { cityPieceId: 'x', assetId: 'buildings/library', column: 2, row: 1 }).ok).toBe(false)
   })
@@ -200,6 +203,8 @@ describe('building it', () => {
     expect(buildingsOf(undone, 'buildings/library')).toHaveLength(0)
     expect(credits(undone)).toBe(1)
     expect(status(undone).status).toBe('ready')
+    const line = undone.log.find((entry) => entry.privateLog === 'cash1981 regains 1 (1) free building as the Spanish')
+    expect(line?.playerId).toBe(CASH1981)
   })
 
   it('puts back the building it replaced when undone', () => {
@@ -235,6 +240,8 @@ describe('undoing the exploration', () => {
     expect(credits(undone)).toBe(0)
     expect(undone.spanishFreeBuildings ?? []).toHaveLength(0)
     expect(undone.board.redo).toHaveLength(0)
+    const line = undone.log.find((entry) => entry.privateLog.includes('loses 1 (0) free building as the Spanish'))
+    expect(line?.playerId).toBe(CASH1981)
   })
 
   it('is refused with its own error when the tile is the last entry and the credit is spent', () => {
@@ -275,7 +282,7 @@ describe('what a player can see', () => {
     const other = toPlayerView(state, KARANDRAS1)
     expect(other.you?.startOfTurn?.spanish ?? null).toBeNull()
     // Neither the credit text nor the private line reaches the others
-    expect(JSON.stringify(other)).not.toContain('free buildings left')
+    expect(JSON.stringify(other)).not.toContain('free building as')
     expect(JSON.stringify(other)).not.toContain('of 1 left')
   })
 

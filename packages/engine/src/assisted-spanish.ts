@@ -14,7 +14,7 @@
  */
 
 import { blocked, lastLogId, playerOf } from './assisted-core.js'
-import type { AssistedActionDefinition } from './assisted-core.js'
+import type { AssistedActionDefinition, AssistedAvailability } from './assisted-core.js'
 import { countLinesIn } from './assisted-culture.js'
 import { placeFreeBuilding, reverseFreeBuilding, withArticle } from './assisted-free-building.js'
 import { replacingText } from './assisted-replace.js'
@@ -36,6 +36,22 @@ export function spanishBuildBlock(state: GameState, player: Playerhand) {
   return undefined
 }
 
+/**
+ * The availability once the player's credit is known to exist, for the basic building choices the caller has computed
+ * (the Start of Turn view needs them as well, so it computes them once).
+ */
+export function spanishAvailabilityWith(state: GameState, player: Playerhand, choices: readonly unknown[]): AssistedAvailability {
+  const left = spanishCreditsOf(state, player.playerId)
+  if (choices.length === 0) {
+    return blocked(
+      'unavailable',
+      `No basic building has an empty legal square in the outskirts of your cities. Your free building is kept (${left} left).`,
+    )
+  }
+  const total = left + spanishUsedBy(state, player.playerId)
+  return { status: 'ready', reason: `Build one basic building in one of your cities for free, unlocked or not (${left} of ${total} left).` }
+}
+
 export const spanishBuild: AssistedActionDefinition = {
   kind: SPANISH_BUILDING_KIND,
   techName: null,
@@ -50,15 +66,7 @@ export const spanishBuild: AssistedActionDefinition = {
     if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
     const refused = spanishBuildBlock(state, player)
     if (refused !== undefined) return refused
-    const left = spanishCreditsOf(state, playerId)
-    if (basicBuildingChoicesOf(state, player).length === 0) {
-      return blocked(
-        'unavailable',
-        `No basic building has an empty legal square in the outskirts of your cities. Your free building is kept (${left} left).`,
-      )
-    }
-    const total = left + spanishUsedBy(state, playerId)
-    return { status: 'ready', reason: `Build one basic building in one of your cities for free, unlocked or not (${left} of ${total} left).` }
+    return spanishAvailabilityWith(state, player, basicBuildingChoicesOf(state, player))
   },
 
   apply(state, player, context) {
@@ -86,16 +94,28 @@ export const spanishBuild: AssistedActionDefinition = {
     const left = spanishCreditsOf(logged, player.playerId) - 1
     const withPrivate = appendLog(logged, {
       username: player.username,
-      privateLog: `${player.username} used 1 free building as ${ABILITY}, ${Math.max(0, left)} free buildings left`,
+      playerId: player.playerId,
+      privateLog: `${player.username} uses 1 (${Math.max(0, left)} left) free building as ${ABILITY}`,
       createdAt: context.at ?? null,
     })
     return ok({ state: countLinesIn(withPrivate, placed.value.historyIds), effect: placed.value.effect, logId })
   },
 
   reverse(state, player, record, at) {
-    return reverseFreeBuilding(state, player, record, at ?? null, {
+    const reversed = reverseFreeBuilding(state, player, record, at ?? null, {
       source: ABILITY,
       again: 'the free building was given back',
+    })
+    if (!reversed.ok) return reversed
+    // The credit is back already (a grant minus the applied records, and this one is no longer applied): only the owner sees the total
+    return ok({
+      ...reversed.value,
+      state: appendLog(reversed.value.state, {
+        username: player.username,
+        playerId: player.playerId,
+        privateLog: `${player.username} regains 1 (${spanishCreditsOf(reversed.value.state, player.playerId) + 1}) free building as ${ABILITY}`,
+        createdAt: at ?? null,
+      }),
     })
   },
 }

@@ -1197,6 +1197,7 @@ export function hasActionsPanel(view: PlayerView): boolean {
     (view.you?.pendingRewards?.length ?? 0) > 0 ||
     (view.you?.conquestOffers?.length ?? 0) > 0 ||
     (view.you?.chineseSave?.units.length ?? 0) > 0 ||
+    (view.you?.startOfTurn?.spanish ?? null) !== null ||
     (view.you?.cities?.length ?? 0) > 0
   )
 }

@@ -51,7 +51,7 @@ import { RESOURCE_KINDS, resourceName } from './tile-icons.js'
 import type { ResourceKind } from './tile-icons.js'
 import { placeFreeBuilding, reverseFreeBuilding, withArticle } from './assisted-free-building.js'
 import { replacingText } from './assisted-replace.js'
-import { spanishBuild, spanishBuildBlock } from './assisted-spanish.js'
+import { spanishAvailabilityWith, spanishBuildBlock } from './assisted-spanish.js'
 import { basicBuildingChoicesOf, freeBuildingChoicesOf } from './build-options.js'
 import { activeGreatPerson } from './great-person-effects.js'
 import { cityProductionsOf } from './city-production.js'
@@ -1227,10 +1227,12 @@ export function startOfTurnViewOf(state: GameState, player: Playerhand): StartOf
     spanish:
       spanishBuildBlock(state, player) === undefined
         ? (() => {
-            const availability = spanishBuild.availability(state, player.playerId)
+            // Once: the availability and the choices both need them
+            const basic = basicBuildingChoicesOf(state, player)
+            const availability = spanishAvailabilityWith(state, player, basic)
             return {
               ...now(availability),
-              choices: availability.status === 'ready' ? basicBuildingChoicesOf(state, player) : [],
+              choices: availability.status === 'ready' ? basic : [],
             }
           })()
         : null,

@@ -12,7 +12,7 @@ import type { GameState } from './state.js'
 
 export const SPANISH_BUILDING_KIND = 'spanishBuild'
 
-/** The credits the player has been given for tiles still on the board, spent or not. */
+/** Every credit the player has been given and not taken back with its tile, spent or not (the tile need not still be on the board: a built one cannot be taken back). */
 export const spanishGrantsOf = (state: GameState, playerId: string): number =>
   (state.spanishFreeBuildings ?? []).filter((grant) => grant.playerId === playerId).length
 

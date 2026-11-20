@@ -431,7 +431,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
   // that has left the pile may have been renumbered since, so only one still in the pile is named.
   const inPile = (item: Item): boolean => state.discardedItems.some((candidate) => candidate.id === item.id)
   const advanceOf = (record: (typeof state.assistedActions)[number]): { readonly drawn: readonly string[] } | undefined => {
-    if (record.effect.kind === 'cultureAdvance' || record.effect.kind === 'relicGreatPerson') return record.effect
+    if (record.effect.kind === 'cultureAdvance' || record.effect.kind === 'relicGreatPerson' || record.effect.kind === 'philosophy') return record.effect
     if ('advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
       return record.effect.advance
     }

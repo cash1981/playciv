@@ -355,6 +355,45 @@ describe('Philosophy (Any 3, City Management: a random great person)', () => {
     expect(player(undone, CASH1981).pendingRewards).toHaveLength(0)
   })
 
+  it('takes the Great Person marker when the Greeks choose, says so publicly, and the votes undo the choice and then Philosophy', () => {
+    const greeks = withCivilization(ready(), 'Greeks')
+    const used = unwrap(press(greeks, 'philosophy', { resources: ['Iron', 'Wheat', 'Silk'] }))
+    const reward = player(used, CASH1981).pendingRewards[0]
+    if (reward === undefined) throw new Error('no pending reward')
+    const keptId = reward.candidateIds[0] as string
+    const chosen = unwrap(
+      performAssistedAction(used, { playerId: CASH1981, action: 'chooseReward', requestId: 'req-2', at: AT, payload: { rewardId: reward.id, itemId: keptId } as never }),
+    )
+    // One card is kept, the other one discarded, and the marker is in the player's area
+    expect(greatPersons(chosen).map((item) => item.id)).toEqual([keptId])
+    expect(player(chosen, CASH1981).pendingRewards).toHaveLength(0)
+    expect(chosen.board.pieces.length).toBe(greeks.board.pieces.length + 1)
+    const record = chosen.assistedActions.find((candidate) => candidate.id === 'req-1')
+    expect(record?.effect).toMatchObject({ kind: 'philosophy', kept: keptId })
+    const marker = record?.effect.kind === 'philosophy' ? record.effect.marker : null
+    expect(marker).not.toBeNull()
+    expect(chosen.board.pieces.some((piece) => piece.id === marker?.pieceId)).toBe(true)
+    const publicLine = chosen.log.at(-2)?.publicLog ?? ''
+    expect(publicLine).toMatch(/cash1981 took a .* great person marker into reserve/)
+    // The board Undo cannot take the marker off on its own
+    expect(undoLastBoardChange(chosen, CASH1981)).toMatchObject({ ok: false })
+
+    // The vote on Philosophy puts both cards back and takes the marker off, as the choice is part of it
+    const undone = voted(chosen, 'req-1')
+    expect(greatPersons(undone)).toHaveLength(0)
+    expect(player(undone, CASH1981).pendingRewards).toHaveLength(0)
+    expect(undone.board.pieces.length).toBe(greeks.board.pieces.length)
+    expect(undone.items.filter((item) => item.sheetName === 'GREAT_PERSON')).toHaveLength(greeks.items.filter((item) => item.sheetName === 'GREAT_PERSON').length)
+    expect(['Iron', 'Wheat', 'Silk'].map((name) => hasHut(undone, name))).toEqual([true, true, true])
+    expect(undoLastBoardChange(undone, CASH1981)).toMatchObject({ ok: false })
+  })
+
+  it('a non-Greek still takes the marker at once, with no pending reward', () => {
+    const used = unwrap(press(ready(), 'philosophy', { resources: ['Iron', 'Wheat', 'Silk'] }))
+    expect(player(used, CASH1981).pendingRewards).toHaveLength(0)
+    expect(used.assistedActions[0]?.effect).toMatchObject({ kind: 'philosophy', marker: expect.anything() })
+  })
+
   it('is blocked, and refuses without paying, when no Great Person marker of any type is left', () => {
     // Another player's pieces use up all three markers of every type
     let state = ready()

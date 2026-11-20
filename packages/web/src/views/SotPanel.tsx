@@ -63,17 +63,33 @@ export function StartOfTurnChoices({ gameId, view, busy, readOnly, run }: Props)
         className="sot-giannini"
         showUnavailable={false}
       />
-      <FreeBuildPicker
-        {...common}
-        answer={sot.spanish}
-        action="spanishBuild"
-        title={SPANISH_TITLE}
-        className="sot-spanish"
-        showUnavailable
-      />
       <ScoutsAndCities {...common} />
       <MetropolisGrowth gameId={gameId} view={view} busy={common.busy} run={run} />
     </>
+  )
+}
+
+/**
+ * The Spanish free building, asked for whenever a credit is unspent: the tile is explored in Movement, so this sits above
+ * the phase tabs and not in the Start of Turn tab. Nothing without a credit, for a spectator or for another civilization.
+ */
+export function SpanishFreeBuild({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
+  const sot = view.you?.startOfTurn
+  const spanish = sot?.spanish ?? null
+  if (view.you === null || sot === undefined || sot === null || spanish === null) return null
+  return (
+    <FreeBuildPicker
+      gameId={gameId}
+      view={view}
+      busy={busy || readOnly}
+      run={run}
+      sot={sot}
+      answer={spanish}
+      action="spanishBuild"
+      title={SPANISH_TITLE}
+      className="sot-spanish"
+      showUnavailable
+    />
   )
 }
 
@@ -389,14 +405,14 @@ interface FreeBuildPickerProps extends ChoiceProps {
  * Giannini's (a building he has unlocked, after an invest) and the Spanish one (a basic building for a tile explored)
  * share it. A choice that a refresh takes away is dropped, not sent.
  */
-function FreeBuildPicker({ gameId, view, busy, run, answer: giannini, action, title, className, showUnavailable }: FreeBuildPickerProps): React.JSX.Element | null {
+function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, className, showUnavailable }: FreeBuildPickerProps): React.JSX.Element | null {
   const [assetId, setAssetId] = useState('')
   const [squareKey, setSquareKey] = useState('')
   const squareId = useId()
   const playerId = view.you?.playerId ?? ''
-  if (giannini === null || (!showUnavailable && giannini.status !== 'ready' && giannini.status !== 'used')) return null
+  if (answer === null || (!showUnavailable && answer.status !== 'ready' && answer.status !== 'used')) return null
 
-  const chosen = giannini.choices.find((choice) => choice.assetId === assetId)
+  const chosen = answer.choices.find((choice) => choice.assetId === assetId)
   const keyOf = (square: { readonly cityPieceId: string; readonly column: number; readonly row: number }): string =>
     `${square.cityPieceId}:${square.column}:${square.row}`
   const square = chosen?.squares.find((candidate) => keyOf(candidate) === squareKey)
@@ -427,7 +443,7 @@ function FreeBuildPicker({ gameId, view, busy, run, answer: giannini, action, ti
   return (
     <section className={`phase-group ${className}`} aria-label={title}>
       <h3 className="phase-group-title">{title}</h3>
-      {giannini.status === 'ready' ? (
+      {answer.status === 'ready' ? (
         <form
           className="sot-form"
           onSubmit={(event) => {
@@ -446,7 +462,7 @@ function FreeBuildPicker({ gameId, view, busy, run, answer: giannini, action, ti
               }}
             >
               <option value="">Choose a building</option>
-              {giannini.choices.map((choice) => (
+              {answer.choices.map((choice) => (
                 <option key={choice.assetId} value={choice.assetId}>
                   {choice.label}
                 </option>
@@ -479,12 +495,15 @@ function FreeBuildPicker({ gameId, view, busy, run, answer: giannini, action, ti
         </form>
       ) : (
         <div className="assisted-action">
-          <button type="button" className="small" disabled title={giannini.reason}>
+          <button type="button" className="small" disabled title={answer.reason}>
             Build for free
           </button>
-          {giannini.status === 'used' && <span className="tag">Used</span>}
-          <HelpHint label={title}>{giannini.reason}</HelpHint>
-          {giannini.status === 'unavailable' && showUnavailable && <p className="muted">{giannini.reason}</p>}
+          {answer.status === 'used' && <span className="tag">Used</span>}
+          {answer.status === 'unavailable' && showUnavailable ? (
+            <p className="muted">{answer.reason}</p>
+          ) : (
+            <HelpHint label={title}>{answer.reason}</HelpHint>
+          )}
         </div>
       )}
     </section>
