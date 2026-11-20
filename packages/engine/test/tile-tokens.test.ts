@@ -391,7 +391,7 @@ describe('the Chinese and huts', () => {
   const collect = (state: GameState, armyId: string) =>
     unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1, collectToken: true }))
 
-  it('gain 3 culture and say so publicly when a figure collects a hut, and nobody else does', () => {
+  it('gain 3 (8) culture and say so publicly when a figure collects a hut, and nobody else does', () => {
     const { state, armyId } = chinese('Chinese')
     const moved = collect(state, armyId)
     expect(me(moved).stats.culture).toBe(8)
@@ -407,22 +407,30 @@ describe('the Chinese and huts', () => {
     expect(plain.log.some((entry) => entry.publicLog.includes('as the Chinese'))).toBe(false)
   })
 
-  it('gain nothing when the figure does not collect, and nothing for a village or a relic', () => {
-    const { state, armyId } = chinese('Chinese')
-    const declined = unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1 }))
-    expect(me(declined).stats.culture).toBe(5)
-
-    const village = put(put(START(), 'figures/redarmy', 3, 2), 'resources/village', 3, 1)
-    const chineseVillage: GameState = {
-      ...village,
-      players: village.players.map((player) =>
+  it('gain 3 culture for a village too, say village in the line, and lose it again with the board Undo', () => {
+    const scene = put(put(START(), 'figures/redarmy', 3, 2), 'resources/village', 3, 1)
+    const state: GameState = {
+      ...scene,
+      players: scene.players.map((player) =>
         player.playerId === CASH1981
           ? { ...player, civilization: { kind: 'civ', name: 'Chinese' } as unknown as Playerhand['civilization'], stats: { ...player.stats, culture: 5 } }
           : player,
       ),
     }
-    const army = chineseVillage.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
-    expect(me(collect(chineseVillage, army.id)).stats.culture).toBe(5)
+    const army = state.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
+    const moved = collect(state, army.id)
+    expect(me(moved).stats.culture).toBe(8)
+    expect(moved.log.some((entry) => entry.publicLog === 'cash1981 gained 3 (8) culture from the village on D2 as the Chinese')).toBe(true)
+    const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(me(undone).stats.culture).toBe(5)
+    expect(undone.log.at(-1)?.publicLog).toContain('put the village token on D2 back')
+    expect(undone.log.at(-1)?.publicLog).toContain('took back 3 (5) culture')
+  })
+
+  it('gain nothing when the figure does not collect, and nothing for a relic', () => {
+    const { state, armyId } = chinese('Chinese')
+    const declined = unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1 }))
+    expect(me(declined).stats.culture).toBe(5)
 
     const relic = put(put(START(), 'figures/redarmy', 3, 2), 'relics/atlantis', 3, 1)
     const chineseRelic: GameState = {
