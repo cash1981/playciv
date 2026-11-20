@@ -112,7 +112,8 @@ export const claimConquest: AssistedActionDefinition = {
     }
     if (status.kind === 'nothing') {
       // At the end of the track there is nothing to advance to and nothing is lost: the offer is closed and logged
-      const logged = announce(open, `${player.username} took the free advance for conquering the ${whatOf(offer)} as the Romans, but there is no space left to advance to`)
+      const why = status.reason.charAt(0).toLowerCase() + status.reason.slice(1)
+      const logged = announce(open, `${player.username} took the free advance for conquering the ${whatOf(offer)} as the Romans, but there is nothing to advance: ${why}`)
       return ok({
         state: logged,
         effect: { kind: 'conquestClaim', offer, accepted: true, culture: 0, advance: null },

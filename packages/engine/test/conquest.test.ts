@@ -334,7 +334,9 @@ describe('answering an offer', () => {
     const result = unwrap(claim(state, offerId(state), true))
     expect(offersOf(result)).toEqual([])
     expect(stepOf(result)).toBe(21)
-    expect(lines(result)).toContain('cash1981 took the free advance for conquering the village on C2 as the Romans, but there is no space left to advance to')
+    expect(lines(result)).toContain(
+      'cash1981 took the free advance for conquering the village on C2 as the Romans, but there is nothing to advance: your marker is already on the Culture Victory space.',
+    )
     expect(result.assistedActions.at(-1)?.effect).toMatchObject({ kind: 'conquestClaim', accepted: true, advance: null })
   })
 

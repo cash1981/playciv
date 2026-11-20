@@ -15,6 +15,7 @@ import type {
   AtomicTheoryPayload,
   AssignScoutPayload,
   AssistedPayload,
+  ClaimConquestPayload,
   CombustionPayload,
   CommunismPayload,
   GunpowderPayload,
@@ -401,6 +402,14 @@ function parseAssignScout(args: Record<string, unknown>): AssignScoutPayload | s
   return { scoutPieceId: args['scoutPieceId'], cityPieceId: city }
 }
 
+function parseClaimConquest(args: Record<string, unknown>): ClaimConquestPayload | string {
+  const extra = extraKeys(args, ['offerId', 'accept'])
+  if (extra.length > 0) return `claimConquest takes only offerId and accept, not ${extra.join(', ')}`
+  if (!isId(args['offerId'])) return 'offerId is required: 1 to 64 characters, letters, digits and . _ : -'
+  if (typeof args['accept'] !== 'boolean') return 'accept must be true (take the reward) or false (no thanks)'
+  return { offerId: args['offerId'], accept: args['accept'] }
+}
+
 type Parser = (args: Record<string, unknown>) => AssistedPayload | string
 
 /** The actions whose payload is `args`, with the parser of each. A map, so a request can only pick an entry that is here. */
@@ -431,6 +440,7 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['feudalismHarvest', parseHarvest],
   ['foundCity', parseFoundCity],
   ['assignScout', parseAssignScout],
+  ['claimConquest', parseClaimConquest],
 ])
 
 /** Whether `action` takes `args`. */
