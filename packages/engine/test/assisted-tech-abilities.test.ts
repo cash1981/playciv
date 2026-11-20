@@ -26,6 +26,7 @@ import { toPlayerView } from '../src/state.js'
 import type { AssistedActionKind, GameState, Playerhand } from '../src/state.js'
 
 import { player, resourcePattern, resourceText, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
+import { withCivilization } from './culture-advance-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-13T12:00:00.000Z'
@@ -334,6 +335,24 @@ describe('Philosophy (Any 3, City Management: a random great person)', () => {
       expect(theirs).not.toContain('privateLog')
     }
     expect(toPlayerView(used, KARANDRAS1).opponents.find((opponent) => opponent.playerId === CASH1981)?.publicHand.greatPersons).toBe(1)
+  })
+
+  it('draws two cards for the Greeks, who keep one, and the choice is a pending reward like a Great Person space', () => {
+    const base = ready()
+    const greeks = withCivilization(base, 'Greeks')
+    const used = unwrap(press(greeks, 'philosophy', { resources: ['Iron', 'Wheat', 'Silk'] }))
+    expect(player(used, CASH1981).pendingRewards[0]?.candidateIds).toHaveLength(2)
+    expect(greatPersons(used)).toHaveLength(2)
+    // No marker is taken until they choose
+    expect(used.board.pieces.length).toBe(greeks.board.pieces.length)
+    const publicLine = used.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog ?? ''
+    expect(publicLine).toMatch(/drew 2 Great Person cards/)
+    // Others get the single card
+    expect(player(unwrap(press(base, 'philosophy', { resources: ['Iron', 'Wheat', 'Silk'] })), CASH1981).pendingRewards).toHaveLength(0)
+    // The vote undo puts both cards back
+    const undone = voted(used, 'req-1')
+    expect(greatPersons(undone)).toHaveLength(0)
+    expect(player(undone, CASH1981).pendingRewards).toHaveLength(0)
   })
 
   it('is blocked, and refuses without paying, when no Great Person marker of any type is left', () => {
