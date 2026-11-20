@@ -350,6 +350,59 @@ describe('history over HTTP', () => {
     expect((await repo.findGame(gameId))?.tokenCollections ?? []).toHaveLength(0)
   })
 
+  it('refuses the board Undo of a Chinese hut once its 3 culture is spent, with a 409, and keeps the card and the token', async () => {
+    const { gameId, starter, starterName } = await startedGame('Collect-chinese')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    await place(gameId, starter, 'resources/hut', 2 * square + 20, top + square + 20)
+    const placed = await place(gameId, starter, assetId, square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+    const placedState = await repo.findGame(gameId)
+    if (placedState === undefined) throw new Error('missing game')
+    await repo.saveGame({
+      ...placedState,
+      players: placedState.players.map((candidate) =>
+        candidate.username === starterName
+          ? { ...candidate, civilization: { kind: 'civ', name: 'Chinese' } as unknown as typeof candidate.civilization }
+          : candidate,
+      ),
+    })
+
+    const travelled = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+      headers: bearer(starter),
+      payload: { column: 2, row: 1, collectToken: true },
+    })
+    expect(travelled.status).toBe(200)
+    const collected = await repo.findGame(gameId)
+    if (collected === undefined) throw new Error('missing game')
+    expect(collected.players.find((candidate) => candidate.username === starterName)?.stats.culture).toBe(3)
+
+    // The culture is spent: one board Undo alone must not take the card back and let the hut be collected again for 3 more
+    await repo.saveGame({
+      ...collected,
+      players: collected.players.map((candidate) =>
+        candidate.username === starterName ? { ...candidate, stats: { ...candidate.stats, culture: 1 } } : candidate,
+      ),
+    })
+    const refused = await inject(app, { method: 'POST', url: `/api/games/${gameId}/board/undo`, headers: bearer(starter) })
+    expect(refused.status).toBe(409)
+    const body = await refused.json() as { error: string; message: string }
+    expect(body.error).toBe('BOARD_UNDO_TOKEN_CULTURE_SPENT')
+    expect(body.message).toContain('culture the hut gave has been spent')
+    expect((await repo.findGame(gameId))?.tokenCollections).toHaveLength(1)
+  })
+
   it('disbands a figure that travels onto its own city centre when asked (F&F p. 7)', async () => {
     const { gameId, starter, starterName } = await startedGame('Disband')
     const state = await repo.findGame(gameId)

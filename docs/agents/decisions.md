@@ -1413,8 +1413,10 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   - A figure that collects a **hut** (`collectMapToken`, shared with the figure move) gives +3 culture the moment the token
     is collected, with no battle, and a public line (`gained 3 (N) culture from the hut on B4 as the Chinese`). Collecting
     a **village** token gives nothing: its 3 culture comes only through a conquest offer, above. The culture is kept on the
-    `TokenCollection`; the board Undo takes back as much as is still there, never below 0, says how much ("took back 1
-    of 3 (0) culture") and always returns the card and the token (spent culture does not stop it). Relics give none.
+    `TokenCollection`; the board Undo takes it back with the token and is refused once it is no longer all there
+    (`BOARD_UNDO_TOKEN_CULTURE_SPENT`, 409; the card and the token stay). This is the one take-back that does not clamp:
+    a board Undo is one player alone, so clamping would let them spend the 3, undo, and collect the same hut again for 3
+    more. Relics give none.
   - The walled capital marker (`cities/<colour>capitalwalled2`) is put in the player's area at the reveal, as a piece
     of the reveal (the reveal undo takes it off) and only if none of that colour is on the board; the reveal log
     says so and the player places it. It stays a marker in the area until a proper setup phase exists (issue #374).
@@ -1475,11 +1477,11 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   Egyptians' free building is not modelled yet (needs its own action and UI).
 
 - **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, Arab culture, a German free unit
-  card): the undo takes back as much as is still there and its line says how much ("took back 2
+  card, the Chinese conquest culture): these are take-backs by vote (or by the ender of a battle), and the undo takes
+  back as much as is still there and its line says how much ("took back 2
   of 3 (0) culture"), or that a card could no longer be returned; it never refuses and never goes
-  below 0. A German card also copied into the battle hand is removed from both. The Chinese hut culture works the same
-  way (the board Undo takes back what is left and still returns the card and the token), and so does the Chinese
-  conquest culture.
+  below 0. A German card also copied into the battle hand is removed from both. The one exception is the Chinese hut
+  culture: its board Undo is one player alone, so it is refused once the 3 is no longer all there (above).
 - A Zulu hut on the city's own square is collected too, like the huts around it. The founding
   line names the huts that were collected and says which stayed on the map (no card left).
 

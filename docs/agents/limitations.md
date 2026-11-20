@@ -15,7 +15,9 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   that setup phase too); Mongol loot (not modelled); French policy cap (no cap exists); Russian sacrifice (no
   enemy-army-city model); Egyptian and Spanish free buildings (need new UI and prompts); Zulu metropolis hut
   exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
-  the board by hand is not a spend.
+  the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
+  spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);
+  the player corrects the culture counter by hand to undo it.
 - **Roman and Chinese conquests (#368):** the offer (the Roman free advance, the Chinese 3 culture) is made from a heuristic,
   not from a conquest the game knows: an own army ended its last qualifying move on a village or (Romans) another
   player's city, and that player won a battle in the arena against the barbarians (village) or the city's owner (city)

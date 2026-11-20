@@ -1250,6 +1250,8 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   // because a redo would move the token without drawing again.
   const collection = state.tokenCollections?.find((candidate) => candidate.historyId === last.id)
   if (collection !== undefined) {
+    const holder = state.players.find((candidate) => candidate.playerId === collection.playerId)
+    if (holder !== undefined && holder.stats.culture < (collection.culture ?? 0)) return err({ kind: 'BOARD_UNDO_TOKEN_CULTURE_SPENT' })
     const returned = returnCollectedCard(state, collection)
     if (returned === undefined) return err({ kind: 'BOARD_UNDO_TOKEN_CARD_GONE' })
     return ok(
