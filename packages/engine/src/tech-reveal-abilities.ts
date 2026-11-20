@@ -120,7 +120,8 @@ export function undoTechRevealAbilities(state: GameState, playerId: string, tech
       for (const sheetName of new Set(back.map((item) => item.sheetName))) next = shuffleSheetTwice(next, sheetName)
     }
     if (effect.culture > 0) {
-      said.push(taken === effect.culture ? `took back ${taken} culture` : `took back ${taken} of ${effect.culture} culture (the rest is spent)`)
+      const left = holder.stats.culture - taken
+      said.push(taken === effect.culture ? `took back ${taken} (${left}) culture` : `took back ${taken} of ${effect.culture} (${left}) culture (the rest is spent)`)
     }
     if (effect.units.length > 0) {
       const lost = effect.units.length - back.length

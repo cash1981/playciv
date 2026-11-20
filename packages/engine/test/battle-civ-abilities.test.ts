@@ -57,6 +57,16 @@ describe('the Aztecs after a battle', () => {
     expect(ended.endedBattle?.aztecs).toEqual({ playerId: CASH1981, trade: 3, culture: 3 })
   })
 
+  it('write every gain as the amount followed by the new total in parentheses, and every take-back the same way', () => {
+    const state = kill(kill(aztecFight(), KARANDRAS1, 1, CASH1981), CASH1981, 2, KARANDRAS1)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    const gain = lines(ended).find((line) => line.includes('as the Aztecs')) ?? ''
+    // Before: 5 trade and 5 culture; the amounts 3 and 3 give the totals 8 and 8
+    expect(gain).toMatch(/^cash1981 gains 3 \(8\) trade for winning and 3 \(8\) culture for the units killed as the Aztecs$/)
+    const back = lines(unwrap(undoEndBattle(ended, { playerId: CASH1981 }))).at(-1) ?? ''
+    expect(back).toContain('takes back 3 (5) trade and 3 (5) culture the Aztecs gained')
+  })
+
   it('gain only the culture when they lose, also when the other side presses End battle', () => {
     const state = kill(aztecFight(), CASH1981, 2, CASH1981)
     const ended = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
@@ -107,14 +117,14 @@ describe('the Aztecs after a battle', () => {
     }
     const undone = unwrap(undoEndBattle(spent, { playerId: CASH1981 }))
     expect(me(undone).stats).toMatchObject({ trade: 0, culture: 0 })
-    expect(lines(undone).at(-1)).toContain('takes back 2 of 3 trade and 1 of 3 culture the Aztecs gained')
+    expect(lines(undone).at(-1)).toContain('takes back 2 of 3 (0) trade and 1 of 3 (0) culture the Aztecs gained')
     const partly: GameState = {
       ...ended,
       players: ended.players.map((p) => (p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, trade: 4, culture: 2 } } : p)),
     }
     const some = unwrap(undoEndBattle(partly, { playerId: CASH1981 }))
     expect(me(some).stats).toMatchObject({ trade: 1, culture: 0 })
-    expect(lines(some).at(-1)).toContain('takes back 3 trade and 2 of 3 culture the Aztecs gained')
+    expect(lines(some).at(-1)).toContain('takes back 3 (1) trade and 2 of 3 (0) culture the Aztecs gained')
   })
 
   it('are put back by undoing the end of the battle, and the log names no unit', () => {
@@ -123,7 +133,7 @@ describe('the Aztecs after a battle', () => {
     const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
     expect(me(undone).stats).toMatchObject({ trade: 5, culture: 5 })
     expect(undone.battle).not.toBeNull()
-    expect(lines(undone).at(-1)).toContain('takes back 3 trade and 2 culture the Aztecs gained')
+    expect(lines(undone).at(-1)).toContain('takes back 3 (5) trade and 2 (5) culture the Aztecs gained')
     const unitName = unitsOf(state, KARANDRAS1)[0]?.unit.id ?? 'x'
     expect(lines(ended).filter((line) => line.includes('Aztecs')).every((line) => !line.includes(unitName))).toBe(true)
   })

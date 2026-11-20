@@ -183,7 +183,7 @@ describe('the Greeks and techs', () => {
     const start = culture(state)
     const revealed = learn(state, 'Pottery')
     expect(culture(undoReveal(revealed, 'Pottery'))).toBe(start)
-    expect(lines(undoReveal(revealed, 'Pottery')).some((line) => line.includes('took back 3 culture: the Greeks ability for Pottery goes with the tech'))).toBe(true)
+    expect(lines(undoReveal(revealed, 'Pottery')).some((line) => line.includes(`took back 3 (${start}) culture: the Greeks ability for Pottery goes with the tech`))).toBe(true)
     expect(culture(unwrap(removeTech(revealed, { playerId: CASH1981, techName: 'Pottery' })))).toBe(start)
   })
 
@@ -196,6 +196,6 @@ describe('the Greeks and techs', () => {
     }
     const undone = undoReveal(spent, 'Pottery')
     expect(culture(undone)).toBe(0)
-    expect(lines(undone).some((line) => line.includes('took back 1 of 3 culture (the rest is spent)'))).toBe(true)
+    expect(lines(undone).some((line) => line.includes('took back 1 of 3 (0) culture (the rest is spent)'))).toBe(true)
   })
 })

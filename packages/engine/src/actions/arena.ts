@@ -1696,9 +1696,10 @@ export function undoEndBattle(
       ...aztecHand,
       stats: { ...aztecHand.stats, trade: aztecHand.stats.trade - tradeBack, culture: aztecHand.stats.culture - cultureBack },
     })
-    const part = (word: string, back: number, gained: number): string | undefined =>
-      gained === 0 ? undefined : back === gained ? `${back} ${word}` : `${back} of ${gained} ${word}`
-    aztecNote = ` and takes back ${[part('trade', tradeBack, aztecs.trade), part('culture', cultureBack, aztecs.culture)].filter((x) => x !== undefined).join(' and ')} the Aztecs gained`
+    // The amount and, in parentheses, the total that is left, as every gain line says it
+    const part = (word: string, back: number, gained: number, left: number): string | undefined =>
+      gained === 0 ? undefined : `${back === gained ? back : `${back} of ${gained}`} (${left}) ${word}`
+    aztecNote = ` and takes back ${[part('trade', tradeBack, aztecs.trade, aztecHand.stats.trade - tradeBack), part('culture', cultureBack, aztecs.culture, aztecHand.stats.culture - cultureBack)].filter((x) => x !== undefined).join(' and ')} the Aztecs gained`
   }
 
   nextState = appendPublicLog(
