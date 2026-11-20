@@ -15,7 +15,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Branch:** `feat/civ-abilities-romans-chinese-spain`
 - **Brief:** `docs/agents/tasks/civ-review-373.md`
 - **Status:** in review
-- **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/player.ts, assisted.ts, assisted-cards.ts, assisted-resources.ts, assisted-city.ts, city-founding.ts, errors.ts, migrate.ts, movement.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes/arena.ts), `packages/server/test/`, `packages/web/src/views/GameView.tsx` and its tests, `docs/agents/decisions.md`, `docs/agents/limitations.md`
+- **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/player.ts, assisted.ts, assisted-core.ts, assisted-sot.ts, build-options.ts, city-actions.ts, city-gather.ts, sot.ts, assisted-cards.ts, assisted-resources.ts, assisted-city.ts, city-founding.ts, errors.ts, migrate.ts, movement.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes/arena.ts, routes/play.ts), `packages/server/test/`, `packages/web/src/views/` (GameView.tsx, BuildPicker.tsx, buildFlow.ts, CityCard.tsx, SotPanel.tsx) and their tests, `packages/web/src/lib/api.ts`, `docs/agents/decisions.md`, `docs/agents/limitations.md`
 - **Notes:** PR #373 Copilot review (issue #368)
 
 ## Format

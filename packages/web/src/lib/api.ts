@@ -900,6 +900,7 @@ export const api = {
       item: payload.item,
       ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
+      ...(payload.free === undefined ? {} : { free: payload.free }),
     }),
   /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
   startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>

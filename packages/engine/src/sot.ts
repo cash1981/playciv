@@ -92,6 +92,22 @@ export function figuresOnMap(
   })
 }
 
+export const ENGLAND = 'England'
+
+/**
+ * Whether the piece is one of the player's figures that gathers its square for a city: a scout, and for the English an army
+ * too ("armies may gather icons and resources as though they were scouts"). The colour is the player's, or the white scout of the Spanish.
+ */
+export function gathersForCity(player: Pick<Playerhand, 'civilization' | 'color'>, piece: BoardPiece): boolean {
+  if (piece.category !== 'figure') return false
+  const gathers = piece.assetId.endsWith('scout') || (piece.assetId.endsWith('army') && player.civilization?.name === ENGLAND)
+  if (!gathers) return false
+  const white = whiteFigureCivilization(piece.assetId)
+  if (white !== undefined) return white === player.civilization?.name
+  const colour = player.color?.toLowerCase()
+  return colour !== undefined && pieceColorOf(piece) === colour
+}
+
 /** The city-states a player controls: the ones with a figure of theirs on the square (W&W p. 9). */
 export function controlledCityStates(state: GameState, player: Playerhand): readonly BoardPiece[] {
   const colour = player.color?.toLowerCase()

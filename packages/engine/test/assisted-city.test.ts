@@ -827,7 +827,7 @@ describe('sending a scout’s square to a city', () => {
       const army = english.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
       expect(scoutViewsOf(english, me(english)).find((view) => view.pieceId === army?.id)).toMatchObject({ canSend: false })
       expect(describeError(unwrapErr(assign(english, army?.id ?? '', near(english)?.pieceId ?? '')))).toBe(
-        'B2 is the centre of your city, and a scout there sends no square.',
+        'B2 is the centre of your city, and an army there sends no square.',
       )
     })
 
@@ -937,7 +937,7 @@ describe('sending a scout’s square to a city', () => {
       const cityId = near(english)?.pieceId ?? ''
       const sent = unwrap(assign(english, army?.id ?? '', cityId))
       const stopped = unwrap(assign(sent, army?.id ?? '', null, 'req-2'))
-      expect(stopped.log.at(-1)?.publicLog).toBe('cash1981 stopped sending the square of the scout on D3 to a city')
+      expect(stopped.log.at(-1)?.publicLog).toBe('cash1981 stopped sending the square of the army on D3 to a city')
     })
 
     it('does not send an English army to the capital on its own', () => {
@@ -1019,6 +1019,53 @@ describe('sending a scout’s square to a city', () => {
     other = put(other, CASH1981, 'figures/redarmy', 3, 2)
     const otherArmy = other.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
     expect(unwrapErr(assign(other, otherArmy?.id ?? '', near(other)?.pieceId ?? '')).kind).toBe('ASSISTED_ACTION_REJECTED')
+  })
+
+  describe('an English army that gathers as a scout would', () => {
+    const harvestOf = (state: GameState, label: string): readonly string[] =>
+      cityActionsOf(state, me(state))
+        .find((city) => city.label.endsWith(label))
+        ?.harvest.choices.map((choice) => choice.label) ?? []
+
+    const withFigure = (civ: string | undefined, assetId: string): { state: GameState; id: string } => {
+      let state = withAmerica(sotTurn({ ...(civ === undefined ? {} : { civ }), techs: ['Irrigation'] }))
+      state = put(state, CASH1981, 'cities/redcapital2', 1, 1)
+      state = put(state, CASH1981, 'cities/redcity2', 8, 8)
+      state = put(state, CASH1981, assetId, 2, 2)
+      const piece = state.board.pieces.find((candidate) => candidate.assetId === assetId)
+      return { state, id: piece?.id ?? '' }
+    }
+
+    it('offers the resource under a sent army to that city, as it does for a scout', () => {
+      const scout = withFigure(undefined, 'figures/redscout')
+      const army = withFigure('England', 'figures/redarmy')
+      const sentScout = unwrap(assign(scout.state, scout.id, far(scout.state)?.pieceId ?? ''))
+      const sentArmy = unwrap(assign(army.state, army.id, far(army.state)?.pieceId ?? ''))
+      expect(harvestOf(sentScout, 'I9')).toEqual(['Incense under a scout at C3'])
+      expect(harvestOf(sentArmy, 'I9')).toEqual(['Incense under an army at C3'])
+      // The city the square left no longer offers it
+      expect(harvestOf(army.state, 'B2')).toContain('Incense at C3')
+      expect(harvestOf(sentArmy, 'B2')).not.toContain('Incense at C3')
+    })
+
+    it('does not offer the square of an army that was not sent, to the capital or to any city', () => {
+      const { state } = withFigure('England', 'figures/redarmy')
+      expect(harvestOf(state, 'B2').filter((label) => label.includes('under'))).toEqual([])
+      expect(harvestOf(state, 'I9')).toEqual([])
+      // Without a capital a scout is offered to every city, an army is not
+      let noCapital = withAmerica(sotTurn({ civ: 'England', techs: ['Irrigation'] }))
+      noCapital = put(noCapital, CASH1981, 'cities/redcity2', 8, 8)
+      noCapital = put(noCapital, CASH1981, 'figures/redarmy', 2, 2)
+      expect(harvestOf(noCapital, 'I9')).toEqual([])
+    })
+
+    it('says "army" in the log and stops offering the resource once the send is cleared', () => {
+      const { state, id } = withFigure('England', 'figures/redarmy')
+      const sent = unwrap(assign(state, id, far(state)?.pieceId ?? ''))
+      expect(sent.log.at(-1)?.publicLog).toBe('cash1981 sent the square of the army on C3 to City I9')
+      const cleared = unwrap(assign(sent, id, null, 'req-2'))
+      expect(harvestOf(cleared, 'I9')).toEqual([])
+    })
   })
 
   it('does not change what another player sees of the cities, except the production figure', () => {

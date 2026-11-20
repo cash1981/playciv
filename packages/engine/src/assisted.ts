@@ -32,6 +32,9 @@ import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
   CITY_ACTION_LABELS,
+  EGYPT_FREE_BUILD_KEY,
+  egyptFreeBuildOpen,
+  EGYPTIANS,
   ENGINEERING_KEY,
   PHASE_REASON,
   REPEAT_NOTE,
@@ -516,6 +519,14 @@ function markersBack(
     : placeBack(withMarker, player, effect.caravan.piece, at)
 }
 
+/** Why the Egyptians' free build cannot be used for this kind of item now, or `undefined` when it can. */
+function egyptFreeRefusal(state: GameState, player: Playerhand, itemKind: string): string | undefined {
+  if (player.civilization?.name !== EGYPTIANS) return 'Only the Egyptians can build for free.'
+  if (itemKind !== 'building' && itemKind !== 'walls') return 'The Egyptians build only a building or City Walls for free, not a wonder, a figure or a unit.'
+  if (!egyptFreeBuildOpen(state, player)) return 'The Egyptians have already built for free this turn.'
+  return undefined
+}
+
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
 
 /** The `build` payload, or `undefined` when the payload is another action's or missing. */
@@ -739,8 +750,14 @@ const build: AssistedActionDefinition = {
       return err(failed('That is not something that can be built.'))
     }
 
+    // The Egyptians' free build is a whole action of its own and is never combined with Engineering (rulings 80 and 164)
+    const free = payload.free === true
+    if (free) {
+      const refusal = egyptFreeRefusal(state, player, item.kind)
+      if (refusal !== undefined) return err(failed(refusal))
+    }
     // A confirmed repeat is another allowance that covers the build: it takes the city's full production, so Engineering does not split
-    const city = buildOptionsOf(state, player, context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+    const city = buildOptionsOf(state, player, !free && context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
     if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
     if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
 
@@ -785,10 +802,18 @@ const build: AssistedActionDefinition = {
         return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
       }
     }
-    if (choice.tradeToPay > 0 && payload.rush !== true) {
+    if (free && choice.freeBuild !== true) return err(failed(`${choice.label} cannot be built for free.`))
+    if (!free && choice.freeOnly === true) {
+      return err(
+        failed(`${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}, and trade cannot cover the rest. The Egyptians can build it for free instead.`),
+      )
+    }
+    // A free build pays nothing: no production is used and no trade is paid
+    const tradeToPay = free ? 0 : choice.tradeToPay
+    if (tradeToPay > 0 && payload.rush !== true) {
       return err(
         failed(
-          `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${choice.tradeToPay} trade to build it.`,
+          `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${tradeToPay} trade to build it.`,
         ),
       )
     }
@@ -818,7 +843,7 @@ const build: AssistedActionDefinition = {
       }
     }
     const sharing = {
-      cost: choice.cost,
+      cost: free ? 0 : choice.cost,
       production: city.production,
       ...(split === undefined ? {} : { engineering: { firstRecordId: split.firstRecordId } }),
     }
@@ -868,7 +893,7 @@ const build: AssistedActionDefinition = {
     // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
     let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
     const caravanPiece =
-      city.caravan && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
+      city.caravan && !free && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
     if (caravanPiece !== undefined) {
       const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
       const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
@@ -889,7 +914,7 @@ const build: AssistedActionDefinition = {
       ...paying,
       wonderDiscount: paying.wonderDiscount - wonderDiscount,
       ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
-      stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
+      stats: { ...paying.stats, trade: paying.stats.trade - tradeToPay },
     })
     // Education: once per turn, a wonder adds a coin to the tech (max 4)
     const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
@@ -897,8 +922,13 @@ const build: AssistedActionDefinition = {
     const keyHolder = playerOf(educated.state, paying.playerId) ?? paying
     // Read from the state with Education's coin already in it, so the coin's own key on the turn is not written over
     const keyTurn = split === undefined ? undefined : openCityManagementTurn(educated.state, keyHolder)
-    const paid =
+    const engineered =
       keyTurn === undefined ? educated.state : useTurnAction(educated.state, keyHolder, keyTurn, ENGINEERING_KEY, keyHolder.stats)
+    // The Egyptians' free build is once per turn: its key is written by the build that used it
+    const egyptHolder = playerOf(engineered, paying.playerId) ?? paying
+    const egyptTurn = free ? openCityManagementTurn(engineered, egyptHolder) : undefined
+    const paid =
+      egyptTurn === undefined ? engineered : useTurnAction(engineered, egyptHolder, egyptTurn, EGYPT_FREE_BUILD_KEY, egyptHolder.stats)
     const educationCoin = educated.granted ?? undefined
     const where =
       made.kind === 'placed'
@@ -915,7 +945,11 @@ const build: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
-        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} (${paying.stats.trade - choice.tradeToPay}) trade for the missing production` : '') +
+        (free
+          ? ', for free with the Egyptian ability'
+          : tradeToPay > 0
+            ? `, paying ${tradeToPay} (${paying.stats.trade - tradeToPay}) trade for the missing production`
+            : '') +
         (removal === null ? '' : ', using up the Building Program marker') +
         (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
         (hensonWound ? ', and Jim Henson took a wound marker' : '') +
@@ -958,7 +992,7 @@ const build: AssistedActionDefinition = {
             itemId: made.card.id,
             sheetName: made.sheetName,
           },
-          trade: choice.tradeToPay,
+          trade: tradeToPay,
           ...sharing,
           marker: removal,
           ...(caravan === undefined ? {} : { caravan }),
@@ -975,8 +1009,9 @@ const build: AssistedActionDefinition = {
           cityPieceId: city.cityPieceId,
           item: payload.item,
           walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
-          trade: choice.tradeToPay,
+          trade: tradeToPay,
           ...sharing,
+          ...(free ? { free: true as const } : {}),
           marker: removal,
           ...(caravan === undefined ? {} : { caravan }),
         },
@@ -1027,8 +1062,9 @@ const build: AssistedActionDefinition = {
           : replaced.reserved
             ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
             : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
-        trade: choice.tradeToPay,
+        trade: tradeToPay,
         ...sharing,
+        ...(free ? { free: true as const } : {}),
         marker: removal,
         ...(caravan === undefined ? {} : { caravan }),
         ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
@@ -2006,7 +2042,12 @@ export function performAssistedAction(
     turnNumber: status.currentTurn,
     // A reward can be chosen after City Management has closed, and an upgrade is done in whatever phase the tech was learned in; every other action needs it open
     phase: definition.phase === 'ANY' ? openPhaseOf(status, input.playerId) : definition.phase,
-    usageKey: effect.kind === 'build' && effect.engineering !== undefined ? ENGINEERING_KEY : definition.usageKey,
+    usageKey:
+      effect.kind === 'build' && 'free' in effect && effect.free === true
+        ? EGYPT_FREE_BUILD_KEY
+        : effect.kind === 'build' && effect.engineering !== undefined
+          ? ENGINEERING_KEY
+          : definition.usageKey,
     at: input.at ?? null,
     logId: applied.value.logId,
     status: 'applied',

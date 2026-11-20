@@ -676,6 +676,17 @@ function cityActionRecordsThisTurn(state: GameState, player: Playerhand, turn: n
 /** The usage key of Engineering: once per turn, written by the second build it splits the production for. */
 export const ENGINEERING_KEY = 'card:Engineering'
 
+/** The Egyptians' civilization name, and the usage key of their free build: once per turn, written by the build that used it. */
+export const EGYPTIANS = 'Egyptians'
+export const EGYPT_FREE_BUILD_KEY = 'civ:Egyptians:free-build'
+
+/** Whether the Egyptians' free build is on offer now: their civilization, an open City Management phase and the key unused this turn. */
+export function egyptFreeBuildOpen(state: GameState, player: Playerhand): boolean {
+  if (player.civilization?.name !== EGYPTIANS) return false
+  const turn = openCityManagementTurn(state, player)
+  return turn !== undefined && !turn.usedActions.includes(EGYPT_FREE_BUILD_KEY)
+}
+
 /** What Engineering offers a city's second build this turn. */
 export interface EngineeringSecondBuild {
   /** The record of the first build, which the second shares the production with. */
@@ -701,6 +712,8 @@ export function engineeringSecondBuild(state: GameState, player: Playerhand, cit
   // Another allowance that covers the second build (Atomic Theory, the capital's extra action, an unused Lovelace or Supply Drop
   // credit) wins: that build is a whole action with the city's full production and Engineering stays unused
   if (extraCityActionFor(state, player, cityPieceId, CITY_ACTION_LABELS.build) !== undefined) return undefined
+  // The Egyptians' free build is its own action and cannot be combined with Engineering (rulings 80 and 164, FAQ 2.0)
+  if ('free' in first.effect && first.effect.free === true) return undefined
   const { cost, production } = first.effect
   return { firstRecordId: first.id, firstCost: cost, production, remaining: Math.max(0, production - cost) }
 }

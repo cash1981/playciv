@@ -90,7 +90,7 @@ import { parseActionArgs, takesArgs } from './assisted-args.js'
 /** What a client may use as a `requestId`: 1 to 64 characters of a small safe set. */
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/
 
-const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush'] as const
+const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush', 'free'] as const
 
 /** The highest map column or row a request may name; the largest board has 16 squares a side, so this is generous. */
 const MAX_BUILD_COORDINATE = 63
@@ -148,7 +148,9 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   }
   const rush = body['rush']
   if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
-  const optionalRush = rush === undefined ? {} : { rush }
+  const free = body['free']
+  if (free !== undefined && typeof free !== 'boolean') return 'free must be a boolean'
+  const optionalRush = { ...(rush === undefined ? {} : { rush }), ...(free === undefined ? {} : { free }) }
 
   if (parsed.kind === 'unit') {
     // A unit is a card in the hand: there is no square to name
@@ -1046,7 +1048,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         c,
         400,
         'BAD_REQUEST',
-        'cityPieceId, item, target and rush only belong to build, and cityPieceId also to startBuildingProgram, devoteToTheArts and harvest',
+        'cityPieceId, item, target, rush and free only belong to build, and cityPieceId also to startBuildingProgram, devoteToTheArts and harvest',
       )
     } else if (body['family'] !== undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'family only belongs to upgradeBuildings')

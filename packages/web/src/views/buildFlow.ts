@@ -42,6 +42,8 @@ export interface BuildPlan {
   /** A wonder with a discount: the other price, for the bar to read. */
   readonly costNote?: string | undefined
   readonly tradeToPay: number
+  /** The Egyptians' free build: nothing is paid, and the build takes the free turn action. */
+  readonly free?: true
   readonly squares: readonly BuildSquare[]
   readonly target: BuildSquare | null
 }
@@ -58,7 +60,7 @@ export interface BuildFlow {
   readonly confirmedAgain: boolean
   openPicker(cityPieceId: string, confirmedAgain?: boolean): void
   closePicker(): void
-  start(city: CityBuildOptions, choice: BuildChoice): void
+  start(city: CityBuildOptions, choice: BuildChoice, free?: boolean): void
   pick(square: BuildSquare): void
   /** Cancel, Escape and a successful build all end here: nothing is left open. */
   clear(): void
@@ -88,6 +90,7 @@ const samePlan = (a: BuildPlan, b: BuildPlan): boolean =>
   a.cost === b.cost &&
   a.costNote === b.costNote &&
   a.tradeToPay === b.tradeToPay &&
+  a.free === b.free &&
   a.squares.length === b.squares.length &&
   a.squares.every((square, index) => {
     const other = b.squares[index]
@@ -112,7 +115,9 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
     city?.status === 'ready'
       ? city.choices.find((candidate) => sameBuildItem(candidate.item, plan.item))
       : undefined
-  if (city === undefined || choice === undefined) {
+  // The free build was used up (or undone) since: the choice is no longer free
+  const freeGone = plan.free === true && choice?.freeBuild !== true
+  if (city === undefined || choice === undefined || freeGone) {
     // Back to the picker of the same city, if it is still there, with fresh choices.
     return {
       ...next,
@@ -135,7 +140,8 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
     label: choice.label,
     cost: choice.cost,
     costNote: choice.costNote,
-    tradeToPay: choice.tradeToPay,
+    tradeToPay: plan.free === true ? 0 : choice.tradeToPay,
+    ...(plan.free === true ? { free: true as const } : {}),
     squares: choice.squares,
     target,
   }
@@ -162,7 +168,7 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
     setState({ pickerCityId: cityPieceId, plan: null, note: null, message: null, confirmedAgain })
   }, [])
   const closePicker = useCallback(() => setState(EMPTY), [])
-  const start = useCallback((city: CityBuildOptions, choice: BuildChoice) => {
+  const start = useCallback((city: CityBuildOptions, choice: BuildChoice, free = false) => {
     setState((current) => ({
       confirmedAgain: current.confirmedAgain,
       pickerCityId: null,
@@ -174,7 +180,8 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
         label: choice.label,
         cost: choice.cost,
         costNote: choice.costNote,
-        tradeToPay: choice.tradeToPay,
+        tradeToPay: free ? 0 : choice.tradeToPay,
+        ...(free ? { free: true as const } : {}),
         squares: choice.squares,
         target: null,
       },

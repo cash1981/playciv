@@ -997,6 +997,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
+      readonly free?: true
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
       /** The caravan the build used up (Fame and Fortune p. 7), as `marker` is kept. Absent without one. */
@@ -1061,6 +1063,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
+      readonly free?: true
     }
   | {
       readonly kind: 'startBuildingProgram'

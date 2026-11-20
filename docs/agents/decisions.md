@@ -814,7 +814,10 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   #319), with or without a capital, and neither does an English army: the send
   is refused, the panel offers none (and says why for a scout), and an older
   send lapses.
-  An English army is only sent by hand.
+  An English army is only sent by hand. A sent English army gathers like a scout for the city it was sent to
+  (Devote to the Arts and Harvest, `gathersForCity`): its square is offered as a culture or resource choice there, and
+  nowhere else. An army with no send is offered to no city, with or without a capital. Regression tests: "an English army
+  that gathers as a scout would" in `assisted-city.test.ts`.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan
   Turing (counts Russia's white army in the supply, human) add their numbers;
@@ -834,7 +837,7 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   word is listed and only turned faceup by "use"; a grant is spent by the first
   matching-level hidden tech revealed in Start of Turn; "a scout placed this turn
   gathers next turn" is told, not enforced; English armies gathering as scouts are
-  offered by hand only; the same resource icon harvested twice in a turn is warned,
+  sent by hand only; the same resource icon harvested twice in a turn is warned,
   not tracked; a scout on a city centre or a second scout on a square sends
   nothing.
 - **Not built:** Great Person abilities needing a map marker, killing markers, map
@@ -916,7 +919,7 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   village or another player's figures (`MovementDestination.ends`). Board Undo
   takes moves back one at a time.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
-  England crosses but cannot end there. An unknown (tile-back) square is not water.
+  England crosses but cannot end there (no Navigation needed). An unknown (tile-back) square is not water.
 - **Huts and villages:** a move must stop on one; with Flight it flies over, but
   may not end there (rule 283).
 - **Stacking:** travel may cross or end on a square with fewer of the player's
@@ -1515,7 +1518,13 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   lost, a token is not); Spy and Uranium requests get no wildcard. An Any cost (and its picker)
   has no wildcard options: it already tries every kind, and the named kinds are only a
   preference. The spend is recorded with `asResource` and the line says "spent 1 Silk as Iron".
-  Egyptians' free building is not modelled yet (needs its own action and UI).
+- **Egyptians (free build):** once per turn, in City Management, the Egyptians may build an unlocked building or
+  City Walls for free (FAQ, rulings 80, 81, 164). A choice the Egyptians get offers `freeBuild`, and `freeOnly` when the
+  city could not pay for it; the payload `free: true` asks for it. It takes the city's action like any build, costs no production and no
+  trade (the caravan is not used up), still uses the Building Program marker, and is never split with Engineering (the
+  first build of a split is not free). Wonders, figures and units are refused. The use is the turn key
+  `civ:Egyptians:free-build`, so an undo by vote gives it back; a second free build in a turn is refused. Regression tests:
+  `assisted-egypt-free-build.test.ts`, "the Egyptians' free build" in the server and web build tests.
 
 - **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, Arab culture, a German free unit
   card): these are take-backs by vote (or by the ender of a battle), and the undo takes

@@ -237,7 +237,7 @@ function FeudalismHarvest({
           <HelpHint label="Feudalism: harvest a resource">
             <p>
               Take one resource token from the market, from a square with its icon in the outskirts of one of your
-              cities, or under a scout that gathers for it. The list is what the map shows around each city.
+              cities, or under a scout (or a sent English army) that gathers for it. The list is what the map shows around each city.
             </p>
             <p>
               The same resource icon cannot be harvested twice in a turn, also not by the Harvest of a city. The game

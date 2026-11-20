@@ -32,11 +32,11 @@ import { mapCellOf } from './blockade.js'
 import { findBoardAsset, mapTop, remainingBoardAssetCount } from './board.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
-import { cityLimitOf, foundCityCheck, foundingFiguresOf, isOwnFigure, ownCityPieces } from './city-founding.js'
+import { cityLimitOf, foundCityCheck, foundingFiguresOf, ownCityPieces } from './city-founding.js'
 import { cityProductionsOf } from './city-production.js'
 import { err, ok } from './result.js'
 import { appendLog } from './log.js'
-import { SOT_PHASE_REASON, capitalOf, openStartOfTurn, ownCityCentreKeys, scoutAssignmentsOf, scoutDestinationsOf } from './sot.js'
+import { SOT_PHASE_REASON, capitalOf, gathersForCity, openStartOfTurn, ownCityCentreKeys, scoutAssignmentsOf, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand, ScoutView } from './state.js'
 import { terrainAt } from './terrain.js'
 
@@ -55,10 +55,7 @@ const assignPayloadOf = (payload: AssistedPayload | undefined): AssignScoutPaylo
 
 /** The figures that gather a square for a city: scouts, and the English armies (civilization sheet). */
 export function gatheringFiguresOf(state: GameState, player: Playerhand): readonly BoardPiece[] {
-  return state.board.pieces.filter((piece) => {
-    if (!isOwnFigure(state, player, piece) || mapCellOf(state.board, piece) === null) return false
-    return piece.assetId.endsWith('scout') || (piece.assetId.endsWith('army') && player.civilization?.name === 'England')
-  })
+  return state.board.pieces.filter((piece) => gathersForCity(player, piece) && mapCellOf(state.board, piece) !== null)
 }
 
 // ---------------------------------------------------------------------------
@@ -360,9 +357,10 @@ export const assignScout: AssistedActionDefinition = {
       cityLabel = city.label
     }
     const square = squareLabel(cell)
+    const figure = scout.assetId.endsWith('army') ? 'army' : 'scout'
     // A city centre is never sent (human, #319)
     if (payload.cityPieceId !== null && ownCityCentreKeys(state, player).has(`${cell.column}:${cell.row}`)) {
-      return fail(`${square} is the centre of your city, and a scout there sends no square.`)
+      return fail(`${square} is the centre of your city, and ${figure === 'army' ? 'an army' : 'a scout'} there sends no square.`)
     }
     // A square goes to one city only (human, #319)
     const other = scoutAssignmentsOf(state, player).find(
@@ -377,10 +375,10 @@ export const assignScout: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         cityLabel === null
-          ? capitalOf(state, player) === undefined || !scout.assetId.endsWith('scout')
-            ? `${player.username} stopped sending the square of the scout on ${square} to a city`
+          ? capitalOf(state, player) === undefined || figure === 'army'
+            ? `${player.username} stopped sending the square of the ${figure} on ${square} to a city`
             : `${player.username} sent the square of the scout on ${square} back to the capital`
-          : `${player.username} sent the square of the scout on ${square} to ${cityLabel}`,
+          : `${player.username} sent the square of the ${figure} on ${square} to ${cityLabel}`,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,

@@ -4,7 +4,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 
 ## Game behavior
 
-- **Engineering:** Egypt's free build (ruling 164 to 168) is not modelled. The cancel list does not say that cancelling the first build of
+- **Engineering:** The cancel list does not say that cancelling the first build of
   an Engineering split also takes back the second; cancelling only the second leaves the first, and the players are trusted to pick
   the first build. The remaining production is computed from the first build's recorded cost and production, so a hand-set production
   changed between the two builds is not seen. Engineering is offered only when the build is the city's first action: a build that is
@@ -13,7 +13,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   reveal for the player to place, until a proper setup phase exists (issue #374); the American free great person
   stays manual (the social policy picked at the same moment, Organized Religion drawing two and keeping one, needs
   that setup phase too); Mongol loot (not modelled); French policy cap (no cap exists); Russian sacrifice (no
-  enemy-army-city model); Egyptian and Spanish free buildings (need new UI and prompts); Zulu metropolis hut
+  enemy-army-city model); the Spanish free building (needs new UI and prompts); Zulu metropolis hut
   exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
   the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
   spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);

@@ -637,7 +637,7 @@ const feudalismHarvest: AssistedActionDefinition = {
     if (!offered) {
       return blocked(
         'unavailable',
-        'No city of yours has a resource icon in its outskirts, or under a scout that gathers for it, that the market still has a token of.',
+        'No city of yours has a resource icon in its outskirts, or under a scout (or a sent English army) that gathers for it, that the market still has a token of.',
       )
     }
     return {
