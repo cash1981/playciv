@@ -1251,6 +1251,12 @@ export interface TechRevealEffect {
   readonly techName: string
   readonly culture: number
   readonly units: readonly { readonly itemId: string; readonly sheetName: SheetName }[]
+  /**
+   * Set on what is left of an effect when the tech was taken back but some of its reward could not be recovered
+   * (culture that is spent, a unit card that left the hand): the reward was paid once and stays paid, so revealing the
+   * same tech again does not pay it twice. Such a record carries no culture and no units.
+   */
+  readonly paid?: true
 }
 
 /** One hut or village a figure collected: the token's move into the player's area, and the card it gave. Server only. */
