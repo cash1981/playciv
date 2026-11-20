@@ -13,12 +13,15 @@ import type { MapToken } from '../zheng-he.js'
 import { movePieceUnchecked } from './board.js'
 import { draw } from './draw.js'
 
-/** The Chinese gain this much culture each time a figure collects a hut or a village (the human, issue #368). */
+/**
+ * The Chinese gain this much culture the moment a figure collects a hut. A village is a conquest and asks the player first
+ * (`conquest.ts`, issue #368), so collecting its token gives nothing.
+ */
 const CHINESE = 'Chinese'
-const CHINESE_TOKEN_CULTURE = 3
+const CHINESE_HUT_CULTURE = 3
 
 /**
- * Collects the token for the player. `culture` says whether the Chinese hut culture applies: a Zulu city never gives it,
+ * Collects the token for the player. `chineseCulture` says whether the Chinese hut culture applies: a Zulu city never gives it,
  * only a Chinese figure does. `undefined` when it cannot be done (no card left in the deck, no area): nothing is changed.
  */
 export function collectMapToken(
@@ -63,9 +66,9 @@ export function collectMapToken(
       : { ...placed, log: placed.log.map((line) => (line.item?.id === card.id && line.logType === 'ITEM' ? { ...line, undo: null, superseded: true } : line)) }
   const entry = placed?.board.history.at(-1)
   if (placed === undefined || sealed === undefined || entry === undefined) return undefined
-  // The Chinese gain 3 culture for a hut or a village (civilization card: a village counts when the figure collects it,
-  // there is no separate conquest); a relic is not a token (`takeRelic` handles it)
-  const culture = options.chineseCulture && player.civilization?.name === CHINESE ? CHINESE_TOKEN_CULTURE : 0
+  // The Chinese gain 3 culture for a hut (civilization card), with no battle involved; a village gives it only after a won
+  // battle, as an offer the player answers, and a relic is not a token (`takeRelic` handles it)
+  const culture = options.chineseCulture && token.sheet === 'HUTS' && player.civilization?.name === CHINESE ? CHINESE_HUT_CULTURE : 0
   const collection: TokenCollection = {
     ...(culture === 0 ? {} : { culture }),
     historyId: entry.id,
@@ -83,7 +86,7 @@ export function collectMapToken(
           withPlayer(sealed, { ...holder, stats: { ...holder.stats, culture: holder.stats.culture + culture } }),
           holder.username,
           holder.playerId,
-          `gained ${culture} (${holder.stats.culture + culture}) culture from the ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} on ${collection.square} as the Chinese`,
+          `gained ${culture} (${holder.stats.culture + culture}) culture from the hut on ${collection.square} as the Chinese`,
         )
   // The line was written after the token's board entry: count it in, as the culture advance does
   const gained = culture === 0 ? written : countLinesIn(written, [entry.id])

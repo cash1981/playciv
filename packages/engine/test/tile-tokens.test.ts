@@ -408,7 +408,7 @@ describe('the Chinese and huts', () => {
     expect(plain.log.some((entry) => entry.publicLog.includes('as the Chinese'))).toBe(false)
   })
 
-  it('gain 3 culture for a village too, say village in the line, and lose it again with the board Undo', () => {
+  it('gain nothing for collecting a village token: its 3 culture comes only through a won battle, as an offer', () => {
     const scene = put(put(START(), 'figures/redarmy', 3, 2), 'resources/village', 3, 1)
     const state: GameState = {
       ...scene,
@@ -420,12 +420,16 @@ describe('the Chinese and huts', () => {
     }
     const army = state.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
     const moved = collect(state, army.id)
-    expect(me(moved).stats.culture).toBe(8)
-    expect(moved.log.some((entry) => entry.publicLog === 'cash1981 gained 3 (8) culture from the village on D2 as the Chinese')).toBe(true)
+    // The token was collected (its card is in the hand) but no culture was given and no line says so
+    expect(me(moved).items.some((item) => item.sheetName === 'VILLAGES')).toBe(true)
+    expect(me(moved).stats.culture).toBe(5)
+    expect(moved.log.some((entry) => entry.publicLog.includes('as the Chinese'))).toBe(false)
+    expect(moved.tokenCollections?.at(-1)?.culture).toBeUndefined()
+    // So the board Undo has no culture to take back
     const undone = unwrap(undoLastBoardChange(moved, CASH1981))
     expect(me(undone).stats.culture).toBe(5)
-    expect(undone.log.at(-1)?.publicLog).toContain('put the village token on D2 back')
-    expect(undone.log.at(-1)?.publicLog).toContain('took back 3 (5) culture')
+    expect(undone.log.at(-1)?.publicLog).toContain('put the village token on D2 back and returned its card')
+    expect(undone.log.at(-1)?.publicLog).not.toContain('culture')
   })
 
   it('gain nothing when the figure does not collect, and nothing for a relic', () => {
