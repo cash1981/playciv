@@ -1371,6 +1371,9 @@ interface BattlePanelProps extends PanelProps {
   readonly readOnly?: boolean
 }
 
+/** The picker's value for "Save none": nothing is sent, so the engine saves no unit. */
+const CHINESE_SAVE_NONE = 'none'
+
 export function BattlePanel({ gameId, busy, run, view, readOnly = false }: BattlePanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
   const battlehand = view.you?.battlehand ?? []
@@ -1425,6 +1428,8 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
     readonly kind: 'hand' | 'arena'
     readonly id: string
   } | null>(null)
+  // The Chinese save one killed unit when the battle ends: a unit id, `CHINESE_SAVE_NONE`, or `null` before the choice is made
+  const [chineseChoice, setChineseChoice] = useState<string | null>(null)
   const battleActionInFlightRef = useRef(false)
   const touchDragRef = useRef<{
     readonly unitId: string
@@ -1436,7 +1441,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   // The wound popup belongs to the battle it was opened in: it does not come back in a later battle or after End battle is undone
   const battleId = battle?.id ?? null
-  useEffect(() => { setWoundPick(null); setHealPick(null) }, [battleId])
+  useEffect(() => { setWoundPick(null); setHealPick(null); setChineseChoice(null) }, [battleId])
   useEffect(() => {
     if (selectedBattlePiece === null) return
     const stillAvailable = selectedBattlePiece.kind === 'hand'
@@ -1580,6 +1585,25 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         ? 'defender'
         : null
     : null
+
+  // The Chinese side (a player, not barbarians) and its killed units that are not saved yet: End battle asks which one to save
+  const chineseSide: BattleSideId | null =
+    battle === null
+      ? null
+      : (['attacker', 'defender'] as const).find((side) => {
+          const sideOf = battle[side]
+          if (sideOf.kind !== 'player') return false
+          const seat = sideOf.playerId === myId ? view.you : view.opponents.find((o) => o.playerId === sideOf.playerId)
+          return seat?.civilization?.name === 'Chinese'
+        }) ?? null
+  const chineseCandidates =
+    battle === null || chineseSide === null
+      ? []
+      : [...battle.arena, ...battle.departedUnits].filter((unit) => unit.side === chineseSide && unit.killed && unit.saved !== true)
+  const askChineseSave = mySideInBattle !== null && chineseCandidates.length > 0
+  // A choice that is no longer possible (the kill was undone) counts as none made
+  const chineseChoiceValid =
+    chineseChoice === CHINESE_SAVE_NONE || chineseCandidates.some((unit) => unit.id === chineseChoice)
 
   // Battle Great Persons I can play now, and Sun Tzu's pass once per battle (a barbarian controller is no combatant)
   const myCombatant = battle !== null && mySideInBattle !== null && battle[mySideInBattle].kind === 'player'
@@ -1899,11 +1923,35 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                 Pass with Sun Tzu ({SUN_TZU_COST} trade)
               </button>
             )}
+            {askChineseSave && (
+              <label className="row" style={{ alignItems: 'center', gap: '0.3rem' }}>
+                <span>Chinese: save a killed unit</span>
+                <select
+                  aria-label="Chinese: save a killed unit"
+                  value={chineseChoiceValid ? (chineseChoice ?? '') : ''}
+                  disabled={busy || noMutations}
+                  onChange={(event) => setChineseChoice(event.target.value === '' ? null : event.target.value)}
+                >
+                  <option value="">Choose…</option>
+                  {chineseCandidates.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {itemName(unit.unit)} (front {unit.position + 1})
+                    </option>
+                  ))}
+                  <option value={CHINESE_SAVE_NONE}>Save none</option>
+                </select>
+              </label>
+            )}
             {mySideInBattle !== null && (
               <button
                 className="small danger"
-                disabled={busy || noMutations}
-                onClick={() => runBattleAction(() => api.endBattleArena(gameId, rev))}
+                disabled={busy || noMutations || (askChineseSave && !chineseChoiceValid)}
+                title={askChineseSave && !chineseChoiceValid ? 'Choose which killed Chinese unit to save, or Save none' : undefined}
+                onClick={() =>
+                  runBattleAction(() =>
+                    api.endBattleArena(gameId, rev, askChineseSave && chineseChoice !== CHINESE_SAVE_NONE && chineseChoiceValid ? (chineseChoice ?? undefined) : undefined),
+                  )
+                }
               >
                 End battle
               </button>

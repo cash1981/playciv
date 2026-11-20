@@ -13,6 +13,7 @@ vi.mock('../lib/api.js', () => ({
     drawBattlehand: vi.fn(),
     revealBattlehand: vi.fn(),
     endBattle: vi.fn(),
+    endBattleArena: vi.fn(),
     initiateBattle: vi.fn(),
     placeUnitInArena: vi.fn(),
     moveArenaUnit: vi.fn(),
@@ -896,5 +897,71 @@ describe('BattlePanel Animal Husbandry and Biology heal', () => {
     const none = render(<BattlePanel gameId="game" busy={false} run={run} view={healView([], [], [])} />)
     fireEvent.click(none.getByText('Battle'))
     expect(none.queryByRole('group', { name: 'Biology heal' })).toBeNull()
+  })
+})
+
+describe('BattlePanel Chinese save picker', () => {
+  afterEach(() => cleanup())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(api.endBattleArena).mockResolvedValue(view)
+  })
+
+  const arenaUnit = (id: string, side: 'attacker' | 'defender', killed: boolean, saved = false) => ({
+    id, side, position: 0, unit: { ...infantry, id: `card-${id}`, inBattle: true },
+    attack: 1, health: killed ? 0 : 3, placedBy: 'me', rotation: 0, killed, ...(saved ? { saved: true } : {}),
+  })
+  const chineseView = (units: readonly ReturnType<typeof arenaUnit>[], mine = true): PlayerView => ({
+    ...view,
+    you: { ...view.you, civilization: mine ? { name: 'Chinese' } : null },
+    opponents: [{ playerId: 'other', username: 'Other', civilization: mine ? null : { name: 'Chinese' } }],
+    battle: { ...view.battle, arena: units, departedUnits: [] },
+  }) as unknown as PlayerView
+  const open = (v: PlayerView) => {
+    const rendered = render(<BattlePanel gameId="game" busy={false} run={run} view={v} />)
+    fireEvent.click(rendered.getByText('Battle'))
+    return rendered
+  }
+
+  it('keeps End battle disabled until a killed unit or Save none is chosen, and sends the unit', () => {
+    const { getByText, getByLabelText } = open(chineseView([arenaUnit('a1', 'attacker', true), arenaUnit('a2', 'attacker', true), arenaUnit('d1', 'defender', true)]))
+    const endButton = getByText('End battle') as HTMLButtonElement
+    expect(endButton.disabled).toBe(true)
+    const picker = getByLabelText('Chinese: save a killed unit') as HTMLSelectElement
+    // Only the Chinese side's killed units are offered: two units plus the two fixed options
+    expect(Array.from(picker.options).map((option) => option.value)).toEqual(['', 'a1', 'a2', 'none'])
+
+    fireEvent.change(picker, { target: { value: 'a2' } })
+    expect(endButton.disabled).toBe(false)
+    fireEvent.click(endButton)
+    expect(api.endBattleArena).toHaveBeenCalledWith('game', 4, 'a2')
+  })
+
+  it('sends no unit for Save none', () => {
+    const { getByText, getByLabelText } = open(chineseView([arenaUnit('a1', 'attacker', true)]))
+    fireEvent.change(getByLabelText('Chinese: save a killed unit'), { target: { value: 'none' } })
+    const endButton = getByText('End battle') as HTMLButtonElement
+    expect(endButton.disabled).toBe(false)
+    fireEvent.click(endButton)
+    expect(api.endBattleArena).toHaveBeenCalledWith('game', 4, undefined)
+  })
+
+  it('also asks when the opponent is the Chinese player', () => {
+    const { getByLabelText, getByText } = open(chineseView([arenaUnit('d1', 'defender', true)], false))
+    expect(getByLabelText('Chinese: save a killed unit')).toBeTruthy()
+    expect((getByText('End battle') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('shows no picker, and leaves End battle enabled, without a Chinese side, a killed unit or an unsaved one', () => {
+    for (const v of [
+      { ...chineseView([arenaUnit('a1', 'attacker', true)]), you: view.you, opponents: [] } as unknown as PlayerView,
+      chineseView([arenaUnit('a1', 'attacker', false)]),
+      chineseView([arenaUnit('a1', 'attacker', true, true)]),
+    ]) {
+      const { queryByLabelText, getByText } = open(v)
+      expect(queryByLabelText('Chinese: save a killed unit')).toBeNull()
+      expect((getByText('End battle') as HTMLButtonElement).disabled).toBe(false)
+      cleanup()
+    }
   })
 })

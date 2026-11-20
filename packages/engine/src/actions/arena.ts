@@ -1380,6 +1380,11 @@ export interface EndBattleInput {
   readonly playerId: string
   /** ISO timestamp for the board history entry that removes a fortification. */
   readonly at?: string
+  /**
+   * The Chinese player's choice: the arena unit id of the killed unit of their side to save. Without it nothing is saved.
+   * Refused (`CHINESE_SAVE_INVALID`) when it is not a killed, unsaved unit of the Chinese side, or when no Chinese player fights.
+   */
+  readonly chineseSave?: string
 }
 
 /**
@@ -1511,8 +1516,8 @@ export function endBattleAction(
   }
 
   // Chinese (civilization card): after a battle they may save one of their killed units, which stays in the hand
-  // (Florence Nightingale's `saved` mark). The end-of-battle action carries no unit choice, so it is the first killed
-  // Chinese unit that is not already saved; figure losses are settled by hand before.
+  // (Florence Nightingale's `saved` mark). The player chooses it with `chineseSave`; without a choice nothing is saved.
+  // Figure losses are settled by hand before.
   let chineseSaved: string | undefined
   let storedBattle = announcedBattle
   const chinese = [battle.attacker, battle.defender].find(
@@ -1520,16 +1525,23 @@ export function endBattleAction(
   )
   if (chinese !== undefined) {
     const sideId = chinese === battle.attacker ? 'attacker' : 'defender'
-    const candidate = [...announcedBattle.arena, ...announcedBattle.departedUnits].find(
-      (unit) => unit.side === sideId && unit.killed && unit.saved !== true,
-    )
     const hand = findPlayer(nextState, chinese.playerId)
-    if (candidate !== undefined && hand !== undefined) {
-      const mark = (unit: ArenaUnit): ArenaUnit => (unit.id === candidate.id ? { ...unit, saved: true } : unit)
-      storedBattle = { ...announcedBattle, arena: announcedBattle.arena.map(mark), departedUnits: announcedBattle.departedUnits.map(mark) }
-      nextState = appendPublicLog(nextState, hand.username, hand.playerId, 'saves one killed unit as the Chinese: it stays in the hand')
-      chineseSaved = candidate.id
+    if (input.chineseSave !== undefined) {
+      const chosen = [...announcedBattle.arena, ...announcedBattle.departedUnits].find(
+        (unit) => unit.id === input.chineseSave && unit.side === sideId && unit.killed && unit.saved !== true,
+      )
+      if (chosen === undefined) return err({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: input.chineseSave })
+      if (hand !== undefined) {
+        const mark = (unit: ArenaUnit): ArenaUnit => (unit.id === chosen.id ? { ...unit, saved: true } : unit)
+        storedBattle = { ...announcedBattle, arena: announcedBattle.arena.map(mark), departedUnits: announcedBattle.departedUnits.map(mark) }
+        nextState = appendPublicLog(nextState, hand.username, hand.playerId, 'saves one killed unit as the Chinese: it stays in the hand')
+        chineseSaved = chosen.id
+      }
+    } else if (hand !== undefined) {
+      nextState = appendPublicLog(nextState, hand.username, hand.playerId, 'saves no unit as the Chinese')
     }
+  } else if (input.chineseSave !== undefined) {
+    return err({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: input.chineseSave })
   }
 
   // A fortification is used up by the battle for its city, whoever won (Fame and Fortune p. 7, the human)

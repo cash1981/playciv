@@ -52,6 +52,7 @@ export function statusFor(error: EngineError): number {
     case 'FIGURE_MOVE_ILLEGAL':
     case 'UNKNOWN_GOVERNMENT':
     case 'INVALID_ARENA_STAT_VALUE':
+    case 'CHINESE_SAVE_INVALID':
     case 'CANNOT_BATTLE_YOURSELF':
     case 'INVALID_PLAYER_COLOR':
     case 'WITHDRAWN_PLAYER_COLOR_MISMATCH':

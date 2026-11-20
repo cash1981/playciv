@@ -2235,6 +2235,36 @@ describe('arena place and rotate', () => {
   })
 })
 
+describe('end battle with a Chinese choice', () => {
+  it('refuses a chineseSave in a battle with no Chinese side, and leaves the battle', async () => {
+    const { gameId, starter } = await startedGame('Arena-chinese-save')
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: 'barbarians' },
+    })
+    expect(initiated.status).toBe(200)
+    const view = await initiated.json() as { rev: number }
+    const refused = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { rev: view.rev, chineseSave: 'some-arena-unit' },
+    })
+    expect(refused.status).toBe(400)
+    expect(((await refused.json()) as { error: string }).error).toBe('CHINESE_SAVE_INVALID')
+
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { rev: view.rev },
+    })
+    expect(ended.status).toBe(200)
+  })
+})
+
 describe('undo end battle', () => {
   /** Two players, one placed unit, battle initiated by `starter` and ended by them. */
   async function endedBattle(name: string) {

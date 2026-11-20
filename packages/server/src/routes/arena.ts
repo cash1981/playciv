@@ -32,6 +32,7 @@ import {
   authenticateWith,
   currentPlayer,
   optionalNumber,
+  optionalString,
   requireString,
 } from '../context.js'
 import { sendError } from '../errors.js'
@@ -362,7 +363,8 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
   })
 
   /**
-   * End the battle entirely. Body: `{ rev: number }`.
+   * End the battle entirely. Body: `{ rev: number, chineseSave?: string }`. `chineseSave` is the arena unit id the
+   * Chinese choose to save; without it nothing is saved.
    * Clears the arena and resets `inBattle` on all involved units.
    * If no battle is active, falls back to clearing `inBattle` on the
    * caller's own hand (the existing standalone behaviour).
@@ -371,12 +373,18 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
     const gameId = c.req.param('gameId')
     const body = asRecord(await c.req.json().catch(() => ({})))
     const clientRev = optionalNumber(body, 'rev')
+    const chineseSave = optionalString(body, 'chineseSave')
 
     return applyToGame(
       context,
       c,
       gameId,
-      (state) => endBattleAction(state, { playerId: currentPlayer(c).id, at: new Date().toISOString() }),
+      (state) =>
+        endBattleAction(state, {
+          playerId: currentPlayer(c).id,
+          at: new Date().toISOString(),
+          ...(chineseSave === undefined ? {} : { chineseSave }),
+        }),
       clientRev,
     )
   })
