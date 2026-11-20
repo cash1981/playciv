@@ -16,7 +16,7 @@ Human decisions on PR #373 (issue #368):
 
 ## Scope
 
-In: the items above with tests. Out: setup phase, conquest triggers, manual token removal.
+In: the items above with tests, and (follow-up) the conquest offers below. Out: setup phase, manual token removal.
 
 ## Acceptance criteria
 
@@ -24,3 +24,20 @@ In: the items above with tests. Out: setup phase, conquest triggers, manual toke
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass
 - [ ] No hidden information in new projections
 - [ ] Browser check: not available to the coder; disclose
+
+## Follow-up: conquest offers
+
+Human decision: a Roman or Chinese conquest asks the player whether to take the reward, never an automatic gain.
+
+1. The Chinese +3 for a village token at collection is removed (huts keep it).
+2. An own army of a Roman or Chinese player that ends its move on a village token (both) or on another player's city
+   (Romans) records a pending conquest (`GameState.pendingConquests`, one per player).
+3. When the battle ends and that player won with the army still on the square against the matching side (barbarians for
+   a village, the city owner for a city), an offer (`conquestOffers`, kept on `EndedBattle` so End battle's Undo
+   removes an unanswered one) is created. Pending entries of the combatants are consumed whatever the outcome.
+4. The assisted action `claimConquest` (`offerId`, `accept`) answers it: Romans advance one space for free, the Chinese
+   gain 3 culture, or decline. Its undo reopens the offer.
+5. Server wiring, the `you.conquestOffers` projection and a prompt in the web.
+6. Also: the Chinese hut Undo no longer refuses when the culture is spent (clamped take-back); "saves no unit" is logged
+   only when there was a candidate.
+7. decisions.md and limitations.md.

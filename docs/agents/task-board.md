@@ -15,8 +15,8 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Branch:** `feat/civ-abilities-romans-chinese-spain`
 - **Brief:** `docs/agents/tasks/civ-abilities-feedback.md`
 - **Status:** in progress
-- **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/collect-token.ts, actions/player.ts, actions/tile-tokens.ts, assisted-resources.ts, assisted-tech-abilities.ts, cancellation.ts, assisted.ts, movement.ts, errors.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes), `packages/server/test/`, `packages/web/src/lib/api.ts`, `packages/web/src/views/GameView.tsx` and its tests, `docs/agents/decisions.md`, `docs/agents/limitations.md`
-- **Notes:** PR #373 human review feedback (issue #368)
+- **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/board.ts, actions/collect-token.ts, actions/player.ts, actions/tile-tokens.ts, actions/token-collection.ts, assisted-resources.ts, assisted-tech-abilities.ts, cancellation.ts, assisted.ts, assisted-core.ts, assisted-conquest.ts (new), conquest.ts (new), index.ts, movement.ts, errors.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes incl. assisted-args.ts and games.ts), `packages/server/test/`, `packages/web/src/lib/api.ts`, `packages/web/src/views/GameView.tsx`, `packages/web/src/views/ConquestPrompt.tsx` (new) and their tests, `docs/agents/decisions.md`, `docs/agents/limitations.md`
+- **Notes:** PR #373 human review feedback (issue #368); follow-up: conquest offers for the Roman and Chinese conquest rewards
 
 ## Format
 
@@ -40,7 +40,7 @@ Rewritten wholesale, so only one task may own each at a time. Claim by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | civ-abilities-feedback |
 | `packages/web/src/lib/api.ts` | civ-abilities-feedback |
 
 ## Queue
