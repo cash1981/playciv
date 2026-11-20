@@ -1401,10 +1401,13 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
      open offer and gives the pending conquests back (unless the player has made a newer move), so ending the battle
      again can offer again. It is refused (`ASSISTED_UNDO_BLOCKED`, 409) while the offer is answered, accepted or
      declined: undo the answer first, which reopens the offer.
-  5. The offer is shown to its owner only (`you.conquestOffers`, with why a Roman advance is stopped; empty in a replayed
-     revision) as a prompt in "Your actions", above the phase tabs (`ConquestPrompt.tsx`): "You conquered the village on
-     B4. As the Romans you may advance one space on the culture track. [Advance] [No thanks]", or "As the Chinese you
-     gain 3 culture. [Take 3 culture] [No thanks]". The pending conquest is never projected.
+  5. The offer is shown to its owner only (`you.conquestOffers`, empty in a replayed revision) as a prompt in "Your actions",
+     above the phase tabs (`ConquestPrompt.tsx`): "You conquered the village on B4. As the Romans you may advance one
+     space on the culture track. [Advance] [No thanks]", or "As the Chinese you gain 3 culture. [Take 3 culture] [No
+     thanks]". The view says why a Roman advance is stopped (`blocked`: the button is disabled with the reason) and when it
+     has nothing to move (`nothing`: no leader marker on the track, or the last space; the prompt says that accepting only
+     closes the offer). A refusal at the press reaches the player through the page's own error, once. The pending
+     conquest is never projected.
   Heuristic limits, on purpose: the same player, an army whose last qualifying move ended on the village or city, a battle
   won against the matching side with that army still there is taken as the conquest, whatever the battle was fought for;
   a battle fought by hand outside the arena makes no offer; a city that changes owner is not modelled (the city piece

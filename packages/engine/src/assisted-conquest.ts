@@ -30,7 +30,8 @@ const rewardOf = (offer: ConquestOffer): string => (offer.civ === 'Romans' ? 'th
 
 /**
  * The viewer's own open offers, each with why taking it is stopped now (a Roman advance cannot be made while a card choice
- * waits or the hand is over its size). Nothing for an opponent: the caller passes the viewer's own hand.
+ * waits or the hand is over its size) and whether there is nothing to advance (accepting then only closes the offer).
+ * Nothing for an opponent: the caller passes the viewer's own hand.
  */
 export function conquestOfferViewsOf(state: GameState, player: Playerhand): readonly ConquestOfferView[] {
   const own = (state.conquestOffers ?? []).filter((offer) => offer.playerId === player.playerId)
@@ -39,6 +40,7 @@ export function conquestOfferViewsOf(state: GameState, player: Playerhand): read
   return own.map(({ playerId: _owner, ...offer }) => ({
     ...offer,
     blocked: offer.civ === 'Romans' && status.kind === 'blocked' ? status.reason : null,
+    nothing: offer.civ === 'Romans' && status.kind === 'nothing' ? status.reason : null,
   }))
 }
 

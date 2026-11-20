@@ -13,10 +13,14 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   SQUARE_SIZE,
+  cultureCellCenter,
+  cultureStepOf,
   draw,
   drawUnitsForBattle,
+  findBoardAsset,
   findPlayer,
   initiateBattle,
+  leaderAssetId,
   killArenaUnit,
   mapTop,
   placePiece,
@@ -43,7 +47,14 @@ interface View {
   readonly rev: number
   readonly you: {
     readonly stats: { readonly culture: number }
-    readonly conquestOffers?: readonly { readonly id: string; readonly kind: string; readonly square: string; readonly civ: string; readonly blocked: string | null }[]
+    readonly conquestOffers?: readonly {
+      readonly id: string
+      readonly kind: string
+      readonly square: string
+      readonly civ: string
+      readonly blocked: string | null
+      readonly nothing: string | null
+    }[]
   } | null
 }
 
@@ -70,8 +81,11 @@ interface Table {
   readonly armyId: string
 }
 
-/** A started two-player game with the scene above, the starter Chinese with 5 culture, the army not yet moved. */
-async function buildTable(name: string, civ = 'Chinese'): Promise<Table> {
+/**
+ * A started two-player game with the scene above, the starter Chinese with 5 culture, the army not yet moved. `leaderStep`
+ * puts the starter's leader marker on that space of the culture track; without it there is none.
+ */
+async function buildTable(name: string, civ = 'Chinese', leaderStep?: number): Promise<Table> {
   const creator = await register(`${name}-a`)
   const created = await inject(app, { method: 'POST', url: '/api/games', headers: bearer(creator), payload: { name, numOfPlayers: 2 } })
   const gameId = (await created.json() as { id: string }).id
@@ -101,6 +115,14 @@ async function buildTable(name: string, civ = 'Chinese'): Promise<Table> {
   state = at('resources/village', 2, 1)
   state = at(`figures/${colour}army`, 2, 2)
   const armyId = state.board.pieces.at(-1)?.id ?? ''
+  const leader = leaderStep === undefined || starterPlayer.color == null ? undefined : leaderAssetId(civ, starterPlayer.color)
+  const leaderAsset = leader === undefined ? undefined : findBoardAsset(leader)
+  if (leaderStep !== undefined && leaderAsset !== undefined) {
+    const centre = cultureCellCenter(state.board, leaderStep)
+    state = unwrap(placePiece(state, { playerId: starterPlayer.playerId, assetId: leaderAsset.id, x: Math.round(centre.x - leaderAsset.width / 2), y: 10 }))
+  } else if (leaderStep !== undefined) {
+    throw new Error('no leader marker artwork')
+  }
   state = {
     ...state,
     players: state.players.map((player) =>
@@ -156,8 +178,8 @@ const claimBody = (offerId: string, accept: unknown, requestId: string, rev: num
 })
 
 /** A table where the battle has been won and ended, with the offer open. */
-async function offered(name: string, civ = 'Chinese'): Promise<{ table: Table; offerId: string }> {
-  const table = await buildTable(name, civ)
+async function offered(name: string, civ = 'Chinese', leaderStep?: number): Promise<{ table: Table; offerId: string }> {
+  const table = await buildTable(name, civ, leaderStep)
   await marchAndFight(table)
   expect((await endBattle(table)).status).toBe(200)
   const offerId = (await view(table.gameId, table.starter)).you?.conquestOffers?.[0]?.id
@@ -178,7 +200,7 @@ describe('the offer in the projection', () => {
 
     expect((await endBattle(table)).status).toBe(200)
     const mine = await view(table.gameId, table.starter)
-    expect(mine.you?.conquestOffers).toEqual([{ id: expect.any(String), kind: 'village', square: 'C2', civ: 'Chinese', blocked: null }])
+    expect(mine.you?.conquestOffers).toEqual([{ id: expect.any(String), kind: 'village', square: 'C2', civ: 'Chinese', blocked: null, nothing: null }])
     const offerId = mine.you?.conquestOffers?.[0]?.id ?? ''
 
     const asOther = await inject(app, { url: `/api/games/${table.gameId}`, headers: bearer(table.other) })
@@ -231,16 +253,34 @@ describe('answering over HTTP', () => {
     expect((await stored(table)).conquestOffers).toBeUndefined()
   })
 
-  it('gives the Romans their free advance, or refuses with the reason and keeps the offer', async () => {
-    const { table, offerId } = await offered('Claim-roman', 'Romans')
-    const rev = (await view(table.gameId, table.starter)).rev
-    // No leader marker is on the track in this scene, so the advance has nothing to move: the offer is closed and logged
-    // (the stopped case, where the offer stays, is tested in the engine)
-    const response = await post(table.starter, `/api/games/${table.gameId}/actions`, claimBody(offerId, true, 'claim-1', rev))
+  const leaderStepOf = (state: GameState): number | null => {
+    const marker = state.board.pieces.find((piece) => piece.assetId.startsWith('leaders/'))
+    return marker === undefined ? null : cultureStepOf(state.board, marker)
+  }
+
+  it('moves the Romans’ leader marker one space for free on accept, and closes the offer', async () => {
+    const { table, offerId } = await offered('Claim-roman', 'Romans', 9)
+    const before = await view(table.gameId, table.starter)
+    expect(before.you?.conquestOffers?.[0]).toMatchObject({ civ: 'Romans', blocked: null, nothing: null })
+    expect(leaderStepOf(await stored(table))).toBe(9)
+    const response = await post(table.starter, `/api/games/${table.gameId}/actions`, claimBody(offerId, true, 'claim-1', before.rev))
+    expect(response.status).toBe(200)
+    const state = await stored(table)
+    expect(leaderStepOf(state)).toBe(10)
+    expect(state.conquestOffers).toBeUndefined()
+    expect(state.log.some((entry) => entry.publicLog.includes('took the free advance for conquering the village on C2 as the Romans'))).toBe(true)
+    expect(state.log.some((entry) => entry.publicLog.includes('advanced for free on the culture track to space 10'))).toBe(true)
+  })
+
+  it('closes and logs a Roman offer when there is nothing to advance (no marker on the track), and says so beforehand', async () => {
+    const { table, offerId } = await offered('Claim-roman-nothing', 'Romans')
+    const before = await view(table.gameId, table.starter)
+    expect(before.you?.conquestOffers?.[0]?.nothing).toBe('Your leader marker is not on the culture track.')
+    const response = await post(table.starter, `/api/games/${table.gameId}/actions`, claimBody(offerId, true, 'claim-1', before.rev))
     expect(response.status).toBe(200)
     const state = await stored(table)
     expect(state.conquestOffers).toBeUndefined()
-    expect(state.log.some((entry) => entry.publicLog.includes('took the free advance for conquering the village on C2 as the Romans'))).toBe(true)
+    expect(state.log.some((entry) => entry.publicLog.includes('took the free advance for conquering the village on C2 as the Romans, but there is nothing to advance'))).toBe(true)
   })
 
   it('refuses another player’s answer with a 400 and leaves the offer open', async () => {

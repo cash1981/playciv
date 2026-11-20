@@ -1300,9 +1300,14 @@ export interface ConquestOffer {
   readonly civ: ConquestCiv
 }
 
-/** An open offer as its owner sees it: `blocked` says why accepting is stopped now (a card choice waiting, a hand over its size). */
+/**
+ * An open offer as its owner sees it: `blocked` says why accepting is stopped now (a card choice waiting, a hand over its
+ * size), `nothing` why a Roman advance has nothing to move (no leader marker on the track, or already on the last space),
+ * in which case accepting only closes the offer.
+ */
 export interface ConquestOfferView extends Omit<ConquestOffer, 'playerId'> {
   readonly blocked: string | null
+  readonly nothing: string | null
 }
 
 /** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */

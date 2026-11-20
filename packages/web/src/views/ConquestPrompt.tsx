@@ -7,8 +7,6 @@
  * one press sends one `claimConquest` and the engine checks it again against the fresh state.
  */
 
-import { useState } from 'react'
-
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
@@ -38,36 +36,27 @@ const acceptText = (offer: Offer): string => (offer.civ === 'Romans' ? 'Advance'
 
 /** The open conquest offers of the viewer, each with the two answers. Nothing when there is none. */
 export function ConquestPrompt({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
-  // The reason the engine gave for the last refused answer, kept with the offer it was for
-  const [refused, setRefused] = useState<{ readonly offerId: string; readonly message: string } | null>(null)
   const offers = view.you?.conquestOffers ?? []
   if (view.you === null || offers.length === 0) return null
   const playerId = view.you.playerId
 
+  // A refusal reaches the player through `run`, the page's own error, once: the reason a Roman advance is stopped is on the
+  // offer before the press, from the view, so it is not written a second time here
   const answer = (offer: Offer, accept: boolean): void => {
     const key = `${gameId}:${playerId}:claimConquest:${offer.id}:${accept ? 'yes' : 'no'}`
-    setRefused(null)
     void pressOnce(
       key,
       run,
-      async (requestId) => {
-        try {
-          return await api.actionWithArgs(gameId, 'claimConquest', requestId, view.rev, { offerId: offer.id, accept })
-        } catch (caught) {
-          setRefused({ offerId: offer.id, message: caught instanceof Error ? caught.message : String(caught) })
-          throw caught
-        }
-      },
+      (requestId) => api.actionWithArgs(gameId, 'claimConquest', requestId, view.rev, { offerId: offer.id, accept }),
       view,
     )
   }
 
   return (
-    <section className="assisted-conquest" aria-label="Conquest" role="status">
+    <section className="assisted-conquest" aria-label="Conquest">
       {offers.map((offer) => {
         // A Roman advance that is stopped now says why, and cannot be pressed; saying no is never stopped
         const stopped = offer.blocked
-        const failure = refused?.offerId === offer.id ? refused.message : null
         return (
           <div key={offer.id} className="assisted-conquest-offer">
             <p className="assisted-conquest-text">{conquestSentence(offer)}</p>
@@ -86,7 +75,11 @@ export function ConquestPrompt({ gameId, view, busy, readOnly, run }: Props): Re
               </button>
             </div>
             {stopped !== null && <p className="assisted-conquest-stopped">Not now: {stopped}</p>}
-            {failure !== null && <p className="error assisted-conquest-stopped" role="alert">{failure}</p>}
+            {offer.nothing != null && (
+              <p className="assisted-conquest-stopped muted">
+                Nothing to advance: {offer.nothing.charAt(0).toLowerCase() + offer.nothing.slice(1)} Accepting only closes this.
+              </p>
+            )}
           </div>
         )
       })}

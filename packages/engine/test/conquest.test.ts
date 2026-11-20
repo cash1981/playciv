@@ -51,6 +51,12 @@ function cityScene(options: Options = {}): GameState {
   return put(withCity, CASH1981, 'figures/redarmy', C3.column, C3.row)
 }
 
+/** The Roman village scene with no leader marker on the culture track. */
+const withAmericaNoMarker = (): GameState => {
+  const scene = villageScene()
+  return { ...scene, board: { ...scene.board, pieces: scene.board.pieces.filter((piece) => !piece.assetId.startsWith('leaders/')) } }
+}
+
 const pieceOf = (state: GameState, assetId: string): BoardPiece => {
   const found = state.board.pieces.find((piece) => piece.assetId === assetId)
   if (found === undefined) throw new Error(`no ${assetId}`)
@@ -498,7 +504,7 @@ describe('what the views show', () => {
   it('shows the owner their open offer, with nothing that names a piece or a pending conquest', () => {
     const state = offered()
     const view = toPlayerView(state, CASH1981)
-    expect(view.you?.conquestOffers).toEqual([{ id: offersOf(state)[0]?.id, kind: 'village', square: 'C2', civ: 'Romans', blocked: null }])
+    expect(view.you?.conquestOffers).toEqual([{ id: offersOf(state)[0]?.id, kind: 'village', square: 'C2', civ: 'Romans', blocked: null, nothing: null }])
     expect(JSON.stringify(view)).not.toContain('pendingConquests')
     // The offer is shown to its owner alone, so it does not carry the owner's id
     expect(view.you?.conquestOffers[0]).not.toHaveProperty('playerId')
@@ -521,6 +527,17 @@ describe('what the views show', () => {
     // The owner's own view of a pending move carries no offer either, and never the pending conquest
     expect(toPlayerView(marched, CASH1981).you?.conquestOffers).toEqual([])
     expect(JSON.stringify(toPlayerView(marched, CASH1981))).not.toContain('pendingConquests')
+  })
+
+  it('says before the press that a Roman advance has nothing to move: no marker on the track, or the end of it', () => {
+    const noMarker = won(march(withAmericaNoMarker()), 'barbarians')
+    expect(toPlayerView(noMarker, CASH1981).you?.conquestOffers[0]).toMatchObject({ blocked: null, nothing: 'Your leader marker is not on the culture track.' })
+    const lastSpace = won(march(villageScene({ step: 21 })), 'barbarians')
+    expect(toPlayerView(lastSpace, CASH1981).you?.conquestOffers[0]).toMatchObject({ blocked: null, nothing: 'Your marker is already on the Culture Victory space.' })
+    // An advance that can be made says neither, and the Chinese have no advance to speak of
+    expect(toPlayerView(offered(), CASH1981).you?.conquestOffers[0]).toMatchObject({ blocked: null, nothing: null })
+    const chinese = won(march(villageScene({ civ: 'Chinese' })), 'barbarians')
+    expect(toPlayerView(chinese, CASH1981).you?.conquestOffers[0]).toMatchObject({ blocked: null, nothing: null })
   })
 
   it('leaves a player without an offer with an empty list, and the Romans’ blocked reason null', () => {

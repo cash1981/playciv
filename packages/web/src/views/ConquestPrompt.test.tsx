@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '../lib/api.js'
@@ -23,9 +23,9 @@ afterEach(() => {
 
 type Offer = NonNullable<PlayerView['you']>['conquestOffers'][number]
 
-const romanVillage: Offer = { id: 'offer-1', kind: 'village', square: 'B4', civ: 'Romans', blocked: null }
-const chineseVillage: Offer = { id: 'offer-2', kind: 'village', square: 'C2', civ: 'Chinese', blocked: null }
-const romanCity: Offer = { id: 'offer-3', kind: 'city', square: 'D4', civ: 'Romans', blocked: null }
+const romanVillage: Offer = { id: 'offer-1', kind: 'village', square: 'B4', civ: 'Romans', blocked: null, nothing: null }
+const chineseVillage: Offer = { id: 'offer-2', kind: 'village', square: 'C2', civ: 'Chinese', blocked: null, nothing: null }
+const romanCity: Offer = { id: 'offer-3', kind: 'city', square: 'D4', civ: 'Romans', blocked: null, nothing: null }
 
 const viewWith = (offers: readonly Offer[], rev = 7): PlayerView =>
   ({
@@ -118,18 +118,43 @@ describe('the conquest prompt', () => {
     expect((screen.getByRole('button', { name: 'No thanks' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('shows the reason the engine gave when it refuses a press, on the offer it was for', async () => {
-    vi.spyOn(api, 'actionWithArgs').mockRejectedValue(
-      new ApiError(400, 'ASSISTED_ACTION_REJECTED', 'The Romans advance one space for free for a conquest, and that is stopped now: Your hand is over its size.'),
-    )
+  it('hands a refusal to the page once, and does not write it on the offer as well', async () => {
+    const refusal = new ApiError(400, 'ASSISTED_ACTION_REJECTED', 'That conquest offer is not open.')
+    vi.spyOn(api, 'actionWithArgs').mockRejectedValue(refusal)
+    const caught: unknown[] = []
+    const reporting: Run = async (action) => {
+      try {
+        await action()
+      } catch (error) {
+        caught.push(error)
+      }
+    }
+    render(<ConquestPrompt gameId="game-1" view={viewWith([chineseVillage])} busy={false} readOnly={false} run={reporting} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Take 3 culture' }))
+    await waitFor(() => expect(caught).toEqual([refusal]))
+    // The page shows the error (GameView's `run`); the prompt adds no second copy of it
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(/not open/)).toBeNull()
+  })
+
+  it('says before the press that a Roman advance has nothing to move, and that accepting only closes the offer', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const nothing: Offer = { ...romanVillage, nothing: 'Your marker is already on the Culture Victory space.' }
+    renderPrompt(viewWith([nothing]))
+    expect(
+      screen.getByText('Nothing to advance: your marker is already on the Culture Victory space. Accepting only closes this.'),
+    ).toBeTruthy()
+    // It can still be answered: accepting closes the offer
+    const advance = screen.getByRole('button', { name: 'Advance' }) as HTMLButtonElement
+    expect(advance.disabled).toBe(false)
+    fireEvent.click(advance)
+    await waitFor(() => expect(send).toHaveBeenCalledWith('game-1', 'claimConquest', expect.any(String), 7, { offerId: 'offer-1', accept: true }))
+  })
+
+  it('has no such note for an advance that can be made, or for the Chinese', () => {
     renderPrompt(viewWith([romanVillage, chineseVillage]))
-    fireEvent.click(screen.getAllByRole('button', { name: 'No thanks' })[0] as HTMLElement)
-    const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('stopped now: Your hand is over its size.')
-    // The reason sits with the first offer, not the second
-    const offers = document.querySelectorAll('.assisted-conquest-offer')
-    expect(within(offers[0] as HTMLElement).getByRole('alert')).toBe(alert)
-    expect(within(offers[1] as HTMLElement).queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(/Nothing to advance/)).toBeNull()
+    expect(screen.queryByText(/Not now/)).toBeNull()
   })
 
   it('shows nothing without an offer, for a spectator, or for a viewer whose list is missing', () => {
@@ -159,12 +184,12 @@ describe('the prompt in Your actions', () => {
   it('is above the phase tabs, whichever tab is open, and the title says a choice is waiting', () => {
     renderActions(viewWith([romanVillage, chineseVillage]))
     expect(screen.getByRole('heading', { name: 'Your actions (2 choices waiting)' })).toBeTruthy()
-    const prompt = screen.getByRole('status', { name: 'Conquest' })
+    const prompt = screen.getByRole('region', { name: 'Conquest' })
     const tabs = screen.getByRole('tablist', { name: 'Phases of the turn' })
     // The prompt comes before the tabs in the document
     expect(prompt.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: /^Research/ }))
-    expect(screen.getByRole('status', { name: 'Conquest' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Conquest' })).toBeTruthy()
   })
 
   it('counts one offer as one choice, and leaves the title alone without one', () => {
@@ -173,7 +198,7 @@ describe('the prompt in Your actions', () => {
     cleanup()
     renderActions(viewWith([]))
     expect(screen.getByRole('heading', { name: 'Your actions' })).toBeTruthy()
-    expect(screen.queryByRole('status', { name: 'Conquest' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Conquest' })).toBeNull()
   })
 
   it('puts "Your actions" on the page for a viewer whose only reason is an offer', () => {
