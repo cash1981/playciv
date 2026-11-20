@@ -22,7 +22,8 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   with the army still on that square. It cannot tell what the battle was really fought for, so a win elsewhere with the
   army standing on the square counts; a battle settled by hand outside the arena, or a city walked into with no
   defender, makes no offer (the player takes the reward by hand); a city that changes owner is not modelled; the pending
-  move is only the last qualifying one of each player.
+  move is only the last qualifying one of each player, and a board Undo of that move leaves it in place: it only counts while
+  the army stands on the recorded square, and a newer move or the next battle of the player replaces or uses it up.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares
