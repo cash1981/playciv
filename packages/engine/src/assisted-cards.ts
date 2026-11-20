@@ -34,6 +34,7 @@ import { createPlayerTurn } from './turn.js'
 import { unitedNationsHolders } from './united-nations.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
+import { awardArabCulture, takeBackArabCulture } from './assisted-resources.js'
 import {
   countLinesIn,
   drawCandidates,
@@ -1342,14 +1343,19 @@ export const playCard: AssistedActionDefinition = {
         appendLog(log, { username: player.username, playerId: player.playerId, privateLog: line, createdAt: context.at ?? null }),
       logged,
     )
+    // The Arabs gain culture for a resource as for any they spend: a card played as one is a resource they spent. This
+    // path never goes through `spendResource`, which is where a card that pays for an ability is counted, so the
+    // culture is not given twice. The amount is kept for the undo.
+    const arab = resource === null ? { state: withPrivate, culture: 0 } : awardArabCulture(withPrivate, player.playerId, resource)
     return ok({
-      state: countLinesIn(withPrivate, (automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId)),
+      state: countLinesIn(arab.state, (automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId)),
       effect: {
         kind: 'playCard',
         item,
         discarded: card.discards,
         targets: targets.map((target) => target.playerId),
         resource,
+        ...(arab.culture === 0 ? {} : { arabCulture: arab.culture }),
         name: card.name,
         ...automated.value?.extra,
       },
@@ -1697,7 +1703,10 @@ export const playCard: AssistedActionDefinition = {
       current = undone.value
       hand = playerOf(current, player.playerId) ?? hand
     }
-    if (effect.battleCard !== undefined) current = undoBattleCard(current, effect.battleCard, record.id)
+    if (effect.battleCard !== undefined) {
+      current = undoBattleCard(current, effect.battleCard, record.id)
+      hand = playerOf(current, player.playerId) ?? hand
+    }
 
     // Akira Kurosawa's culture goes back from the holder, as far as it is still there
     const kurosawa = takeBackKurosawa(current, effect.kurosawa ?? [])
@@ -1718,21 +1727,25 @@ export const playCard: AssistedActionDefinition = {
       }
       return freed
     }
+    // The Arabs' culture for playing the card as a resource goes back as far as it is still there (the line says how much),
+    // written on the finished state so the hand it changes is the one that is kept
+    const withoutArabCulture = (restored: GameState): GameState =>
+      takeBackArabCulture(restored, player.playerId, effect.arabCulture ?? 0, effect.resource ?? '')
     if (effect.discarded) {
-      const back: GameState = freeTurnUse({
+      const back: GameState = withoutArabCulture(freeTurnUse({
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
-      })
+      }))
       return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${gainUndoneText(statsBeforeGain, hand)}${kurosawa.said}` })
     }
-    const back = freeTurnUse(
+    const back = withoutArabCulture(freeTurnUse(
       withPlayerHand(current, {
         ...hand,
         items: hand.items.map((candidate) =>
           candidate.id === effect.item.id ? { ...candidate, hidden: effect.item.hidden } : candidate,
         ),
       }),
-    )
+    ))
     return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}${gainUndoneText(statsBeforeGain, hand)}` })
   },
 }

@@ -15,6 +15,7 @@
  * log would drown.
  */
 
+import { spanishCreditsOf, spanishGrantAt, withoutSpanishGrant } from '../spanish-credit.js'
 import type {
   Board,
   BoardArea,
@@ -1123,6 +1124,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       return true
     }
     const effect = record.effect
+    // A conquest claim took the village token into the player's area: the claim's own undo gives it back with the card
+    if (effect.kind === 'conquestClaim' && effect.village?.historyId === entry.id) return true
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
     // A unit placed nothing, so only a marker is on the board; City Walls only turned the city marker over.
     if (effect.kind === 'build') {
@@ -1138,7 +1141,13 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         ('walls' in effect && effect.walls.historyId === entry.id) ||
         effect.marker?.historyId === entry.id ||
         // and the caravan it used up
-        effect.caravan?.historyId === entry.id
+        effect.caravan?.historyId === entry.id ||
+        // and the Romans' free advance for a wonder: the marker's move, and the Great Person marker it placed
+        ('advance' in effect &&
+          effect.advance !== undefined &&
+          effect.advance !== null &&
+          ((change.kind === 'move' && effect.advance.historyId === entry.id) ||
+            (change.kind === 'place' && effect.advance.marker?.pieceId === change.piece.id)))
       )
     }
     // Khalid moved the start player marker: stepping that back alone would undo only half the card
@@ -1191,7 +1200,7 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     }
     // A city took the scout off the map, put the city (and the destroyed city-state) on it: all one action
     if (effect.kind === 'foundCity') {
-      if ([effect.figureHistoryId, effect.historyId, effect.cityState?.historyId].includes(entry.id)) return true
+      if ([effect.figureHistoryId, effect.historyId, effect.cityState?.historyId, ...(effect.huts ?? []).map((hut) => hut.historyId)].includes(entry.id)) return true
     }
     // The token a Feudalism harvest put in the player's area, and the coin a wonder was given
     if (effect.kind === 'feudalismHarvest' || effect.kind === 'sotCoin') {
@@ -1204,7 +1213,7 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
     // The Great Person marker the School of Confucius put in the player's area
-    if (effect.kind === 'relicGreatPerson' && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
+    if ((effect.kind === 'relicGreatPerson' || effect.kind === 'philosophy') && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
     // Gunpowder pays several tokens, every other action one
     const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (
@@ -1244,6 +1253,8 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   // because a redo would move the token without drawing again.
   const collection = state.tokenCollections?.find((candidate) => candidate.historyId === last.id)
   if (collection !== undefined) {
+    const holder = state.players.find((candidate) => candidate.playerId === collection.playerId)
+    if (holder !== undefined && holder.stats.culture < (collection.culture ?? 0)) return err({ kind: 'BOARD_UNDO_TOKEN_CULTURE_SPENT' })
     const returned = returnCollectedCard(state, collection)
     if (returned === undefined) return err({ kind: 'BOARD_UNDO_TOKEN_CARD_GONE' })
     return ok(
@@ -1252,6 +1263,29 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
         pieces: revertChange(returned.board.pieces, last.change),
         history: returned.board.history.slice(0, -1),
         redo: [],
+      }),
+    )
+  }
+
+  // A tile that gave the Spanish a free building: taken back with it while the building is unbuilt, refused once it stands.
+  // No redo either, which would lay the tile again without the credit.
+  const grant = spanishGrantAt(state, last.id)
+  if (grant !== undefined) {
+    if (spanishCreditsOf(state, grant.playerId) <= 0) return err({ kind: 'BOARD_UNDO_SPANISH_BUILDING_USED' })
+    const taken = withBoard(withoutSpanishGrant(state, last.id), {
+      ...state.board,
+      pieces: revertChange(state.board.pieces, last.change),
+      history: state.board.history.slice(0, -1),
+      redo: [],
+    })
+    const holder = findPlayer(taken, grant.playerId)
+    if (holder === undefined) return ok(taken)
+    // Only the owner sees the total, as the line that gave the credit
+    return ok(
+      appendLog(taken, {
+        username: holder.username,
+        playerId: holder.playerId,
+        privateLog: `${holder.username} loses 1 (${spanishCreditsOf(taken, holder.playerId)}) free building as the Spanish with the tile that was taken back`,
       }),
     )
   }

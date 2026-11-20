@@ -8,6 +8,8 @@
 
 import type { ArenaUnit, Battle, BattleSideId } from './battle.js'
 import type { GameState, Playerhand } from './state.js'
+import type { DiscardedKilledCard } from './killed-units.js'
+import { killedCardOnPile, rediscardKilledCard, returnKilledCard } from './killed-units.js'
 
 export const LEONIDAS = 'Leonidas'
 export const JOAN_OF_ARC = 'Joan of Arc'
@@ -152,6 +154,8 @@ export interface BattleCardEffect {
   readonly battleId: string
   readonly bonus?: number
   readonly saved?: readonly string[]
+  /** Florence Nightingale after the battle: the discarded cards she took back into the hand, for an undo to discard again. */
+  readonly returned?: readonly DiscardedKilledCard[]
   readonly zhukov?: boolean
 }
 
@@ -175,13 +179,27 @@ export function applyBattleCard(
     const target = state.battle ?? ended?.battle ?? null
     const own = target === null ? null : playerSideOf(target, player.playerId)
     if (target === null || own === null) return undefined
-    const saved = killedOf(target, own).map((unit) => unit.id)
+    const killed = killedOf(target, own)
+    const saved = killed.map((unit) => unit.id)
     const mark = (unit: ArenaUnit): ArenaUnit => (saved.includes(unit.id) ? { ...unit, saved: true } : unit)
     const marked = { ...target, arena: target.arena.map(mark), departedUnits: target.departedUnits.map(mark) }
+    if (ended === null) {
+      return {
+        state: { ...state, battle: marked },
+        effect: { battleId: target.id, saved },
+        said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they stay in the hand`,
+      }
+    }
+    // After the battle End battle has discarded the killed units' cards: the saved ones go back to the hand
+    const cardIds = new Set(killed.map((unit) => unit.unit.id))
+    const returned = (ended.killedDiscarded ?? []).filter(
+      (record) => record.ownerId === player.playerId && cardIds.has(record.cardId) && killedCardOnPile(state, record),
+    )
+    const back = returned.reduce((next, record) => returnKilledCard(next, record), state)
     return {
-      state: ended === null ? { ...state, battle: marked } : { ...state, endedBattle: { ...ended, battle: marked } },
-      effect: { battleId: target.id, saved },
-      said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they stay in the hand`,
+      state: { ...back, endedBattle: { ...ended, battle: marked } },
+      effect: { battleId: target.id, saved, ...(returned.length === 0 ? {} : { returned }) },
+      said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they go back to the hand`,
     }
   }
   const battle = state.battle
@@ -235,7 +253,8 @@ export function undoBattleCard(state: GameState, effect: BattleCardEffect, actio
   }
   const ended = state.endedBattle
   if (ended !== null && ended.battle.id === effect.battleId) {
-    return { ...state, endedBattle: { ...ended, battle: withoutCard(ended.battle, effect, actionId) } }
+    const discarded = (effect.returned ?? []).reduce((next, record) => rediscardKilledCard(next, record), state)
+    return { ...discarded, endedBattle: { ...ended, battle: withoutCard(ended.battle, effect, actionId) } }
   }
   return state
 }

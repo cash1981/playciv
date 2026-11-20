@@ -180,15 +180,20 @@ export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNum
   // existing way of recording it (issue #102, `3+1`), so that expression is the
   // army's speed and already includes the bonus: a scout gives one point of it
   // back. Without a `+` the engine adds the bonus to an army itself.
-  let bonus = typed.bonus
+  //
+  // Spain's +1 sits in the same typed bonus (`2+1`, set by the reveal) but is not the older Natural Religion convention:
+  // it is taken out first and added back afterwards, so a Spanish army with Natural Religion travels 4 and a scout 3.
+  const spain = player.civilization?.name === 'Spanish' ? Math.min(1, typed.bonus) : 0
+  const typedBonus = typed.bonus - spain
+  let bonus = typedBonus
   if (naturalReligion) {
-    if (typed.bonus === 0) {
+    if (typedBonus === 0) {
       if (isArmy(piece)) bonus = 1
     } else if (!isArmy(piece)) {
-      bonus = Math.max(0, typed.bonus - 1)
+      bonus = Math.max(0, typedBonus - 1)
     }
   }
-  let speed = Math.max(typed.base, techSpeedOf(player.techsChosen)?.speed ?? 0) + bonus
+  let speed = Math.max(typed.base, techSpeedOf(player.techsChosen)?.speed ?? 0) + bonus + spain
   if (hasActiveGreatPerson(player, 'Henry Ford')) speed += 1
   const cook = player.playerTurns
     .find((turn) => turn.turnNumber === turnNumber)

@@ -41,6 +41,7 @@ import {
   withLogEntry,
   withPlayer,
 } from '../state.js'
+import { undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import { castVote, createUndo, resultOfVotes } from '../undo.js'
 
 import { removePieceAsSystem } from './board.js'
@@ -352,6 +353,8 @@ function undoCivReveal(
       stats: {
         ...current.stats,
         coinSources: clearedCoinSources(current, civ, techsChosen),
+        // Spain's +1 travel speed goes with the reveal, unless the player typed another value since
+        ...(setup.mvmt !== undefined && current.stats.mvmt === setup.mvmt.set ? { mvmt: setup.mvmt.before } : {}),
       },
     },
   )
@@ -392,7 +395,8 @@ function undoCivReveal(
       'REVEAL',
       (name) =>
         `has undone ${current.username}'s reveal of ${name}. Its starting units, wonders, tile, ` +
-        `marker and white figure are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}. ` +
+        `marker and white figure are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}` +
+        `${setup.mvmt !== undefined && current.stats.mvmt === setup.mvmt.set ? `, and movement went back to ${setup.mvmt.before}` : ''}. ` +
         'Deck is reshuffled',
     ),
   )
@@ -554,7 +558,7 @@ function putTechBack(
       },
     })
     return ok(
-      logUndo(next, player, tech, logType, (name) => `has removed ${name} from ${player.username}`),
+      logUndo(undoTechRevealAbilities(next, player.playerId, tech.name), player, tech, logType, (name) => `has removed ${name} from ${player.username}`),
     )
   }
 

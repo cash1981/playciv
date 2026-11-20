@@ -52,12 +52,15 @@ export function statusFor(error: EngineError): number {
     case 'FIGURE_MOVE_ILLEGAL':
     case 'UNKNOWN_GOVERNMENT':
     case 'INVALID_ARENA_STAT_VALUE':
+    case 'CHINESE_SAVE_INVALID':
     case 'CANNOT_BATTLE_YOURSELF':
     case 'INVALID_PLAYER_COLOR':
     case 'WITHDRAWN_PLAYER_COLOR_MISMATCH':
       return 400
     case 'BOARD_ASSET_LIMIT_REACHED':
     case 'BATTLE_ALREADY_ACTIVE':
+    case 'CHINESE_SAVE_UNAVAILABLE':
+    case 'END_BATTLE_UNDO_AZTEC_SPENT':
     case 'CULTURE_HAND_OVER':
     case 'UNIT_ALREADY_IN_BATTLE':
     case 'ARENA_POSITION_OCCUPIED':
@@ -86,6 +89,8 @@ export function statusFor(error: EngineError): number {
     case 'ASSISTED_UNDO_BLOCKED':
     case 'BOARD_UNDO_ASSISTED':
     case 'BOARD_UNDO_TOKEN_CARD_GONE':
+    case 'BOARD_UNDO_TOKEN_CULTURE_SPENT':
+    case 'BOARD_UNDO_SPANISH_BUILDING_USED':
       return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':

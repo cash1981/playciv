@@ -163,6 +163,39 @@ describe('movement speed', () => {
     expect(travelSpeedOf(playerOf(anarchy), armyPiece, 1)).toBe(2)
   })
 
+  it('gives a Spanish army 4 and a Spanish scout 3 with Natural Religion, and Spain keeps its +1 without it or in Anarchy', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'figures/redscout', 4, 1)
+    const army = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+    const scout = state.board.pieces.find((piece) => piece.assetId === 'figures/redscout')
+    if (army === undefined || scout === undefined) throw new Error('missing figure')
+    const spanish = (mvmt: string, religion: boolean, government?: string): Playerhand => {
+      const player = playerOf(state)
+      return {
+        ...player,
+        civilization: { kind: 'civ', name: 'Spanish' } as unknown as Playerhand['civilization'],
+        stats: { ...player.stats, mvmt },
+        socialPolicies: religion ? [{ name: 'Natural Religion', hidden: false } as Playerhand['socialPolicies'][number]] : [],
+        ...(government === undefined ? {} : { government }),
+      } as Playerhand
+    }
+    // Spain's +1 is not the older typed Natural Religion bonus: the army adds its own +1 on top of it
+    expect(travelSpeedOf(spanish('2+1', true), army, 1)).toBe(4)
+    expect(travelSpeedOf(spanish('2+1', true), scout, 1)).toBe(3)
+    // Without Natural Religion both travel 3, and under Anarchy (no policy effect) too
+    expect(travelSpeedOf(spanish('2+1', false), army, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('2+1', false), scout, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('2+1', true, 'Anarchy'), army, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('2+1', true, 'Anarchy'), scout, 1)).toBe(3)
+    // A legacy typed `+` for Natural Religion on top of Spain's: still the army's speed, the scout gives it back
+    expect(travelSpeedOf(spanish('2+2', true), army, 1)).toBe(4)
+    expect(travelSpeedOf(spanish('2+2', true), scout, 1)).toBe(3)
+    // Other civilizations keep the older reading of `2+1`
+    const roman = { ...spanish('2+1', true), civilization: { kind: 'civ', name: 'Romans' } as unknown as Playerhand['civilization'] }
+    expect(travelSpeedOf(roman, army, 1)).toBe(3)
+    expect(travelSpeedOf(roman, scout, 1)).toBe(2)
+  })
+
   it('takes the highest speed a revealed tech gives, never below the typed one, and the techs do not add up', () => {
     const state = place(game(), 'figures/redarmy', 1, 1)
     const piece = figure(state)

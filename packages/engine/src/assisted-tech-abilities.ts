@@ -69,6 +69,7 @@ import { cityProductionsOf } from './city-production.js'
 import type { EngineError } from './errors.js'
 import { isUnit, itemName, revealAll } from './item.js'
 import type { UnitItem } from './item.js'
+import { rewardDrawCount } from './culture-track.js'
 import { tradeCeilingOf } from './limits.js'
 import { appendLog, itemNumberText } from './log.js'
 import { nextInt } from './random.js'
@@ -497,7 +498,9 @@ const philosophy = techAbility<'philosophy', null>({
   // included). The card is private: the public line has the marker type and the logged item number, the name goes to
   // the player's own log
   act(state, player, _plan, spent, context) {
-    const gained = gainGreatPerson(state, player, { requestId: context.requestId, at: context.at, count: 1, level: 1, step: 0 })
+    // As a Great Person space draws: one card, one more for Organized Religion and one more for the Greeks, of which they keep one
+    const count = rewardDrawCount(state, player, 'greatPerson')
+    const gained = gainGreatPerson(state, player, { requestId: context.requestId, at: context.at, count, level: 1, step: 0 })
     if (!gained.ok) return err(gained.error)
     if (gained.value.outcome === 'none') return err(`No great person could be gained: ${gained.value.phrase.replace(/^gained no Great Person, because /, '')}.`)
     return ok({

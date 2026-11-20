@@ -23,7 +23,7 @@ Source: `packages/engine/src/`, `packages/server/src/app.ts`,
 
 - Only owners receive private hands, notes and logs; opponents see counts and
   revealed information.
-- Great Person pyramid placement exposes an anonymous slot, not the card name.
+- Great Person placement exposes an anonymous slot, not the card name.
 - Publicly derived coins/combat/culture limits use revealed information even for
   the owner, so private research cannot leak through a total. Public totals never
   include hidden bonuses.
@@ -220,7 +220,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
 `actions/player.ts`; tests `white-figures.test.ts`, `undo-civ-reveal.test.ts`,
 `player-action.test.ts`.
 
-## Coins, wonders and blockade
+## Coins, cards, wonders and blockade
 
 - Wonder ownership/bonuses do not depend on the piece staying in the shared
   Wonders area. Disabling a wonder clears its owner, keeps the piece, marks it
@@ -485,9 +485,15 @@ Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
 
 - Arena turn indicators are advisory; participation and edits have their own
   permissions. Do not turn indicators into enforcement.
-- Kills are reversible flags, not automatic discards (the earlier auto-discard
-  plan, #71, is superseded). Reinforced-away cards stay locked until battle end.
-  Loot remains manual.
+- Kills are reversible flags during the battle. End battle discards the cards of
+  the killed units of the player sides, unless Florence Nightingale saved them,
+  each with a public `DISCARD` line (the human in #373; this reverses #75's
+  "never auto-discard"). Killed barbarians stay with their controller, who uses
+  Discard barbarians. Undo end battle puts the cards back where they stood in the
+  hand and battlehand, locked, and supersedes their discard lines. A card that
+  comes back after End battle (the Chinese, Nightingale) supersedes its discard
+  line too, so a vote undo cannot return it twice. Reinforced-away cards stay
+  locked until battle end. Loot remains manual.
 - Gifting is restricted to tradable cards; Great Persons/civilizations are not
   freely giftable. Owners may explicitly discard a Great Person from hand or
   revealed cards, with log wording matching what was already visible.
@@ -543,10 +549,11 @@ combatant for a card.
   is not spent). Refused with no culture. "At the start of a battle" is not enforced, as with Leonidas (the arena
   has no start): she can be played until End battle.
 - **Florence Nightingale:** discarded; every killed unit of the player, also one a later unit replaced on its
-  front, gets `ArenaUnit.saved`, shown as SAVED. Killed units are never discarded by the app, so this is a mark: it still counts as killed for the result, and the card
-  stays in the hand. Refused when none of the player's units is killed. She is played "after a battle" (human
+  front, gets `ArenaUnit.saved`, shown as SAVED. It still counts as killed for the result, and End battle does not discard
+  its card. Refused when none of the player's units is killed. She is played "after a battle" (human
   2026-11-03): also on the battle End battle has just set aside, by whichever combatant holds her, until the next battle
-  starts; the SAVED marks then show in the final arena, and Undo end battle brings the battle back with them.
+  starts; then the cards End battle discarded go back to the hand (`BattleCardEffect.returned`; her vote undo discards
+  them again). The SAVED marks show in the final arena, and Undo end battle brings the battle back with them.
   The mark goes when the death is taken back (kill toggle, face-off undo). A saved unit another unit has replaced on its
   front is no longer in the arena: it is listed as saved casualties, in the active battle and in the final arena
   (`LastBattleView.savedDeparted`).
@@ -809,7 +816,10 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   #319), with or without a capital, and neither does an English army: the send
   is refused, the panel offers none (and says why for a scout), and an older
   send lapses.
-  An English army is only sent by hand.
+  An English army is only sent by hand. A sent English army gathers like a scout for the city it was sent to
+  (Devote to the Arts and Harvest, `gathersForCity`): its square is offered as a culture or resource choice there, and
+  nowhere else. An army with no send is offered to no city, with or without a capital. Regression tests: "an English army
+  that gathers as a scout would" in `assisted-city.test.ts`.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`,
   `sot:<ability>`): Stonehenge, Colossus, Louvre, Lorenzo de' Medici and Alan
   Turing (counts Russia's white army in the supply, human) add their numbers;
@@ -829,7 +839,7 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   word is listed and only turned faceup by "use"; a grant is spent by the first
   matching-level hidden tech revealed in Start of Turn; "a scout placed this turn
   gathers next turn" is told, not enforced; English armies gathering as scouts are
-  offered by hand only; the same resource icon harvested twice in a turn is warned,
+  sent by hand only; the same resource icon harvested twice in a turn is warned,
   not tracked; a scout on a city centre or a second scout on a square sends
   nothing.
 - **Not built:** Great Person abilities needing a map marker, killing markers, map
@@ -911,7 +921,7 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   village or another player's figures (`MovementDestination.ends`). Board Undo
   takes moves back one at a time.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
-  England crosses but cannot end there. An unknown (tile-back) square is not water.
+  England crosses but cannot end there (no Navigation needed). An unknown (tile-back) square is not water.
 - **Huts and villages:** a move must stop on one; with Flight it flies over, but
   may not end there (rule 283).
 - **Stacking:** travel may cross or end on a square with fewer of the player's
@@ -930,7 +940,10 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   side the figure explored from: figure south of the tile 0, west 90, north 180, east 270.
   It can still be turned by hand. It neither moves nor
   locks the figure; any lock forbids exploring. It fails without spending when the
-  card has no artwork. The tile card goes to the hand like any draw, so board Undo
+  card has no artwork. A drawn tile card (exploration or the manual Draw) never
+  enters the hand: it goes straight to the discard pile and shows in Revealed and
+  Discarded Items, dated by its draw line (the human asked for this in #373; tiles
+  are not reshuffled, so it cannot be drawn twice). Board Undo
   (two presses: tile, then movement) does not return it; explore-undo-explore to
   see more tiles is accepted for now (the draw line can be undone by vote).
   Test helper `coverMap` lays tile backs so older tests see no fog.
@@ -1367,6 +1380,207 @@ The picture is decorative (empty alt) when the row names the card in text.
 
 Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 `PlayableCards.tsx` and their tests.
+
+### Civilization abilities (#368)
+
+- **Log format:** every line that states a gain gives the amount and, in parentheses, the new total:
+  `gained 3 (14) culture from the hut on B4 as the Chinese`, `gains 3 (10) trade ... as the Aztecs`. A take-back line
+  says the same ("took back 2 of 3 (0) culture", amount really taken, total left). Tests pin the format.
+- **Romans:** a wonder build advances the leader marker one space for free, as a city does
+  (`freeAdvanceStatus`, `performAdvance` with `free`). A wonder is refused before it is placed
+  while that advance is stopped (card choice waiting, hand over its size); the end of the
+  track stops nothing. The build's undo takes the advance back first and refuses if the marker
+  has moved on. A conquest (a village, or another player's city) is an offer the player answers, below.
+- **Village fight (the human, PR #373 round 2):** an army (not a scout, not a Zulu army) that ends its move on a village
+  is not asked whether to draw it but whether to fight the barbarians for it. OK sends `fightVillage` with the move
+  (`travelFigureCollecting`): the army moves, the battle against the barbarians starts at once (`initiateBattle`), the
+  token is never drawn by that move (even if `collectToken` is also sent) and the Battle panel scrolls into view when a
+  battle was started. The engine ignores `fightVillage` for a scout, a disbanding move, a square without a village, a
+  square with another player's figures and while a battle is active (then it is a plain move). Cancel just moves there.
+  The Zulu keep "Draw the village now?". The village itself is got from the conquest offer below, for every civ.
+- **Conquest offers (every civ for a village, the Romans for a city; the human: a prompt, never an automatic gain):**
+  accepting a village takes its token into the player's area and its card into the hand (`collectMapToken`, no Chinese
+  hut culture), plus the civ's extra: the Romans advance one space on the culture track for free for each village or
+  city (another player's) they conquer, the Chinese gain 3 culture for each village. A decline leaves the token on the
+  map, where it can still be drawn by hand. The game has no conquest event, so it is recognised from what it can see
+  (`conquest.ts`):
+  1. An own **army** ends its move (`travelFigureCollecting`) on a square with a village token (any civ; a village drawn
+     on the move records nothing unless the civ has an extra) or on a centre square of another player's city (Romans
+     only, the colour of a player other than the mover's). It is recorded as the player's pending conquest
+     (`GameState.pendingConquests`, server only, one per player, a newer move replaces it). A scout never conquers, and a
+     disbanding move records nothing.
+  2. When the battle ends (`endBattleAction`) and that player won it with that army still standing on the recorded
+     square, against the matching side (the barbarians for a village, the owner of a city standing on that square for a
+     city), an offer is made (`GameState.conquestOffers`: id, player, `village`/`city`, square, civ name). A loss, a draw (the
+     defender wins it) or an army that moved away makes none. The pending conquest of every combatant is used up
+     whatever the outcome; a player who only controls the barbarians loses nothing.
+  3. `claimConquest` (`assisted-conquest.ts`, args `{ offerId, accept }`, only the offer's owner) answers it. The Romans
+     take the free advance exactly as for a city (`freeAdvanceStatus`, `performAdvance` with `free`); while it is stopped
+     (a card choice waiting, a hand over its size) the answer is refused with the reason and the offer stays; at the end
+     of the track nothing is gained but the offer is closed and logged. The Chinese gain 3 culture, logged as
+     `gained 3 (N) culture for conquering the village on B4 as the Chinese`. The village is taken after the extra; a
+     token that has left the square, or no village card to draw, leaves the extra to be taken alone; a civ without an
+     extra then only closes the offer (token gone) or is refused with the reason (no card). A decline only closes the offer and logs it.
+     Its undo vote reopens the offer and takes everything back: the village token to its square and the card out of the
+     hand, the Roman advance through the effect's reverse (refused once the marker has moved on) and the Chinese culture.
+     Since the reopened offer can be answered again, the undo is refused, not clamped, while the village card has left
+     the hand or the Chinese culture is no longer all there, so nothing can be taken twice. The board Undo cannot take the
+     claimed token back on its own (`isAssistedBoardChange`), and the claim's undo seals it (`undoFloor`).
+  4. The offer is kept on the `EndedBattle` record with the pending conquests it used up: undoing End battle withdraws an
+     open offer and gives the pending conquests back (unless the player has made a newer move), so ending the battle
+     again can offer again. It is refused (`ASSISTED_UNDO_BLOCKED`, 409) while the offer is answered, accepted or
+     declined: undo the answer first, which reopens the offer.
+  5. The offer is shown to its owner only (`you.conquestOffers`, empty in a replayed revision) as a prompt in "Your actions",
+     above the phase tabs, and in the Battle panel once the battle has ended (`ConquestPrompt.tsx`): "You conquered the
+     village on B4. Take it: its token goes to your area and its card into your hand. As the Romans you may also advance
+     one space on the culture track. [Take village and advance] [No thanks]"; the Chinese get [Take village and 3
+     culture], any other civ [Take the village]. `villageGone` says that the token has left the square (only the extra is
+     offered, or [Close]). The view says why a Roman advance is stopped (`blocked`: the button is disabled with the
+     reason) and when it has nothing to move (`nothing`: no leader marker on the track, or the last space; the prompt
+     says what accepting still does). A refusal at the press reaches the player through the page's own error, once. The pending
+     conquest is never projected.
+  Heuristic limits, on purpose: the same player, an army whose last qualifying move ended on the village or city, a battle
+  won against the matching side with that army still there is taken as the conquest, whatever the battle was fought for;
+  a battle fought by hand outside the arena makes no offer; a city that changes owner is not modelled (the city piece
+  stays where it is); a city with no army to defend it is walked into without a battle and so makes no offer.
+- **Chinese:**
+  - A figure that collects a **hut** (`collectMapToken`, shared with the figure move) gives +3 culture the moment the token
+    is collected, with no battle, and a public line (`gained 3 (N) culture from the hut on B4 as the Chinese`). Collecting
+    a **village** token gives nothing: its 3 culture comes only through a conquest offer, above. The culture is kept on the
+    `TokenCollection`; the board Undo takes it back with the token and is refused once it is no longer all there
+    (`BOARD_UNDO_TOKEN_CULTURE_SPENT`, 409; the card and the token stay). This is the one take-back that does not clamp:
+    a board Undo is one player alone, so clamping would let them spend the 3, undo, and collect the same hut again for 3
+    more. Relics give none.
+  - The walled capital marker (`cities/<colour>capitalwalled2`) is put in the player's area at the reveal, as a piece
+    of the reveal (the reveal undo takes it off) and only if none of that colour is on the board; the reveal log
+    says so and the player places it. It stays a marker in the area until a proper setup phase exists (issue #374).
+  - Saving a killed unit follows the civ sheet ("may save one of their killed units after each battle, returning it to
+    their standing forces") and the human's design in #373. End battle, pressed by either side, discards the killed
+    units' cards as any battle does. Then, until the next battle starts, the Chinese combatant (attacker or defender,
+    also against the barbarians) may save one of their own killed units whose card is still on the pile:
+    `chineseSaveAction` returns the card to the hand, marks the unit `saved`, keeps it on `endedBattle.chineseSaved` and
+    logs `saves the killed <unit> as the Chinese: it goes back to the hand`. Once per battle (`CHINESE_SAVE_UNAVAILABLE`,
+    409, also outside the window or for anyone else); a unit that is not such a candidate is `CHINESE_SAVE_INVALID`
+    (400). Only the Chinese player's own view carries the choices (`you.chineseSave`, real arena ids); the opponent
+    sees nothing until the public line. The prompt is in the Battle panel after the battle and in "Your actions",
+    counted as a waiting choice. There is no separate undo: Undo end battle takes the save back with the battle.
+- **Spanish:** the reveal sets `stats.mvmt` from `2` to `2+1` (the typed bonus `movement.ts`
+  reads) and logs it. A value the player already typed is left alone. The `civSetup` records
+  what it set, and the reveal undo restores it only if the value is still the one it set. With Natural Religion
+  the army travels 4 and a scout 3 (the army gets Natural Religion's +1 on top of Spain's): `travelSpeedOf` takes
+  Spain's 1 out of the typed bonus before the older Natural Religion reading (`3+1`) and adds it back, so a legacy
+  typed `+` is still the army's speed (Spanish `2+2` with Natural Religion: army 4, scout 3). Anarchy turns
+  Natural Religion off, not Spain's +1.
+- **Indians:** besides the resource wildcard below, the reveal puts the metropolis marker (`cities/<colour>metropolis2`)
+  in the player's area, with the same rules as the Chinese walls (one, a piece of the reveal, the player places it;
+  issue #374).
+- **Americans:** the free great person and the social policy picked at the same moment stay manual (Organized
+  Religion draws two and keeps one), which needs the setup phase (issue #374).
+
+- **Aztecs (end of battle):** the Aztec player gains 3 trade for winning and 1 culture for each
+  unit killed, both sides counted, in a battle they fought as a player (not the barbarians they
+  only control). The trade stops at the ceiling (`tradeCeilingOf`): only what fits is gained, and that amount is what
+  is logged and kept on `endedBattle`. `undoEndBattle` (`actions/arena.ts`) takes back exactly what was recorded, and is
+  refused (`END_BATTLE_UNDO_AZTEC_SPENT`, 409) when the Aztec player no longer holds all of it: the ender undoes alone,
+  so a partial take-back would let a spent reward be earned again by ending the battle a second time.
+
+- **Germans and Greeks (first reveal of a tech, `revealTech`):** never for the starting tech.
+  A German reveal of a tech in `UNIT_LEVEL_TECHS` (or Flight) draws one free unit card per unit
+  type it upgrades or unlocks, also when the type is already further up, and logs that they may
+  take one resource from the market; that resource is taken by hand, so it has no choice step.
+  One free unit per unit type the tech unlocks or upgrades is settled (the human): Logistics gives
+  three, with no cap.
+  A Greek reveal gives 1 culture for each other player who does not have the tech revealed. Only what is public
+  counts: a hidden choice is not counted, so the amount never tells whether another player is researching the same
+  tech (the Greeks may get one more than the card says in that case). The amount is public; players and hidden
+  techs are never named. Both are kept in
+  `techRevealEffects` (server only) and taken back when the tech is taken back by the undo vote
+  or `removeTech` (`tech-reveal-abilities.ts`). A take-back that cannot recover all of the reward (spent culture, a
+  unit card that left the hand) leaves a `paid` record, so revealing the tech again pays nothing more; a complete
+  take-back leaves none and the next reveal pays again. A returned unit card loses its battle lock.
+
+- **Zulu:** a city founded next to huts collects them at once (`actions/collect-token.ts`, shared
+  with figure moves; no Chinese culture). The undo vote returns the tokens and cards; the board
+  Undo leaves them to the vote. Metropolis growth next to huts is still by hand.
+- **Arabs:**
+  - The civ reveal puts one token of each resource kind (`RESOURCE_KINDS`) in the area, as
+    pieces of the reveal, so its undo removes them; a kind out of supply is skipped and logged.
+  - Each resource the Arab player spends gives +1 culture (`ARAB_RESOURCE_CULTURE`). The human chose 1, the FAQ 2.0
+    ("Advanced Arabia") value; the printed card says 2. Every spend funnels through `spendResource`
+    (`assisted-resources.ts`: single, any N, one of each, chosen payments, event cards, the Spy of a
+    cancellation), so a spend counts once however it was reached; a token, a hut or village in hand and a culture
+    card played as a resource all count. The line is `gained 1 (N) culture for spending <resource> as the Arabs`, naming the resource really spent (a substitute
+    token of Marie Curie or an Indian wildcard is named the same in the gain and in its take-back), and
+    the amount is kept on the `SpentResource` (`arabCulture`). `returnResource` takes back what is still there (never
+    below 0) and says how much. A resource a cancelled ability spent stays spent, so does its culture. Not covered:
+    taking a token off the board by hand is not a spend, a hut used as a hut (a Start of Turn free tech) is not a
+    resource spend, and the free coin investments are not resource spends.
+- **Indians (resources):** a token of any other resource (Spy and Uranium included) pays a request for
+  incense, iron, silk or wheat, after the real resource and before a culture card (a card is
+  lost, a token is not); Spy and Uranium requests get no wildcard. An Any cost (and its picker)
+  has no wildcard options: it already tries every kind, and the named kinds are only a
+  preference. The spend is recorded with `asResource` and the line says "spent 1 Silk as Iron".
+- **Egyptians (free build):** once per turn, in City Management, the Egyptians may build an unlocked building or
+  City Walls for free (FAQ, rulings 80, 81, 164). A choice the Egyptians get offers `freeBuild`, and `freeOnly` when the
+  city could not pay for it; the payload `free: true` asks for it. It takes the city's action like any build, costs no production and no
+  trade (the caravan is not used up), still uses the Building Program marker, and is never split with Engineering (the
+  first build of a split is not free). Wonders, figures and units are refused. The use is the turn key
+  `civ:Egyptians:free-build`, so an undo by vote gives it back; a second free build in a turn is refused. Regression tests:
+  `assisted-egypt-free-build.test.ts`, "the Egyptians' free build" in the server and web build tests.
+
+- **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, Arab culture, a German free unit
+  card): these are take-backs by vote (or by the ender of a battle), and the undo takes
+  back as much as is still there and its line says how much ("took back 2
+  of 3 (0) culture"), or that a card could no longer be returned; it never refuses and never goes
+  below 0. A German card also copied into the battle hand is removed from both. Exceptions, where a clamped take-back
+  would let the player earn the gain again: the Chinese hut culture (board Undo) and the Aztec reward (End battle undo),
+  both one player alone, and a conquest answer (its undo reopens the offer), are refused once the gain is no longer all
+  there. Removing a tech by hand cannot be
+  refused (it is a correction path), so it keeps the `paid` record instead.
+- **Spanish free building (explore):** a tile the Spanish explore (`exploreSquare`, scout or army) gives one credit
+  (`spanishFreeBuildings`, server only; the credits left are the grants minus the applied `spanishBuild` records, so
+  undoing the build returns it). The player picks a basic building (not an upgrade, wall or wonder; not unlocked
+  needed) and a square in the Giannini picker, shown above the phase tabs whenever a credit is held; the one star
+  building per city rule is Build's (`legalFreeBuildings`). The board Undo of the credited tile takes an unspent credit
+  back and is refused (`BOARD_UNDO_SPANISH_BUILDING_USED`) when it is spent. The build reuses effect kind
+  `gianniniBuild`, so its seals apply.
+- **Philosophy and great person draws:** Philosophy draws as a Great Person space does (`rewardDrawCount`: one,
+  +1 Organized Religion, +1 Greeks), keeping one through a pending reward whose choice takes the marker
+  (the Greeks' extra draw is for every assisted great person gain).
+- **Aztec great person units:** each great person kept gives 2 free-unit credits (`assisted-aztecs.ts`, buttons per
+  unlocked unit type like Attila's Village); undoing the gain takes back the unused credits only, and undoing a use is
+  refused when its credit would be orphaned.
+- **Villages (fight and offer):** an army (not Zulu) ending its move on a village is asked to fight the barbarians, the
+  battle starts at once, and the village is taken through the conquest offer after the win (every civ); Zulu draw it
+  on the move. The claim's undo returns token and card and is refused when the card left the hand or the Chinese
+  3 culture is spent.
+- **Markers and sealing:** the walled-capital and metropolis markers lying in a player area are not cities
+  (`ownCityPieces`, `cityCountOf`), so they do not block founding. A resource card played from the hand
+  (`playCard`) gives the Arab culture too and its undo takes it back. The vote undo of a Roman advance (wonder, city),
+  an Arab invest with a free advance, Mother Teresa, Sydney Opera House and a Zulu city that collected huts seals the
+  board Undo (`undoFloor`), since their reversal writes its own board moves. A plain Advance button is still not sealed.
+  Spanish saves revealed before the +1 get `2+1` once on load (`migrate.ts`, only when the movement is still `2`).
+- A Zulu hut on the city's own square is collected too, like the huts around it. The founding
+  line names the huts that were collected and says which stayed on the map (no card left).
+- **Aztecs (free units for Great Persons):** "each time they gain a great person, may build 2 unlocked units of their
+  choice for free" is modelled like Attila's Village (`assisted-aztecs.ts`). Every Great Person an Aztec player keeps
+  through an assisted gain (`takeGreatPersonMarker`: the culture track, a card choice, Philosophy, the School of
+  Confucius) gives 2 credits, written on the marker (`aztecCredits`) and to `GameState.aztecFreeUnits` (server only,
+  never projected; the owner sees "N of M left" on the buttons). One button per unit type draws one card of that type
+  (aircraft needs Flight) and uses a credit; the public line names the type, the private line the card. Its undo returns
+  the card to its deck and the credit, but is refused while the card has left the hand or when the Great Person behind
+  the credit was undone (otherwise undoing the gain and then the unit would make a credit out of nothing). Undoing the
+  Great Person takes its credits back as far as they are unused, never below 0; a unit already drawn stays.
+
+Source: `assisted.ts` (`build`), `assisted-city.ts`, `assisted-resources.ts`,
+`tech-reveal-abilities.ts`, `movement.ts` (`travelSpeedOf`), `actions/arena.ts` (`endBattleAction`),
+`conquest.ts`, `assisted-conquest.ts`, `actions/collect-token.ts`, `actions/token-collection.ts`,
+`actions/tile-tokens.ts`, `actions/player.ts`, `actions/undo.ts`; server `routes/assisted-args.ts`; web
+`GameView.tsx` (`BattlePanel`), `ConquestPrompt.tsx`; tests `assisted-wonders`, `assisted-city`,
+`tile-tokens`, `undo-civ-reveal`, `battle-civ-abilities`, `conquest`, `tech-reveal-abilities`, `indians-resources`,
+`arabs-resources`, `movement`, `assisted-aztecs`, server `assisted-conquest-api`, `board-api`, `BattlePanel.test.tsx`,
+`BoardView.test.tsx`, `ConquestPrompt.test.tsx`; also `assisted-aztecs.ts`, `assisted-culture.ts`
+(`takeGreatPersonMarker`, `removeGreatPersonMarker`), web `BoardView.tsx`.
 
 ## Reopening a phase (2026-10-23)
 

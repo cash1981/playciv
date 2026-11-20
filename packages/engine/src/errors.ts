@@ -100,6 +100,9 @@ export type EngineError =
   | { readonly kind: 'BOARD_UNDO_ASSISTED' }
   /** The card drawn from a hut or village token is no longer in the player's hand, so collecting it cannot be undone (issue #364). */
   | { readonly kind: 'BOARD_UNDO_TOKEN_CARD_GONE' }
+  | { readonly kind: 'BOARD_UNDO_TOKEN_CULTURE_SPENT' }
+  /** The free building the Spanish got for exploring that tile has been used, so the exploration cannot be undone. */
+  | { readonly kind: 'BOARD_UNDO_SPANISH_BUILDING_USED' }
   /** Nothing has been undone since the last board change, so there is nothing to redo */
   | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
   /** The game has not started: there is no player to the left of the caller yet (barbarians) */
@@ -161,6 +164,15 @@ export type EngineError =
   | { readonly kind: 'UNIT_ALREADY_IN_BATTLE'; readonly unitId: string }
   /** No arena unit with the given id was found */
   | { readonly kind: 'ARENA_UNIT_NOT_FOUND'; readonly arenaUnitId: string }
+  /** The unit the Chinese chose to save is not one of their killed units whose card End battle discarded and that is still on the pile */
+  | { readonly kind: 'CHINESE_SAVE_INVALID'; readonly arenaUnitId: string }
+  /**
+   * Undoing End battle would take back what the Aztecs gained, and they no longer hold all of it (they spent it): the ender
+   * alone may undo, so the take-back is refused instead of paying out a reward that was already used.
+   */
+  | { readonly kind: 'END_BATTLE_UNDO_AZTEC_SPENT' }
+  /** The player has no killed unit to save as the Chinese now: not Chinese, not in the battle that has just ended, or one is already saved */
+  | { readonly kind: 'CHINESE_SAVE_UNAVAILABLE' }
   /** An arena stat value is not a non-negative integer */
   | { readonly kind: 'INVALID_ARENA_STAT_VALUE'; readonly value: number }
   /** A player cannot initiate a battle against themselves */
@@ -271,6 +283,10 @@ export function describeError(error: EngineError): string {
       return 'The last board change was made by an assisted action. Ask for an undo vote on its log line instead'
     case 'BOARD_UNDO_TOKEN_CARD_GONE':
       return 'The card drawn from that token has left the hand, so collecting it cannot be undone'
+    case 'BOARD_UNDO_TOKEN_CULTURE_SPENT':
+      return 'The culture the hut gave has been spent, so collecting it cannot be undone'
+    case 'BOARD_UNDO_SPANISH_BUILDING_USED':
+      return 'The free building that tile gave has been used, so exploring it cannot be undone. Undo the building first'
     case 'NOTHING_TO_REDO_ON_BOARD':
       return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':
@@ -319,6 +335,12 @@ export function describeError(error: EngineError): string {
       return 'This unit is already in the arena'
     case 'ARENA_UNIT_NOT_FOUND':
       return `No arena unit with id ${error.arenaUnitId}`
+    case 'CHINESE_SAVE_INVALID':
+      return `The unit ${error.arenaUnitId} cannot be saved: only a killed unit of yours from the battle that has just ended, still on the discard pile, can`
+    case 'END_BATTLE_UNDO_AZTEC_SPENT':
+      return 'The trade or culture the Aztecs gained for that battle has been spent, so ending it cannot be undone'
+    case 'CHINESE_SAVE_UNAVAILABLE':
+      return 'There is no killed unit to save as the Chinese: one can be saved after each battle, until the next one starts'
     case 'INVALID_ARENA_STAT_VALUE':
       return `Arena stat must be a non-negative whole number, got ${error.value}`
     case 'CANNOT_BATTLE_YOURSELF':

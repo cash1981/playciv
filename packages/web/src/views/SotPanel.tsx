@@ -7,7 +7,7 @@
  * rule: it shows the status and reason the engine gives and sends one request per press.
  */
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import type { Government } from '@civ/engine'
 
@@ -16,6 +16,7 @@ import type { PlayerView } from '../lib/api.js'
 import { AssistedActionButton, pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { HelpHint } from './HelpHint.js'
+import { useMapPicker } from './mapPick.js'
 import { goToPanel } from './PhaseSummary.js'
 import { openGovernmentReference } from './GovernmentReferenceDialog.js'
 import './SotPanel.css'
@@ -55,10 +56,41 @@ export function StartOfTurnChoices({ gameId, view, busy, readOnly, run }: Props)
       <GovernmentChange {...common} />
       {sot.feudalism !== null && <FeudalismHarvest {...common} feudalism={sot.feudalism} />}
       <Invest {...common} />
-      <GianniniBuild {...common} />
+      <FreeBuildPicker
+        {...common}
+        answer={sot.giannini}
+        action="gianniniBuild"
+        title={GIANNINI_TITLE}
+        className="sot-giannini"
+        showUnavailable={false}
+      />
       <ScoutsAndCities {...common} />
       <MetropolisGrowth gameId={gameId} view={view} busy={common.busy} run={run} />
     </>
+  )
+}
+
+/**
+ * The Spanish free building, asked for whenever a credit is unspent: the tile is explored in Movement, so this sits above
+ * the phase tabs and not in the Start of Turn tab. Nothing without a credit, for a spectator or for another civilization.
+ */
+export function SpanishFreeBuild({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
+  const sot = view.you?.startOfTurn
+  const spanish = sot?.spanish ?? null
+  if (view.you === null || sot === undefined || sot === null || spanish === null) return null
+  return (
+    <FreeBuildPicker
+      gameId={gameId}
+      view={view}
+      busy={busy || readOnly}
+      run={run}
+      sot={sot}
+      answer={spanish}
+      action="spanishBuild"
+      title={SPANISH_TITLE}
+      className="sot-spanish"
+      showUnavailable
+    />
   )
 }
 
@@ -237,7 +269,7 @@ function FeudalismHarvest({
           <HelpHint label="Feudalism: harvest a resource">
             <p>
               Take one resource token from the market, from a square with its icon in the outskirts of one of your
-              cities, or under a scout that gathers for it. The list is what the map shows around each city.
+              cities, or under a scout (or a sent English army) that gathers for it. The list is what the map shows around each city.
             </p>
             <p>
               The same resource icon cannot be harvested twice in a turn, also not by the Harvest of a city. The game
@@ -356,107 +388,194 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
 }
 
 const GIANNINI_TITLE = 'A. P. Giannini: a free building'
+const SPANISH_TITLE = 'Spanish: a free building'
+
+type FreeBuildChoice = NonNullable<StartOfTurn['giannini']>['choices'][number]
+type FreeBuildSquare = FreeBuildChoice['squares'][number]
+const squareKeyOf = (square: FreeBuildSquare): string => `${square.cityPieceId}:${square.column}:${square.row}`
+
+interface FreeBuildPickerProps extends ChoiceProps {
+  /** The engine's answer for this free building, `null` when it does not apply to the viewer. */
+  readonly answer: StartOfTurn['giannini']
+  /** The assisted action the choice is sent to. Both take the same payload. */
+  readonly action: 'gianniniBuild' | 'spanishBuild'
+  readonly title: string
+  readonly className: string
+  /** Show the reason when nothing can be built now (the Spanish keep their credit), instead of hiding the section or tagging it as used. */
+  readonly showUnavailable: boolean
+}
 
 /**
- * A. P. Giannini's free building after an invest: one building he has unlocked, on a square of one of the player's
- * cities. A choice that a refresh takes away is dropped, not sent.
+ * A free building: one building, on a square of one of the player's cities, from the choices the engine lists. A. P.
+ * Giannini's (a building he has unlocked, after an invest) and the Spanish one (a basic building for a tile explored)
+ * share it. A choice that a refresh takes away is dropped, not sent.
  */
-function GianniniBuild({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
-  const { giannini } = sot
+function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, className, showUnavailable }: FreeBuildPickerProps): React.JSX.Element | null {
   const [assetId, setAssetId] = useState('')
-  const [squareKey, setSquareKey] = useState('')
-  const squareId = useId()
+  // The key of a square with a note (it replaces a building), picked on the map and read here before the button builds.
+  const [pickedKey, setPickedKey] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  // Whether a board pick is open now, and a counter that opens one again on request.
+  const [pickOpen, setPickOpen] = useState(false)
+  const [restart, setRestart] = useState(0)
+  const mapPicker = useMapPicker()
+  const buildButton = useRef<HTMLButtonElement>(null)
   const playerId = view.you?.playerId ?? ''
-  if (giannini === null || (giannini.status !== 'ready' && giannini.status !== 'used')) return null
 
-  const chosen = giannini.choices.find((choice) => choice.assetId === assetId)
-  const keyOf = (square: { readonly cityPieceId: string; readonly column: number; readonly row: number }): string =>
-    `${square.cityPieceId}:${square.column}:${square.row}`
-  const square = chosen?.squares.find((candidate) => keyOf(candidate) === squareKey)
-  const valid = chosen !== undefined && square !== undefined
+  const chosen = answer?.status === 'ready' ? answer.choices.find((choice) => choice.assetId === assetId) : undefined
+  const chosenId = chosen?.assetId
+  const squaresKey = chosen?.squares.map(squareKeyOf).join('|') ?? ''
+  // Read again from the current choice on every render: a square a refresh took away is no longer picked, and its note is the current one.
+  const picked = pickedKey === null ? null : (chosen?.squares.find((square) => squareKeyOf(square) === pickedKey) ?? null)
+  const hasPicked = picked !== null
 
-  const press = (): void => {
-    if (chosen === undefined || square === undefined) return
-    const key = `${gameId}:${playerId}:gianniniBuild:${chosen.assetId}:${keyOf(square)}`
+  const busyRef = useRef(busy)
+  const build = (choice: FreeBuildChoice, square: FreeBuildSquare): void => {
+    const key = `${gameId}:${playerId}:${action}:${choice.assetId}:${squareKeyOf(square)}`
+    setSending(true)
     void pressOnce(
       key,
       run,
       (requestId) =>
-        api.actionWithArgs(gameId, 'gianniniBuild', requestId, view.rev, {
+        api.actionWithArgs(gameId, action, requestId, view.rev, {
           cityPieceId: square.cityPieceId,
-          assetId: chosen.assetId,
+          assetId: choice.assetId,
           column: square.column,
           row: square.row,
         }),
       view,
     ).then((done) => {
+      setSending(false)
       if (done) {
         setAssetId('')
-        setSquareKey('')
+        setPickedKey(null)
       }
+      // Not done (declined, refused, a repeated press): nothing reopens and the page does not move; the buttons below start again.
     })
   }
+  // The pick below resolves later than the render that opened it: it builds with the latest view and choice.
+  const buildRef = useRef(build)
+  useEffect(() => {
+    busyRef.current = busy
+    buildRef.current = build
+  })
+
+  // The building is chosen in the list; the square is then picked on the map, where the legal squares around the cities are
+  // highlighted (the same board picker as a Build). A plain square builds at once, one that replaces a building is read first.
+  // It opens on a change of building or squares, not on every refresh or send.
+  useEffect(() => {
+    if (mapPicker === null || chosen === undefined || hasPicked) return
+    const choice = chosen
+    let stale = false
+    let settled = false
+    setPickOpen(true)
+    void mapPicker.begin({ title: choice.label, cells: choice.squares }).then((cell) => {
+      settled = true
+      if (stale) return
+      setPickOpen(false)
+      if (cell === null) {
+        setAssetId('')
+        return
+      }
+      const square = choice.squares.find((candidate) => candidate === cell) ?? choice.squares.find((candidate) => candidate.column === cell.column && candidate.row === cell.row)
+      if (square === undefined) return
+      if (square.note !== undefined) setPickedKey(squareKeyOf(square))
+      else if (!busyRef.current) buildRef.current(choice, square)
+    })
+    return () => {
+      stale = true
+      setPickOpen(false)
+      if (!settled) mapPicker.cancel()
+    }
+    // The pick follows the building and its squares, not every refresh of the view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapPicker, chosenId, squaresKey, hasPicked, restart])
+
+  // A replacing square was tapped and the board pick closed: bring the note and its button into view.
+  useEffect(() => {
+    if (hasPicked) buildButton.current?.focus()
+  }, [hasPicked])
+
+  if (answer === null || (!showUnavailable && answer.status !== 'ready' && answer.status !== 'used')) return null
 
   return (
-    <section className="phase-group sot-giannini" aria-label={GIANNINI_TITLE}>
-      <h3 className="phase-group-title">{GIANNINI_TITLE}</h3>
-      {giannini.status === 'ready' ? (
-        <form
-          className="sot-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            press()
-          }}
-        >
+    <section className={`phase-group ${className}`} aria-label={title}>
+      <h3 className="phase-group-title">{title}</h3>
+      {answer.status === 'ready' ? (
+        <div className="sot-form">
           <label>
             Building{' '}
             <select
               value={chosen === undefined ? '' : chosen.assetId}
-              disabled={busy}
+              disabled={busy || sending}
               onChange={(event) => {
                 setAssetId(event.target.value)
-                setSquareKey('')
+                setPickedKey(null)
               }}
             >
               <option value="">Choose a building</option>
-              {giannini.choices.map((choice) => (
+              {answer.choices.map((choice) => (
                 <option key={choice.assetId} value={choice.assetId}>
                   {choice.label}
                 </option>
               ))}
             </select>
           </label>
-          <div className="sot-field">
-            <label htmlFor={squareId}>Square</label>
-            <select
-              id={squareId}
-              value={square === undefined ? '' : squareKey}
-              disabled={busy || chosen === undefined}
-              onChange={(event) => setSquareKey(event.target.value)}
-            >
-              <option value="">Choose a square</option>
-              {(chosen?.squares ?? []).map((candidate) => (
-                <option key={keyOf(candidate)} value={keyOf(candidate)}>
-                  {candidate.cityLabel} — {candidate.label}
-                  {candidate.replaces === undefined ? '' : ` (replaces your ${candidate.replaces.label})`}
-                </option>
-              ))}
-            </select>
-          </div>
-          {square?.replaces !== undefined && (
-            <p className="muted">{square.note ?? `Replaces your ${square.replaces.label}.`}</p>
+          <p className="muted" role="status">
+            {chosen === undefined
+              ? ''
+              : picked === null
+                ? `Pick a square for the ${chosen.label} on the map.`
+                : `${chosen.label} in ${picked.cityLabel} on ${picked.label}. ${picked.note ?? `Replaces your ${picked.replaces?.label ?? 'building'}.`}`}
+          </p>
+          {chosen !== undefined && picked !== null && (
+            <>
+              <button ref={buildButton} type="button" className="small" disabled={busy || sending} onClick={() => build(chosen, picked)}>
+                Build for free
+              </button>
+              <button
+                type="button"
+                className="small"
+                disabled={sending}
+                onClick={() => {
+                  setPickedKey(null)
+                  setRestart((count) => count + 1)
+                }}
+              >
+                Pick another square
+              </button>
+            </>
           )}
-          <button type="submit" className="small" disabled={busy || !valid}>
-            Build for free
-          </button>
-        </form>
+          {chosen !== undefined && picked === null && !pickOpen && (
+            <button type="button" className="small" disabled={busy || sending} onClick={() => setRestart((count) => count + 1)}>
+              Pick a square on the map
+            </button>
+          )}
+          {chosen !== undefined && (
+            <button
+              type="button"
+              className="small"
+              disabled={sending}
+              onClick={() => {
+                setAssetId('')
+                setPickedKey(null)
+              }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       ) : (
         <div className="assisted-action">
-          <button type="button" className="small" disabled title={giannini.reason}>
+          <button type="button" className="small" disabled title={answer.reason}>
             Build for free
           </button>
-          <span className="tag">Used</span>
-          <HelpHint label={GIANNINI_TITLE}>{giannini.reason}</HelpHint>
+          {answer.status === 'used' && <span className="tag">Used</span>}
+          {answer.status === 'unavailable' && showUnavailable ? (
+            <p className="muted">{answer.reason}</p>
+          ) : (
+            <HelpHint label={title}>{answer.reason}</HelpHint>
+          )}
         </div>
       )}
     </section>
@@ -644,7 +763,7 @@ function FoundHere({
         Found a city here
       </button>
       {zuluHuts.length > 0 && (
-        <p className="muted">The Zulu may explore the hut next to the city ({zuluHuts.join(', ')}). Do that by hand.</p>
+        <p className="muted">The Zulu explore the huts next to the city ({zuluHuts.join(', ')}) at once, when a hut card is left.</p>
       )}
     </div>
   )

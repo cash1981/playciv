@@ -741,6 +741,17 @@ describe('investing a coin', () => {
     expect(marker?.x).toBe(before?.x)
     expect(status(undone, 'invest').status).toBe('ready')
   })
+
+  it('seals the board Undo after the vote undo of an Arab investment with a free advance, and not of one without', () => {
+    const sheet = { ...me(sotTurn()).stats.coinSources, sheet: 1 }
+    const undone = undoByVote(unwrap(invest(sotTurn({ civ: 'Arabs', step: 9, stats: { coinSources: sheet } }), 'sheet', 'infra')), 'req-1')
+    // The marker cannot be moved forward again by the board Undo with the cards back in the deck
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.board.redo).toEqual([])
+    // An investment with no advance wrote no move of its own
+    const plain = undoByVote(unwrap(invest(sotTurn({ civ: 'Japanese', step: 9, stats: { coinSources: sheet } }), 'sheet', 'infra')), 'req-1')
+    expect(undoLastBoardChange(plain, CASH1981).ok).toBe(true)
+  })
 })
 
 describe('what other players can see', () => {

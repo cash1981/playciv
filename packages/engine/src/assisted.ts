@@ -32,6 +32,9 @@ import { drawWonderToBoard } from './actions/draw.js'
 import { CARAVAN_ASSET_ID, cityMarkerMayReturn, cityMarkerOf } from './disband.js'
 import {
   CITY_ACTION_LABELS,
+  EGYPT_FREE_BUILD_KEY,
+  egyptFreeBuildOpen,
+  EGYPTIANS,
   ENGINEERING_KEY,
   PHASE_REASON,
   REPEAT_NOTE,
@@ -57,15 +60,19 @@ import { DARWIN_NAME, darwinTradeOf, greatPersonActionIdOf, payKurosawa, takeBac
 import { playCard } from './assisted-cards.js'
 import { putReplacedBack, removeReplaced, replacedText, replacingText, reservedUndoBlock } from './assisted-replace.js'
 import { findResourceToken, parseResourcePayments, resourceAvailability, resourcePaymentOptions, returnedText, returnResource, spendActionResource, spendResource } from './assisted-resources.js'
-import { CITY_ACTIONS } from './assisted-city.js'
+import { CITY_ACTIONS, ROMANS } from './assisted-city.js'
 import { ABILITY_ACTIONS } from './assisted-abilities.js'
 import { SOT_ACTIONS } from './assisted-sot.js'
 import {
+  advanceEffectOf,
   chooseReward,
   countLinesIn,
   cultureAdvance,
   cultureAdvanceSkip,
   drawCandidates,
+  freeAdvanceStatus,
+  performAdvance,
+  reverseAdvanceEffect,
   shuffleSheetTwice,
 } from './assisted-culture.js'
 import type {
@@ -132,6 +139,7 @@ import type {
   AssistedActionRecord,
   AssistedEffect,
   AvailableAction,
+  CultureAdvanceEffect,
   CultureCardKind,
   DrawnWonder,
   GameLogEntry,
@@ -236,7 +244,8 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
     reverse(state, player, record, at) {
       const effect = record.effect
       if (effect.kind !== card.kind) return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-      const stats = { ...player.stats, culture: Math.max(0, player.stats.culture - effect.culture) }
+      const removed = Math.min(player.stats.culture, effect.culture)
+      const stats = { ...player.stats, culture: player.stats.culture - removed }
       const returned = returnResource(
         withPlayerHand(state, { ...player, stats }),
         { ...player, stats },
@@ -245,9 +254,12 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
         record.logId,
       )
       if (!returned.ok) return returned
+      // The total is read once the resource is back: for the Arabs that also takes the culture they were given for the
+      // spend off, and says so in its own line
+      const total = playerOf(returned.value, player.playerId)?.stats.culture ?? stats.culture
       return ok({
         state: returned.value,
-        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} (${stats.culture}) culture removed and ${returnedText(effect.spent)} returned`,
+        text: `${player.username}'s ${card.techName} was undone: ${removed === effect.culture ? removed : `${removed} of ${effect.culture}`} (${total}) culture removed and ${returnedText(effect.spent)} returned`,
       })
     },
   }
@@ -507,6 +519,14 @@ function markersBack(
     : placeBack(withMarker, player, effect.caravan.piece, at)
 }
 
+/** Why the Egyptians' free build cannot be used for this kind of item now, or `undefined` when it can. */
+function egyptFreeRefusal(state: GameState, player: Playerhand, itemKind: string): string | undefined {
+  if (player.civilization?.name !== EGYPTIANS) return 'Only the Egyptians can build for free.'
+  if (itemKind !== 'building' && itemKind !== 'walls') return 'The Egyptians build only a building or City Walls for free, not a wonder, a figure or a unit.'
+  if (!egyptFreeBuildOpen(state, player)) return 'The Egyptians have already built for free this turn.'
+  return undefined
+}
+
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
 
 /** The `build` payload, or `undefined` when the payload is another action's or missing. */
@@ -730,8 +750,14 @@ const build: AssistedActionDefinition = {
       return err(failed('That is not something that can be built.'))
     }
 
+    // The Egyptians' free build is a whole action of its own and is never combined with Engineering (rulings 80 and 164)
+    const free = payload.free === true
+    if (free) {
+      const refusal = egyptFreeRefusal(state, player, item.kind)
+      if (refusal !== undefined) return err(failed(refusal))
+    }
     // A confirmed repeat is another allowance that covers the build: it takes the city's full production, so Engineering does not split
-    const city = buildOptionsOf(state, player, context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+    const city = buildOptionsOf(state, player, !free && context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
     if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
     if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
 
@@ -776,10 +802,18 @@ const build: AssistedActionDefinition = {
         return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
       }
     }
-    if (choice.tradeToPay > 0 && payload.rush !== true) {
+    if (free && choice.freeBuild !== true) return err(failed(`${choice.label} cannot be built for free.`))
+    if (!free && choice.freeOnly === true) {
+      return err(
+        failed(`${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}, and trade cannot cover the rest. The Egyptians can build it for free instead.`),
+      )
+    }
+    // A free build pays nothing: no production is used and no trade is paid
+    const tradeToPay = free ? 0 : choice.tradeToPay
+    if (tradeToPay > 0 && payload.rush !== true) {
       return err(
         failed(
-          `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${choice.tradeToPay} trade to build it.`,
+          `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${tradeToPay} trade to build it.`,
         ),
       )
     }
@@ -799,8 +833,17 @@ const build: AssistedActionDefinition = {
         ),
       )
     }
+    // The Romans advance one space for free with every wonder (civilization sheet), so a wonder is refused
+    // while that advance is stopped (a card choice waiting, a hand over its size); the end of the track stops nothing
+    const romanWonder = payload.item.kind === 'wonder' && player.civilization?.name === ROMANS
+    if (romanWonder) {
+      const status = freeAdvanceStatus(state, player)
+      if (status.kind === 'blocked') {
+        return err(failed(`The Romans advance one space for free with every wonder, and that is stopped now: ${status.reason}`))
+      }
+    }
     const sharing = {
-      cost: choice.cost,
+      cost: free ? 0 : choice.cost,
       production: city.production,
       ...(split === undefined ? {} : { engineering: { firstRecordId: split.firstRecordId } }),
     }
@@ -850,7 +893,7 @@ const build: AssistedActionDefinition = {
     // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
     let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
     const caravanPiece =
-      city.caravan && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
+      city.caravan && !free && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
     if (caravanPiece !== undefined) {
       const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
       const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
@@ -871,7 +914,7 @@ const build: AssistedActionDefinition = {
       ...paying,
       wonderDiscount: paying.wonderDiscount - wonderDiscount,
       ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
-      stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
+      stats: { ...paying.stats, trade: paying.stats.trade - tradeToPay },
     })
     // Education: once per turn, a wonder adds a coin to the tech (max 4)
     const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
@@ -879,8 +922,13 @@ const build: AssistedActionDefinition = {
     const keyHolder = playerOf(educated.state, paying.playerId) ?? paying
     // Read from the state with Education's coin already in it, so the coin's own key on the turn is not written over
     const keyTurn = split === undefined ? undefined : openCityManagementTurn(educated.state, keyHolder)
-    const paid =
+    const engineered =
       keyTurn === undefined ? educated.state : useTurnAction(educated.state, keyHolder, keyTurn, ENGINEERING_KEY, keyHolder.stats)
+    // The Egyptians' free build is once per turn: its key is written by the build that used it
+    const egyptHolder = playerOf(engineered, paying.playerId) ?? paying
+    const egyptTurn = free ? openCityManagementTurn(engineered, egyptHolder) : undefined
+    const paid =
+      egyptTurn === undefined ? engineered : useTurnAction(engineered, egyptHolder, egyptTurn, EGYPT_FREE_BUILD_KEY, egyptHolder.stats)
     const educationCoin = educated.granted ?? undefined
     const where =
       made.kind === 'placed'
@@ -897,7 +945,11 @@ const build: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
-        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} (${paying.stats.trade - choice.tradeToPay}) trade for the missing production` : '') +
+        (free
+          ? ', for free with the Egyptian ability'
+          : tradeToPay > 0
+            ? `, paying ${tradeToPay} (${paying.stats.trade - tradeToPay}) trade for the missing production`
+            : '') +
         (removal === null ? '' : ', using up the Building Program marker') +
         (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
         (hensonWound ? ', and Jim Henson took a wound marker' : '') +
@@ -940,7 +992,7 @@ const build: AssistedActionDefinition = {
             itemId: made.card.id,
             sheetName: made.sheetName,
           },
-          trade: choice.tradeToPay,
+          trade: tradeToPay,
           ...sharing,
           marker: removal,
           ...(caravan === undefined ? {} : { caravan }),
@@ -957,8 +1009,9 @@ const build: AssistedActionDefinition = {
           cityPieceId: city.cityPieceId,
           item: payload.item,
           walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
-          trade: choice.tradeToPay,
+          trade: tradeToPay,
           ...sharing,
+          ...(free ? { free: true as const } : {}),
           marker: removal,
           ...(caravan === undefined ? {} : { caravan }),
         },
@@ -981,6 +1034,17 @@ const build: AssistedActionDefinition = {
         drawn = { item: card, pieceId: entry.change.piece.id, historyId: entry.id }
       }
     }
+    // The Romans' free advance for the wonder; its own line carries no action id, so only the build's line takes the undo vote
+    let advance: CultureAdvanceEffect | undefined
+    if (romanWonder) {
+      const holder = playerOf(refilled, player.playerId) ?? player
+      if (freeAdvanceStatus(refilled, holder).kind === 'ok') {
+        const taken = performAdvance(refilled, holder, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
+        if (!taken.ok) return taken
+        refilled = taken.value.state
+        advance = taken.value.effect
+      }
+    }
     return ok({
       state: refilled,
       effect: {
@@ -998,19 +1062,35 @@ const build: AssistedActionDefinition = {
           : replaced.reserved
             ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
             : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
-        trade: choice.tradeToPay,
+        trade: tradeToPay,
         ...sharing,
+        ...(free ? { free: true as const } : {}),
         marker: removal,
         ...(caravan === undefined ? {} : { caravan }),
         ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
         ...(hensonWound ? { hensonWound: true as const } : {}),
         ...(educationCoin === undefined ? {} : { educationCoin }),
+        ...(advance === undefined ? {} : { advance }),
       },
       logId,
     })
   },
 
   reverse(state, player, record, at, pieceMayHaveMoved = false) {
+    const effect = record.effect
+    // The Romans' free advance goes first: it can refuse (the marker has moved on), and a refusal leaves the game as it was
+    if (effect.kind === 'build' && 'advance' in effect && effect.advance !== undefined && effect.advance !== null) {
+      const reversed = reverseAdvanceEffect(state, player, record, effect.advance, at)
+      if (!reversed.ok) return reversed
+      const back = reverseBuild(reversed.value.state, playerOf(reversed.value.state, player.playerId) ?? player, record, at, pieceMayHaveMoved)
+      if (!back.ok) return back
+      return ok({ state: back.value.state, text: `${back.value.text}, and the free advance was taken back` })
+    }
+    return reverseBuild(state, player, record, at, pieceMayHaveMoved)
+  },
+}
+
+const reverseBuild: AssistedActionDefinition['reverse'] = (state, player, record, at, pieceMayHaveMoved = false) => {
     const effect = record.effect
     if (effect.kind !== 'build') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const refused = (reason: string): EngineError => ({
@@ -1189,7 +1269,6 @@ const build: AssistedActionDefinition = {
         tradeText +
         markerText,
     })
-  },
 }
 
 // -- Start a Building Program -----------------------------------------------------
@@ -1752,7 +1831,10 @@ import { atomicTheory } from './assisted-atomic-theory.js'
 import { bureaucracy } from './assisted-bureaucracy.js'
 import { agriculture } from './assisted-agriculture.js'
 import { RELIC_ACTIONS } from './assisted-relics.js'
+import { AZTEC_ACTIONS } from './assisted-aztecs.js'
+import { SPANISH_ACTIONS } from './assisted-spanish.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
+import { CONQUEST_ACTIONS } from './assisted-conquest.js'
 
 /** Every assisted action, in the order the projection lists them. */
 export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
@@ -1784,7 +1866,10 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ...SOT_ACTIONS,
   ...ABILITY_ACTIONS,
   ...RELIC_ACTIONS,
+  ...AZTEC_ACTIONS,
+  ...SPANISH_ACTIONS,
   ...CITY_ACTIONS,
+  ...CONQUEST_ACTIONS,
 ]
 
 /** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */
@@ -1959,7 +2044,12 @@ export function performAssistedAction(
     turnNumber: status.currentTurn,
     // A reward can be chosen after City Management has closed, and an upgrade is done in whatever phase the tech was learned in; every other action needs it open
     phase: definition.phase === 'ANY' ? openPhaseOf(status, input.playerId) : definition.phase,
-    usageKey: effect.kind === 'build' && effect.engineering !== undefined ? ENGINEERING_KEY : definition.usageKey,
+    usageKey:
+      effect.kind === 'build' && 'free' in effect && effect.free === true
+        ? EGYPT_FREE_BUILD_KEY
+        : effect.kind === 'build' && effect.engineering !== undefined
+          ? ENGINEERING_KEY
+          : definition.usageKey,
     at: input.at ?? null,
     logId: applied.value.logId,
     status: 'applied',
@@ -2073,6 +2163,13 @@ export function reverseAssistedAction(
   // Galileo's (and Cousteau's, and Giannini's free building's) undo wrote the reverse moves itself. Keep the board Undo from walking past them into
   // the forward moves, which would teleport the already-restored figures to the destination again.
   if (
+    // A free culture advance another action holds (the Romans' wonder and city, the Arabs' coin, Mother Teresa, Sydney
+    // Opera House, a conquest) was taken back by moving the leader marker, and a Great Person marker it placed was
+    // removed: the board Undo must not move the marker forward again with the price refunded and the cards back in the deck.
+    // A plain advance of the Advance button is not sealed: its own tests keep the board Undo of the older entries working
+    (effect.kind !== 'cultureAdvance' && advanceEffectOf(record) !== undefined) ||
+    // A Zulu city explored huts: the reversal moved the tokens back to their squares and the cards back to the deck
+    (effect.kind === 'foundCity' && effect.huts !== undefined && effect.huts.length > 0) ||
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
       (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
@@ -2145,6 +2242,13 @@ export function takeBackOpenBuild(
   // with the build: the piece is removed as any other, which is what the player asked for
   if (record.effect.kind === 'build' && 'reserved' in record.effect && reservedUndoBlock(state, record.playerId, record.effect) !== undefined) {
     return undefined
+  }
+  // The Romans' free advance for this wonder cannot be taken back (the marker has moved on, a Great Person marker it placed has
+  // left the player's area, or a reward card is gone): the piece is removed as any other. The advance is reversed on a copy of the
+  // game, exactly as the take-back below will, so its every refusal is met here and none comes up after the build is half undone.
+  if (record.effect.kind === 'build' && 'advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
+    const holder = playerOf(state, record.playerId)
+    if (holder === undefined || !reverseAdvanceEffect(state, holder, record, record.effect.advance, input.at ?? null).ok) return undefined
   }
   // Military Tradition gave a free unit for this army: the army is removed as any other, and the unit stays
   if (militaryTraditionUndoBlock(state, record) !== undefined) return undefined

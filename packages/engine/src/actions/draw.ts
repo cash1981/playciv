@@ -247,6 +247,11 @@ function putRejectedGreatPersons(
  * Moves the item at `index` from the deck into the player's hand and logs the
  * draw. Java set `hidden = true` in `createDraw` — items come out of
  * ItemReader hidden already, so it is only a confirmation.
+ *
+ * An exploration tile skips the hand: it is laid on the map and its card goes
+ * straight to the discard pile, where the Revealed and Discarded Items panel
+ * shows it. Tiles are never reshuffled, so the card cannot be drawn again. A
+ * vote undo of the draw line still puts the card back in the deck.
  */
 function takeFromDeck(
   state: GameState,
@@ -262,13 +267,17 @@ function takeFromDeck(
     ...state,
     items: [...state.items.slice(0, index), ...state.items.slice(index + 1)],
   }
+  if (drawn.kind === 'tile') {
+    const discarded: GameState = { ...withDeck, discardedItems: [...withDeck.discardedItems, drawn] }
+    const logged = appendItemLog(discarded, 'ITEM', player.username, player.playerId, drawn)
+    return placeExploredTile(logged, player.playerId, drawn, tileOrigin, tileRotation)
+  }
   const withHand = withPlayer(withDeck, {
     ...player,
     items: [...player.items, drawn],
   })
 
-  const logged = appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
-  return drawn.kind === 'tile' ? placeExploredTile(logged, player.playerId, drawn, tileOrigin, tileRotation) : logged
+  return appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
 }
 
 /**
@@ -300,8 +309,8 @@ function placeExploredTile(
 
 /**
  * Draws the next exploration tile and lays it at `origin` instead of the first free slot: what a
- * figure's exploration does (issue #302). Like a manual draw the card goes to the player's hand,
- * faceup on the map from then on; the deck is reshuffled from the discards when it has run out.
+ * figure's exploration does (issue #302). Like a manual draw the card goes to the discard pile,
+ * faceup on the map from then on. Tiles are not reshuffled, so an empty deck refuses the draw.
  * It has no turn check: the caller (the figure's movement) has made its own.
  * `rotation` turns the tile as it is laid; left out, it lies unturned.
  */

@@ -362,12 +362,24 @@ describe('Florence Nightingale after End battle', () => {
     expect(saved.length).toBeGreaterThan(0)
     expect(saved.every((unit) => unit.saved === true)).toBe(true)
     expect(toPlayerView(after, KARANDRAS1).lastBattle?.arena.some((unit) => unit.saved === true)).toBe(true)
-    expect(after.log.at(-1)?.publicLog).toContain('saving 1 killed unit')
+    expect(after.log.at(-1)?.publicLog).toContain('saving 1 killed unit: they go back to the hand')
+    // End battle discarded the killed unit's card; she takes it off the pile, back to the hand
+    const cardOf = saved[0]!.unit.id
+    expect(state.discardedItems.some((item) => item.id === cardOf)).toBe(true)
+    expect(after.discardedItems.some((item) => item.id === cardOf)).toBe(false)
+    expect(findPlayer(after, CASH1981)!.items.find((item) => item.id === cardOf)).toMatchObject({ inBattle: false })
+    const discardLine = (s: GameState) => s.log.find((entry) => entry.logType === 'DISCARD' && entry.item?.id === cardOf)
+    expect(discardLine(after)?.superseded).toBe(true)
     const undone = undoByVote(after, CASH1981, 'b1')
     expect(undone.endedBattle!.battle.arena.some((unit) => unit.saved !== undefined)).toBe(false)
-    // The ender's Undo end battle brings the battle back with the mark, when it was kept
+    // Her undo discards the card again, and its discard line counts again
+    expect(undone.discardedItems.some((item) => item.id === cardOf)).toBe(true)
+    expect(findPlayer(undone, CASH1981)!.items.some((item) => item.id === cardOf)).toBe(false)
+    expect(discardLine(undone)?.superseded).toBeUndefined()
+    // The ender's Undo end battle brings the battle back with the mark, when it was kept, and the card locked in it
     const back = unwrap(undoEndBattle(after, { playerId: KARANDRAS1 }))
     expect(back.battle?.arena.some((unit) => unit.saved === true)).toBe(true)
+    expect(findPlayer(back, CASH1981)!.battlehand.find((item) => item.id === cardOf)).toMatchObject({ inBattle: true })
   })
 
   it('is refused by a player who was not in the battle, without a killed unit, and once a new battle has started', () => {

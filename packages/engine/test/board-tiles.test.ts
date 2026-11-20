@@ -394,8 +394,8 @@ describe('automatic placement', () => {
     expect(tiles).toHaveLength(1)
     expect([tiles[0]?.x, tiles[0]?.y]).toEqual([0, mapTop(after.board)])
 
-    // The piece has to match the card that landed in the hand
-    const drawn = findPlayer(after, CASH1981)?.items.at(-1)
+    // The piece has to match the card, which went straight to the discard pile
+    const drawn = after.discardedItems.at(-1)
     if (drawn?.kind !== 'tile') throw new Error('drew something other than a tile')
     expect(tiles[0]?.assetId).toBe(tileAssetIdForNumber(Number(drawn.name)))
   })

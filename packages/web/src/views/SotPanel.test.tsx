@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBoard, mapTop } from '@civ/engine'
@@ -11,7 +11,7 @@ import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { MapPickerContext } from './mapPick.js'
 import type { MapPicker } from './mapPick.js'
-import { StartOfTurnChoices } from './SotPanel.js'
+import { SpanishFreeBuild, StartOfTurnChoices } from './SotPanel.js'
 
 beforeEach(() => {
   resetPendingRequestIds()
@@ -22,6 +22,35 @@ afterEach(() => {
 })
 
 type StartOfTurn = NonNullable<NonNullable<PlayerView['you']>['startOfTurn']>
+
+
+type PickCell = { column: number; row: number; label: string; cityPieceId?: string; note?: string }
+
+/** A board picker whose picks the test answers: `pick(label)` taps a square, `cancel()` is Escape on the board. */
+function boardPicker() {
+  const open: Array<(cell: PickCell | null) => void> = []
+  const begin = vi.fn(
+    (_request: { title: string; cells: readonly PickCell[] }) =>
+      new Promise<PickCell | null>((resolve) => {
+        open.push(resolve)
+      }),
+  )
+  const cancel = vi.fn(() => open.pop()?.(null))
+  const picker = { begin, cancel } as unknown as MapPicker
+  const cells = (): readonly PickCell[] => begin.mock.calls.at(-1)?.[0].cells ?? []
+  return {
+    picker,
+    begin,
+    cancel,
+    cells,
+    pick: async (label: string) => {
+      const cell = cells().find((candidate) => candidate.label === label)
+      if (cell === undefined) throw new Error(`no square ${label}`)
+      await act(async () => open.pop()?.(cell))
+    },
+    escape: () => act(async () => open.pop()?.(null)),
+  }
+}
 
 const READY = { status: 'ready', reason: 'You may change government once in your Start of Turn.' } as const
 
@@ -47,6 +76,7 @@ function sotWith(overrides: Partial<StartOfTurn> = {}): StartOfTurn {
       totalCoins: 2,
     },
     giannini: null,
+    spanish: null,
     cityLimit: { have: 2, max: 2 },
     cities: [
       { pieceId: 'c1', label: 'Capital B3' },
@@ -586,7 +616,7 @@ describe('scouts and cities', () => {
 
   it('tells a Zulu player about the hut next to the new city', () => {
     renderChoices(viewOf(sotWith({ scouts: [scout({ found: { ok: true, reasons: [], zuluHuts: ['F5'] } })] as never })))
-    expect(screen.getByText(/The Zulu may explore the hut next to the city \(F5\)/)).toBeTruthy()
+    expect(screen.getByText(/The Zulu explore the huts next to the city \(F5\) at once, when a hut card is left/)).toBeTruthy()
   })
 
   it('is hidden outside the Start of Turn', () => {
@@ -803,25 +833,34 @@ describe('A. P. Giannini', () => {
     expect(screen.queryByRole('region', { name: 'A. P. Giannini: a free building' })).toBeNull()
   })
 
-  it('needs a building and a square, then sends the choice and clears the form', async () => {
-    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
-    renderChoices(viewOf(giannini('ready', READY_TEXT)))
-    const button = within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-    const building = within(section()).getByRole('combobox', { name: 'Building' }) as HTMLSelectElement
-    const square = within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement
-    expect(square.disabled).toBe(true)
+  const renderWithBoard = (view: PlayerView, board: ReturnType<typeof boardPicker>) =>
+    render(
+      <MapPickerContext.Provider value={board.picker}>
+        <StartOfTurnChoices gameId="g1" view={view} busy={false} readOnly={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
 
+  it('has no square dropdown: choosing a building highlights its squares on the board and nothing is sent yet', () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const board = boardPicker()
+    renderWithBoard(viewOf(giannini('ready', READY_TEXT)), board)
+    expect(within(section()).queryByRole('combobox', { name: 'Square' })).toBeNull()
+    expect(board.begin).not.toHaveBeenCalled()
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/library' } })
+    expect(board.begin).toHaveBeenCalledTimes(1)
+    expect(board.begin.mock.calls[0]?.[0].title).toBe('Library')
+    expect(board.cells().map((cell) => cell.label)).toEqual(['C3', 'F6'])
+    expect(within(section()).getByText('Pick a square for the Library on the map.')).toBeTruthy()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('sends the same payload when a plain square is tapped, and clears the form', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const board = boardPicker()
+    renderWithBoard(viewOf(giannini('ready', READY_TEXT)), board)
+    const building = within(section()).getByRole('combobox', { name: 'Building' }) as HTMLSelectElement
     fireEvent.change(building, { target: { value: 'buildings/library' } })
-    expect(within(square).getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'Choose a square',
-      'Capital B3 — C3',
-      'City F6 — F6',
-    ])
-    expect(button.disabled).toBe(true)
-    fireEvent.change(square, { target: { value: 'c2:5:5' } })
-    expect(button.disabled).toBe(false)
-    fireEvent.click(button)
+    await board.pick('F6')
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send).toHaveBeenCalledWith('g1', 'gianniniBuild', expect.any(String), 6, {
       cityPieceId: 'c2',
@@ -830,10 +869,9 @@ describe('A. P. Giannini', () => {
       row: 5,
     })
     await waitFor(() => expect(building.value).toBe(''))
-    expect(square.value).toBe('')
   })
 
-  it('says what a square replaces, in the option and in a note once it is chosen, and sends the same payload', async () => {
+  it('reads a replacing square first: its note is shown and the button builds, with the same payload', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const replacing = [
       {
@@ -853,20 +891,14 @@ describe('A. P. Giannini', () => {
         ],
       },
     ]
-    renderChoices(viewOf(giannini('ready', READY_TEXT, replacing)))
+    const board = boardPicker()
+    renderWithBoard(viewOf(giannini('ready', READY_TEXT, replacing)), board)
     fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/market' } })
-    const square = within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement
-    expect(within(square).getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'Choose a square',
-      'City B2 — C2 (replaces your Library)',
-      'City F6 — F6',
-    ])
-    // A plain square says nothing; the one that replaces says what happens to the old building
-    expect(within(section()).queryByText(/Replaces your Library/)).toBeNull()
-    fireEvent.change(square, { target: { value: 'c2:5:5' } })
-    expect(within(section()).queryByText(/Replaces your Library/)).toBeNull()
-    fireEvent.change(square, { target: { value: 'c1:2:1' } })
-    expect(within(section()).getByText('Replaces your Library, which is taken off the board and goes back to the supply.')).toBeTruthy()
+    // The cells carry the replaces data the board styles and names its buttons by
+    expect(board.cells().find((cell) => cell.label === 'C2')).toMatchObject({ replaces: { label: 'Library' } })
+    await board.pick('C2')
+    expect(send).not.toHaveBeenCalled()
+    expect(within(section()).getByText(/Replaces your Library, which is taken off the board and goes back to the supply\./)).toBeTruthy()
     fireEvent.click(within(section()).getByRole('button', { name: 'Build for free' }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send).toHaveBeenCalledWith('g1', 'gianniniBuild', expect.any(String), 6, {
@@ -877,21 +909,111 @@ describe('A. P. Giannini', () => {
     })
   })
 
-  it('forgets the square when another building is chosen, and drops a choice that a refresh took away', () => {
-    const view = viewOf(giannini('ready', READY_TEXT))
-    const { rerender } = renderChoices(view)
+  it('can pick another square after reading a note, which opens the board pick again', async () => {
+    const replacing = [
+      { assetId: 'buildings/market', label: 'Market', squares: [{ cityPieceId: 'c1', cityLabel: 'City B2', column: 2, row: 1, label: 'C2', replaces: { assetId: 'buildings/library', label: 'Library', kind: 'building' }, note: 'Replaces your Library.' }] },
+    ]
+    const board = boardPicker()
+    renderWithBoard(viewOf(giannini('ready', READY_TEXT, replacing)), board)
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/market' } })
+    await board.pick('C2')
+    expect(board.begin).toHaveBeenCalledTimes(1)
+    fireEvent.click(within(section()).getByRole('button', { name: 'Pick another square' }))
+    expect(board.begin).toHaveBeenCalledTimes(2)
+    expect(within(section()).queryByRole('button', { name: 'Build for free' })).toBeNull()
+  })
+
+  it('cancel clears the selection and closes the board pick, and so does Escape on the board', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const board = boardPicker()
+    renderWithBoard(viewOf(giannini('ready', READY_TEXT)), board)
+    const building = within(section()).getByRole('combobox', { name: 'Building' }) as HTMLSelectElement
+    fireEvent.change(building, { target: { value: 'buildings/library' } })
+    fireEvent.click(within(section()).getByRole('button', { name: 'Cancel' }))
+    expect(board.cancel).toHaveBeenCalledTimes(1)
+    expect(building.value).toBe('')
+    expect(within(section()).queryByRole('button', { name: 'Cancel' })).toBeNull()
+
+    fireEvent.change(building, { target: { value: 'buildings/granary' } })
+    expect(board.begin).toHaveBeenCalledTimes(2)
+    await board.escape()
+    await waitFor(() => expect(building.value).toBe(''))
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('does not reopen the pick when the send did not go through, and offers a button to start it again', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockRejectedValue(new Error('refused'))
+    const quietRun: Run = async (action) => {
+      try {
+        await action()
+      } catch {
+        // like GameView: the failure is shown elsewhere
+      }
+    }
+    const board = boardPicker()
+    render(
+      <MapPickerContext.Provider value={board.picker}>
+        <StartOfTurnChoices gameId="g1" view={viewOf(giannini('ready', READY_TEXT))} busy={false} readOnly={false} run={quietRun} />
+      </MapPickerContext.Provider>,
+    )
     fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/library' } })
-    fireEvent.change(within(section()).getByRole('combobox', { name: 'Square' }), { target: { value: 'c1:2:2' } })
-    expect((within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(within(section()).queryByRole('button', { name: 'Pick a square on the map' })).toBeNull()
+    await board.pick('F6')
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+    expect(board.begin).toHaveBeenCalledTimes(1)
+    // The building stays chosen, with a way back to the map
+    expect((within(section()).getByRole('combobox', { name: 'Building' }) as HTMLSelectElement).value).toBe('buildings/library')
+    fireEvent.click(within(section()).getByRole('button', { name: 'Pick a square on the map' }))
+    expect(board.begin).toHaveBeenCalledTimes(2)
+    expect(within(section()).queryByRole('button', { name: 'Pick a square on the map' })).toBeNull()
+  })
 
-    // The square is taken: the selection no longer counts, so nothing stale can be sent
-    const refreshed = giannini('ready', READY_TEXT, [{ ...choices[0], squares: [choices[0]?.squares[1]] }, choices[1]])
-    rerender(<StartOfTurnChoices gameId="g1" view={viewOf(refreshed)} busy={false} readOnly={false} run={run} />)
-    expect((within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement).value).toBe('')
-    expect((within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement).disabled).toBe(true)
+  it('moves focus to the Build for free button when a replacing square is picked, and forgets a picked square a refresh took away', async () => {
+    const market = (squares: readonly unknown[]) => [{ assetId: 'buildings/market', label: 'Market', squares }]
+    const c2 = { cityPieceId: 'c1', cityLabel: 'City B2', column: 2, row: 1, label: 'C2', replaces: { assetId: 'buildings/library', label: 'Library', kind: 'building' }, note: 'Replaces your Library.' }
+    const f6 = { cityPieceId: 'c2', cityLabel: 'City F6', column: 5, row: 5, label: 'F6' }
+    const board = boardPicker()
+    const view = (list: readonly unknown[]) => viewOf(giannini('ready', READY_TEXT, market(list)))
+    const wrap = (v: PlayerView) => (
+      <MapPickerContext.Provider value={board.picker}>
+        <StartOfTurnChoices gameId="g1" view={v} busy={false} readOnly={false} run={run} />
+      </MapPickerContext.Provider>
+    )
+    const { rerender } = render(wrap(view([c2, f6])))
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/market' } })
+    await board.pick('C2')
+    expect(document.activeElement).toBe(within(section()).getByRole('button', { name: 'Build for free' }))
 
+    // The note is the current one
+    rerender(wrap(view([{ ...c2, note: 'Replaces your Library (new note).' }, f6])))
+    expect(within(section()).getByText(/new note/)).toBeTruthy()
+
+    // The square is taken: nothing stale can be built, and the pick opens again for the squares left
+    const before = board.begin.mock.calls.length
+    rerender(wrap(view([f6])))
+    expect(within(section()).queryByRole('button', { name: 'Build for free' })).toBeNull()
+    expect(board.begin.mock.calls.length).toBeGreaterThan(before)
+    expect(board.cells().map((cell) => cell.label)).toEqual(['F6'])
+  })
+
+  it('opens the pick for the other building when the choice changes, and closes it when a refresh takes the choice away', () => {
+    const board = boardPicker()
+    const { rerender } = renderWithBoard(viewOf(giannini('ready', READY_TEXT)), board)
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/library' } })
     fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/granary' } })
-    expect((within(section()).getByRole('combobox', { name: 'Square' }) as HTMLSelectElement).value).toBe('')
+    expect(board.begin).toHaveBeenCalledTimes(2)
+    expect(board.cells().map((cell) => cell.label)).toEqual(['B4'])
+
+    // The Granary is gone from the engine's list: its squares are no longer highlighted
+    const refreshed = giannini('ready', READY_TEXT, [choices[0]])
+    rerender(
+      <MapPickerContext.Provider value={board.picker}>
+        <StartOfTurnChoices gameId="g1" view={viewOf(refreshed)} busy={false} readOnly={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    expect(board.cancel).toHaveBeenCalled()
+    expect((within(section()).getByRole('combobox', { name: 'Building' }) as HTMLSelectElement).value).toBe('')
   })
 
   it('stays as a compact disabled row once the free building was built', () => {
@@ -900,5 +1022,63 @@ describe('A. P. Giannini', () => {
     expect(button.disabled).toBe(true)
     expect(within(section()).getByText('Used')).toBeTruthy()
     expect(within(section()).queryByRole('combobox')).toBeNull()
+  })
+})
+
+const renderSpanish = (view: PlayerView) =>
+  render(<SpanishFreeBuild gameId="g1" view={view} busy={false} readOnly={false} run={run} />)
+
+describe('Spanish free building', () => {
+  const choices = [
+    { assetId: 'buildings/bank', label: 'Bank', squares: [{ cityPieceId: 'c1', cityLabel: 'Capital B3', column: 2, row: 2, label: 'C3' }] },
+    {
+      assetId: 'buildings/market',
+      label: 'Market',
+      squares: [{ cityPieceId: 'c1', cityLabel: 'Capital B3', column: 1, row: 3, label: 'B4', replaces: { kind: 'building', assetId: 'buildings/temple', label: 'Temple' } }],
+    },
+  ]
+  const spanish = (status: string, reason: string, list: readonly unknown[] = choices) =>
+    sotWith({ spanish: { status, reason, choices: list } } as unknown as Partial<StartOfTurn>)
+  const READY_TEXT = 'Build one basic building in one of your cities for free, unlocked or not (1 of 1 left).'
+  const section = () => screen.getByRole('region', { name: 'Spanish: a free building' })
+
+  it('has no section for another civilization or without a credit', () => {
+    renderSpanish(viewOf(sotWith()))
+    expect(screen.queryByRole('region', { name: 'Spanish: a free building' })).toBeNull()
+  })
+
+  it('is not in the Start of Turn choices, which would show it twice beside the picker above the tabs', () => {
+    renderChoices(viewOf(spanish('ready', READY_TEXT)))
+    expect(screen.queryByRole('region', { name: 'Spanish: a free building' })).toBeNull()
+  })
+
+  it('sends the choice to spanishBuild with the same payload as Giannini, from a square tapped on the board', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const board = boardPicker()
+    render(
+      <MapPickerContext.Provider value={board.picker}>
+        <SpanishFreeBuild gameId="g1" view={viewOf(spanish('ready', READY_TEXT))} busy={false} readOnly={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    expect(within(section()).queryByRole('combobox', { name: 'Square' })).toBeNull()
+    fireEvent.change(within(section()).getByRole('combobox', { name: 'Building' }), { target: { value: 'buildings/bank' } })
+    await board.pick('C3')
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'spanishBuild', expect.any(String), 6, {
+      cityPieceId: 'c1',
+      assetId: 'buildings/bank',
+      column: 2,
+      row: 2,
+    })
+  })
+
+  it('shows a missing legal square as unavailable with its reason, not as used', () => {
+    const reason = 'No basic building has an empty legal square in the outskirts of your cities. Your free building is kept (1 left).'
+    renderSpanish(viewOf(spanish('unavailable', reason, [])))
+    const button = within(section()).getByRole('button', { name: 'Build for free' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(within(section()).queryByText('Used')).toBeNull()
+    // Said once, in the text: no second copy in a hint beside the button
+    expect(screen.getAllByText(reason)).toHaveLength(1)
   })
 })

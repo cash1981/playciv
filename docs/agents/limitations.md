@@ -4,11 +4,41 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 
 ## Game behavior
 
-- **Engineering:** Egypt's free build (ruling 164 to 168) is not modelled. The cancel list does not say that cancelling the first build of
+- **Engineering:** The cancel list does not say that cancelling the first build of
   an Engineering split also takes back the second; cancelling only the second leaves the first, and the players are trusted to pick
   the first build. The remaining production is computed from the first build's recorded cost and production, so a hand-set production
   changed between the two builds is not seen. Engineering is offered only when the build is the city's first action: a build that is
   itself an extra action (Atomic Theory, Lovelace, a confirmed repeat) cannot be split.
+- **Civilization abilities not automated (#368):** Chinese walls and Indian metropolis are markers put in the area at
+  reveal for the player to place, until a proper setup phase exists (issue #374); the American free great person
+  stays manual (the social policy picked at the same moment, Organized Religion drawing two and keeping one, needs
+  that setup phase too); Mongol loot (not modelled); French policy cap (no cap exists); Russian sacrifice (no
+  enemy-army-city model); Zulu metropolis hut
+  exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
+  the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
+  spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);
+  the player corrects the culture counter by hand to undo it. The same refusal applies to the End battle undo of an
+  Aztec reward that is spent. The Spanish migration cannot tell an old save from a Spanish player who typed `2` on
+  purpose when no reveal setup records the choice: that `2` is set to `2+1` on load. The Spanish free-building credit
+  counts every tile explored, also one the players later move or remove by hand, and a great person drawn by hand in
+  the Draw panel gives the Greeks and Aztecs nothing extra.
+- **Killed units and the Chinese save (#368):** End battle discards only the players' killed units; killed barbarians
+  are still discarded by hand with Discard barbarians. The Chinese save has no undo of its own (only Undo end battle,
+  by the player who ended the battle), and its window closes when the next battle starts.
+- **Conquests (#368):** the offer (a village for every civ, with the Roman free advance or the Chinese 3 culture; a city
+  for the Romans) is made from a heuristic,
+  not from a conquest the game knows: an own army ended its last qualifying move on a village or (Romans) another
+  player's city, and that player won a battle in the arena against the barbarians (village) or the city's owner (city)
+  with the army still on that square. It cannot tell what the battle was really fought for, so a win elsewhere with the
+  army standing on the square counts; a battle settled by hand outside the arena, or a city walked into with no
+  defender, makes no offer (the player takes the reward by hand); a city that changes owner is not modelled; the pending
+  move is only the last qualifying one of each player, and a board Undo of that move leaves it in place: it only counts while
+  the army stands on the recorded square, and a newer move or the next battle of the player replaces or uses it up.
+  The village fight question is asked by the web client from what it sees; when the engine ignores it (another player's
+  figures on the square, a battle already active) the army just moves.
+- **Aztec free units (#368):** a Great Person drawn by hand in the Draw panel, or gained outside an assisted action,
+  gives no credits; the player draws the units by hand. A free unit drawn before its Great Person was undone stays in
+  the hand.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares

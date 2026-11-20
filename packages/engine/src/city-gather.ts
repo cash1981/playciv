@@ -13,10 +13,10 @@
  * Pure: the phase and the supply of tokens are decided by the caller, not here.
  */
 
-import { mapCellOf, pieceColorOf } from './blockade.js'
+import { mapCellOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
-import { WHITE_SCOUT_ID, isMapCell, whiteFigureFor } from './board.js'
-import { capitalOf, ownCityCentreKeys, scoutDestinationsOf } from './sot.js'
+import { isMapCell } from './board.js'
+import { capitalOf, gathersForCity, ownCityCentreKeys, scoutDestinationsOf } from './sot.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import { buildingDataOf, buildingNameOf } from './building-data.js'
@@ -165,15 +165,6 @@ function readSquare(state: GameState, cell: Cell): SquareReading {
   return { cell, label, covered: null, source: 'Culture icon', culture, tile: null, resource, coveredResource, known: icons !== null }
 }
 
-/** Whether the piece is a scout of this player: their colour's, or the white one of the Spanish. */
-function isOwnScout(piece: BoardPiece, player: Playerhand): boolean {
-  if (piece.category !== 'figure' || !piece.assetId.endsWith('scout')) return false
-  if (piece.assetId === WHITE_SCOUT_ID) {
-    return player.civilization !== null && whiteFigureFor(player.civilization.name) === WHITE_SCOUT_ID
-  }
-  return player.color !== null && pieceColorOf(piece) === player.color.toLowerCase()
-}
-
 /** "Temple", "The Louvre", "Artist (Great Person)" or "Culture icon": what a line of the sum names as the source. */
 const sourceLabel = (reading: SquareReading): string =>
   reading.covered === 'great person' ? `${reading.source} (Great Person)` : reading.source
@@ -208,6 +199,7 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   const found = new Map<ResourceKind, string[]>()
   const sentTo = new Map(scoutDestinationsOf(state, player).map((assignment) => [assignment.scoutPieceId, assignment]))
   const sentAway: string[] = []
+  const sentAwayBy = new Set<string>()
 
   for (const cell of outskirts) {
     const reading = readSquare(state, cell)
@@ -215,6 +207,8 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
     const leaves = [...sentTo.values()].some((assignment) => sameCell(assignment, cell) && assignment.cityPieceId !== footprint.piece.id)
     if (leaves) {
       sentAway.push(reading.label)
+      const sender = board.pieces.find((piece) => [...sentTo.values()].some((assignment) => sameCell(assignment, cell) && assignment.scoutPieceId === piece.id))
+      sentAwayBy.add(sender?.assetId.endsWith('army') === true ? 'an army' : 'a scout')
       continue
     }
     const blockaded = footprint.hasEnemyFigureAt(cell)
@@ -238,7 +232,7 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   const sentAwayNote =
     sentAway.length === 0
       ? null
-      : `${listSquares(sentAway)} ${sentAway.length === 1 ? 'is' : 'are'} sent to another city by a scout and give${sentAway.length === 1 ? 's' : ''} nothing here.`
+      : `${listSquares(sentAway)} ${sentAway.length === 1 ? 'is' : 'are'} sent to another city by ${[...sentAwayBy].sort().join(' and ')} and give${sentAway.length === 1 ? 's' : ''} nothing here.`
   if (sentAwayNote !== null) notes.push(sentAwayNote)
   if (unknown.length > 0) {
     notes.push(`The icons of ${listSquares(unknown)} are not in the map data and count as none.`)
@@ -268,11 +262,15 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   let sentHere = false
   let defaultHere = false
   let unsent = false
+  let armySent = false
   for (const piece of board.pieces) {
-    if (!isOwnScout(piece, player)) continue
+    if (!gathersForCity(player, piece)) continue
     const destination = sentTo.get(piece.id)
     if (destination !== undefined && destination.cityPieceId !== footprint.piece.id) continue
-    if (destination === undefined && hasCapital) continue
+    // An English army gathers only where it was sent: it never goes to the capital or to every city on its own
+    const army = piece.assetId.endsWith('army')
+    if (destination === undefined && (hasCapital || army)) continue
+    if (army) armySent = true
     const cell = mapCellOf(board, piece)
     if (cell === null || own.some((mine) => sameCell(mine, cell)) || centres.has(`${cell.column}:${cell.row}`)) continue
     if (destination === undefined) unsent = true
@@ -289,7 +287,7 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
     if (reading.resource !== null) {
       scoutChoices.push({
         resource: reading.resource,
-        label: `${resourceName(reading.resource)} under a scout at ${reading.label}`,
+        label: `${resourceName(reading.resource)} under ${army ? 'an army' : 'a scout'} at ${reading.label}`,
         scoutPieceId: piece.id,
         available: true,
         unavailableReason: null,
@@ -305,6 +303,7 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   if (unsent) {
     scoutNotes.push('Your capital is not marked on the map, so a scout you did not send is offered to every city. Send it to a city in the Start of Turn so the game tracks it.')
   }
+  if (armySent) scoutNotes.push('An English army gathers like a scout, but only for the city you sent it to.')
   if (scouts.length > 0) notes.push(...scoutNotes)
 
   const choices: HarvestChoiceView[] = [

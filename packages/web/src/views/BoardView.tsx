@@ -65,6 +65,7 @@ import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { DisplaySettings, formatZoom, useDisplaySettings } from './DisplaySettings.js'
+import { revealPanel } from '../lib/reveal.js'
 import { BOARD_PANEL_ID } from './PhaseSummary.js'
 
 /** A map square the player may pick, as the engine lists it for a Build. */
@@ -1265,20 +1266,43 @@ export function BoardView({
                                 Math.floor((piece.x + piece.width / 2) / board.squareSize) === cell.column &&
                                 Math.floor((piece.y + piece.height / 2 - mapStart) / board.squareSize) === cell.row,
                             )
+                      // An army on a village (not Zulu: they draw it on the move) fights the barbarians for it instead of drawing it
+                      const fightsForVillage =
+                        token !== undefined &&
+                        token.sheet === 'VILLAGES' &&
+                        selected.assetId.endsWith('army') &&
+                        viewerCivilization !== 'Zulu' &&
+                        window.confirm(
+                          `${selected.label} ends its move on a village on ${cell.label}. ` +
+                            'Fight the barbarians for it? OK moves it there and starts the battle; if you win, you are offered the village with the army still on the square. ' +
+                            'Cancel just moves there and leaves the village.',
+                        )
                       const collectToken =
-                        (token !== undefined &&
+                        !fightsForVillage &&
+                        ((token !== undefined &&
+                          !(token.sheet === 'VILLAGES' && selected.assetId.endsWith('army') && viewerCivilization !== 'Zulu') &&
                           window.confirm(
                             `${selected.label} ends its move on a ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} on ${cell.label}. ` +
                               `Draw the ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} now? OK takes the token into your area and the card into your hand; ` +
                               'Cancel just moves there and leaves the token.',
                           )) ||
-                        // An army ending its move on a relic removes the marker and gains its one-time ability (Fame and Fortune p. 9)
-                        (relic !== undefined &&
-                          window.confirm(
-                            `${selected.label} ends its move on the ${relic.label} relic on ${cell.label}. ` +
-                              'OK removes the marker and ends the move; the Ark and the School of Confucius take effect at once, and the other abilities are buttons under Possible actions. Cancel just moves there and leaves the marker.',
-                          ))
+                          // An army ending its move on a relic removes the marker and gains its one-time ability (Fame and Fortune p. 9)
+                          (relic !== undefined &&
+                            window.confirm(
+                              `${selected.label} ends its move on the ${relic.label} relic on ${cell.label}. ` +
+                                'OK removes the marker and ends the move; the Ark and the School of Confucius take effect at once, and the other abilities are buttons under Possible actions. Cancel just moves there and leaves the marker.',
+                            )))
                       setMoveModeId(null)
+                      if (fightsForVillage) {
+                        // The battle exists once the move is done: bring the Battle panel (the arena) into view. The engine
+                        // ignores the fight on a contested square or while a battle is active, so only a started battle scrolls.
+                        void run(async () => {
+                          const result = await api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, false, true)
+                          if (result.battle != null) revealPanel('battle')
+                          return result
+                        })
+                        return
+                      }
                       void run(() =>
                         collectToken
                           ? api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, true)

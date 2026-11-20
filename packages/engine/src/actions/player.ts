@@ -9,6 +9,7 @@
 import {
   areaSlotRegion,
   civTileAssetId,
+  nextFreeSlot,
   cultureCellCenter,
   cultureStepOf,
   cultureTrackHeight,
@@ -46,6 +47,7 @@ import {
   appendInfoLog,
   appendItemLog,
   appendLog,
+  appendPublicLog,
   appendRandomDiscardLog,
   createLogTexts,
   loggedItemNumber,
@@ -53,10 +55,13 @@ import {
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import { shuffle } from '../random.js'
+import { RESOURCE_KINDS } from '../tile-icons.js'
+import { applyTechRevealAbilities, undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { CivRevealSetup, GameState, Playerhand, PlayerStats } from '../state.js'
 import {
+  DEFAULT_PLAYER_STATS,
   findPlayer,
   hasUserAccess,
   isCombatHandSizeValue,
@@ -68,6 +73,26 @@ import { placeUnchecked, setWonderCoinTokens } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
+
+/** The civilizations whose reveal does something by itself. */
+const ARABS = 'Arabs'
+
+/**
+ * The marker a civilization is given in its area at the reveal, by civilization name: the Chinese walled capital and the
+ * Indian metropolis (`cities/<colour><suffix>`). The player places it themselves; there is no setup phase for it yet
+ * (issue #374).
+ */
+const CIV_CITY_MARKER: Readonly<Record<string, { readonly suffix: string; readonly label: string }>> = {
+  Chinese: { suffix: 'capitalwalled2', label: 'walled capital marker' },
+  Indians: { suffix: 'metropolis2', label: 'metropolis marker' },
+}
+
+/**
+ * Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). Exported
+ * for `migrateGameState`, which gives it to a Spanish player revealed before the reveal set it.
+ */
+export const SPANISH = 'Spanish'
+export const SPANISH_MVMT = '2+1'
 
 /** Java: `SecurityCheck.hasUserAccess` followed by a 403. */
 function requireAccess(
@@ -197,7 +222,7 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
     },
   })
 
-  return ok(appendItemLog(next, 'REMOVED_TECH', player.username, player.playerId, tech))
+  return ok(appendItemLog(undoTechRevealAbilities(next, player.playerId, tech.name), 'REMOVED_TECH', player.username, player.playerId, tech))
 }
 
 /**
@@ -286,9 +311,11 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     researchedTurn !== undefined && turnStatus(logged).currentTurn > researchedTurn
       ? payArchimedesOnReveal(logged, player.playerId, tech.name, researchedTurn)
       : logged
-  if (grant === undefined) return ok(archimedes)
+  // Germans and Greeks: what the first reveal gives (never the starting tech, which does not come through here)
+  const abilities = tech.hidden ? applyTechRevealAbilities(archimedes, player.playerId, tech.name) : archimedes
+  if (grant === undefined) return ok(abilities)
   return ok(
-    appendLog(archimedes, {
+    appendLog(abilities, {
       username: player.username,
       playerId: player.playerId,
       publicLog: `${player.username} learned ${tech.name} with ${grant.source}`,
@@ -553,6 +580,8 @@ function revealCivilization(
   next = placeStartingTile(next, player, civ)
   next = placeLeaderMarker(next, player, civ)
   next = placeWhiteFigure(next, player, civ)
+  next = placeArabResources(next, player, civ)
+  next = placeCivCityMarker(next, player, civ)
   const ownPieces = newPieces(afterReveal, next)
   const ownWonders = wondersTakenFromDeck(afterReveal, next)
 
@@ -565,17 +594,33 @@ function revealCivilization(
     dealt = { wonders: wondersTakenFromDeck(beforeDeal, next), pieceIds: newPieces(beforeDeal, next) }
   }
 
+  // Spain: +1 travel speed, written as the typed bonus (`2` becomes `2+1`). A value the player typed is left alone.
+  let mvmt: CivRevealSetup['mvmt']
+  if (civ.name === SPANISH) {
+    const holder = findPlayer(next, player.playerId)
+    if (holder !== undefined && holder.stats.mvmt === DEFAULT_PLAYER_STATS.mvmt) {
+      mvmt = { before: holder.stats.mvmt, set: SPANISH_MVMT }
+      next = withPlayer(next, { ...holder, stats: { ...holder.stats, mvmt: SPANISH_MVMT } })
+    }
+  }
+
   const civSetup: CivRevealSetup = {
     unitIds,
     discardedCivIds,
     pieceIds: ownPieces,
     wonders: ownWonders,
     ...(dealt === undefined ? {} : { dealt }),
+    ...(mvmt === undefined ? {} : { mvmt }),
   }
-  return ok({
+  const withSetup: GameState = {
     ...next,
     log: next.log.map((entry, index) => (index === revealIndex ? { ...entry, civSetup } : entry)),
-  })
+  }
+  return ok(
+    mvmt === undefined
+      ? withSetup
+      : appendPublicLog(withSetup, player.username, player.playerId, `gets +1 travel speed as the Spanish (movement ${mvmt.set})`),
+  )
 }
 
 /** The ids of the board pieces that `after` has and `before` did not. */
@@ -699,6 +744,71 @@ function placeWhiteFigure(
       x: region.x,
       y: region.y,
     }) ?? state
+  )
+}
+
+/**
+ * Chinese walled capital and Indian metropolis: the marker of the player's colour goes in their own area, like the white
+ * figure, as a piece of the reveal (the reveal undo takes it off). It is one piece: if one of that colour is already on
+ * the board, none is added. The player places it themselves, so the line says so.
+ */
+function placeCivCityMarker(state: GameState, player: Playerhand, civ: CivItem): GameState {
+  const marker = CIV_CITY_MARKER[civ.name]
+  if (marker === undefined || player.color === null) return state
+  const asset = findBoardAsset(`cities/${player.color.toLowerCase()}${marker.suffix}`)
+  if (asset === undefined) return state
+  // One supply: a second reveal, or a marker already placed by hand, must not add another
+  if (state.board.pieces.some((piece) => piece.assetId === asset.id)) return state
+  const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
+  if (area === undefined) return state
+  const region = areaSlotRegion(area)
+  const [x, y] = nextFreeSlot(state.board, area, state.board.pieces, { x: region.x, y: region.y })
+  const placed = placeUnchecked(state, { playerId: player.playerId, assetId: asset.id, x, y })
+  if (placed === undefined) return state
+  return appendPublicLog(
+    placed,
+    player.username,
+    player.playerId,
+    `has the ${marker.label} in their area to place as the ${civ.name}`,
+  )
+}
+
+const capitalised = (kind: string): string => kind.charAt(0).toUpperCase() + kind.slice(1)
+
+/**
+ * Arabs (civilization card): the game starts with one of each resource from the market. Each token is put in the
+ * player's area and counts as a piece of the reveal, so undoing the reveal takes them off again. A resource whose
+ * supply is used up is skipped and the log says so.
+ */
+function placeArabResources(state: GameState, player: Playerhand, civ: CivItem): GameState {
+  if (civ.name !== ARABS) return state
+  const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
+  if (area === undefined) return state
+  const region = areaSlotRegion(area)
+  let next = state
+  const taken: string[] = []
+  const missing: string[] = []
+  for (const kind of RESOURCE_KINDS) {
+    const asset = findBoardAsset(`resources/${kind}`)
+    if (asset === undefined || (remainingBoardAssetCount(asset, next.board.pieces, next.numOfPlayers) ?? Infinity) <= 0) {
+      missing.push(kind)
+      continue
+    }
+    const [x, y] = nextFreeSlot(next.board, area, next.board.pieces, { x: region.x, y: region.y })
+    const placed = placeUnchecked(next, { playerId: player.playerId, assetId: asset.id, x, y })
+    if (placed === undefined) {
+      missing.push(kind)
+      continue
+    }
+    next = placed
+    taken.push(kind)
+  }
+  return appendPublicLog(
+    next,
+    player.username,
+    player.playerId,
+    `starts with one of each resource from the market as the Arabs (${taken.map(capitalised).join(', ') || 'none'})` +
+      (missing.length === 0 ? '' : `; the market has no ${missing.map(capitalised).join(', ')} left`),
   )
 }
 

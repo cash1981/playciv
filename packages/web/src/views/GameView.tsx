@@ -27,6 +27,8 @@ import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { CoinsPanel } from './CoinsPanel.js'
+import { ChineseSavePrompt } from './ChineseSavePrompt.js'
+import { ConquestPrompt } from './ConquestPrompt.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
@@ -1372,6 +1374,8 @@ interface BattlePanelProps extends PanelProps {
   readonly readOnly?: boolean
 }
 
+/** The picker's value for "Save none": nothing is sent, so the engine saves no unit. */
+
 export function BattlePanel({ gameId, busy, run, view, readOnly = false }: BattlePanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
   const battlehand = view.you?.battlehand ?? []
@@ -1668,6 +1672,13 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   return (
     <CollapsiblePanel id="battle" title="Battle" defaultOpen={false}>
+      {/* The conquest offer a won battle makes and the Chinese save, here where the arena is (they are also in "Your actions", far from it) */}
+      {battle === null && (
+        <>
+          <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Conquest (battle)" />
+          <ChineseSavePrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Chinese save (battle)" />
+        </>
+      )}
 
       {/* — Hand management — */}
       <div className="row">
@@ -1904,6 +1915,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               <button
                 className="small danger"
                 disabled={busy || noMutations}
+                title="Ends the battle and discards the killed units' cards"
                 onClick={() => runBattleAction(() => api.endBattleArena(gameId, rev))}
               >
                 End battle
@@ -2456,7 +2468,7 @@ export function ArenaUnitCard({
         onDragEnd={onDragEnd}
       />
       {unit.killed && <span className="tag discarded">DEAD</span>}
-      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved by Florence Nightingale: it stays in the hand">SAVED</span>}
+      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved (Florence Nightingale or the Chinese): its card is not discarded">SAVED</span>}
       <button
         className="small"
         disabled={busy || readOnly}

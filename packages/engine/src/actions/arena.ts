@@ -11,21 +11,25 @@ import { nextRotation } from '../board.js'
 import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
-import { isUnit, revealAll } from '../item.js'
+import { isUnit, itemName, revealAll } from '../item.js'
 import { appendPrivatePublicLog, appendPublicLog, itemNumberText } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { battleSummaries, battleWinner, findPlayer, withPlayer } from '../state.js'
-import type { ArenaFaceOff, ArenaRefight, ArenaUnit, ArenaVitals, BattleSide, BattleSideId } from '../battle.js'
+import type { ArenaFaceOff, ArenaRefight, ArenaUnit, ArenaVitals, Battle, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
+import { settleConquests, takeBackConquest } from '../conquest.js'
 import { SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, healOwed, playerSideOf, techWoundsOwed, zhukovOwed } from '../battle-cards.js'
 import { blockadedGreatPersonTypes } from '../blockade.js'
+import { tradeCeilingOf } from '../limits.js'
 import { earnTechCoin, returnTechCoin } from '../tech-coins.js'
+import { discardKilledUnits, killedCardOnPile, restoreKilledCard, returnKilledCard } from '../killed-units.js'
+import { chineseSaveCandidates } from '../chinese-save.js'
 import type { TechCoinGrant } from '../tech-coins.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -1371,6 +1375,10 @@ export function healUnits(state: GameState, input: HealInput): ActionResult {
 // endBattle (extends the existing one in draw.ts)
 // ---------------------------------------------------------------------------
 
+/** Civilization abilities that act when a battle ends. */
+const AZTECS = 'Aztecs'
+const AZTEC_WIN_TRADE = 3
+
 export interface EndBattleInput {
   readonly playerId: string
   /** ISO timestamp for the board history entry that removes a fortification. */
@@ -1381,10 +1389,11 @@ export interface EndBattleInput {
  * Ends the active battle and cleans up.
  *
  * If a battle is active:
- *   - Every arena unit's source card has `inBattle` cleared, killed or not,
- *     so it returns to the hand's "available" state. Killing never
- *     auto-discards (issue #75) — the player discards a killed unit
- *     themselves, the same as any other card.
+ *   - Every arena unit's source card has `inBattle` cleared, so it returns to
+ *     the hand's "available" state.
+ *   - The cards of the killed units of the player sides go to the discard pile
+ *     (`discardKilledUnits`), each with a public discard line. Issue #75 left
+ *     that to the players; the human asked for it to be automatic in #373.
  *   - Sets `battle` to null.
  *
  * If no battle is active, falls back to the original `endBattle` behaviour in
@@ -1419,12 +1428,10 @@ export function endBattleAction(
     battle.defender.playerId === input.playerId
   if (!isParticipant) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
 
-  // Every arena unit's source card returns to the hand's "available" state,
-  // killed or not — killing was never meant to auto-discard (issue #75); the
-  // player discards a killed unit themselves, same as any other card. This
-  // includes `departedUnits` (issue #74's reinforced-away units): their
+  // Every arena unit's source card returns to the hand's "available" state.
+  // This includes `departedUnits` (issue #74's reinforced-away units): their
   // cards stayed locked for the rest of the battle, and this is the moment
-  // they finally free up too.
+  // they finally free up too. The killed ones are discarded below.
   let nextState = announcePlacements(
     announcePlacements(state, battle.attacker.playerId),
     battle.defender.playerId,
@@ -1477,6 +1484,46 @@ export function endBattleAction(
     }
   }
 
+  // Aztecs (civilization card): 3 trade for winning a battle, and 1 culture for each unit killed in a battle they fought,
+  // killed units of both sides counted. A side the barbarians fight on is not a player's own army, so it never counts.
+  // The trade stops at the ceiling: only what fits is gained, and `aztecs` records that, so the undo takes back the same
+  let aztecs: { readonly playerId: string; readonly trade: number; readonly culture: number } | undefined
+  const aztec = [battle.attacker, battle.defender].find(
+    (side) => side.kind === 'player' && findPlayer(nextState, side.playerId)?.civilization?.name === AZTECS,
+  )
+  const aztecHand = aztec === undefined ? undefined : findPlayer(nextState, aztec.playerId)
+  if (aztec !== undefined && aztecHand !== undefined) {
+    const won = outcome !== null && outcome.winner.kind === 'player' && outcome.winner.playerId === aztec.playerId
+    const room = Math.max(0, tradeCeilingOf(aztecHand.civilization?.name) - aztecHand.stats.trade)
+    const trade = won ? Math.min(AZTEC_WIN_TRADE, room) : 0
+    const culture = [...battle.arena, ...battle.departedUnits].filter((unit) => unit.killed).length
+    if (trade > 0 || culture > 0) {
+      const gained = [
+        trade > 0 ? `${trade} (${aztecHand.stats.trade + trade}) trade for winning` : undefined,
+        culture > 0 ? `${culture} (${aztecHand.stats.culture + culture}) culture for the ${culture === 1 ? 'unit' : 'units'} killed` : undefined,
+      ].filter((part) => part !== undefined)
+      nextState = appendPublicLog(
+        withPlayer(nextState, {
+          ...aztecHand,
+          stats: { ...aztecHand.stats, trade: aztecHand.stats.trade + trade, culture: aztecHand.stats.culture + culture },
+        }),
+        aztecHand.username,
+        aztecHand.playerId,
+        `gains ${gained.join(' and ')} as the Aztecs`,
+      )
+      aztecs = { playerId: aztecHand.playerId, trade, culture }
+    }
+  }
+
+  // The killed units' cards go to the discard pile. The Chinese may take one back afterwards (`chineseSaveAction`)
+  const killed = discardKilledUnits(nextState, announcedBattle)
+  nextState = killed.state
+
+  // The Romans' and the Chinese's conquests (civ cards): a won battle for the village or city their army stands on makes an
+  // offer they answer later; the pending conquests of the combatants are used up whatever the outcome
+  const settled = settleConquests(nextState, battle, outcome?.winner.side ?? null)
+  nextState = settled.state
+
   // A fortification is used up by the battle for its city, whoever won (Fame and Fortune p. 7, the human)
   const defence = summaries.find((s) => s.side === 'defender')?.cityDefence ?? null
   const fortification =
@@ -1511,6 +1558,9 @@ export function endBattleAction(
       summary: summaries,
       ...(fortification === undefined ? {} : { fortification }),
       ...(codeOfLawsCoin === undefined ? {} : { codeOfLawsCoin }),
+      ...(aztecs === undefined ? {} : { aztecs }),
+      ...(killed.discarded.length === 0 ? {} : { killedDiscarded: killed.discarded }),
+      ...(settled.conquest === undefined ? {} : { conquest: settled.conquest }),
     },
   })
 }
@@ -1558,17 +1608,22 @@ function lockArenaUnitCard(
  * pressed it. No vote: the human decided the ender alone may take it back.
  *
  * Available until a new battle is initiated; other game actions do not expire
- * it. Only the battle comes back: the arena, the turn and `inBattle` on the
- * source cards. A card discarded or removed in between is simply skipped, and
+ * it. Only the battle comes back: the arena, the turn, `inBattle` on the
+ * source cards and the killed units' cards End battle put on the discard pile.
+ * A card discarded, removed or reshuffled in between is simply skipped, and
  * the arena unit keeps its own snapshot of it.
  *
  * Like the other arena log lines it never sets `item` on the entry —
  * `initiateUndo` treats any entry with an `item` as undoable (see
  * `appendRollingArenaLog`). The earlier "ends the battle" line stays.
  *
+ * The trade and culture the Aztecs gained for the battle go back with it, exactly as recorded in `endedBattle.aztecs`. When
+ * they no longer hold all of it the undo is refused (`END_BATTLE_UNDO_AZTEC_SPENT`) and nothing changes: the ender undoes
+ * alone, so a partial take-back would let a spent reward be earned again.
+ *
  * Errors: a battle is already active (`BATTLE_ALREADY_ACTIVE`), nothing was
- * ended (`NO_BATTLE_ACTIVE`), or the caller is not who ended it
- * (`NOT_IN_THIS_BATTLE`).
+ * ended (`NO_BATTLE_ACTIVE`), the caller is not who ended it
+ * (`NOT_IN_THIS_BATTLE`), or the Aztec reward was spent (`END_BATTLE_UNDO_AZTEC_SPENT`).
  */
 export function undoEndBattle(
   state: GameState,
@@ -1585,8 +1640,35 @@ export function undoEndBattle(
     return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
   }
 
-  const battle = ended.battle
-  let nextState = state
+  // What the Aztecs gained for this battle must still be there: the ender may undo alone, so a reward that was spent
+  // cannot be taken back in part (and the loop of spend, undo and win again is closed). Nothing has changed at this point
+  const aztecs = ended.aztecs
+  const aztecHand = aztecs === undefined ? undefined : findPlayer(state, aztecs.playerId)
+  if (aztecs !== undefined && aztecHand !== undefined && (aztecHand.stats.trade < aztecs.trade || aztecHand.stats.culture < aztecs.culture)) {
+    return err({ kind: 'END_BATTLE_UNDO_AZTEC_SPENT' })
+  }
+
+  // The unit the Chinese saved is killed and unsaved again, as it stood in the battle
+  const unsave = (unit: ArenaUnit): ArenaUnit => {
+    if (unit.id !== ended.chineseSaved) return unit
+    const { saved: _saved, ...rest } = unit
+    return rest
+  }
+  const battle: Battle =
+    ended.chineseSaved === undefined
+      ? ended.battle
+      : { ...ended.battle, arena: ended.battle.arena.map(unsave), departedUnits: ended.battle.departedUnits.map(unsave) }
+  // The conquest offers this end made are withdrawn and its pending conquests given back; an offer that was answered
+  // refuses first, and nothing has changed by then
+  const conquestBack = ended.conquest === undefined ? ok(state) : takeBackConquest(state, ended.conquest)
+  if (!conquestBack.ok) return conquestBack
+  let nextState = conquestBack.value
+  // The killed units' cards come back from the discard pile, one that has left it since (reshuffled, traded) is skipped,
+  // into the places they had, locked again. Those the Chinese or Florence Nightingale saved since are moved back into place
+  const killedBack = (ended.killedDiscarded ?? []).filter(
+    (record) => killedCardOnPile(nextState, record) && findPlayer(nextState, record.ownerId) !== undefined,
+  )
+  for (const record of [...(ended.killedDiscarded ?? [])].reverse()) nextState = restoreKilledCard(nextState, record)
   for (const arenaUnit of [...battle.arena, ...battle.departedUnits]) {
     const ownerSide =
       arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
@@ -1606,14 +1688,68 @@ export function undoEndBattle(
   const coinBack = ended.codeOfLawsCoin !== undefined
   if (ended.codeOfLawsCoin !== undefined) nextState = returnTechCoin(nextState, ended.codeOfLawsCoin)
 
+  // What the Aztecs gained goes back with it: all of it, as checked above, and exactly what was recorded
+  let aztecNote = ''
+  const aztecNow = aztecs === undefined ? undefined : findPlayer(nextState, aztecs.playerId)
+  if (aztecs !== undefined && aztecNow !== undefined) {
+    const trade = aztecNow.stats.trade - aztecs.trade
+    const culture = aztecNow.stats.culture - aztecs.culture
+    nextState = withPlayer(nextState, { ...aztecNow, stats: { ...aztecNow.stats, trade, culture } })
+    // The amount and, in parentheses, the total that is left, as every gain line says it
+    const part = (word: string, back: number, left: number): string | undefined => (back === 0 ? undefined : `${back} (${left}) ${word}`)
+    aztecNote = ` and takes back ${[part('trade', aztecs.trade, trade), part('culture', aztecs.culture, culture)].filter((x) => x !== undefined).join(' and ')} the Aztecs gained`
+  }
+
   nextState = appendPublicLog(
     nextState,
     player.username,
     player.playerId,
-    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}`,
+    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}${aztecNote}${killedBack.length === 0 ? '' : `, and ${killedBack.length === 1 ? 'the killed unit goes' : `the ${killedBack.length} killed units go`} back to the hand`}${ended.chineseSaved === undefined ? '' : ', and the saved Chinese unit is killed again'}${(ended.conquest?.offerIds.length ?? 0) === 0 ? '' : ', and the conquest offer is withdrawn'}`,
   )
 
   return ok({ ...nextState, battle, endedBattle: null })
+}
+
+// ---------------------------------------------------------------------------
+// The Chinese save a killed unit
+// ---------------------------------------------------------------------------
+
+export interface ChineseSaveInput {
+  readonly playerId: string
+  /** The arena unit id of the killed unit, as `you.chineseSave` lists it. */
+  readonly arenaUnitId: string
+}
+
+/**
+ * The Chinese civilization card: after a battle the Chinese may save one of their killed units, returning it to their
+ * standing forces. End battle has discarded the card; this takes it off the pile into the hand and marks the unit
+ * `saved` (as Florence Nightingale does). Once per battle, until the next battle starts, by the Chinese player who
+ * fought. The public line names the unit, already seen in the arena and on the pile. Undoing End battle takes it back.
+ *
+ * Errors: nothing to save now (`CHINESE_SAVE_UNAVAILABLE`), or the unit is not one of the choices (`CHINESE_SAVE_INVALID`).
+ */
+export function chineseSaveAction(state: GameState, input: ChineseSaveInput): ActionResult {
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+
+  const candidates = chineseSaveCandidates(state, player)
+  const ended = state.endedBattle
+  if (candidates.length === 0 || ended === null) return err({ kind: 'CHINESE_SAVE_UNAVAILABLE' })
+  const chosen = candidates.find((candidate) => candidate.unit.id === input.arenaUnitId)
+  if (chosen === undefined) return err({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: input.arenaUnitId })
+
+  const mark = (unit: ArenaUnit): ArenaUnit => (unit.id === chosen.unit.id ? { ...unit, saved: true } : unit)
+  const battle = { ...ended.battle, arena: ended.battle.arena.map(mark), departedUnits: ended.battle.departedUnits.map(mark) }
+  const returned = returnKilledCard(state, chosen.record)
+  return ok(
+    appendPublicLog(
+      { ...returned, endedBattle: { ...ended, battle, chineseSaved: chosen.unit.id } },
+      player.username,
+      player.playerId,
+      `saves the killed ${itemName(chosen.unit.unit)} as the Chinese: it goes back to the hand`,
+    ),
+  )
 }
 
 // ---------------------------------------------------------------------------

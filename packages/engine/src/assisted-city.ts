@@ -8,7 +8,11 @@
  * Harvest. Its trade and coin icons are not in the map data and stay by hand.
  */
 
-import { placeUnchecked, removePiece } from './actions/board.js'
+import { movePieceUnchecked, placeUnchecked, removePiece } from './actions/board.js'
+import { joinList } from './assisted-resources.js'
+import { collectMapToken } from './actions/collect-token.js'
+import { returnCollectedCard } from './actions/tile-tokens.js'
+import { mapTokensOf } from './zheng-he.js'
 import {
   blocked,
   lastLogId,
@@ -28,11 +32,11 @@ import { mapCellOf } from './blockade.js'
 import { findBoardAsset, mapTop, remainingBoardAssetCount } from './board.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
-import { cityLimitOf, foundCityCheck, foundingFiguresOf, isOwnFigure, ownCityPieces } from './city-founding.js'
+import { cityLimitOf, foundCityCheck, foundingFiguresOf, ownCityPieces } from './city-founding.js'
 import { cityProductionsOf } from './city-production.js'
 import { err, ok } from './result.js'
 import { appendLog } from './log.js'
-import { SOT_PHASE_REASON, capitalOf, openStartOfTurn, ownCityCentreKeys, scoutAssignmentsOf, scoutDestinationsOf } from './sot.js'
+import { SOT_PHASE_REASON, capitalOf, gathersForCity, openStartOfTurn, ownCityCentreKeys, scoutAssignmentsOf, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand, ScoutView } from './state.js'
 import { terrainAt } from './terrain.js'
 
@@ -51,17 +55,14 @@ const assignPayloadOf = (payload: AssistedPayload | undefined): AssignScoutPaylo
 
 /** The figures that gather a square for a city: scouts, and the English armies (civilization sheet). */
 export function gatheringFiguresOf(state: GameState, player: Playerhand): readonly BoardPiece[] {
-  return state.board.pieces.filter((piece) => {
-    if (!isOwnFigure(state, player, piece) || mapCellOf(state.board, piece) === null) return false
-    return piece.assetId.endsWith('scout') || (piece.assetId.endsWith('army') && player.civilization?.name === 'England')
-  })
+  return state.board.pieces.filter((piece) => gathersForCity(player, piece) && mapCellOf(state.board, piece) !== null)
 }
 
 // ---------------------------------------------------------------------------
 // Found a city
 // ---------------------------------------------------------------------------
 
-const ROMANS = 'Romans'
+export const ROMANS = 'Romans'
 const CITY_STATE_CULTURE = 3
 
 /**
@@ -162,19 +163,39 @@ export const foundCity: AssistedActionDefinition = {
       working = withPlayerHand(working, { ...holder, stats: { ...holder.stats, culture: holder.stats.culture + culture } })
     }
 
+    // The Zulu explore the huts next to the city at once (civilization card): each token goes to their area and its card to the hand
+    const explored: string[] = []
+    const huts: { readonly historyId: string; readonly pieceId: string; readonly from: { readonly x: number; readonly y: number }; readonly itemId: string }[] = []
+    for (const token of mapTokensOf(working.board)) {
+      if (token.sheet !== 'HUTS' || !check.zuluHuts.includes(squareLabel(token.cell))) continue
+      const next = collectMapToken(working, player.playerId, token, { at: context.at, chineseCulture: false })
+      const collection = next?.tokenCollections?.at(-1)
+      if (next === undefined || collection === undefined) continue
+      working = next
+      huts.push({ historyId: collection.historyId, pieceId: token.piece.id, from: { x: token.piece.x, y: token.piece.y }, itemId: collection.itemId })
+      explored.push(squareLabel(token.cell))
+    }
+    // Only the huts that were collected are said to be: the others (no card left in the deck) stay on the map
+    const stayed = check.zuluHuts.filter((label) => !explored.includes(label))
+    const hutText =
+      check.zuluHuts.length === 0
+        ? ''
+        : (explored.length === 0 ? '' : `, exploring the ${explored.length === 1 ? 'hut' : 'huts'} at ${joinList(explored)} at once`) +
+          (stayed.length === 0 ? '' : `${explored.length === 0 ? ', but' : '; and'} the ${stayed.length === 1 ? 'hut' : 'huts'} at ${joinList(stayed)} ${stayed.length === 1 ? 'stays' : 'stay'} on the map (no hut card could be drawn)`)
+
     // The new city counts towards the number of social policies a civilization may adopt
     const cities = ownCityPieces(working, player).length
     const holder = playerOf(working, player.playerId) ?? player
     const policyNote = holder.socialPolicies.length < cities ? ', and may now adopt another social policy' : ''
     const withFigure = figure.assetId.endsWith('army') ? 'an army' : 'a scout'
-    const lineIds = [figureEntry.id, cityEntry.id, destroyed?.historyId]
+    const lineIds = [figureEntry.id, cityEntry.id, destroyed?.historyId, ...huts.map((hut) => hut.historyId)]
     const founded = appendLog(working, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
         `${player.username} founded a city on ${square} with ${withFigure}` +
         (destroyed === null ? '' : `, destroying the city-state there (+${CITY_STATE_CULTURE} (${holder.stats.culture}) culture)`) +
-        (check.zuluHuts.length === 0 ? '' : `, next to a hut they may explore (${check.zuluHuts.join(', ')})`) +
+        hutText +
         policyNote,
       privateLog: '',
       createdAt: context.at ?? null,
@@ -209,6 +230,7 @@ export const foundCity: AssistedActionDefinition = {
         square: { column: cell.column, row: cell.row, label: square },
         cityState: destroyed,
         culture,
+        ...(huts.length === 0 ? {} : { huts }),
         advance: advance !== null && advance.ok ? advance.value.effect : null,
       },
       logId,
@@ -248,6 +270,25 @@ export const foundCity: AssistedActionDefinition = {
 
     let working = state
     let current = player
+    // The huts the Zulu explored go back first: the token to its square, the card out of the hand
+    for (const hut of [...(effect.huts ?? [])].reverse()) {
+      const collection = working.tokenCollections?.find((candidate) => candidate.historyId === hut.historyId)
+      // A board Undo may already have put it back
+      if (collection === undefined) continue
+      const returned = returnCollectedCard(working, collection)
+      if (returned === undefined) return blockedBy(`The hut card from ${collection.square} has left the hand, so the city cannot be undone.`)
+      const moved = movePieceUnchecked(returned, {
+        playerId: player.playerId,
+        pieceId: hut.pieceId,
+        x: hut.from.x,
+        y: hut.from.y,
+        snap: false,
+        ...(at === null ? {} : { at }),
+      })
+      if (moved === undefined) return blockedBy(`The hut token of ${collection.square} could not be put back.`)
+      working = moved
+      current = playerOf(working, player.playerId) ?? player
+    }
     // The free advance goes first: it can refuse (the marker has moved on)
     if (effect.advance !== null) {
       const reversed = reverseAdvanceEffect(working, current, record, effect.advance, at)
@@ -316,9 +357,10 @@ export const assignScout: AssistedActionDefinition = {
       cityLabel = city.label
     }
     const square = squareLabel(cell)
+    const figure = scout.assetId.endsWith('army') ? 'army' : 'scout'
     // A city centre is never sent (human, #319)
     if (payload.cityPieceId !== null && ownCityCentreKeys(state, player).has(`${cell.column}:${cell.row}`)) {
-      return fail(`${square} is the centre of your city, and a scout there sends no square.`)
+      return fail(`${square} is the centre of your city, and ${figure === 'army' ? 'an army' : 'a scout'} there sends no square.`)
     }
     // A square goes to one city only (human, #319)
     const other = scoutAssignmentsOf(state, player).find(
@@ -333,10 +375,10 @@ export const assignScout: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         cityLabel === null
-          ? capitalOf(state, player) === undefined || !scout.assetId.endsWith('scout')
-            ? `${player.username} stopped sending the square of the scout on ${square} to a city`
+          ? capitalOf(state, player) === undefined || figure === 'army'
+            ? `${player.username} stopped sending the square of the ${figure} on ${square} to a city`
             : `${player.username} sent the square of the scout on ${square} back to the capital`
-          : `${player.username} sent the square of the scout on ${square} to ${cityLabel}`,
+          : `${player.username} sent the square of the ${figure} on ${square} to ${cityLabel}`,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,

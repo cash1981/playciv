@@ -224,6 +224,32 @@ describe('the phase tabs', () => {
     expect(screen.getByRole('heading', { name: /Your actions \(1 choice waiting\)/ })).toBeTruthy()
   })
 
+  it('asks for the Spanish free building above the tabs, in any phase, and counts it as a choice waiting', () => {
+    const spanish = {
+      status: 'ready',
+      reason: 'Build one basic building in one of your cities for free, unlocked or not (1 of 1 left).',
+      choices: [{ assetId: 'buildings/bank', label: 'Bank', squares: [{ cityPieceId: 'c1', cityLabel: 'Capital B3', column: 2, row: 2, label: 'C3' }] }],
+    }
+    const startOfTurn = {
+      government: { status: 'ready', reason: 'You may change government once in your Start of Turn.', current: 'Despotism', options: [], canEnterAnarchy: true },
+      feudalism: null,
+      giannini: null,
+      spanish,
+      invest: { status: 'ready', reason: 'Invest one coin token this turn.', coins: [], cards: [], totalCoins: 0 },
+      cityLimit: { have: 2, max: 2 },
+      cities: [],
+      scouts: [],
+      techGrants: [],
+    }
+    renderPanel(viewIn('MOVEMENT', [], { startOfTurn }))
+    expect(selected()).toMatch(/^Movement/)
+    expect(screen.getAllByRole('region', { name: 'Spanish: a free building' })).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: /Your actions \(1 choice waiting\)/ })).toBeTruthy()
+    // Not repeated in the Start of Turn tab
+    fireEvent.click(tab(/^Start of turn/))
+    expect(screen.getAllByRole('region', { name: 'Spanish: a free building' })).toHaveLength(1)
+  })
+
   it('lists the cards that can be played in the open phase, and the any-time ones in every tab', () => {
     const counterfeiters = {
       itemId: 'c1',
@@ -272,6 +298,7 @@ describe('the phase tabs', () => {
       government: { status: 'ready', reason: 'You may change government once in your Start of Turn.', current: 'Despotism', options: [], canEnterAnarchy: true },
       feudalism: null,
       giannini: null,
+      spanish: null,
       invest: {
         status: 'ready',
         reason: 'Invest one coin token this turn.',

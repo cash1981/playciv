@@ -741,8 +741,10 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/arena/tech-wound`, { tech, arenaUnitId, wounds, rev }),
   healUnits: (gameId: string, tech: string, arenaUnitId: string, wounds: number, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/heal`, { tech, arenaUnitId, wounds, rev }),
-  endBattleArena: (gameId: string, rev: number) =>
-    post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+  endBattleArena: (gameId: string, rev: number) => post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+  /** The Chinese save one of their killed units after the battle: `arenaUnitId` from `you.chineseSave`. */
+  chineseSave: (gameId: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/chinese-save`, { rev, arenaUnitId }),
   undoEndBattle: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/end/undo`, { rev }),
 
@@ -898,6 +900,7 @@ export const api = {
       item: payload.item,
       ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
+      ...(payload.free === undefined ? {} : { free: payload.free }),
     }),
   /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
   startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>
@@ -993,12 +996,13 @@ export const api = {
       ...(snap === undefined ? {} : { snap }),
     }),
   /** Moves a figure by the Movement rules (issue #302) to a map square. */
-  travelFigure: (gameId: string, pieceId: string, column: number, row: number, disband = false, collectToken = false) =>
+  travelFigure: (gameId: string, pieceId: string, column: number, row: number, disband = false, collectToken = false, fightVillage = false) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/travel`, {
       column,
       row,
       ...(disband ? { disband } : {}),
       ...(collectToken ? { collectToken } : {}),
+      ...(fightVillage ? { fightVillage } : {}),
     }),
   /** A figure spends 1 movement to explore the fog next to it: the next map tile is laid there (issue #302). */
   exploreSquare: (gameId: string, pieceId: string, column: number, row: number) =>
