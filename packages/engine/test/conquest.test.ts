@@ -22,7 +22,7 @@ import type { BoardPiece } from '../src/board.js'
 import { describeError } from '../src/errors.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
-import { findPlayer, toPlayerView } from '../src/state.js'
+import { battleSummaries, battleWinner, findPlayer, toPlayerView } from '../src/state.js'
 
 import { AT, me, put, sotTurn, withAmerica } from './sot-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1 } from './fixture.js'
@@ -95,6 +95,25 @@ function fight(state: GameState, opponent: 'barbarians' | string, health = 3): G
   if (opponent === 'barbarians') place(KARANDRAS1, 'defender', 10, 3, 'barbarians')
   else place(opponent, 'defender', 10, 3, 'battlehand')
   return next
+}
+
+/** The defenders' health spread so that their total equals the attackers': neither has more, whatever bonus either side has. */
+function evenTotals(state: GameState): GameState {
+  const arena = state.battle?.arena ?? []
+  const total = arena.filter((unit) => unit.side === 'attacker').reduce((sum, unit) => sum + unit.health, 0)
+  const defenders = arena.filter((unit) => unit.side === 'defender')
+  let left = total
+  const health = new Map(
+    defenders.map((unit, index) => {
+      const share = index === defenders.length - 1 ? left : Math.floor(total / defenders.length)
+      left -= share
+      return [unit.id, share] as const
+    }),
+  )
+  return {
+    ...state,
+    battle: state.battle === null ? null : { ...state.battle, arena: state.battle.arena.map((unit) => (health.has(unit.id) ? { ...unit, health: health.get(unit.id) ?? 0 } : unit)) },
+  }
 }
 
 const killSide = (state: GameState, side: 'attacker' | 'defender'): GameState =>
@@ -212,10 +231,17 @@ describe('a won battle makes an offer', () => {
     const lost = unwrap(endBattleAction(killSide(fight(march(villageScene()), 'barbarians'), 'attacker'), { playerId: CASH1981 }))
     expect(offersOf(lost)).toEqual([])
     expect(lost.pendingConquests).toBeUndefined()
-    // Nobody was killed: equal health, and a draw goes to the defender
-    const drawn = unwrap(endBattleAction(fight(march(villageScene()), 'barbarians'), { playerId: CASH1981 }))
+    // A real draw: the defenders' health is set so both sides total the same, and a draw goes to the defender
+    const even = evenTotals(fight(march(villageScene()), 'barbarians'))
+    const [attackerTotals, defenderTotals] = ['attacker', 'defender'].map((side) => battleSummaries(even).find((summary) => summary.side === side))
+    expect((attackerTotals?.totalHealth ?? -1) + (attackerTotals?.combatBonus ?? 0)).toBe((defenderTotals?.totalHealth ?? -2) + (defenderTotals?.combatBonus ?? 0))
+    expect(battleWinner(battleSummaries(even))?.side).toBe('defender')
+    const drawn = unwrap(endBattleAction(even, { playerId: CASH1981 }))
     expect(offersOf(drawn)).toEqual([])
     expect(drawn.pendingConquests).toBeUndefined()
+    // One health more for the attacker is a win, so the draw really was the tie-break and nothing else
+    const ahead: GameState = { ...even, battle: even.battle === null ? null : { ...even.battle, arena: even.battle.arena.map((unit, index) => (unit.side === 'attacker' && index === 0 ? { ...unit, health: unit.health + 1 } : unit)) } }
+    expect(offersOf(unwrap(endBattleAction(ahead, { playerId: CASH1981 })))).toHaveLength(1)
     // The army left the village square before the battle ended
     const moved = march(villageScene())
     const army = pieceOf(moved, 'figures/redarmy')
@@ -238,11 +264,16 @@ describe('a won battle makes an offer', () => {
     expect(ended.pendingConquests).toBeUndefined()
   })
 
-  it('leaves the pending conquest of a player who only controls the barbarians alone', () => {
-    const scene = { ...villageScene(), pendingConquests: [{ playerId: ITCHI, pieceId: 'green', column: 2, row: 1, square: 'C2', kind: 'village' as const }] }
-    // karandras1 controls the barbarians of cash1981, itchi fights nobody
+  it('leaves the pending conquest of the player who only controls the barbarians alone, and uses up the combatant’s', () => {
+    // karandras1 controls the barbarians cash1981 fights: they are no combatant, so their own pending conquest (a village
+    // of theirs elsewhere) stays; itchi fights nobody and keeps theirs too
+    const entry = (playerId: string) => ({ playerId, pieceId: `${playerId}-army`, column: 0, row: 0, square: 'A1', kind: 'village' as const })
+    const marched = march(villageScene())
+    const scene = { ...marched, pendingConquests: [...(marched.pendingConquests ?? []), entry(KARANDRAS1), entry(ITCHI)] }
     const ended = won(scene, 'barbarians')
-    expect(ended.pendingConquests?.map((entry) => entry.playerId)).toEqual([ITCHI])
+    // cash1981's own entry was used up (and made the offer); the controller's and the bystander's remain
+    expect(offersOf(ended)).toHaveLength(1)
+    expect(ended.pendingConquests?.map((pending) => pending.playerId)).toEqual([KARANDRAS1, ITCHI])
   })
 
   it('leaves a battle with no pending conquest exactly as it was', () => {

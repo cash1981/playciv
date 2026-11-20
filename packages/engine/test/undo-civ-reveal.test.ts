@@ -419,7 +419,7 @@ describe('undo of a civilization reveal', () => {
       expect(handOf(undone, CASH1981).some(isUnit)).toBe(false)
       // The Chinese walled capital and the Indian metropolis are not rebuilt: a reveal saved before they were handed out
       // never had one, and a rebuild cannot tell the piece from one the player placed by hand
-      expect(undone.board.pieces.filter((piece) => piece.category !== 'city')).toEqual([])
+      expect(undone.board.pieces.filter((piece) => !/^cities\/[a-z]+(capitalwalled2|metropolis2)$/.test(piece.assetId))).toEqual([])
       const ids = undone.items.map((item) => item.id)
       expect(new Set(ids).size).toBe(ids.length)
     })
