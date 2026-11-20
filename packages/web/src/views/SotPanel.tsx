@@ -7,7 +7,7 @@
  * rule: it shows the status and reason the engine gives and sends one request per press.
  */
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import type { Government } from '@civ/engine'
 
@@ -16,6 +16,7 @@ import type { PlayerView } from '../lib/api.js'
 import { AssistedActionButton, pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { HelpHint } from './HelpHint.js'
+import { useMapPicker } from './mapPick.js'
 import { goToPanel } from './PhaseSummary.js'
 import { openGovernmentReference } from './GovernmentReferenceDialog.js'
 import './SotPanel.css'
@@ -389,6 +390,10 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
 const GIANNINI_TITLE = 'A. P. Giannini: a free building'
 const SPANISH_TITLE = 'Spanish: a free building'
 
+type FreeBuildChoice = NonNullable<StartOfTurn['giannini']>['choices'][number]
+type FreeBuildSquare = FreeBuildChoice['squares'][number]
+const squareKeyOf = (square: FreeBuildSquare): string => `${square.cityPieceId}:${square.column}:${square.row}`
+
 interface FreeBuildPickerProps extends ChoiceProps {
   /** The engine's answer for this free building, `null` when it does not apply to the viewer. */
   readonly answer: StartOfTurn['giannini']
@@ -407,58 +412,87 @@ interface FreeBuildPickerProps extends ChoiceProps {
  */
 function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, className, showUnavailable }: FreeBuildPickerProps): React.JSX.Element | null {
   const [assetId, setAssetId] = useState('')
-  const [squareKey, setSquareKey] = useState('')
-  const squareId = useId()
+  // A square with a note (it replaces a building) is picked on the map, read here, and built by the button.
+  const [picked, setPicked] = useState<FreeBuildSquare | null>(null)
+  const [sending, setSending] = useState(false)
+  // Bumped to open the map pick again when a pick could not be used (the page was busy).
+  const [retry, setRetry] = useState(0)
+  const mapPicker = useMapPicker()
   const playerId = view.you?.playerId ?? ''
-  if (answer === null || (!showUnavailable && answer.status !== 'ready' && answer.status !== 'used')) return null
 
-  const chosen = answer.choices.find((choice) => choice.assetId === assetId)
-  const keyOf = (square: { readonly cityPieceId: string; readonly column: number; readonly row: number }): string =>
-    `${square.cityPieceId}:${square.column}:${square.row}`
-  const square = chosen?.squares.find((candidate) => keyOf(candidate) === squareKey)
-  const valid = chosen !== undefined && square !== undefined
+  const chosen = answer?.status === 'ready' ? answer.choices.find((choice) => choice.assetId === assetId) : undefined
+  const chosenId = chosen?.assetId
+  const squaresKey = chosen?.squares.map(squareKeyOf).join('|') ?? ''
 
-  const press = (): void => {
-    if (chosen === undefined || square === undefined) return
-    const key = `${gameId}:${playerId}:${action}:${chosen.assetId}:${keyOf(square)}`
+  const build = (choice: FreeBuildChoice, square: FreeBuildSquare): void => {
+    const key = `${gameId}:${playerId}:${action}:${choice.assetId}:${squareKeyOf(square)}`
+    setSending(true)
     void pressOnce(
       key,
       run,
       (requestId) =>
         api.actionWithArgs(gameId, action, requestId, view.rev, {
           cityPieceId: square.cityPieceId,
-          assetId: chosen.assetId,
+          assetId: choice.assetId,
           column: square.column,
           row: square.row,
         }),
       view,
     ).then((done) => {
-      if (done) {
-        setAssetId('')
-        setSquareKey('')
-      }
+      setSending(false)
+      setPicked(null)
+      if (done) setAssetId('')
     })
   }
+  // The pick below resolves later than the render that opened it: it builds with the latest view and choice.
+  const buildRef = useRef(build)
+  useEffect(() => {
+    buildRef.current = build
+  })
+
+  // The building is chosen in the list; the square is then picked on the map, where the legal squares around the cities are
+  // highlighted (the same board picker as a Build). A plain square builds at once, one that replaces a building is read first.
+  useEffect(() => {
+    if (mapPicker === null || chosen === undefined || picked !== null || sending) return
+    const choice = chosen
+    let stale = false
+    let settled = false
+    void mapPicker.begin({ title: choice.label, cells: choice.squares }).then((cell) => {
+      settled = true
+      if (stale) return
+      if (cell === null) {
+        setAssetId('')
+        return
+      }
+      const square = choice.squares.find((candidate) => candidate === cell) ?? choice.squares.find((candidate) => candidate.column === cell.column && candidate.row === cell.row)
+      if (square === undefined) return
+      if (square.note !== undefined) setPicked(square)
+      else if (busy) setRetry((count) => count + 1)
+      else buildRef.current(choice, square)
+    })
+    return () => {
+      stale = true
+      if (!settled) mapPicker.cancel()
+    }
+    // The pick follows the building and its squares, not every refresh of the view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapPicker, chosenId, squaresKey, picked, sending, retry])
+
+  if (answer === null || (!showUnavailable && answer.status !== 'ready' && answer.status !== 'used')) return null
 
   return (
     <section className={`phase-group ${className}`} aria-label={title}>
       <h3 className="phase-group-title">{title}</h3>
       {answer.status === 'ready' ? (
-        <form
-          className="sot-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            press()
-          }}
-        >
+        <div className="sot-form">
           <label>
             Building{' '}
             <select
               value={chosen === undefined ? '' : chosen.assetId}
-              disabled={busy}
+              disabled={busy || sending}
               onChange={(event) => {
                 setAssetId(event.target.value)
-                setSquareKey('')
+                setPicked(null)
               }}
             >
               <option value="">Choose a building</option>
@@ -469,30 +503,38 @@ function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, class
               ))}
             </select>
           </label>
-          <div className="sot-field">
-            <label htmlFor={squareId}>Square</label>
-            <select
-              id={squareId}
-              value={square === undefined ? '' : squareKey}
-              disabled={busy || chosen === undefined}
-              onChange={(event) => setSquareKey(event.target.value)}
-            >
-              <option value="">Choose a square</option>
-              {(chosen?.squares ?? []).map((candidate) => (
-                <option key={keyOf(candidate)} value={keyOf(candidate)}>
-                  {candidate.cityLabel} — {candidate.label}
-                  {candidate.replaces === undefined ? '' : ` (replaces your ${candidate.replaces.label})`}
-                </option>
-              ))}
-            </select>
-          </div>
-          {square?.replaces !== undefined && (
-            <p className="muted">{square.note ?? `Replaces your ${square.replaces.label}.`}</p>
+          {chosen !== undefined && picked === null && (
+            <p className="muted" role="status">
+              Pick a square for the {chosen.label} on the map.
+            </p>
           )}
-          <button type="submit" className="small" disabled={busy || !valid}>
-            Build for free
-          </button>
-        </form>
+          {chosen !== undefined && picked !== null && (
+            <>
+              <p className="muted" role="status">
+                {chosen.label} in {picked.cityLabel} on {picked.label}. {picked.note ?? `Replaces your ${picked.replaces?.label ?? 'building'}.`}
+              </p>
+              <button type="button" className="small" disabled={busy || sending} onClick={() => build(chosen, picked)}>
+                Build for free
+              </button>
+              <button type="button" className="small" disabled={sending} onClick={() => setPicked(null)}>
+                Pick another square
+              </button>
+            </>
+          )}
+          {chosen !== undefined && (
+            <button
+              type="button"
+              className="small"
+              disabled={sending}
+              onClick={() => {
+                setAssetId('')
+                setPicked(null)
+              }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       ) : (
         <div className="assisted-action">
           <button type="button" className="small" disabled title={answer.reason}>
