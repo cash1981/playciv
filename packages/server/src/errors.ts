@@ -87,7 +87,6 @@ export function statusFor(error: EngineError): number {
     case 'ASSISTED_UNDO_BLOCKED':
     case 'BOARD_UNDO_ASSISTED':
     case 'BOARD_UNDO_TOKEN_CARD_GONE':
-    case 'BOARD_UNDO_TOKEN_CULTURE_SPENT':
       return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':

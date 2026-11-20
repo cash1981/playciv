@@ -386,7 +386,8 @@ describe('the Chinese and huts', () => {
       ),
     }
     const army = withCiv.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
-    return { state: withCiv, armyId: army.id }
+    const hut = withCiv.board.pieces.find((piece) => piece.assetId === 'resources/hut') as BoardPiece
+    return { state: withCiv, armyId: army.id, hutId: hut.id }
   }
   const collect = (state: GameState, armyId: string) =>
     unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1, collectToken: true }))
@@ -445,22 +446,42 @@ describe('the Chinese and huts', () => {
     expect(me(collect(chineseRelic, relicArmy.id)).stats.culture).toBe(5)
   })
 
-  it('lose the culture again when the board Undo returns the token, and the Undo is refused once it is spent', () => {
+  it('lose the culture again when the board Undo returns the token', () => {
     const { state, armyId } = chinese('Chinese')
     const moved = collect(state, armyId)
     const undone = unwrap(undoLastBoardChange(moved, CASH1981))
     expect(me(undone).stats.culture).toBe(5)
     expect(undone.log.at(-1)?.publicLog).toContain('took back 3 (5) culture')
+  })
 
-    const spent: GameState = {
+  it('take back what is still there when the culture was spent, and still return the card and the token', () => {
+    const { state, armyId, hutId } = chinese('Chinese')
+    const moved = collect(state, armyId)
+    const card = me(moved).items.find((item) => item.sheetName === 'HUTS')
+    const spendTo = (culture: number): GameState => ({
       ...moved,
-      players: moved.players.map((player) =>
-        player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture: 1 } } : player,
-      ),
-    }
-    const refused = undoLastBoardChange(spent, CASH1981)
-    expect(refused.ok).toBe(false)
-    if (!refused.ok) expect(refused.error.kind).toBe('BOARD_UNDO_TOKEN_CULTURE_SPENT')
+      players: moved.players.map((player) => (player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture } } : player)),
+    })
+
+    // 1 left of the 3: that one goes, the line says how much and what is left
+    const some = unwrap(undoLastBoardChange(spendTo(1), CASH1981))
+    expect(me(some).stats.culture).toBe(0)
+    expect(some.log.at(-1)?.publicLog).toContain('returned its card, and took back 1 of 3 (0) culture')
+    // The card is out of the hand and the token is on the map again
+    expect(me(some).items.some((item) => item.id === card?.id)).toBe(false)
+    expect(mapTokensOf(some.board).some((token) => token.piece.id === hutId)).toBe(true)
+    expect(some.tokenCollections ?? []).toHaveLength(0)
+
+    // None left: the culture never goes below 0
+    const none = unwrap(undoLastBoardChange(spendTo(0), CASH1981))
+    expect(me(none).stats.culture).toBe(0)
+    expect(none.log.at(-1)?.publicLog).toContain('took back 0 of 3 (0) culture')
+    expect(me(none).items.some((item) => item.id === card?.id)).toBe(false)
+
+    // More than was given is left (earned since): only the 3 goes
+    const more = unwrap(undoLastBoardChange(spendTo(10), CASH1981))
+    expect(me(more).stats.culture).toBe(7)
+    expect(more.log.at(-1)?.publicLog).toContain('took back 3 (7) culture')
   })
 })
 

@@ -151,12 +151,13 @@ export function returnCollectedCard(state: GameState, collection: TokenCollectio
   const card = player?.items.find((item) => item.id === collection.itemId)
   if (player === undefined || card === undefined) return undefined
   const culture = collection.culture ?? 0
-  // The culture a hut gave the Chinese goes back with it; once it is spent it cannot be taken back
-  if (player.stats.culture < culture) return undefined
+  // The culture a hut gave the Chinese goes back with it, as far as it is still there: what they have spent since stays
+  // spent, like the Aztec and Arab gains, so the card and the token can always be returned
+  const tookBack = Math.min(player.stats.culture, culture)
   const withoutCard = withPlayer(state, {
     ...player,
     items: player.items.filter((item) => item !== card),
-    stats: { ...player.stats, culture: player.stats.culture - culture },
+    stats: { ...player.stats, culture: player.stats.culture - tookBack },
   })
   const rest = (withoutCard.tokenCollections ?? []).filter((other) => other !== collection)
   // The card stays with its token, so what the player saw is not the next card anyone draws (issue #364)
@@ -168,7 +169,7 @@ export function returnCollectedCard(state: GameState, collection: TokenCollectio
     // The draw's own line can no longer be voted back: the card is not in the hand
     log: withoutCard.log.map((entry) => (entry.item?.id === collection.itemId && entry.logType === 'ITEM' ? { ...entry, undo: null, superseded: true } : entry)),
   }
-  return appendPublicLog(back, player.username, player.playerId, `put the ${card.kind === 'village' ? 'village' : 'hut'} token on ${collection.square} back and returned its card${culture > 0 ? `, and took back ${culture} (${player.stats.culture - culture}) culture` : ''}`)
+  return appendPublicLog(back, player.username, player.playerId, `put the ${card.kind === 'village' ? 'village' : 'hut'} token on ${collection.square} back and returned its card${culture > 0 ? `, and took back ${tookBack === culture ? tookBack : `${tookBack} of ${culture}`} (${player.stats.culture - tookBack}) culture` : ''}`)
 }
 
 /** The pieces of hut and village tokens a figure collected: they belong to a player's area now, not to a tile. */
