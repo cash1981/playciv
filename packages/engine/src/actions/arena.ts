@@ -1538,7 +1538,11 @@ export function endBattleAction(
         chineseSaved = chosen.id
       }
     } else if (hand !== undefined) {
-      nextState = appendPublicLog(nextState, hand.username, hand.playerId, 'saves no unit as the Chinese')
+      // Only a choice not made is worth a line: with no killed unit to save there was nothing to choose
+      const candidates = [...announcedBattle.arena, ...announcedBattle.departedUnits].some(
+        (unit) => unit.side === sideId && unit.killed && unit.saved !== true,
+      )
+      if (candidates) nextState = appendPublicLog(nextState, hand.username, hand.playerId, 'saves no unit as the Chinese')
     }
   } else if (input.chineseSave !== undefined) {
     return err({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: input.chineseSave })

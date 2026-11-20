@@ -205,10 +205,22 @@ describe('the Chinese after a battle', () => {
     expect(endBattleAction(state, { playerId: CASH1981, chineseSave: victim.id }).ok).toBe(false)
   })
 
-  it('save nothing when no Chinese unit was killed', () => {
+  it('save nothing when no Chinese unit was killed, and say nothing about it', () => {
     const none = unwrap(endBattleAction(kill(chineseFight(), CASH1981, 2, KARANDRAS1), { playerId: CASH1981 }))
     expect(none.endedBattle?.chineseSaved).toBeUndefined()
     expect(none.endedBattle?.battle.arena.some((unit) => unit.saved === true)).toBe(false)
+    // No candidate, no choice: the "saves no unit" line is for a choice that was open and left empty
+    expect(lines(none).some((line) => line.includes('as the Chinese'))).toBe(false)
+  })
+
+  it('say nothing about saving either when every killed Chinese unit was already saved by another card', () => {
+    const killed = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
+    const saved: GameState = {
+      ...killed,
+      battle: killed.battle === null ? null : { ...killed.battle, arena: killed.battle.arena.map((unit) => (unit.killed ? { ...unit, saved: true } : unit)) },
+    }
+    const ended = unwrap(endBattleAction(saved, { playerId: CASH1981 }))
+    expect(lines(ended).some((line) => line.includes('as the Chinese'))).toBe(false)
   })
 
   it('is taken back by undoing the end of the battle: the unit is killed and unsaved again', () => {
