@@ -1447,7 +1447,10 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 
 - **Aztecs (end of battle):** the Aztec player gains 3 trade for winning and 1 culture for each
   unit killed, both sides counted, in a battle they fought as a player (not the barbarians they
-  only control). Both are kept on `endedBattle` and taken back by `undoEndBattle` (`actions/arena.ts`).
+  only control). The trade stops at the ceiling (`tradeCeilingOf`): only what fits is gained, and that amount is what
+  is logged and kept on `endedBattle`. `undoEndBattle` (`actions/arena.ts`) takes back exactly what was recorded, and is
+  refused (`END_BATTLE_UNDO_AZTEC_SPENT`, 409) when the Aztec player no longer holds all of it: the ender undoes alone,
+  so a partial take-back would let a spent reward be earned again by ending the battle a second time.
 
 - **Germans and Greeks (first reveal of a tech, `revealTech`):** never for the starting tech.
   A German reveal of a tech in `UNIT_LEVEL_TECHS` (or Flight) draws one free unit card per unit
@@ -1455,10 +1458,14 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   take one resource from the market; that resource is taken by hand, so it has no choice step.
   One free unit per unit type the tech unlocks or upgrades is settled (the human): Logistics gives
   three, with no cap.
-  A Greek reveal gives 1 culture for each other player who has not chosen (hidden or revealed)
-  that tech. The amount is public; players and hidden techs are never named. Both are kept in
+  A Greek reveal gives 1 culture for each other player who does not have the tech revealed. Only what is public
+  counts: a hidden choice is not counted, so the amount never tells whether another player is researching the same
+  tech (the Greeks may get one more than the card says in that case). The amount is public; players and hidden
+  techs are never named. Both are kept in
   `techRevealEffects` (server only) and taken back when the tech is taken back by the undo vote
-  or `removeTech` (`tech-reveal-abilities.ts`).
+  or `removeTech` (`tech-reveal-abilities.ts`). A take-back that cannot recover all of the reward (spent culture, a
+  unit card that left the hand) leaves a `paid` record, so revealing the tech again pays nothing more; a complete
+  take-back leaves none and the next reveal pays again. A returned unit card loses its battle lock.
 
 - **Zulu:** a city founded next to huts collects them at once (`actions/collect-token.ts`, shared
   with figure moves; no Chinese culture). The undo vote returns the tokens and cards; the board
@@ -1487,8 +1494,16 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   card, the Chinese conquest culture): these are take-backs by vote (or by the ender of a battle), and the undo takes
   back as much as is still there and its line says how much ("took back 2
   of 3 (0) culture"), or that a card could no longer be returned; it never refuses and never goes
-  below 0. A German card also copied into the battle hand is removed from both. The one exception is the Chinese hut
-  culture: its board Undo is one player alone, so it is refused once the 3 is no longer all there (above).
+  below 0. A German card also copied into the battle hand is removed from both. Two exceptions, both one player
+  alone: the Chinese hut culture (board Undo) and the Aztec reward (End battle undo) are refused once the gain is no
+  longer all there, since a clamped take-back would let the player earn it again. Removing a tech by hand cannot be
+  refused (it is a correction path), so it keeps the `paid` record instead.
+- **Markers and sealing:** the walled-capital and metropolis markers lying in a player area are not cities
+  (`ownCityPieces`, `cityCountOf`), so they do not block founding. A resource card played from the hand
+  (`playCard`) gives the Arab culture too and its undo takes it back. The vote undo of a Roman advance (wonder, city),
+  an Arab invest with a free advance, Mother Teresa, Sydney Opera House and a Zulu city that collected huts seals the
+  board Undo (`undoFloor`), since their reversal writes its own board moves. A plain Advance button is still not sealed.
+  Spanish saves revealed before the +1 get `2+1` once on load (`migrate.ts`, only when the movement is still `2`).
 - A Zulu hut on the city's own square is collected too, like the huts around it. The founding
   line names the huts that were collected and says which stayed on the map (no card left).
 

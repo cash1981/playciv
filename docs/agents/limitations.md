@@ -17,7 +17,9 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
   the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
   spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);
-  the player corrects the culture counter by hand to undo it.
+  the player corrects the culture counter by hand to undo it. The same refusal applies to the End battle undo of an
+  Aztec reward that is spent. The Spanish migration cannot tell an old save from a Spanish player who typed `2` on
+  purpose when no reveal setup records the choice: that `2` is set to `2+1` on load.
 - **Chinese saved unit (#368):** only the Chinese player chooses the unit they save, so while a killed unit could be saved the
   other combatant (or the barbarian controller) cannot end the battle. A Chinese player who has left the game stops it; no
   forced end exists.
