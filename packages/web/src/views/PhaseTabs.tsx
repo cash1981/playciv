@@ -26,6 +26,7 @@ import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { AssistedActionGroups, PendingRewardSection, hasActionsPanel } from './AssistedActions.js'
 import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { ConquestPrompt } from './ConquestPrompt.js'
 import { EndTurn } from './EndTurn.js'
 import type { Run } from './GameView.js'
 import { turnTitle } from './ChatOrdersPanel.js'
@@ -157,10 +158,11 @@ export function PhaseActionsPanel({
   }, [grants])
 
   if (view.you === null || !hasActionsPanel(view)) return null
-  // A collapsed panel must not hide the choice, so the title says it is waiting.
+  // A collapsed panel must not hide the choice, so the title says it is waiting; a conquest offer waits for an answer too
+  const choices = waiting + (view.you.conquestOffers?.length ?? 0)
   const title =
-    waiting > 0
-      ? `Your actions (${waiting} ${waiting === 1 ? 'choice' : 'choices'} waiting)`
+    choices > 0
+      ? `Your actions (${choices} ${choices === 1 ? 'choice' : 'choices'} waiting)`
       : 'Your actions'
 
   // Every request a tab sends goes through here, so only a press that changes the game asks; navigation,
@@ -220,6 +222,8 @@ export function PhaseActionsPanel({
           run={run}
           onKept={() => bodyRef.current?.focus()}
         />
+
+        <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
 
         <div className="phase-tabs" role="tablist" aria-label="Phases of the turn">
           {TURN_PHASES.map((phase) => {
