@@ -422,9 +422,12 @@ describe('what other clients receive', () => {
     const publicLog = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
     expect(publicLog.body).toContain('kept a card')
     const keptId = candidates[0]?.id
+    const keptName = candidates[0] === undefined ? '' : itemName(candidates[0])
     for (const item of candidates) {
-      if (item.id === keptId) expect(publicLog.body).not.toContain(itemName(item))
-      else expect(publicLog.body).toContain(`and discarded ${itemName(item)}`)
+      if (item.id === keptId) {
+        // Two drawn cards can share a name (a deck holds several Migrants), and then the discarded one names it too
+        if (!candidates.some((other) => other.id !== keptId && itemName(other) === keptName)) expect(publicLog.body).not.toContain(itemName(item))
+      } else expect(publicLog.body).toContain(`and discarded ${itemName(item)}`)
     }
     const privateLog = await inject(app, { url: `/api/games/${table.gameId}/log/private`, headers: bearer(table.starter) })
     expect(privateLog.body).toContain(`kept ${itemName(candidates[0] as Item)}`)
