@@ -107,7 +107,7 @@ export const spanishBuild: AssistedActionDefinition = {
       again: 'the free building was given back',
     })
     if (!reversed.ok) return reversed
-    // The credit is back already (a grant minus the applied records, and this one is no longer applied): only the owner sees the total
+    // The record is still applied while `reverse` runs, so the credit is counted back with a + 1 below: only the owner sees the total
     return ok({
       ...reversed.value,
       state: appendLog(reversed.value.state, {
