@@ -412,18 +412,24 @@ interface FreeBuildPickerProps extends ChoiceProps {
  */
 function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, className, showUnavailable }: FreeBuildPickerProps): React.JSX.Element | null {
   const [assetId, setAssetId] = useState('')
-  // A square with a note (it replaces a building) is picked on the map, read here, and built by the button.
-  const [picked, setPicked] = useState<FreeBuildSquare | null>(null)
+  // The key of a square with a note (it replaces a building), picked on the map and read here before the button builds.
+  const [pickedKey, setPickedKey] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
-  // Bumped to open the map pick again when a pick could not be used (the page was busy).
-  const [retry, setRetry] = useState(0)
+  // Whether a board pick is open now, and a counter that opens one again on request.
+  const [pickOpen, setPickOpen] = useState(false)
+  const [restart, setRestart] = useState(0)
   const mapPicker = useMapPicker()
+  const buildButton = useRef<HTMLButtonElement>(null)
   const playerId = view.you?.playerId ?? ''
 
   const chosen = answer?.status === 'ready' ? answer.choices.find((choice) => choice.assetId === assetId) : undefined
   const chosenId = chosen?.assetId
   const squaresKey = chosen?.squares.map(squareKeyOf).join('|') ?? ''
+  // Read again from the current choice on every render: a square a refresh took away is no longer picked, and its note is the current one.
+  const picked = pickedKey === null ? null : (chosen?.squares.find((square) => squareKeyOf(square) === pickedKey) ?? null)
+  const hasPicked = picked !== null
 
+  const busyRef = useRef(busy)
   const build = (choice: FreeBuildChoice, square: FreeBuildSquare): void => {
     const key = `${gameId}:${playerId}:${action}:${choice.assetId}:${squareKeyOf(square)}`
     setSending(true)
@@ -440,43 +446,55 @@ function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, class
       view,
     ).then((done) => {
       setSending(false)
-      setPicked(null)
-      if (done) setAssetId('')
+      if (done) {
+        setAssetId('')
+        setPickedKey(null)
+      }
+      // Not done (declined, refused, a repeated press): nothing reopens and the page does not move; the buttons below start again.
     })
   }
   // The pick below resolves later than the render that opened it: it builds with the latest view and choice.
   const buildRef = useRef(build)
   useEffect(() => {
+    busyRef.current = busy
     buildRef.current = build
   })
 
   // The building is chosen in the list; the square is then picked on the map, where the legal squares around the cities are
   // highlighted (the same board picker as a Build). A plain square builds at once, one that replaces a building is read first.
+  // It opens on a change of building or squares, not on every refresh or send.
   useEffect(() => {
-    if (mapPicker === null || chosen === undefined || picked !== null || sending) return
+    if (mapPicker === null || chosen === undefined || hasPicked) return
     const choice = chosen
     let stale = false
     let settled = false
+    setPickOpen(true)
     void mapPicker.begin({ title: choice.label, cells: choice.squares }).then((cell) => {
       settled = true
       if (stale) return
+      setPickOpen(false)
       if (cell === null) {
         setAssetId('')
         return
       }
       const square = choice.squares.find((candidate) => candidate === cell) ?? choice.squares.find((candidate) => candidate.column === cell.column && candidate.row === cell.row)
       if (square === undefined) return
-      if (square.note !== undefined) setPicked(square)
-      else if (busy) setRetry((count) => count + 1)
-      else buildRef.current(choice, square)
+      if (square.note !== undefined) setPickedKey(squareKeyOf(square))
+      else if (!busyRef.current) buildRef.current(choice, square)
     })
     return () => {
       stale = true
+      setPickOpen(false)
       if (!settled) mapPicker.cancel()
     }
     // The pick follows the building and its squares, not every refresh of the view.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapPicker, chosenId, squaresKey, picked, sending, retry])
+  }, [mapPicker, chosenId, squaresKey, hasPicked, restart])
+
+  // A replacing square was tapped and the board pick closed: bring the note and its button into view.
+  useEffect(() => {
+    if (hasPicked) buildButton.current?.focus()
+  }, [hasPicked])
 
   if (answer === null || (!showUnavailable && answer.status !== 'ready' && answer.status !== 'used')) return null
 
@@ -492,7 +510,7 @@ function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, class
               disabled={busy || sending}
               onChange={(event) => {
                 setAssetId(event.target.value)
-                setPicked(null)
+                setPickedKey(null)
               }}
             >
               <option value="">Choose a building</option>
@@ -503,23 +521,35 @@ function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, class
               ))}
             </select>
           </label>
-          {chosen !== undefined && picked === null && (
-            <p className="muted" role="status">
-              Pick a square for the {chosen.label} on the map.
-            </p>
-          )}
+          <p className="muted" role="status">
+            {chosen === undefined
+              ? ''
+              : picked === null
+                ? `Pick a square for the ${chosen.label} on the map.`
+                : `${chosen.label} in ${picked.cityLabel} on ${picked.label}. ${picked.note ?? `Replaces your ${picked.replaces?.label ?? 'building'}.`}`}
+          </p>
           {chosen !== undefined && picked !== null && (
             <>
-              <p className="muted" role="status">
-                {chosen.label} in {picked.cityLabel} on {picked.label}. {picked.note ?? `Replaces your ${picked.replaces?.label ?? 'building'}.`}
-              </p>
-              <button type="button" className="small" disabled={busy || sending} onClick={() => build(chosen, picked)}>
+              <button ref={buildButton} type="button" className="small" disabled={busy || sending} onClick={() => build(chosen, picked)}>
                 Build for free
               </button>
-              <button type="button" className="small" disabled={sending} onClick={() => setPicked(null)}>
+              <button
+                type="button"
+                className="small"
+                disabled={sending}
+                onClick={() => {
+                  setPickedKey(null)
+                  setRestart((count) => count + 1)
+                }}
+              >
                 Pick another square
               </button>
             </>
+          )}
+          {chosen !== undefined && picked === null && !pickOpen && (
+            <button type="button" className="small" disabled={busy || sending} onClick={() => setRestart((count) => count + 1)}>
+              Pick a square on the map
+            </button>
           )}
           {chosen !== undefined && (
             <button
@@ -528,7 +558,7 @@ function FreeBuildPicker({ gameId, view, busy, run, answer, action, title, class
               disabled={sending}
               onClick={() => {
                 setAssetId('')
-                setPicked(null)
+                setPickedKey(null)
               }}
             >
               Cancel
