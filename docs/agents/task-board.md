@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### civ-abilities-feedback
-
-- **Owner:** coder (Claude Sonnet 5.5)
-- **Branch:** `feat/civ-abilities-romans-chinese-spain`
-- **Brief:** `docs/agents/tasks/civ-abilities-feedback.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/board.ts, actions/collect-token.ts, actions/player.ts, actions/tile-tokens.ts, actions/token-collection.ts, assisted-resources.ts, assisted-tech-abilities.ts, cancellation.ts, assisted.ts, assisted-core.ts, assisted-conquest.ts (new), conquest.ts (new), index.ts, movement.ts, errors.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes incl. assisted-args.ts and games.ts), `packages/server/test/`, `packages/web/src/lib/api.ts`, `packages/web/src/views/GameView.tsx`, `packages/web/src/views/ConquestPrompt.tsx` and `.css` (new), `packages/web/src/views/PhaseTabs.tsx`, `packages/web/src/views/AssistedActions.tsx` and their tests, `docs/agents/decisions.md`, `docs/agents/limitations.md`
-- **Notes:** PR #373 human review feedback (issue #368); follow-up: conquest offers for the Roman and Chinese conquest rewards
+_None._
 
 ## Format
 

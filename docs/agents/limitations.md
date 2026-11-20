@@ -18,6 +18,9 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
   spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);
   the player corrects the culture counter by hand to undo it.
+- **Chinese saved unit (#368):** only the Chinese player chooses the unit they save, so while a killed unit could be saved the
+  other combatant (or the barbarian controller) cannot end the battle. A Chinese player who has left the game stops it; no
+  forced end exists.
 - **Roman and Chinese conquests (#368):** the offer (the Roman free advance, the Chinese 3 culture) is made from a heuristic,
   not from a conquest the game knows: an own army ended its last qualifying move on a village or (Romans) another
   player's city, and that player won a battle in the arena against the barbarians (village) or the city's owner (city)

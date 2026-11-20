@@ -144,7 +144,7 @@ export function carriedTileTokens(board: Board, tile: BoardPiece, x: number, y: 
 /**
  * The state part of taking a collected token back: the card leaves the hand and is bound back under the piece
  * (what Zheng He had seen there, or the card the player drew), and a public line says so. The pieces are
- * the caller's. `undefined` when the card is no longer in that player's hand.
+ * the caller's. `undefined` when the card is no longer in that player's hand, or when the culture the hut gave (Chinese) is spent.
  */
 export function returnCollectedCard(state: GameState, collection: TokenCollection): GameState | undefined {
   const player = findPlayer(state, collection.playerId)
