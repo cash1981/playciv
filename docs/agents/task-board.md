@@ -14,7 +14,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Owner:** orchestrator + three coders (Claude Sonnet 5.5)
 - **Branch:** `feat/civ-abilities-romans-chinese-spain`
 - **Brief:** `docs/agents/tasks/civ-review-373.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/player.ts, assisted.ts, assisted-cards.ts, assisted-resources.ts, assisted-city.ts, city-founding.ts, errors.ts, migrate.ts, movement.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes/arena.ts), `packages/server/test/`, `packages/web/src/views/GameView.tsx` and its tests, `docs/agents/decisions.md`, `docs/agents/limitations.md`
 - **Notes:** PR #373 Copilot review (issue #368)
 

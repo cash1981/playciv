@@ -1306,14 +1306,23 @@ describe('BoardView mobile placement', () => {
   })
 
   it.each([
-    // [figure, civilization, answer, the question asked, the call]
-    ['figures/redarmy', null, true, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false, false, true]],
-    ['figures/redarmy', null, false, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false]],
-    ['figures/redarmy', 'Zulu', true, 'Draw the village now?', ['game', 'army-1', 2, 1, false, true]],
-    ['figures/redarmy', 'Zulu', false, 'Draw the village now?', ['game', 'army-1', 2, 1, false]],
-  ] as const)('asks an army to fight for a village and a Zulu army to draw it: %s, %s, answer %s', async (figureId, civilization, answer, question, call) => {
+    // [figure, civilization, answer, the question asked, the call, a battle after the move, Battle panel opened]
+    ['figures/redarmy', null, true, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false, false, true], true, 1],
+    // The engine ignored the fight (another player's figures, a battle already active): no scroll to an empty arena
+    ['figures/redarmy', null, true, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false, false, true], false, 0],
+    ['figures/redarmy', null, false, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false], false, 0],
+    ['figures/redarmy', 'Zulu', true, 'Draw the village now?', ['game', 'army-1', 2, 1, false, true], false, 0],
+    ['figures/redarmy', 'Zulu', false, 'Draw the village now?', ['game', 'army-1', 2, 1, false], false, 0],
+  ] as const)('asks an army to fight for a village and a Zulu army to draw it: %s, %s, answer %s (case %#)', async (figureId, civilization, answer, question, call, battleAfter, opened) => {
     vi.spyOn(api, 'boardAssets').mockResolvedValue([])
-    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({ battle: battleAfter ? { id: 'battle-1' } : null } as unknown as PlayerView)
+    // The collapsed Battle panel's toggle, as `revealPanel` finds it
+    const toggle = document.createElement('button')
+    toggle.setAttribute('aria-controls', 'battle-content')
+    toggle.setAttribute('aria-expanded', 'false')
+    const toggled = vi.fn()
+    toggle.addEventListener('click', toggled)
+    document.body.append(toggle)
     const figureAsset = findBoardAsset(figureId)
     const village = findBoardAsset('resources/village')
     const back = findBoardAsset('tiles/tileback')
@@ -1370,6 +1379,8 @@ describe('BoardView mobile placement', () => {
     await waitFor(() => expect(travel).toHaveBeenCalledWith(...call))
     // Only the fight question for an army asks anything about the battle; nothing is ever sent as a draw together with it
     expect(travel.mock.calls.some((args) => args[5] === true && args[6] === true)).toBe(false)
+    await waitFor(() => expect(toggled).toHaveBeenCalledTimes(opened))
+    toggle.remove()
     travel.mockRestore()
     confirm.mockRestore()
     cleanup()

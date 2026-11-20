@@ -1,6 +1,6 @@
 # Civ abilities: Copilot review of PR #373
 
-- **Slug:** `civ-review-373` · **Branch:** `feat/civ-abilities-romans-chinese-spain` · **Owner:** orchestrator + three coders (Claude Sonnet 5.5) · **Status:** in progress
+- **Slug:** `civ-review-373` · **Branch:** `feat/civ-abilities-romans-chinese-spain` · **Owner:** orchestrator + three coders (Claude Sonnet 5.5) · **Status:** in review
 
 ## Goal
 

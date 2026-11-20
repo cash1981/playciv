@@ -1290,10 +1290,11 @@ export function BoardView({
                             )))
                       setMoveModeId(null)
                       if (fightsForVillage) {
-                        // The battle exists once the move is done: bring the Battle panel (the arena) into view
+                        // The battle exists once the move is done: bring the Battle panel (the arena) into view. The engine
+                        // ignores the fight on a contested square or while a battle is active, so only a started battle scrolls.
                         void run(async () => {
                           const result = await api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, false, true)
-                          revealPanel('battle')
+                          if (result.battle != null) revealPanel('battle')
                           return result
                         })
                         return

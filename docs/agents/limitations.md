@@ -23,7 +23,8 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - **Chinese saved unit (#368):** only the Chinese player chooses the unit they save, so while a killed unit could be saved the
   other combatant (or the barbarian controller) cannot end the battle. A Chinese player who has left the game stops it; no
   forced end exists.
-- **Roman and Chinese conquests (#368):** the offer (the Roman free advance, the Chinese 3 culture) is made from a heuristic,
+- **Conquests (#368):** the offer (a village for every civ, with the Roman free advance or the Chinese 3 culture; a city
+  for the Romans) is made from a heuristic,
   not from a conquest the game knows: an own army ended its last qualifying move on a village or (Romans) another
   player's city, and that player won a battle in the arena against the barbarians (village) or the city's owner (city)
   with the army still on that square. It cannot tell what the battle was really fought for, so a win elsewhere with the
@@ -31,6 +32,11 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   defender, makes no offer (the player takes the reward by hand); a city that changes owner is not modelled; the pending
   move is only the last qualifying one of each player, and a board Undo of that move leaves it in place: it only counts while
   the army stands on the recorded square, and a newer move or the next battle of the player replaces or uses it up.
+  The village fight question is asked by the web client from what it sees; when the engine ignores it (another player's
+  figures on the square, a battle already active) the army just moves.
+- **Aztec free units (#368):** a Great Person drawn by hand in the Draw panel, or gained outside an assisted action,
+  gives no credits; the player draws the units by hand. A free unit drawn before its Great Person was undone stays in
+  the hand.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares
