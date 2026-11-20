@@ -5,8 +5,8 @@
  * Two board history entries, in this order: the figure's movement bookkeeping
  * (same square, 1 more used) and the tile. The board Undo therefore takes the
  * tile off first and gives the movement back on the second press. The tile
- * card stays in the player's hand like any other draw; undoing the draw's log
- * line by vote returns it to the deck.
+ * card goes straight to the discard pile, like every drawn tile; undoing the
+ * draw's log line by vote returns it to the deck.
  */
 
 import { brandenburgForbiddenFor } from '../brandenburg.js'

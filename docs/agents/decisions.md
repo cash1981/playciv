@@ -485,9 +485,15 @@ Source: `packages/engine/src/coins.ts`, `blockade.ts`, `combat-bonus.ts`,
 
 - Arena turn indicators are advisory; participation and edits have their own
   permissions. Do not turn indicators into enforcement.
-- Kills are reversible flags, not automatic discards (the earlier auto-discard
-  plan, #71, is superseded). Reinforced-away cards stay locked until battle end.
-  Loot remains manual.
+- Kills are reversible flags during the battle. End battle discards the cards of
+  the killed units of the player sides, unless Florence Nightingale saved them,
+  each with a public `DISCARD` line (the human in #373; this reverses #75's
+  "never auto-discard"). Killed barbarians stay with their controller, who uses
+  Discard barbarians. Undo end battle puts the cards back where they stood in the
+  hand and battlehand, locked, and supersedes their discard lines. A card that
+  comes back after End battle (the Chinese, Nightingale) supersedes its discard
+  line too, so a vote undo cannot return it twice. Reinforced-away cards stay
+  locked until battle end. Loot remains manual.
 - Gifting is restricted to tradable cards; Great Persons/civilizations are not
   freely giftable. Owners may explicitly discard a Great Person from hand or
   revealed cards, with log wording matching what was already visible.
@@ -543,10 +549,11 @@ combatant for a card.
   is not spent). Refused with no culture. "At the start of a battle" is not enforced, as with Leonidas (the arena
   has no start): she can be played until End battle.
 - **Florence Nightingale:** discarded; every killed unit of the player, also one a later unit replaced on its
-  front, gets `ArenaUnit.saved`, shown as SAVED. Killed units are never discarded by the app, so this is a mark: it still counts as killed for the result, and the card
-  stays in the hand. Refused when none of the player's units is killed. She is played "after a battle" (human
+  front, gets `ArenaUnit.saved`, shown as SAVED. It still counts as killed for the result, and End battle does not discard
+  its card. Refused when none of the player's units is killed. She is played "after a battle" (human
   2026-11-03): also on the battle End battle has just set aside, by whichever combatant holds her, until the next battle
-  starts; the SAVED marks then show in the final arena, and Undo end battle brings the battle back with them.
+  starts; then the cards End battle discarded go back to the hand (`BattleCardEffect.returned`; her vote undo discards
+  them again). The SAVED marks show in the final arena, and Undo end battle brings the battle back with them.
   The mark goes when the death is taken back (kill toggle, face-off undo). A saved unit another unit has replaced on its
   front is no longer in the arena: it is listed as saved casualties, in the active battle and in the final arena
   (`LastBattleView.savedDeparted`).
@@ -928,7 +935,10 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   side the figure explored from: figure south of the tile 0, west 90, north 180, east 270.
   It can still be turned by hand. It neither moves nor
   locks the figure; any lock forbids exploring. It fails without spending when the
-  card has no artwork. The tile card goes to the hand like any draw, so board Undo
+  card has no artwork. A drawn tile card (exploration or the manual Draw) never
+  enters the hand: it goes straight to the discard pile and shows in Revealed and
+  Discarded Items, dated by its draw line (the human asked for this in #373; tiles
+  are not reshuffled, so it cannot be drawn twice). Board Undo
   (two presses: tile, then movement) does not return it; explore-undo-explore to
   see more tiles is accepted for now (the draw line can be undone by vote).
   Test helper `coverMap` lays tile backs so older tests see no fog.
@@ -1439,15 +1449,16 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   - The walled capital marker (`cities/<colour>capitalwalled2`) is put in the player's area at the reveal, as a piece
     of the reveal (the reveal undo takes it off) and only if none of that colour is on the board; the reveal log
     says so and the player places it. It stays a marker in the area until a proper setup phase exists (issue #374).
-  - The saved unit is the player's choice: `EndBattleInput.chineseSave` is the arena unit id, validated as a killed,
-    not yet saved unit of the Chinese side (`CHINESE_SAVE_INVALID`, 400), and marked `saved`. Without it nothing
-    is saved and the line says "saves no unit", only when a killed unsaved unit could have been saved (with no
-    candidate nothing is logged). The Chinese player alone chooses: while the Chinese side has a killed unsaved unit,
-    End battle pressed by anyone else (the opponent, or the player who controls the barbarians) is refused with
-    `CHINESE_SAVE_PENDING` (409) and changes nothing; the Chinese player must end the battle. With no such unit either
-    side ends it as any battle. The Battle panel shows the picker (a unit, or "Save none") to the Chinese player only and
-    keeps their End battle button disabled until one is chosen; the other combatant's button is disabled with that
-    reason. Kept on `endedBattle.chineseSaved` and taken back by `undoEndBattle`.
+  - Saving a killed unit follows the civ sheet ("may save one of their killed units after each battle, returning it to
+    their standing forces") and the human's design in #373. End battle, pressed by either side, discards the killed
+    units' cards as any battle does. Then, until the next battle starts, the Chinese combatant (attacker or defender,
+    also against the barbarians) may save one of their own killed units whose card is still on the pile:
+    `chineseSaveAction` returns the card to the hand, marks the unit `saved`, keeps it on `endedBattle.chineseSaved` and
+    logs `saves the killed <unit> as the Chinese: it goes back to the hand`. Once per battle (`CHINESE_SAVE_UNAVAILABLE`,
+    409, also outside the window or for anyone else); a unit that is not such a candidate is `CHINESE_SAVE_INVALID`
+    (400). Only the Chinese player's own view carries the choices (`you.chineseSave`, real arena ids); the opponent
+    sees nothing until the public line. The prompt is in the Battle panel after the battle and in "Your actions",
+    counted as a waiting choice. There is no separate undo: Undo end battle takes the save back with the battle.
 - **Spanish:** the reveal sets `stats.mvmt` from `2` to `2+1` (the typed bonus `movement.ts`
   reads) and logs it. A value the player already typed is left alone. The `civSetup` records
   what it set, and the reveal undo restores it only if the value is still the one it set. With Natural Religion

@@ -514,6 +514,14 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
 
   state.log.forEach((entry, logIndex) => {
     if (entry.item === null) return
+    // A drawn tile goes straight to the discard pile; its draw line dates the row.
+    if (entry.logType === 'ITEM' && entry.item.kind === 'tile') {
+      const tileRow = rows.get(entry.item.itemNumber)
+      if (tileRow === undefined || !tileRow.discarded) return
+      tileRow.createdAt = newer(tileRow.createdAt, entry.createdAt)
+      tileRow.logOrder = Math.max(tileRow.logOrder, logIndex)
+      return
+    }
     if (entry.logType !== 'REVEAL' && entry.logType !== 'DISCARD') return
     let row = rows.get(entry.item.itemNumber)
     if (row === undefined) {

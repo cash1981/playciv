@@ -26,6 +26,7 @@ import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { AssistedActionGroups, PendingRewardSection, hasActionsPanel } from './AssistedActions.js'
 import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { ChineseSavePrompt } from './ChineseSavePrompt.js'
 import { ConquestPrompt } from './ConquestPrompt.js'
 import { EndTurn } from './EndTurn.js'
 import type { Run } from './GameView.js'
@@ -158,8 +159,8 @@ export function PhaseActionsPanel({
   }, [grants])
 
   if (view.you === null || !hasActionsPanel(view)) return null
-  // A collapsed panel must not hide the choice, so the title says it is waiting; a conquest offer waits for an answer too
-  const choices = waiting + (view.you.conquestOffers?.length ?? 0)
+  // A collapsed panel must not hide the choice, so the title says it is waiting; a conquest offer and the Chinese save wait too
+  const choices = waiting + (view.you.conquestOffers?.length ?? 0) + ((view.you.chineseSave?.units.length ?? 0) > 0 ? 1 : 0)
   const title =
     choices > 0
       ? `Your actions (${choices} ${choices === 1 ? 'choice' : 'choices'} waiting)`
@@ -224,6 +225,7 @@ export function PhaseActionsPanel({
         />
 
         <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+        <ChineseSavePrompt gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
 
         <div className="phase-tabs" role="tablist" aria-label="Phases of the turn">
           {TURN_PHASES.map((phase) => {

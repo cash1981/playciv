@@ -1,10 +1,12 @@
 /**
- * Civilization abilities that act when a battle ends: the Aztecs' trade and culture, the Chinese saving a killed unit.
+ * What happens when a battle ends: the killed units are discarded, the Aztecs gain trade and culture, the Chinese may save a
+ * killed unit.
  */
 
 import { describe, expect, it } from 'vitest'
 
-import { endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, undoEndBattle } from '../src/actions/arena.js'
+import { chineseSaveAction, endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, undoEndBattle } from '../src/actions/arena.js'
+import { initiateUndo, vote } from '../src/actions/undo.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { describeError } from '../src/errors.js'
 import { unwrap } from '../src/result.js'
@@ -12,7 +14,7 @@ import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
 import { withCivilization, withStats } from './culture-advance-fixture.js'
-import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 /** Cash (attacker) and Karandras1 (defender) with two units each in the arena, 1 attack and 3 health. */
 function fight(): GameState {
@@ -233,83 +235,123 @@ describe('the Aztecs after a battle', () => {
   })
 })
 
+describe('End battle discards the killed units', () => {
+  it("puts every killed unit's card of both players on the discard pile with a public line, and leaves the living ones", () => {
+    const state = kill(kill(fight(), KARANDRAS1, 1, CASH1981), CASH1981, 2, KARANDRAS1)
+    const [dead, alive] = unitsOf(state, CASH1981)
+    if (dead === undefined || alive === undefined) throw new Error('no units')
+    const ended = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    const deadCards = [dead, ...unitsOf(state, KARANDRAS1)].map((unit) => unit.unit.id)
+    for (const id of deadCards) {
+      expect(ended.discardedItems.some((item) => item.id === id)).toBe(true)
+      expect([...me(ended).items, ...me(ended, KARANDRAS1).items, ...me(ended).battlehand].some((item) => item.id === id)).toBe(false)
+    }
+    expect(me(ended).items.find((item) => item.id === alive.unit.id)).toMatchObject({ inBattle: false })
+    const discards = ended.log.filter((entry) => entry.logType === 'DISCARD')
+    expect(discards.map((entry) => entry.item?.id).sort()).toEqual([...deadCards].sort())
+    expect(discards.find((entry) => entry.item?.id === dead.unit.id)?.publicLog).toMatch(/^cash1981 has discarded /)
+    expect(ended.endedBattle?.killedDiscarded).toHaveLength(3)
+  })
+
+  it('keeps a unit Florence Nightingale saved during the battle in the hand', () => {
+    const killed = kill(fight(), KARANDRAS1, 1, CASH1981)
+    const state: GameState = {
+      ...killed,
+      battle: killed.battle === null ? null : { ...killed.battle, arena: killed.battle.arena.map((unit) => (unit.killed ? { ...unit, saved: true } : unit)) },
+    }
+    const victim = unitsOf(state, CASH1981)[0]
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(me(ended).items.some((item) => item.id === victim?.unit.id)).toBe(true)
+    expect(ended.endedBattle?.killedDiscarded).toBeUndefined()
+  })
+
+  it('gives the cards back to the hand, locked in the battle, when End battle is undone, and their discard lines can no longer be undone by vote', () => {
+    const state = kill(fight(), KARANDRAS1, 2, CASH1981)
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    for (const unit of unitsOf(state, CASH1981)) {
+      expect(me(undone).items.find((item) => item.id === unit.unit.id)).toMatchObject({ inBattle: true })
+      expect(undone.discardedItems.some((item) => item.id === unit.unit.id)).toBe(false)
+    }
+    const discards = undone.log.filter((entry) => entry.logType === 'DISCARD')
+    expect(discards).toHaveLength(2)
+    expect(discards.every((entry) => entry.superseded === true)).toBe(true)
+    expect(lines(undone).at(-1)).toContain('and the 2 killed units go back to the hand')
+  })
+})
+
 describe('the Chinese after a battle', () => {
   const chineseFight = (): GameState => withCivilization(fight(), 'Chinese')
+  const save = (state: GameState, arenaUnitId: string, playerId = CASH1981) => chineseSaveAction(state, { playerId, arenaUnitId })
 
-  it('save the killed unit that was chosen, not the first one, and it stays in the hand', () => {
+  it('are offered nothing while the battle is on, and the battle ends for either player', () => {
     const state = kill(chineseFight(), KARANDRAS1, 2, CASH1981)
-    const killed = unitsOf(state, CASH1981)
-    const [first, second] = killed
+    expect(toPlayerView(state, CASH1981).you?.chineseSave).toBeNull()
+    const victim = unitsOf(state, CASH1981)[0]
+    if (victim === undefined) throw new Error('no unit')
+    const refused = save(state, victim.id)
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_UNAVAILABLE' })
+    // The opponent may end the battle: nothing waits for the Chinese, and the end says nothing about them
+    const ended = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    expect(lines(ended).some((line) => line.includes('Chinese'))).toBe(false)
+  })
+
+  it('save the chosen killed unit after the battle: its card leaves the discard pile for the hand', () => {
+    const state = kill(chineseFight(), KARANDRAS1, 2, CASH1981)
+    const [first, second] = unitsOf(state, CASH1981)
     if (first === undefined || second === undefined) throw new Error('no units')
-    const ended = unwrap(endBattleAction(state, { playerId: CASH1981, chineseSave: second.id }))
-    const saved = ended.endedBattle?.battle.arena.filter((unit) => unit.saved === true) ?? []
-    expect(saved.map((unit) => unit.id)).toEqual([second.id])
-    expect(ended.endedBattle?.chineseSaved).toBe(second.id)
-    expect(lines(ended)).toContain('cash1981 saves one killed unit as the Chinese: it stays in the hand')
-    // Nothing discards a killed card: it is still in the hand, and the other killed unit is no different
-    expect(me(ended).items.some((item) => item.id === second.unit.id)).toBe(true)
-    expect(ended.discardedItems.some((item) => item.id === second.unit.id)).toBe(false)
+    const ended = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    expect(toPlayerView(ended, CASH1981).you?.chineseSave?.units.map((unit) => unit.arenaUnitId)).toEqual([first.id, second.id])
+
+    const saved = unwrap(save(ended, second.id))
+    expect(me(saved).items.find((item) => item.id === second.unit.id)).toMatchObject({ inBattle: false, hidden: true })
+    expect(saved.discardedItems.some((item) => item.id === second.unit.id)).toBe(false)
+    expect(saved.discardedItems.some((item) => item.id === first.unit.id)).toBe(true)
+    expect(saved.endedBattle?.chineseSaved).toBe(second.id)
+    expect(saved.endedBattle?.battle.arena.filter((unit) => unit.saved === true).map((unit) => unit.id)).toEqual([second.id])
+    expect(lines(saved).at(-1)).toMatch(/^cash1981 saves the killed .+ as the Chinese: it goes back to the hand$/)
+    // Its discard line is spent: a vote cannot put the card back a second time
+    expect(saved.log.find((entry) => entry.logType === 'DISCARD' && entry.item?.id === second.unit.id)?.superseded).toBe(true)
     // The public view of the last battle carries the mark, with ids scrubbed
-    const view = toPlayerView(ended, KARANDRAS1)
+    const view = toPlayerView(saved, KARANDRAS1)
     expect(view.lastBattle?.arena.filter((unit) => unit.saved === true)).toHaveLength(1)
     expect(JSON.stringify(view.lastBattle)).not.toContain(second.unit.id)
   })
 
-  it('save nothing without a choice, and say so', () => {
+  it('save one unit per battle', () => {
     const state = kill(chineseFight(), KARANDRAS1, 2, CASH1981)
-    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    expect(ended.endedBattle?.chineseSaved).toBeUndefined()
-    expect(ended.endedBattle?.battle.arena.some((unit) => unit.saved === true)).toBe(false)
-    expect(lines(ended)).toContain('cash1981 saves no unit as the Chinese')
+    const [first, second] = unitsOf(state, CASH1981)
+    if (first === undefined || second === undefined) throw new Error('no units')
+    const saved = unwrap(save(unwrap(endBattleAction(state, { playerId: CASH1981 })), first.id))
+    expect(toPlayerView(saved, CASH1981).you?.chineseSave).toBeNull()
+    const again = save(saved, second.id)
+    expect(again.ok).toBe(false)
+    if (!again.ok) expect(again.error).toEqual({ kind: 'CHINESE_SAVE_UNAVAILABLE' })
   })
 
-  it('are the only ones who choose: the opponent may not end the battle while a killed unit could be saved', () => {
+  it('are the only ones offered it: the opponent sees nothing, and is refused', () => {
     const state = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
     const victim = unitsOf(state, CASH1981)[0]
     if (victim === undefined) throw new Error('no unit')
-    // Neither with their choice nor without one, and the battle is left as it was
-    for (const input of [{ playerId: KARANDRAS1 }, { playerId: KARANDRAS1, chineseSave: victim.id }]) {
-      const refused = endBattleAction(state, input)
-      expect(refused.ok).toBe(false)
-      if (!refused.ok) {
-        expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_PENDING' })
-        expect(describeError(refused.error)).toContain('the Chinese player chooses')
-      }
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    for (const viewer of [KARANDRAS1, ITCHI]) {
+      const view = toPlayerView(ended, viewer)
+      expect(view.you?.chineseSave).toBeNull()
+      expect(JSON.stringify(view)).not.toContain(victim.id)
     }
-    expect(state.battle).not.toBeNull()
-    expect(state.endedBattle).toBeNull()
-    // The Chinese player ends it and chooses
-    const ended = unwrap(endBattleAction(state, { playerId: CASH1981, chineseSave: victim.id }))
-    expect(ended.endedBattle?.chineseSaved).toBe(victim.id)
-  })
-
-  it('are the only ones who choose when they defend, too', () => {
-    // karandras1 defends as the Chinese; cash1981 attacks and kills one of their units
-    const state = kill(withCivilization(fight(), 'Chinese', KARANDRAS1), CASH1981, 1, KARANDRAS1)
-    const victim = unitsOf(state, KARANDRAS1)[0]
-    if (victim === undefined) throw new Error('no unit')
-    const refused = endBattleAction(state, { playerId: CASH1981 })
+    const refused = save(ended, victim.id, KARANDRAS1)
     expect(refused.ok).toBe(false)
-    if (!refused.ok) expect(refused.error.kind).toBe('CHINESE_SAVE_PENDING')
-    const ended = unwrap(endBattleAction(state, { playerId: KARANDRAS1, chineseSave: victim.id }))
-    expect(ended.endedBattle?.chineseSaved).toBe(victim.id)
+    if (!refused.ok) expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_UNAVAILABLE' })
   })
 
-  it('leave the end of the battle to either player when no killed unit could be saved', () => {
-    // Nothing of the Chinese was killed
-    const none = kill(chineseFight(), CASH1981, 2, KARANDRAS1)
-    expect(endBattleAction(none, { playerId: KARANDRAS1 }).ok).toBe(true)
-    // Their only killed unit was already saved by another card
-    const killed = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
-    const saved: GameState = {
-      ...killed,
-      battle: killed.battle === null ? null : { ...killed.battle, arena: killed.battle.arena.map((unit) => (unit.killed ? { ...unit, saved: true } : unit)) },
-    }
-    expect(endBattleAction(saved, { playerId: KARANDRAS1 }).ok).toBe(true)
-  })
+  it('save when they defend, and after a battle against the barbarians ended by their controller', () => {
+    const defending = kill(withCivilization(fight(), 'Chinese', KARANDRAS1), CASH1981, 1, KARANDRAS1)
+    const victim = unitsOf(defending, KARANDRAS1)[0]
+    if (victim === undefined) throw new Error('no unit')
+    const ended = unwrap(endBattleAction(defending, { playerId: CASH1981 }))
+    expect(unwrap(save(ended, victim.id, KARANDRAS1)).endedBattle?.chineseSaved).toBe(victim.id)
 
-  it('are not ended for by the player who controls the barbarians they fight', () => {
-    // karandras1 controls the barbarians cash1981 (the Chinese) fights
     let base = withCivilization(firstCivGame(), 'Chinese')
     base = unwrap(draw(base, { playerId: CASH1981, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
     base = unwrap(drawUnitsForBattle(base, { playerId: CASH1981, numberOfDraws: 1 }))
@@ -320,150 +362,67 @@ describe('the Chinese after a battle', () => {
     state = unwrap(placeUnitInArena(state, { playerId: CASH1981, unitId: own.id, side: 'attacker', position: 0, attack: 1, health: 3 }))
     state = unwrap(placeUnitInArena(state, { playerId: KARANDRAS1, unitId: barbarian.id, side: 'defender', position: 0, attack: 1, health: 3 }))
     const mine = state.battle?.arena.find((unit) => unit.side === 'attacker')
-    if (mine === undefined) throw new Error('no attacker')
-    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: mine.id }))
-    const refused = endBattleAction(state, { playerId: KARANDRAS1 })
-    expect(refused.ok).toBe(false)
-    if (!refused.ok) expect(refused.error.kind).toBe('CHINESE_SAVE_PENDING')
-    expect(endBattleAction(state, { playerId: CASH1981, chineseSave: mine.id }).ok).toBe(true)
+    const theirs = state.battle?.arena.find((unit) => unit.side === 'defender')
+    if (mine === undefined || theirs === undefined) throw new Error('no units')
+    state = unwrap(killArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId: mine.id }))
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: theirs.id }))
+    const byController = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    // A killed barbarian stays with its controller, for Discard barbarians
+    expect(me(byController, KARANDRAS1).barbarians.some((unit) => unit.id === barbarian.id)).toBe(true)
+    expect(me(unwrap(save(byController, mine.id))).items.some((item) => item.id === own.id)).toBe(true)
   })
 
-  it('refuse a choice that is not a killed, unsaved unit of the Chinese side', () => {
+  it('refuse a unit that is not one of their killed units still on the pile', () => {
     const state = kill(kill(chineseFight(), KARANDRAS1, 1, CASH1981), CASH1981, 1, KARANDRAS1)
     const [killedChinese, aliveChinese] = unitsOf(state, CASH1981)
     const killedEnemy = unitsOf(state, KARANDRAS1)[0]
     if (killedChinese === undefined || aliveChinese === undefined || killedEnemy === undefined) throw new Error('no units')
-    for (const arenaUnitId of ['no-such-unit', aliveChinese.id, killedEnemy.id]) {
-      const refused = endBattleAction(state, { playerId: CASH1981, chineseSave: arenaUnitId })
-      expect(refused.ok).toBe(false)
-      if (!refused.ok) expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId })
-    }
-    // A unit another card (Florence Nightingale) already saved cannot be chosen again
-    const marked: GameState = {
-      ...state,
-      battle: state.battle === null ? null : { ...state.battle, arena: state.battle.arena.map((unit) => (unit.id === killedChinese.id ? { ...unit, saved: true } : unit)) },
-    }
-    expect(endBattleAction(marked, { playerId: CASH1981, chineseSave: killedChinese.id }).ok).toBe(false)
-    // The battle is untouched by a refusal, and a valid choice still works
-    expect(state.battle).not.toBeNull()
-    expect(endBattleAction(state, { playerId: CASH1981, chineseSave: killedChinese.id }).ok).toBe(true)
-  })
-
-  it('refuse a choice in a battle with no Chinese side', () => {
-    const state = kill(fight(), KARANDRAS1, 1, CASH1981)
-    const victim = unitsOf(state, CASH1981)[0]
-    if (victim === undefined) throw new Error('no unit')
-    expect(endBattleAction(state, { playerId: CASH1981, chineseSave: victim.id }).ok).toBe(false)
-  })
-
-  it('save nothing when no Chinese unit was killed, and say nothing about it', () => {
-    const none = unwrap(endBattleAction(kill(chineseFight(), CASH1981, 2, KARANDRAS1), { playerId: CASH1981 }))
-    expect(none.endedBattle?.chineseSaved).toBeUndefined()
-    expect(none.endedBattle?.battle.arena.some((unit) => unit.saved === true)).toBe(false)
-    // No candidate, no choice: the "saves no unit" line is for a choice that was open and left empty
-    expect(lines(none).some((line) => line.includes('as the Chinese'))).toBe(false)
-  })
-
-  it('say nothing about saving either when every killed Chinese unit was already saved by another card', () => {
-    const killed = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
-    const saved: GameState = {
-      ...killed,
-      battle: killed.battle === null ? null : { ...killed.battle, arena: killed.battle.arena.map((unit) => (unit.killed ? { ...unit, saved: true } : unit)) },
-    }
-    const ended = unwrap(endBattleAction(saved, { playerId: CASH1981 }))
-    expect(lines(ended).some((line) => line.includes('as the Chinese'))).toBe(false)
-  })
-
-  /** The card of an arena unit leaves the player's hand before the battle ends (discarded, or removed some other way). */
-  const withoutCard = (state: GameState, arenaUnitId: string, playerId = CASH1981): GameState => {
-    const cardId = [...(state.battle?.arena ?? []), ...(state.battle?.departedUnits ?? [])].find((unit) => unit.id === arenaUnitId)?.unit.id
-    if (cardId === undefined) throw new Error('no such arena unit')
-    const player = me(state, playerId)
-    const card = player.items.find((item) => item.id === cardId)
-    if (card === undefined) throw new Error('card not in hand')
-    return {
-      ...state,
-      players: state.players.map((p) => (p.playerId === playerId ? { ...p, items: p.items.filter((item) => item.id !== cardId) } : p)),
-      discardedItems: [...state.discardedItems, { ...card, hidden: true }],
-    }
-  }
-
-  it('cannot save a killed unit whose card has left the hand, and the choice is refused with its id', () => {
-    const killed = kill(chineseFight(), KARANDRAS1, 2, CASH1981)
-    const [gone, kept] = unitsOf(killed, CASH1981)
-    if (gone === undefined || kept === undefined) throw new Error('no units')
-    const state = withoutCard(killed, gone.id)
-    const refused = endBattleAction(state, { playerId: CASH1981, chineseSave: gone.id })
-    expect(refused.ok).toBe(false)
-    if (!refused.ok) {
-      expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: gone.id })
-      expect(describeError(refused.error)).toContain('whose card is still in the hand')
-    }
-    // The battle is untouched by the refusal, and the unit whose card is still there can be saved
-    expect(state.battle).not.toBeNull()
-    const ended = unwrap(endBattleAction(state, { playerId: CASH1981, chineseSave: kept.id }))
-    expect(ended.endedBattle?.chineseSaved).toBe(kept.id)
-    expect(ended.endedBattle?.battle.arena.filter((unit) => unit.saved === true).map((unit) => unit.id)).toEqual([kept.id])
-    // The discarded card is still where it was put: saving did not bring it back
-    expect(me(ended).items.some((item) => item.id === gone.unit.id)).toBe(false)
-  })
-
-  it('cannot save a departed killed unit whose card has left the hand either, but can while it is there', () => {
-    const killed = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
-    const victim = unitsOf(killed, CASH1981).find((unit) => unit.killed)
-    if (victim === undefined || killed.battle === null) throw new Error('no unit')
-    // The unit was moved off its front by a reinforcement: it is among the departed units
-    const departed: GameState = {
-      ...killed,
-      battle: { ...killed.battle, arena: killed.battle.arena.filter((unit) => unit.id !== victim.id), departedUnits: [...killed.battle.departedUnits, victim] },
-    }
-    expect(endBattleAction(departed, { playerId: CASH1981, chineseSave: victim.id }).ok).toBe(true)
-    const refused = endBattleAction(withoutCard(departed, victim.id), { playerId: CASH1981, chineseSave: victim.id })
-    expect(refused.ok).toBe(false)
-    if (!refused.ok) expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: victim.id })
-  })
-
-  it('is no candidate for the Chinese choice when its card has left the hand: the opponent may end, and no line says nothing was saved', () => {
-    const killed = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
-    const victim = unitsOf(killed, CASH1981).find((unit) => unit.killed)
-    if (victim === undefined) throw new Error('no unit')
-    const state = withoutCard(killed, victim.id)
-    // Nothing could be saved, so nobody waits for the Chinese player
-    const byOpponent = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
-    expect(byOpponent.endedBattle?.chineseSaved).toBeUndefined()
-    expect(lines(byOpponent).some((line) => line.includes('as the Chinese'))).toBe(false)
-    // The Chinese player ending it with no choice does not get the "saves no unit" line either
-    const byChinese = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    expect(lines(byChinese).some((line) => line.includes('as the Chinese'))).toBe(false)
-  })
-
-  it('still wait for the Chinese player, and say that no unit was saved, while another killed unit has its card in the hand', () => {
-    const killed = kill(chineseFight(), KARANDRAS1, 2, CASH1981)
-    const [gone] = unitsOf(killed, CASH1981)
-    if (gone === undefined) throw new Error('no unit')
-    const state = withoutCard(killed, gone.id)
-    const refused = endBattleAction(state, { playerId: KARANDRAS1 })
-    expect(refused.ok).toBe(false)
-    if (!refused.ok) expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_PENDING' })
     const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    expect(lines(ended)).toContain('cash1981 saves no unit as the Chinese')
+    for (const arenaUnitId of ['no-such-unit', aliveChinese.id, killedEnemy.id]) {
+      const refused = save(ended, arenaUnitId)
+      expect(refused.ok).toBe(false)
+      if (!refused.ok) {
+        expect(refused.error).toEqual({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId })
+        expect(describeError(refused.error)).toContain('still on the discard pile')
+      }
+    }
+    // A card that has left the pile since (a vote put it back in the hand) is no choice any more
+    const line = ended.log.find((entry) => entry.logType === 'DISCARD' && entry.item?.id === killedChinese.unit.id)
+    if (line === undefined) throw new Error('no discard line')
+    let voted = unwrap(initiateUndo(ended, { logId: line.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI, CHUL]) voted = unwrap(vote(voted, { logId: line.id, playerId, vote: true }))
+    expect(toPlayerView(voted, CASH1981).you?.chineseSave).toBeNull()
+    expect(save(voted, killedChinese.id).ok).toBe(false)
   })
 
-  it('is taken back by undoing the end of the battle: the unit is killed and unsaved again', () => {
+  it('cannot save in a battle with no Chinese side, nor once the next battle has started', () => {
+    const plain = kill(fight(), KARANDRAS1, 1, CASH1981)
+    const victim = unitsOf(plain, CASH1981)[0]
+    if (victim === undefined) throw new Error('no unit')
+    expect(save(unwrap(endBattleAction(plain, { playerId: CASH1981 })), victim.id).ok).toBe(false)
+
+    const ended = unwrap(endBattleAction(kill(chineseFight(), KARANDRAS1, 1, CASH1981), { playerId: CASH1981 }))
+    const next = unwrap(initiateBattle(ended, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    expect(toPlayerView(next, CASH1981).you?.chineseSave).toBeNull()
+    expect(save(next, victim.id).ok).toBe(false)
+  })
+
+  it('is taken back by undoing the end of the battle: the unit is killed and unsaved again, its card locked in the hand', () => {
     const state = kill(chineseFight(), KARANDRAS1, 1, CASH1981)
     const victim = unitsOf(state, CASH1981)[0]
     if (victim === undefined) throw new Error('no unit')
-    const ended = unwrap(endBattleAction(state, { playerId: CASH1981, chineseSave: victim.id }))
-    const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    const saved = unwrap(save(unwrap(endBattleAction(state, { playerId: CASH1981 })), victim.id))
+    const undone = unwrap(undoEndBattle(saved, { playerId: CASH1981 }))
     expect(undone.battle?.arena.some((unit) => unit.saved === true)).toBe(false)
     expect(undone.battle?.arena.filter((unit) => unit.killed)).toHaveLength(1)
+    expect(me(undone).items.find((item) => item.id === victim.unit.id)).toMatchObject({ inBattle: true })
     expect(lines(undone).at(-1)).toContain('the saved Chinese unit is killed again')
     expect(undone.endedBattle).toBeNull()
   })
 })
 
 describe('the Chinese and Florence Nightingale on the same battle', () => {
-  it('save the chosen unit when Nightingale has already saved another, and the undo leaves her mark', () => {
+  it('offer only the killed units Nightingale did not save, and the undo leaves her mark', () => {
     let state = kill(withCivilization(fight(), 'Chinese'), KARANDRAS1, 2, CASH1981)
     const [first, second] = unitsOf(state, CASH1981)
     if (first === undefined || second === undefined) throw new Error('no units')
@@ -472,10 +431,11 @@ describe('the Chinese and Florence Nightingale on the same battle', () => {
       ...state,
       battle: state.battle === null ? null : { ...state.battle, arena: state.battle.arena.map((unit) => (unit.id === first.id ? { ...unit, saved: true } : unit)) },
     }
-    const ended = unwrap(endBattleAction(state, { playerId: CASH1981, chineseSave: second.id }))
-    expect(ended.endedBattle?.chineseSaved).toBe(second.id)
-    expect(ended.endedBattle?.battle.arena.filter((unit) => unit.saved === true).map((unit) => unit.id).sort()).toEqual([first.id, second.id].sort())
-    const undone = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(toPlayerView(ended, CASH1981).you?.chineseSave?.units.map((unit) => unit.arenaUnitId)).toEqual([second.id])
+    const saved = unwrap(chineseSaveAction(ended, { playerId: CASH1981, arenaUnitId: second.id }))
+    expect(saved.endedBattle?.battle.arena.filter((unit) => unit.saved === true).map((unit) => unit.id).sort()).toEqual([first.id, second.id].sort())
+    const undone = unwrap(undoEndBattle(saved, { playerId: CASH1981 }))
     expect(undone.battle?.arena.filter((unit) => unit.saved === true).map((unit) => unit.id)).toEqual([first.id])
   })
 })

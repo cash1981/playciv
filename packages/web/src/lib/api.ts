@@ -741,9 +741,10 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/arena/tech-wound`, { tech, arenaUnitId, wounds, rev }),
   healUnits: (gameId: string, tech: string, arenaUnitId: string, wounds: number, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/heal`, { tech, arenaUnitId, wounds, rev }),
-  /** `chineseSave` is the arena unit id the Chinese save from the killed units; left out, nothing is saved. */
-  endBattleArena: (gameId: string, rev: number, chineseSave?: string) =>
-    post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev, ...(chineseSave === undefined ? {} : { chineseSave }) }),
+  endBattleArena: (gameId: string, rev: number) => post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+  /** The Chinese save one of their killed units after the battle: `arenaUnitId` from `you.chineseSave`. */
+  chineseSave: (gameId: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/chinese-save`, { rev, arenaUnitId }),
   undoEndBattle: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/end/undo`, { rev }),
 

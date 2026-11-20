@@ -253,10 +253,10 @@ describe('placeUnitInArena', () => {
     expect(stillLocked?.inBattle).toBe(true)
     expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(false)
 
-    // Ending the battle finally frees it, same as any other unit.
+    // Ending the battle discards it, as it does every killed unit's card.
     state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    const freed = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === fallen!.id)
-    expect(freed?.inBattle).toBe(false)
+    expect(findPlayer(state, CASH1981)!.battlehand.some((u) => u.id === fallen!.id)).toBe(false)
+    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(true)
   })
 })
 
@@ -442,11 +442,12 @@ describe('moveArenaUnit', () => {
     const lockedInItems = updated.items.find((it) => it.id === fallen!.id)
     expect((lockedInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(true)
 
+    // Ending the battle discards it, as it does every killed unit's card
     state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    const freedPlayer = findPlayer(state, CASH1981)!
-    expect(freedPlayer.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
-    const freedInItems = freedPlayer.items.find((it) => it.id === fallen!.id)
-    expect((freedInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(false)
+    const endedPlayer = findPlayer(state, CASH1981)!
+    expect(endedPlayer.battlehand.some((u) => u.id === fallen!.id)).toBe(false)
+    expect(endedPlayer.items.some((it) => it.id === fallen!.id)).toBe(false)
+    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(true)
   })
 })
 
@@ -677,7 +678,7 @@ describe('endBattleAction', () => {
     expect((it as { inBattle?: boolean }).inBattle).toBe(false)
   })
 
-  it('returns a still-killed unit\'s source card to hand too, not just an unkilled one (issue #75)', () => {
+  it('discards a killed unit\'s source card and returns an unkilled one to the hand', () => {
     let state = withBattlehand(CASH1981, 2)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
@@ -709,13 +710,12 @@ describe('endBattleAction', () => {
     state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
 
     const updated = findPlayer(state, CASH1981)!
-    // Killing never auto-discards: the killed unit's card is back in hand,
-    // just like the unkilled one — the player discards it themselves.
-    const killedInHand = updated.battlehand.find((u) => u.id === killedUnit!.id)
-    expect(killedInHand?.inBattle).toBe(false)
-    const killedInItems = updated.items.find((it) => it.id === killedUnit!.id)
-    expect((killedInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(false)
-    expect(state.discardedItems.some((it) => it.id === killedUnit!.id)).toBe(false)
+    // End battle discards the killed unit's card (this reverses issue #75's
+    // "never auto-discard", as the human decided in #373)
+    expect(updated.battlehand.some((u) => u.id === killedUnit!.id)).toBe(false)
+    expect(updated.items.some((it) => it.id === killedUnit!.id)).toBe(false)
+    expect(state.discardedItems.find((it) => it.id === killedUnit!.id)).toMatchObject({ hidden: true, inBattle: false })
+    expect(state.log.at(-1)).toMatchObject({ logType: 'DISCARD', playerId: CASH1981, item: { id: killedUnit!.id } })
 
     const survivorHand = updated.battlehand.find((u) => u.id === survivor!.id)
     expect(survivorHand?.inBattle).toBe(false)
@@ -1886,7 +1886,9 @@ describe('undoEndBattle', () => {
   it('restores the same arena, turn and units, and locks the source cards again', () => {
     const { before, ended, attackerCardId, defenderCardId } = endedPvpBattle()
     expect(ended.battle).toBeNull()
-    expect(cardInBattle(ended, CASH1981, attackerCardId)).toBe(false)
+    // Both units were killed, so End battle discarded their cards
+    expect(cardInBattle(ended, CASH1981, attackerCardId)).toBeUndefined()
+    expect(ended.discardedItems.map((it) => it.id)).toEqual(expect.arrayContaining([attackerCardId, defenderCardId]))
 
     const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
 
@@ -1903,6 +1905,7 @@ describe('undoEndBattle', () => {
       findPlayer(before, CASH1981)!.battlehand,
     )
     expect(restored.items).toEqual(before.items)
+    expect(restored.discardedItems).toEqual(before.discardedItems)
   })
 
   it('logs one public line, with no item, and keeps the earlier "ends the battle" line', () => {
@@ -1910,9 +1913,12 @@ describe('undoEndBattle', () => {
     const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
 
     expect(restored.log).toHaveLength(ended.log.length + 1)
-    expect(restored.log.slice(0, ended.log.length)).toEqual(ended.log)
+    // The killed units' discard lines are spent: their cards are no longer on the pile
+    expect(restored.log.slice(0, ended.log.length)).toEqual(
+      ended.log.map((line) => (line.logType === 'DISCARD' ? { ...line, undo: null, superseded: true } : line)),
+    )
     const entry = restored.log[restored.log.length - 1]!
-    expect(entry.publicLog).toBe('cash1981 undoes ending the battle')
+    expect(entry.publicLog).toBe('cash1981 undoes ending the battle, and the 2 killed units go back to the hand')
     expect(entry.item).toBeNull()
   })
 
@@ -2053,7 +2059,7 @@ describe('undoEndBattle', () => {
     const before = state
 
     state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    expect(cardInBattle(state, CASH1981, fallen!.id)).toBe(false)
+    expect(cardInBattle(state, CASH1981, fallen!.id)).toBeUndefined()
     const restored = unwrap(undoEndBattle(state, { playerId: CASH1981 }))
 
     expect(restored.battle).toEqual(announcedBattle(before.battle))
@@ -2065,9 +2071,10 @@ describe('undoEndBattle', () => {
   it('skips a source card that was discarded or removed between end and undo', () => {
     const { ended, attackerCardId } = endedPvpBattle()
     const attacker = findPlayer(ended, CASH1981)!
-    // The attacker's card leaves their hand; the defender's player is gone entirely
+    // The attacker's killed card leaves the discard pile; the defender's player is gone entirely
     const gone: GameState = {
       ...ended,
+      discardedItems: ended.discardedItems.filter((it) => it.id !== attackerCardId),
       players: ended.players
         .filter((p) => p.playerId !== KARANDRAS1)
         .map((p) =>

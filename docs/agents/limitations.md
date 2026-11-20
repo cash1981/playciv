@@ -20,9 +20,9 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   the player corrects the culture counter by hand to undo it. The same refusal applies to the End battle undo of an
   Aztec reward that is spent. The Spanish migration cannot tell an old save from a Spanish player who typed `2` on
   purpose when no reveal setup records the choice: that `2` is set to `2+1` on load.
-- **Chinese saved unit (#368):** only the Chinese player chooses the unit they save, so while a killed unit could be saved the
-  other combatant (or the barbarian controller) cannot end the battle. A Chinese player who has left the game stops it; no
-  forced end exists.
+- **Killed units and the Chinese save (#368):** End battle discards only the players' killed units; killed barbarians
+  are still discarded by hand with Discard barbarians. The Chinese save has no undo of its own (only Undo end battle,
+  by the player who ended the battle), and its window closes when the next battle starts.
 - **Conquests (#368):** the offer (a village for every civ, with the Roman free advance or the Chinese 3 culture; a city
   for the Romans) is made from a heuristic,
   not from a conquest the game knows: an own army ended its last qualifying move on a village or (Romans) another

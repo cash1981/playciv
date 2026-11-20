@@ -249,3 +249,33 @@ describe('the prompt in Your actions', () => {
     expect(hasActionsPanel(without)).toBe(false)
   })
 })
+
+describe('the Chinese save in Your actions', () => {
+  const units = [{ arenaUnitId: 'a1', name: 'Infantry 1.3', position: 0 }]
+  const withSave = (chineseSave: unknown): PlayerView => {
+    const base = viewWith([])
+    return { ...base, you: { ...base.you, chineseSave } } as unknown as PlayerView
+  }
+
+  it('is above the phase tabs as one waiting choice, saves the chosen unit, and puts the panel on the page on its own', async () => {
+    const saved = vi.spyOn(api, 'chineseSave').mockResolvedValue(viewWith([]))
+    render(<PhaseActionsPanel gameId="g1" view={withSave({ units })} busy={false} readOnly={false} run={run} />)
+    expect(screen.getByRole('heading', { name: 'Your actions (1 choice waiting)' })).toBeTruthy()
+    const prompt = screen.getByRole('region', { name: 'Chinese save' })
+    const tabs = screen.getByRole('tablist', { name: 'Phases of the turn' })
+    expect(prompt.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Killed unit to save' }), { target: { value: 'a1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save unit' }))
+    await waitFor(() => expect(saved).toHaveBeenCalledWith('g1', 'a1', 7))
+
+    const only = { rev: 1, you: { playerId: 'me', cities: [], availableActions: [], pendingRewards: [], conquestOffers: [], chineseSave: { units } }, opponents: [] } as unknown as PlayerView
+    expect(hasActionsPanel(only)).toBe(true)
+    expect(hasActionsPanel({ ...only, you: { ...only.you, chineseSave: null } } as unknown as PlayerView)).toBe(false)
+  })
+
+  it('is not there, and counts no choice, without a save to make', () => {
+    render(<PhaseActionsPanel gameId="g1" view={withSave(null)} busy={false} readOnly={false} run={run} />)
+    expect(screen.getByRole('heading', { name: 'Your actions' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Chinese save' })).toBeNull()
+  })
+})

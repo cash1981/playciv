@@ -2117,8 +2117,7 @@ describe('arena place and rotate', () => {
     expect(returnedView.battle.arena).toHaveLength(1)
     expect(returnedView.you.battlehand.find((u) => u.id === unitB!.id)?.inBattle).toBe(false)
 
-    // Kill A again and end the battle: A's card returns to hand too, not
-    // discarded — killing never auto-discards (issue #75).
+    // Kill A again and end the battle: End battle discards A's card.
     const killedAgain = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/battle/arena/${arenaUnitAId}/kill`,
@@ -2139,8 +2138,9 @@ describe('arena place and rotate', () => {
       you: { battlehand: { id: string; inBattle: boolean }[]; items: { id: string; inBattle?: boolean }[] }
     }
     expect(endedView.battle).toBeNull()
-    expect(endedView.you.battlehand.find((u) => u.id === unitA!.id)?.inBattle).toBe(false)
-    expect(endedView.you.items.find((u) => u.id === unitA!.id)?.inBattle).toBe(false)
+    expect(endedView.you.battlehand.some((u) => u.id === unitA!.id)).toBe(false)
+    expect(endedView.you.items.some((u) => u.id === unitA!.id)).toBe(false)
+    expect((await repo.findGame(gameId))?.discardedItems.some((item) => item.id === unitA!.id)).toBe(true)
   })
 
   it('lets a new unit reinforce a front a killed unit still holds', async () => {
@@ -2234,7 +2234,7 @@ describe('arena place and rotate', () => {
     expect(reinforcedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
     expect(reinforcedView.you.items.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
 
-    // Ending the battle finally frees it, same as any other unit.
+    // Ending the battle discards it, as it does every killed unit's card.
     const ended = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/battle/arena/end`,
@@ -2243,80 +2243,15 @@ describe('arena place and rotate', () => {
     })
     expect(ended.status).toBe(200)
     const endedView = await ended.json() as {
-      you: { battlehand: { id: string; inBattle: boolean }[] }
+      you: { battlehand: { id: string }[]; items: { id: string }[] }
     }
-    expect(endedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
+    expect(endedView.you.battlehand.some((u) => u.id === fallen!.id)).toBe(false)
+    expect(endedView.you.items.some((u) => u.id === fallen!.id)).toBe(false)
+    expect((await repo.findGame(gameId))?.discardedItems.some((item) => item.id === fallen!.id)).toBe(true)
   })
 })
 
-describe('end battle with a Chinese choice', () => {
-  it('refuses a chineseSave in a battle with no Chinese side, and leaves the battle', async () => {
-    const { gameId, starter } = await startedGame('Arena-chinese-save')
-    const initiated = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/battle/arena/initiate`,
-      headers: bearer(starter),
-      payload: { opponentId: 'barbarians' },
-    })
-    expect(initiated.status).toBe(200)
-    const view = await initiated.json() as { rev: number }
-    const refused = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/battle/arena/end`,
-      headers: bearer(starter),
-      payload: { rev: view.rev, chineseSave: 'some-arena-unit' },
-    })
-    expect(refused.status).toBe(400)
-    expect(((await refused.json()) as { error: string }).error).toBe('CHINESE_SAVE_INVALID')
-
-    const ended = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/battle/arena/end`,
-      headers: bearer(starter),
-      payload: { rev: view.rev },
-    })
-    expect(ended.status).toBe(200)
-  })
-})
-
-describe('end battle with a malformed chineseSave', () => {
-  it('answers 400 BAD_REQUEST for a number, null or an empty string, ends nothing, and still ends the battle without it', async () => {
-    const { gameId, starter } = await startedGame('Arena-chinese-save-malformed')
-    const initiated = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/battle/arena/initiate`,
-      headers: bearer(starter),
-      payload: { opponentId: 'barbarians' },
-    })
-    expect(initiated.status).toBe(200)
-    const view = await initiated.json() as { rev: number }
-    for (const chineseSave of [7, null, '']) {
-      const refused = await inject(app, {
-        method: 'POST',
-        url: `/api/games/${gameId}/battle/arena/end`,
-        headers: bearer(starter),
-        payload: { rev: view.rev, chineseSave },
-      })
-      expect(refused.status).toBe(400)
-      expect(((await refused.json()) as { error: string }).error).toBe('BAD_REQUEST')
-      // The battle is still on and its revision unchanged
-      const after = await repo.findGame(gameId)
-      expect(after?.battle).not.toBeNull()
-      expect(after?.rev).toBe(view.rev)
-    }
-    // Absent still means none
-    const ended = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/battle/arena/end`,
-      headers: bearer(starter),
-      payload: { rev: view.rev },
-    })
-    expect(ended.status).toBe(200)
-    expect((await repo.findGame(gameId))?.battle).toBeNull()
-  })
-})
-
-describe('end battle with a killed Chinese unit', () => {
+describe('the Chinese save a killed unit after the battle', () => {
   /** The starter is Chinese and fights the barbarians (the other player controls them); one of their units is killed. */
   async function chineseLoss(name: string) {
     const { gameId, starter, waiting } = await startedGame(name)
@@ -2345,28 +2280,58 @@ describe('end battle with a killed Chinese unit', () => {
     return { gameId, starter, waiting, unitId: mine.id, rev: state.rev }
   }
 
-  it('refuses the player who controls the barbarians with a 409, and lets the Chinese player choose', async () => {
-    const { gameId, starter, waiting, unitId } = await chineseLoss('Chinese-pending')
-    const refused = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/battle/arena/end`,
-      headers: bearer(waiting),
-      payload: { chineseSave: unitId },
-    })
-    expect(refused.status).toBe(409)
-    const body = (await refused.json()) as { error: string; message: string }
-    expect(body.error).toBe('CHINESE_SAVE_PENDING')
-    expect(body.message).toContain('the Chinese player chooses')
-    // The battle is still on, and the Chinese player ends it with their choice
-    expect((await repo.findGame(gameId))?.battle).not.toBeNull()
+  it('lets anyone end the battle, then offers the save to the Chinese player alone, who gets the card back', async () => {
+    const { gameId, starter, waiting, unitId } = await chineseLoss('Chinese-save')
     const ended = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/battle/arena/end`,
-      headers: bearer(starter),
-      payload: { chineseSave: unitId },
+      headers: bearer(waiting),
+      payload: {},
     })
     expect(ended.status).toBe(200)
-    expect((await repo.findGame(gameId))?.endedBattle?.chineseSaved).toBe(unitId)
+    const opponentView = (await ended.json()) as { you: { chineseSave: unknown } }
+    expect(opponentView.you.chineseSave).toBeNull()
+    expect(JSON.stringify(opponentView)).not.toContain(unitId)
+
+    const refused = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/chinese-save`,
+      headers: bearer(waiting),
+      payload: { arenaUnitId: unitId },
+    })
+    expect(refused.status).toBe(409)
+    expect(((await refused.json()) as { error: string }).error).toBe('CHINESE_SAVE_UNAVAILABLE')
+
+    const missing = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/chinese-save`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(missing.status).toBe(400)
+    const wrong = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/chinese-save`,
+      headers: bearer(starter),
+      payload: { arenaUnitId: 'no-such-unit' },
+    })
+    expect(wrong.status).toBe(400)
+    expect(((await wrong.json()) as { error: string }).error).toBe('CHINESE_SAVE_INVALID')
+
+    const saved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/chinese-save`,
+      headers: bearer(starter),
+      payload: { arenaUnitId: unitId },
+    })
+    expect(saved.status).toBe(200)
+    const savedView = (await saved.json()) as { you: { chineseSave: unknown; items: { id: string }[] } }
+    expect(savedView.you.chineseSave).toBeNull()
+    const game = await repo.findGame(gameId)
+    expect(game?.endedBattle?.chineseSaved).toBe(unitId)
+    const cardId = game?.endedBattle?.battle.arena.find((unit) => unit.id === unitId)?.unit.id
+    expect(savedView.you.items.some((item) => item.id === cardId)).toBe(true)
+    expect(game?.discardedItems.some((item) => item.id === cardId)).toBe(false)
   })
 })
 

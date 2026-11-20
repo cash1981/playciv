@@ -1703,7 +1703,10 @@ export const playCard: AssistedActionDefinition = {
       current = undone.value
       hand = playerOf(current, player.playerId) ?? hand
     }
-    if (effect.battleCard !== undefined) current = undoBattleCard(current, effect.battleCard, record.id)
+    if (effect.battleCard !== undefined) {
+      current = undoBattleCard(current, effect.battleCard, record.id)
+      hand = playerOf(current, player.playerId) ?? hand
+    }
 
     // Akira Kurosawa's culture goes back from the holder, as far as it is still there
     const kurosawa = takeBackKurosawa(current, effect.kurosawa ?? [])

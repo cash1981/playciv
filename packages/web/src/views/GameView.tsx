@@ -27,6 +27,7 @@ import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { CoinsPanel } from './CoinsPanel.js'
+import { ChineseSavePrompt } from './ChineseSavePrompt.js'
 import { ConquestPrompt } from './ConquestPrompt.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
@@ -1373,9 +1374,6 @@ interface BattlePanelProps extends PanelProps {
 }
 
 /** The picker's value for "Save none": nothing is sent, so the engine saves no unit. */
-const CHINESE_SAVE_NONE = 'none'
-/** Why End battle waits for the Chinese player: they alone choose the unit that is saved. */
-const CHINESE_SAVE_WAIT = 'A killed Chinese unit could be saved: the Chinese player chooses it and must end the battle.'
 
 export function BattlePanel({ gameId, busy, run, view, readOnly = false }: BattlePanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
@@ -1431,8 +1429,6 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
     readonly kind: 'hand' | 'arena'
     readonly id: string
   } | null>(null)
-  // The Chinese save one killed unit when the battle ends: a unit id, `CHINESE_SAVE_NONE`, or `null` before the choice is made
-  const [chineseChoice, setChineseChoice] = useState<string | null>(null)
   const battleActionInFlightRef = useRef(false)
   const touchDragRef = useRef<{
     readonly unitId: string
@@ -1444,7 +1440,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   // The wound popup belongs to the battle it was opened in: it does not come back in a later battle or after End battle is undone
   const battleId = battle?.id ?? null
-  useEffect(() => { setWoundPick(null); setHealPick(null); setChineseChoice(null) }, [battleId])
+  useEffect(() => { setWoundPick(null); setHealPick(null) }, [battleId])
   useEffect(() => {
     if (selectedBattlePiece === null) return
     const stillAvailable = selectedBattlePiece.kind === 'hand'
@@ -1589,34 +1585,6 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
         : null
     : null
 
-  // The Chinese side (a player, not barbarians) and its killed units that are not saved yet: End battle asks which one to save
-  const chineseSide: BattleSideId | null =
-    battle === null
-      ? null
-      : (['attacker', 'defender'] as const).find((side) => {
-          const sideOf = battle[side]
-          if (sideOf.kind !== 'player') return false
-          const seat = sideOf.playerId === myId ? view.you : view.opponents.find((o) => o.playerId === sideOf.playerId)
-          return seat?.civilization?.name === 'Chinese'
-        }) ?? null
-  const iAmChinese = battle !== null && chineseSide !== null && battle[chineseSide].playerId === myId
-  // The Chinese player is offered only the units whose card is still in their hand: a discarded or removed card has nothing
-  // left to save, and the engine refuses it. The other combatant cannot see the hand, so they go by the arena alone
-  const myCardIds = new Set((view.you?.items ?? []).map((item) => item.id))
-  const chineseCandidates =
-    battle === null || chineseSide === null
-      ? []
-      : [...battle.arena, ...battle.departedUnits].filter(
-          (unit) => unit.side === chineseSide && unit.killed && unit.saved !== true && (!iAmChinese || myCardIds.has(unit.unit.id)),
-        )
-  // Only the Chinese player chooses. The other combatant (the opponent, or the controller of the barbarians) waits for them:
-  // the engine refuses their End battle while a killed Chinese unit could be saved
-  const askChineseSave = iAmChinese && chineseCandidates.length > 0
-  const waitForChinese = mySideInBattle !== null && !iAmChinese && chineseCandidates.length > 0
-  // A choice that is no longer possible (the kill was undone) counts as none made
-  const chineseChoiceValid =
-    chineseChoice === CHINESE_SAVE_NONE || chineseCandidates.some((unit) => unit.id === chineseChoice)
-
   // Battle Great Persons I can play now, and Sun Tzu's pass once per battle (a barbarian controller is no combatant)
   const myCombatant = battle !== null && mySideInBattle !== null && battle[mySideInBattle].kind === 'player'
   // Gustavus Adolphus is played before the battle, on the units drawn for it, and Florence Nightingale also right after it
@@ -1703,9 +1671,12 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   return (
     <CollapsiblePanel id="battle" title="Battle" defaultOpen={false}>
-      {/* The conquest offer a won battle makes, here where the arena is (it is also in "Your actions", far from it) */}
+      {/* The conquest offer a won battle makes and the Chinese save, here where the arena is (they are also in "Your actions", far from it) */}
       {battle === null && (
-        <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Conquest (battle)" />
+        <>
+          <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Conquest (battle)" />
+          <ChineseSavePrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Chinese save (battle)" />
+        </>
       )}
 
       {/* — Hand management — */}
@@ -1939,42 +1910,12 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
                 Pass with Sun Tzu ({SUN_TZU_COST} trade)
               </button>
             )}
-            {askChineseSave && (
-              <label className="row" style={{ alignItems: 'center', gap: '0.3rem' }}>
-                <span>Chinese: save a killed unit</span>
-                <select
-                  aria-label="Chinese: save a killed unit"
-                  value={chineseChoiceValid ? (chineseChoice ?? '') : ''}
-                  disabled={busy || noMutations}
-                  onChange={(event) => setChineseChoice(event.target.value === '' ? null : event.target.value)}
-                >
-                  <option value="">Choose…</option>
-                  {chineseCandidates.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {itemName(unit.unit)} (front {unit.position + 1})
-                    </option>
-                  ))}
-                  <option value={CHINESE_SAVE_NONE}>Save none</option>
-                </select>
-              </label>
-            )}
-            {waitForChinese && <span className="muted">{CHINESE_SAVE_WAIT}</span>}
             {mySideInBattle !== null && (
               <button
                 className="small danger"
-                disabled={busy || noMutations || waitForChinese || (askChineseSave && !chineseChoiceValid)}
-                title={
-                  waitForChinese
-                    ? CHINESE_SAVE_WAIT
-                    : askChineseSave && !chineseChoiceValid
-                      ? 'Choose which killed Chinese unit to save, or Save none'
-                      : undefined
-                }
-                onClick={() =>
-                  runBattleAction(() =>
-                    api.endBattleArena(gameId, rev, askChineseSave && chineseChoice !== CHINESE_SAVE_NONE && chineseChoiceValid ? (chineseChoice ?? undefined) : undefined),
-                  )
-                }
+                disabled={busy || noMutations}
+                title="Ends the battle and discards the killed units' cards"
+                onClick={() => runBattleAction(() => api.endBattleArena(gameId, rev))}
               >
                 End battle
               </button>
@@ -2526,7 +2467,7 @@ export function ArenaUnitCard({
         onDragEnd={onDragEnd}
       />
       {unit.killed && <span className="tag discarded">DEAD</span>}
-      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved (Florence Nightingale or the Chinese): it stays in the hand">SAVED</span>}
+      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved (Florence Nightingale or the Chinese): its card is not discarded">SAVED</span>}
       <button
         className="small"
         disabled={busy || readOnly}

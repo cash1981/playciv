@@ -47,11 +47,14 @@ import {
 import type { Undo } from './undo.js'
 import type { ArenaRefight, ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
 import type { TechCoinGrant } from './tech-coins.js'
+import type { DiscardedKilledCard } from './killed-units.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import type { ResourcePaymentOption } from './assisted-resources.js'
 import { livePendingRewards } from './assisted-culture.js'
 import { conquestOfferViewsOf } from './assisted-conquest.js'
+import { chineseSaveViewOf } from './chinese-save.js'
+import type { ChineseSaveView } from './chinese-save.js'
 import { playableCardsOf } from './assisted-cards.js'
 import { startOfTurnViewOf } from './assisted-sot.js'
 import type { GovernmentOption } from './sot.js'
@@ -1626,6 +1629,8 @@ export interface EndedBattle {
   readonly aztecs?: { readonly playerId: string; readonly trade: number; readonly culture: number }
   /** The killed Chinese unit (its arena unit id) the Chinese saved after this battle, so an undo marks it killed again. */
   readonly chineseSaved?: string
+  /** The cards of the killed units this end discarded, so a save can take one back and an undo all of them. */
+  readonly killedDiscarded?: readonly DiscardedKilledCard[]
   /**
    * The conquests this end settled: the offers it made (an undo removes the ones still open, and is refused for one that was
    * answered) and the pending conquests it used up (an undo gives them back, so ending the battle again can offer again).
@@ -2084,6 +2089,11 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    * viewer's own, like `pendingRewards`; empty for a replayed revision.
    */
   readonly conquestOffers: readonly ConquestOfferView[]
+  /**
+   * The killed units the viewer may save as the Chinese after the battle that has just ended, or null. Only ever the
+   * viewer's own; null for a replayed revision.
+   */
+  readonly chineseSave: ChineseSaveView | null
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
@@ -2327,6 +2337,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           upgradeOptions: upgradeOptionsOf(state, player),
           pendingRewards: pendingRewardViews(player),
           conquestOffers: conquestOfferViewsOf(state, player),
+          chineseSave: chineseSaveViewOf(state, player),
         }
   return {
     id: state.id,

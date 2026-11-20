@@ -8,6 +8,7 @@
 
 import type { ArenaStatKey } from '@civ/engine'
 import {
+  chineseSaveAction,
   endBattleAction,
   endBattleTurn,
   initiateBattle,
@@ -32,7 +33,6 @@ import {
   authenticateWith,
   currentPlayer,
   optionalNumber,
-  optionalString,
   requireString,
 } from '../context.js'
 import { sendError } from '../errors.js'
@@ -363,9 +363,8 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
   })
 
   /**
-   * End the battle entirely. Body: `{ rev: number, chineseSave?: string }`. `chineseSave` is the arena unit id the
-   * Chinese choose to save; without it nothing is saved. Present but not a non-empty string is a 400.
-   * Clears the arena and resets `inBattle` on all involved units.
+   * End the battle entirely. Body: `{ rev: number }`.
+   * Clears the arena, resets `inBattle` on all involved units and discards the killed units' cards.
    * If no battle is active, falls back to clearing `inBattle` on the
    * caller's own hand (the existing standalone behaviour).
    */
@@ -373,24 +372,28 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
     const gameId = c.req.param('gameId')
     const body = asRecord(await c.req.json().catch(() => ({})))
     const clientRev = optionalNumber(body, 'rev')
-    const chineseSave = optionalString(body, 'chineseSave')
-    // A choice that is present but not a unit id (a number, null, an empty string) is a malformed request, not "save none"
-    if ('chineseSave' in body && chineseSave === undefined) {
-      return sendError(c, 400, 'BAD_REQUEST', 'chineseSave must be a non-empty string (the arena unit id), or left out')
-    }
 
     return applyToGame(
       context,
       c,
       gameId,
-      (state) =>
-        endBattleAction(state, {
-          playerId: currentPlayer(c).id,
-          at: new Date().toISOString(),
-          ...(chineseSave === undefined ? {} : { chineseSave }),
-        }),
+      (state) => endBattleAction(state, { playerId: currentPlayer(c).id, at: new Date().toISOString() }),
       clientRev,
     )
+  })
+
+  /**
+   * The Chinese save one of their killed units after the battle: its card goes from the discard pile back to the hand.
+   * Body: `{ rev: number, arenaUnitId: string }`, an id from `you.chineseSave`.
+   */
+  app.post('/api/games/:gameId/battle/arena/chinese-save', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+    const arenaUnitId = requireString(body, 'arenaUnitId')
+    if (arenaUnitId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'arenaUnitId is required')
+
+    return applyToGame(context, c, gameId, (state) => chineseSaveAction(state, { playerId: currentPlayer(c).id, arenaUnitId }), clientRev)
   })
 
   /**
