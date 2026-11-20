@@ -81,6 +81,7 @@ export type {
   AgriculturePayload,
   AssignScoutPayload,
   ChooseRewardPayload,
+  ClaimConquestPayload,
   CombustionPayload,
   CommunismPayload,
   GunpowderPayload,

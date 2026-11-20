@@ -23,6 +23,7 @@ import { drawBarbarians } from './draw.js'
 import { removePiece } from './board.js'
 import { placeBack } from '../assisted-core.js'
 import { cityMarkerMayReturn } from '../disband.js'
+import { settleConquests, takeBackConquest } from '../conquest.js'
 import { SUN_TZU, SUN_TZU_COST, TECH_WOUNDS, ZHUKOV, healOwed, playerSideOf, techWoundsOwed, zhukovOwed } from '../battle-cards.js'
 import { blockadedGreatPersonTypes } from '../blockade.js'
 import { earnTechCoin, returnTechCoin } from '../tech-coins.js'
@@ -1548,6 +1549,11 @@ export function endBattleAction(
     return err({ kind: 'CHINESE_SAVE_INVALID', arenaUnitId: input.chineseSave })
   }
 
+  // The Romans' and the Chinese's conquests (civ cards): a won battle for the village or city their army stands on makes an
+  // offer they answer later; the pending conquests of the combatants are used up whatever the outcome
+  const settled = settleConquests(nextState, battle, outcome?.winner.side ?? null)
+  nextState = settled.state
+
   // A fortification is used up by the battle for its city, whoever won (Fame and Fortune p. 7, the human)
   const defence = summaries.find((s) => s.side === 'defender')?.cityDefence ?? null
   const fortification =
@@ -1584,6 +1590,7 @@ export function endBattleAction(
       ...(codeOfLawsCoin === undefined ? {} : { codeOfLawsCoin }),
       ...(aztecs === undefined ? {} : { aztecs }),
       ...(chineseSaved === undefined ? {} : { chineseSaved }),
+      ...(settled.conquest === undefined ? {} : { conquest: settled.conquest }),
     },
   })
 }
@@ -1668,7 +1675,11 @@ export function undoEndBattle(
     ended.chineseSaved === undefined
       ? ended.battle
       : { ...ended.battle, arena: ended.battle.arena.map(unsave), departedUnits: ended.battle.departedUnits.map(unsave) }
-  let nextState = state
+  // The conquest offers this end made are withdrawn and its pending conquests given back; an offer that was answered
+  // refuses first, and nothing has changed by then
+  const conquestBack = ended.conquest === undefined ? ok(state) : takeBackConquest(state, ended.conquest)
+  if (!conquestBack.ok) return conquestBack
+  let nextState = conquestBack.value
   for (const arenaUnit of [...battle.arena, ...battle.departedUnits]) {
     const ownerSide =
       arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
@@ -1710,7 +1721,7 @@ export function undoEndBattle(
     nextState,
     player.username,
     player.playerId,
-    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}${aztecNote}${ended.chineseSaved === undefined ? '' : ', and the saved Chinese unit is killed again'}`,
+    `undoes ending the battle${restoring ? ' and puts the fortification back' : ''}${coinBack ? ' and takes the Code of Laws coin off' : ''}${aztecNote}${ended.chineseSaved === undefined ? '' : ', and the saved Chinese unit is killed again'}${(ended.conquest?.offerIds.length ?? 0) === 0 ? '' : ', and the conquest offer is withdrawn'}`,
   )
 
   return ok({ ...nextState, battle, endedBattle: null })

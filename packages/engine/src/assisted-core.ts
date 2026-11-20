@@ -352,6 +352,12 @@ export interface FoundCityPayload {
   readonly figurePieceId: string
 }
 
+/** What `claimConquest` carries: the open offer, and whether the player takes its reward. */
+export interface ClaimConquestPayload {
+  readonly offerId: string
+  readonly accept: boolean
+}
+
 /** What `assignScout` carries: the scout, and the city to send its square to (`null` stops it). */
 export interface AssignScoutPayload {
   readonly scoutPieceId: string
@@ -384,6 +390,7 @@ export type AssistedPayload = (
   | FeudalismHarvestPayload
   | FoundCityPayload
   | AssignScoutPayload
+  | ClaimConquestPayload
   | { readonly payments?: readonly ResourcePaymentChoice[] }
 ) & { readonly payments?: readonly ResourcePaymentChoice[] }
 

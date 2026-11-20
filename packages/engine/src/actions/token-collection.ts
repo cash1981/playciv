@@ -24,6 +24,7 @@ import { occupancyOf } from '../movement.js'
 import { mapTokensOf } from '../zheng-he.js'
 import { removePiece, travelFigure } from './board.js'
 import { collectMapToken } from './collect-token.js'
+import { pendingConquestOf, withPendingConquest } from '../conquest.js'
 import type { TravelFigureInput } from './board.js'
 
 export interface TravelCollectingInput extends TravelFigureInput {
@@ -56,7 +57,20 @@ function relicForArmyAt(state: GameState, input: TravelCollectingInput) {
   })
 }
 
+/**
+ * A figure's move, with the hut or village it ends on collected when the player agreed. An army of a Roman or Chinese player
+ * that ends on a village or (Romans) another player's city also records a pending conquest, which the next battle it wins
+ * there may turn into an offer (`conquest.ts`).
+ */
 export function travelFigureCollecting(state: GameState, input: TravelCollectingInput): Result<GameState, EngineError> {
+  const moved = travelAndCollect(state, input)
+  if (!moved.ok || input.disband === true) return moved
+  // Judged on the board before the move: a village token that was collected on it is gone from the square now
+  const conquest = pendingConquestOf(state, input.playerId, input.pieceId, { column: input.column, row: input.row })
+  return conquest === undefined ? moved : ok(withPendingConquest(moved.value, conquest))
+}
+
+function travelAndCollect(state: GameState, input: TravelCollectingInput): Result<GameState, EngineError> {
   const collecting = input.collectToken === true && input.disband !== true && !contested(state, input)
   const relic = collecting ? relicForArmyAt(state, input) : undefined
   const travelled = travelFigure(state, relic === undefined ? input : { ...input, endsMove: true })

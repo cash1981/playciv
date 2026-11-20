@@ -1792,6 +1792,7 @@ import { bureaucracy } from './assisted-bureaucracy.js'
 import { agriculture } from './assisted-agriculture.js'
 import { RELIC_ACTIONS } from './assisted-relics.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
+import { CONQUEST_ACTIONS } from './assisted-conquest.js'
 
 /** Every assisted action, in the order the projection lists them. */
 export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
@@ -1824,6 +1825,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ...ABILITY_ACTIONS,
   ...RELIC_ACTIONS,
   ...CITY_ACTIONS,
+  ...CONQUEST_ACTIONS,
 ]
 
 /** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */
@@ -2122,6 +2124,8 @@ export function reverseAssistedAction(
     (effect.kind === 'philosophy' && effect.marker !== null) ||
     // The Ark moved the leader marker back, and the School of Confucius took its Great Person marker off
     record.kind === 'relic:ark' ||
+    // The same for the Romans' advance for a conquest: the reverse move must not be undone by the board Undo
+    (effect.kind === 'conquestClaim' && effect.advance !== null) ||
     (effect.kind === 'relicGreatPerson' && effect.marker !== null) ||
     (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined)) ||
     (effect.kind === 'combustion' && (effect.building !== undefined || effect.unwalled !== undefined))

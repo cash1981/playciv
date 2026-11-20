@@ -50,6 +50,7 @@ import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import type { ResourcePaymentOption } from './assisted-resources.js'
 import { livePendingRewards } from './assisted-culture.js'
+import { conquestOfferViewsOf } from './assisted-conquest.js'
 import { playableCardsOf } from './assisted-cards.js'
 import { startOfTurnViewOf } from './assisted-sot.js'
 import type { GovernmentOption } from './sot.js'
@@ -447,6 +448,8 @@ export type AssistedActionKind =
   | 'gianniniBuild'
   | 'foundCity'
   | 'assignScout'
+  // The answer to a conquest offer (the Romans' free advance, the Chinese 3 culture, or no thanks): `conquest.ts`
+  | 'claimConquest'
   | 'devoteToTheArts'
   | 'harvest'
   | 'communism'
@@ -655,6 +658,16 @@ export type AssistedEffect =
         readonly itemId: string
       }[]
       /** The free advance the Romans get for a new city, or `null`. */
+      readonly advance: CultureAdvanceEffect | null
+    }
+  | {
+      /** The answer to a conquest offer. The offer is kept as it stood, so an undo opens it again. */
+      readonly kind: 'conquestClaim'
+      readonly offer: ConquestOffer
+      readonly accepted: boolean
+      /** The culture the Chinese were given; 0 for the Romans and for a decline. */
+      readonly culture: number
+      /** The free advance the Romans took, or `null` (declined, or no space left to advance to). */
       readonly advance: CultureAdvanceEffect | null
     }
   | {
@@ -1256,6 +1269,42 @@ export interface TokenCollection {
   readonly culture?: number
 }
 
+/**
+ * An own army of a Roman or Chinese player ended its move on a village token, or (Romans) on another player's city: the
+ * conquest the next battle that player wins with that army may settle (`conquest.ts`). At most one per player, a newer
+ * qualifying move replaces it. Server only: it names a piece, so a projection must never carry it.
+ */
+export interface PendingConquest {
+  readonly playerId: string
+  /** The army that made the move. */
+  readonly pieceId: string
+  readonly column: number
+  readonly row: number
+  /** "B4": where it stands. */
+  readonly square: string
+  readonly kind: 'village' | 'city'
+}
+
+/** The civilizations whose conquests give a reward the player may take (the civ cards, issue #368). */
+export type ConquestCiv = 'Romans' | 'Chinese'
+
+/**
+ * A conquest the player won a battle for and has not answered yet: take the civ reward (the Romans' free advance, the
+ * Chinese 3 culture) or leave it. Public in effect (the log says the battle was won), but only shown to its owner.
+ */
+export interface ConquestOffer {
+  readonly id: string
+  readonly playerId: string
+  readonly kind: 'village' | 'city'
+  readonly square: string
+  readonly civ: ConquestCiv
+}
+
+/** An open offer as its owner sees it: `blocked` says why accepting is stopped now (a card choice waiting, a hand over its size). */
+export interface ConquestOfferView extends Omit<ConquestOffer, 'playerId'> {
+  readonly blocked: string | null
+}
+
 /** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
 export interface DrawTokenView {
   readonly pieceId: string
@@ -1418,6 +1467,10 @@ export interface GameState {
   readonly tokenCollections?: readonly TokenCollection[]
   /** What the first reveal of a tech gave its player (Germans, Greeks), so taking the tech back takes it back. Server only, never projected. */
   readonly techRevealEffects?: readonly TechRevealEffect[]
+  /** The conquests an army may have made with its last move (Romans, Chinese), one per player. Server only, never projected. */
+  readonly pendingConquests?: readonly PendingConquest[]
+  /** The conquests won and not answered yet. Each owner sees their own in the view (`you.conquestOffers`), nobody else's. */
+  readonly conquestOffers?: readonly ConquestOffer[]
   readonly players: readonly Playerhand[]
   /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]
@@ -1533,6 +1586,11 @@ export interface EndedBattle {
   readonly aztecs?: { readonly playerId: string; readonly trade: number; readonly culture: number }
   /** The killed Chinese unit (its arena unit id) the Chinese saved after this battle, so an undo marks it killed again. */
   readonly chineseSaved?: string
+  /**
+   * The conquests this end settled: the offers it made (an undo removes the ones still open, and is refused for one that was
+   * answered) and the pending conquests it used up (an undo gives them back, so ending the battle again can offer again).
+   */
+  readonly conquest?: { readonly offerIds: readonly string[]; readonly pending: readonly PendingConquest[] }
 }
 
 // ---------------------------------------------------------------------------
@@ -1983,6 +2041,11 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    * not even a count.
    */
   readonly pendingRewards: readonly PendingRewardView[]
+  /**
+   * The viewer's own open conquest offers (a won battle for a village or a city, as the Romans or the Chinese). Only ever the
+   * viewer's own, like `pendingRewards`; empty for a replayed revision.
+   */
+  readonly conquestOffers: readonly ConquestOfferView[]
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
@@ -2225,6 +2288,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cityActions: cityActionsOf(state, player),
           upgradeOptions: upgradeOptionsOf(state, player),
           pendingRewards: pendingRewardViews(player),
+          conquestOffers: conquestOfferViewsOf(state, player),
         }
   return {
     id: state.id,
