@@ -1375,20 +1375,53 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   (`freeAdvanceStatus`, `performAdvance` with `free`). A wonder is refused before it is placed
   while that advance is stopped (card choice waiting, hand over its size); the end of the
   track stops nothing. The build's undo takes the advance back first and refuses if the marker
-  has moved on. Conquests stay manual: no conquer-city action exists, and a village is only a token
-  collection, so the Roman advance for a conquest is not automated.
+  has moved on. A conquest (a village, or another player's city) is an offer the player answers, below.
+- **Conquest offers (Romans and Chinese, the human: a prompt, never an automatic gain):** the Romans advance one space on
+  the culture track for free for each village or city (another player's) they conquer, the Chinese gain 3 culture for each
+  village. The game has no conquest event, so it is recognised from what it can see (`conquest.ts`):
+  1. An own **army** of a Roman or Chinese player ends its move (`travelFigureCollecting`) on a square with a village
+     token (both civs, whether or not the token is drawn) or on a centre square of another player's city (Romans only,
+     the colour of a player other than the mover's). It is recorded as the player's pending conquest
+     (`GameState.pendingConquests`, server only, one per player, a newer move replaces it). A scout never conquers, and a
+     disbanding move records nothing.
+  2. When the battle ends (`endBattleAction`) and that player won it with that army still standing on the recorded
+     square, against the matching side (the barbarians for a village, the owner of a city standing on that square for a
+     city), an offer is made (`GameState.conquestOffers`: id, player, `village`/`city`, square, civ). A loss, a draw (the
+     defender wins it) or an army that moved away makes none. The pending conquest of every combatant is used up
+     whatever the outcome; a player who only controls the barbarians loses nothing.
+  3. `claimConquest` (`assisted-conquest.ts`, args `{ offerId, accept }`, only the offer's owner) answers it. The Romans
+     take the free advance exactly as for a city (`freeAdvanceStatus`, `performAdvance` with `free`); while it is stopped
+     (a card choice waiting, a hand over its size) the answer is refused with the reason and the offer stays; at the end
+     of the track nothing is gained but the offer is closed and logged. The Chinese gain 3 culture, logged as
+     `gained 3 (N) culture for conquering the village on B4 as the Chinese`. A decline only closes the offer and logs it.
+     Its undo vote reopens the offer and takes the gain back (the Roman advance through the effect's reverse, which
+     refuses once the marker has moved on; the Chinese culture as far as it is still there, never below 0, logged like the
+     Aztec take-back).
+  4. The offer is kept on the `EndedBattle` record with the pending conquests it used up: undoing End battle withdraws an
+     open offer and gives the pending conquests back (unless the player has made a newer move), so ending the battle
+     again can offer again. It is refused (`ASSISTED_UNDO_BLOCKED`, 409) while the offer is answered, accepted or
+     declined: undo the answer first, which reopens the offer.
+  5. The offer is shown to its owner only (`you.conquestOffers`, with why a Roman advance is stopped; empty in a replayed
+     revision) as a prompt in "Your actions", above the phase tabs (`ConquestPrompt.tsx`): "You conquered the village on
+     B4. As the Romans you may advance one space on the culture track. [Advance] [No thanks]", or "As the Chinese you
+     gain 3 culture. [Take 3 culture] [No thanks]". The pending conquest is never projected.
+  Heuristic limits, on purpose: the same player, an army whose last qualifying move ended on the village or city, a battle
+  won against the matching side with that army still there is taken as the conquest, whatever the battle was fought for;
+  a battle fought by hand outside the arena makes no offer; a city that changes owner is not modelled (the city piece
+  stays where it is); a city with no army to defend it is walked into without a battle and so makes no offer.
 - **Chinese:**
-  - A figure that collects a hut or a village (`collectMapToken`, shared with the figure move) gives +3 culture
-    and a public line that says "hut" or "village". There is no separate conquest event: a village counts when the
-    token is collected, and a lost fight is undone with the board Undo. The culture is kept on the
-    `TokenCollection`; the board Undo takes it back and is refused once it is spent
-    (`BOARD_UNDO_TOKEN_CULTURE_SPENT`, because it also returns the card). Relics give none.
+  - A figure that collects a **hut** (`collectMapToken`, shared with the figure move) gives +3 culture the moment the token
+    is collected, with no battle, and a public line (`gained 3 (N) culture from the hut on B4 as the Chinese`). Collecting
+    a **village** token gives nothing: its 3 culture comes only through a conquest offer, above. The culture is kept on the
+    `TokenCollection`; the board Undo takes back as much as is still there, never below 0, says how much ("took back 1
+    of 3 (0) culture") and always returns the card and the token (spent culture does not stop it). Relics give none.
   - The walled capital marker (`cities/<colour>capitalwalled2`) is put in the player's area at the reveal, as a piece
     of the reveal (the reveal undo takes it off) and only if none of that colour is on the board; the reveal log
     says so and the player places it. It stays a marker in the area until a proper setup phase exists (issue #374).
   - The saved unit is the player's choice: `EndBattleInput.chineseSave` is the arena unit id, validated as a killed,
     not yet saved unit of the Chinese side (`CHINESE_SAVE_INVALID`, 400), and marked `saved`. Without it nothing
-    is saved and the line says "saves no unit". The Battle panel asks next to End battle (a unit, or "Save none")
+    is saved and the line says "saves no unit", only when a killed unsaved unit could have been saved (with no
+    candidate nothing is logged). The Battle panel asks next to End battle (a unit, or "Save none")
     and keeps the button disabled until one is chosen. Kept on `endedBattle.chineseSaved` and taken back by
     `undoEndBattle`.
 - **Spanish:** the reveal sets `stats.mvmt` from `2` to `2+1` (the typed bonus `movement.ts`
@@ -1444,17 +1477,19 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 - **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, Arab culture, a German free unit
   card): the undo takes back as much as is still there and its line says how much ("took back 2
   of 3 (0) culture"), or that a card could no longer be returned; it never refuses and never goes
-  below 0. A German card also copied into the battle hand is removed from both. The Chinese hut and village
-  culture is the exception: the board Undo is refused once it is spent, because it also returns the card.
+  below 0. A German card also copied into the battle hand is removed from both. The Chinese hut culture works the same
+  way (the board Undo takes back what is left and still returns the card and the token), and so does the Chinese
+  conquest culture.
 - A Zulu hut on the city's own square is collected too, like the huts around it. The founding
   line names the huts that were collected and says which stayed on the map (no card left).
 
 Source: `assisted.ts` (`build`), `assisted-city.ts`, `assisted-resources.ts`,
 `tech-reveal-abilities.ts`, `movement.ts` (`travelSpeedOf`), `actions/arena.ts` (`endBattleAction`),
-`actions/collect-token.ts`, `actions/token-collection.ts`, `actions/tile-tokens.ts`, `actions/player.ts`,
-`actions/undo.ts`; web `GameView.tsx` (`BattlePanel`); tests `assisted-wonders`, `assisted-city`,
-`tile-tokens`, `undo-civ-reveal`, `battle-civ-abilities`, `tech-reveal-abilities`, `indians-resources`,
-`arabs-resources`, `movement`, `BattlePanel.test.tsx`.
+`conquest.ts`, `assisted-conquest.ts`, `actions/collect-token.ts`, `actions/token-collection.ts`,
+`actions/tile-tokens.ts`, `actions/player.ts`, `actions/undo.ts`; server `routes/assisted-args.ts`; web
+`GameView.tsx` (`BattlePanel`), `ConquestPrompt.tsx`; tests `assisted-wonders`, `assisted-city`,
+`tile-tokens`, `undo-civ-reveal`, `battle-civ-abilities`, `conquest`, `tech-reveal-abilities`, `indians-resources`,
+`arabs-resources`, `movement`, server `assisted-conquest-api`, `BattlePanel.test.tsx`, `ConquestPrompt.test.tsx`.
 
 ## Reopening a phase (2026-10-23)
 

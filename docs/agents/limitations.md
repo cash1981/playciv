@@ -13,12 +13,16 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   reveal for the player to place, until a proper setup phase exists (issue #374); the American free great person
   stays manual (the social policy picked at the same moment, Organized Religion drawing two and keeping one, needs
   that setup phase too); Mongol loot (not modelled); French policy cap (no cap exists); Russian sacrifice (no
-  enemy-army-city model); Egyptian and Spanish free buildings (need new UI and prompts); Roman and Chinese
-  conquests (no conquer-city action exists and a village is only a token collection, so a Roman advance for a
-  conquest is not automated; a Chinese village gives +3 when its token is collected, and a lost fight is undone
-  with the board Undo, there is no separate conquest event); Zulu metropolis hut exploring; the German free
-  resource is a log line only. Arab culture covers resource spends only: taking a token off the board by hand is not
-  a spend. The Chinese board Undo of a hut or village is refused once the culture it gave is spent.
+  enemy-army-city model); Egyptian and Spanish free buildings (need new UI and prompts); Zulu metropolis hut
+  exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
+  the board by hand is not a spend.
+- **Roman and Chinese conquests (#368):** the offer (the Roman free advance, the Chinese 3 culture) is made from a heuristic,
+  not from a conquest the game knows: an own army ended its last qualifying move on a village or (Romans) another
+  player's city, and that player won a battle in the arena against the barbarians (village) or the city's owner (city)
+  with the army still on that square. It cannot tell what the battle was really fought for, so a win elsewhere with the
+  army standing on the square counts; a battle settled by hand outside the arena, or a city walked into with no
+  defender, makes no offer (the player takes the reward by hand); a city that changes owner is not modelled; the pending
+  move is only the last qualifying one of each player.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares
