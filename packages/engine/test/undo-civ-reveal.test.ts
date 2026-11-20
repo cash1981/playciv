@@ -17,7 +17,7 @@ import { chooseTech, discardItem, removeTech, revealItem } from '../src/actions/
 import { markPhasesDone } from '../src/actions/turn.js'
 import { canInitiateUndo, initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/undo.js'
 import { DEFAULT_GOVERNMENT } from '../src/government.js'
-import { findBoardAsset, remainingBoardAssetCount } from '../src/board.js'
+import { areaAt, findBoardAsset, playerAreas, remainingBoardAssetCount } from '../src/board.js'
 import { isUnit, itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameLogEntry, GameState } from '../src/state.js'
@@ -417,7 +417,9 @@ describe('undo of a civilization reveal', () => {
       expect(after?.techsChosen).toEqual([])
       expect(handOf(undone, CASH1981).filter((item) => item.kind === 'civ')).toHaveLength(3)
       expect(handOf(undone, CASH1981).some(isUnit)).toBe(false)
-      expect(undone.board.pieces).toEqual([])
+      // The Chinese walled capital and the Indian metropolis are not rebuilt: a reveal saved before they were handed out
+      // never had one, and a rebuild cannot tell the piece from one the player placed by hand
+      expect(undone.board.pieces.filter((piece) => piece.category !== 'city')).toEqual([])
       const ids = undone.items.map((item) => item.id)
       expect(new Set(ids).size).toBe(ids.length)
     })
@@ -617,5 +619,38 @@ describe("the Arabs' starting resources", () => {
     expect(undoByVote(revealed, CASH1981).board.pieces.filter((piece) => piece.assetId === 'resources/iron')).toHaveLength(
       state.board.pieces.filter((piece) => piece.assetId === 'resources/iron').length,
     )
+  })
+})
+
+describe.each([
+  ['Chinese', 'cities/redcapitalwalled2', 'walled capital marker'],
+  ['Indians', 'cities/redmetropolis2', 'metropolis marker'],
+])('the %s city marker', (civ, assetId, label) => {
+  const markers = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId === assetId)
+
+  it('is put in the own area on the reveal with a public line, and only one', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
+    const [marker, ...rest] = markers(revealed)
+    expect(rest).toEqual([])
+    if (marker === undefined) throw new Error(`no ${assetId} on the board`)
+    expect(marker.placedBy).toBe(CASH1981)
+    expect(areaAt(playerAreas(revealed.board, revealed.players), marker.x + marker.width / 2, marker.y + marker.height / 2)?.playerId).toBe(CASH1981)
+    expect(revealed.log.some((entry) => entry.publicLog === `cash1981 has the ${label} in their area to place as the ${civ}`)).toBe(true)
+    // Nobody else gets one, and another civilization gets none
+    expect(markers(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toHaveLength(0)
+  })
+
+  it('goes with the reveal undo, and a new reveal hands out one again', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
+    const undone = undoByVote(revealed, CASH1981)
+    expect(markers(undone)).toHaveLength(0)
+    expect(markers(revealHidden(undone, CASH1981))).toHaveLength(1)
+  })
+
+  it('adds no second one when the player already placed it by hand', () => {
+    const placed = unwrap(placePiece(firstCivGame(), { playerId: CASH1981, assetId, x: 0, y: 0 }))
+    const revealed = revealHidden(giveCiv(placed, CASH1981, civ), CASH1981)
+    expect(markers(revealed)).toHaveLength(1)
+    expect(revealed.log.some((entry) => entry.publicLog.includes(label))).toBe(false)
   })
 })
