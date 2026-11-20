@@ -13,13 +13,15 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   reveal for the player to place, until a proper setup phase exists (issue #374); the American free great person
   stays manual (the social policy picked at the same moment, Organized Religion drawing two and keeping one, needs
   that setup phase too); Mongol loot (not modelled); French policy cap (no cap exists); Russian sacrifice (no
-  enemy-army-city model); the Spanish free building (needs new UI and prompts); Zulu metropolis hut
+  enemy-army-city model); Zulu metropolis hut
   exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
   the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
   spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);
   the player corrects the culture counter by hand to undo it. The same refusal applies to the End battle undo of an
   Aztec reward that is spent. The Spanish migration cannot tell an old save from a Spanish player who typed `2` on
-  purpose when no reveal setup records the choice: that `2` is set to `2+1` on load.
+  purpose when no reveal setup records the choice: that `2` is set to `2+1` on load. The Spanish free-building credit
+  counts every tile explored, also one the players later move or remove by hand, and a great person drawn by hand in
+  the Draw panel gives the Greeks and Aztecs nothing extra.
 - **Killed units and the Chinese save (#368):** End battle discards only the players' killed units; killed barbarians
   are still discarded by hand with Discard barbarians. The Chinese save has no undo of its own (only Undo end battle,
   by the player who ended the battle), and its window closes when the next battle starts.

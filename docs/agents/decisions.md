@@ -1535,6 +1535,23 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   both one player alone, and a conquest answer (its undo reopens the offer), are refused once the gain is no longer all
   there. Removing a tech by hand cannot be
   refused (it is a correction path), so it keeps the `paid` record instead.
+- **Spanish free building (explore):** a tile the Spanish explore (`exploreSquare`, scout or army) gives one credit
+  (`spanishFreeBuildings`, server only; the credits left are the grants minus the applied `spanishBuild` records, so
+  undoing the build returns it). The player picks a basic building (not an upgrade, wall or wonder; not unlocked
+  needed) and a square in the Giannini picker, shown above the phase tabs whenever a credit is held; the one star
+  building per city rule is Build's (`legalFreeBuildings`). The board Undo of the credited tile takes an unspent credit
+  back and is refused (`BOARD_UNDO_SPANISH_BUILDING_USED`) when it is spent. The build reuses effect kind
+  `gianniniBuild`, so its seals apply.
+- **Philosophy and great person draws:** Philosophy draws as a Great Person space does (`rewardDrawCount`: one,
+  +1 Organized Religion, +1 Greeks), keeping one through a pending reward whose choice takes the marker
+  (the Greeks' extra draw is for every assisted great person gain).
+- **Aztec great person units:** each great person kept gives 2 free-unit credits (`assisted-aztecs.ts`, buttons per
+  unlocked unit type like Attila's Village); undoing the gain takes back the unused credits only, and undoing a use is
+  refused when its credit would be orphaned.
+- **Villages (fight and offer):** an army (not Zulu) ending its move on a village is asked to fight the barbarians, the
+  battle starts at once, and the village is taken through the conquest offer after the win (every civ); Zulu draw it
+  on the move. The claim's undo returns token and card and is refused when the card left the hand or the Chinese
+  3 culture is spent.
 - **Markers and sealing:** the walled-capital and metropolis markers lying in a player area are not cities
   (`ownCityPieces`, `cityCountOf`), so they do not block founding. A resource card played from the hand
   (`playCard`) gives the Arab culture too and its undo takes it back. The vote undo of a Roman advance (wonder, city),
