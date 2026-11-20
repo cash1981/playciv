@@ -94,3 +94,46 @@ In: the items above with tests. Out: new abilities, UI changes beyond the picker
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass (orchestrator runs the full set at the end)
 - [ ] No hidden information in new projections
 - [ ] Browser check: not available; disclose
+
+## Round 2 (human testing of PR #373)
+
+### Package D: village fight flow and conquest offer for every civ
+
+Human decisions: an army that ends its move on a village (not a Zulu army, not a scout) is not asked whether to draw it.
+It is asked whether to fight the barbarians for it; OK moves it there, starts the battle against the barbarians
+automatically (`initiateBattle` with `'barbarians'`) and the page scrolls to the arena. The village is then got from the
+conquest offer after a won battle with the army still on the square, for every civ (not only Romans and Chinese): accept =
+the village token goes to the player's area and its card into the hand (`collectMapToken`), plus the civ's extra (Roman free
+advance, Chinese +3 culture); decline leaves the token on the map (the player can draw it by hand). Zulu keep "Draw the
+village now?" on the move. The offer must also show in the battle panel right after End battle (today only in "Your actions",
+which is far from the arena and was missed).
+
+- Engine: `travelFigureCollecting` gets `fightVillage?: boolean`; with it an army on a village token, with no foreign figure
+  on the square and no battle active, starts the battle after the move and never collects. `pendingConquestOf` records a
+  village conquest for any civ's army (a city only for Romans as now); `ConquestOffer`/`claimConquest` handle a civ without an
+  extra (accept draws the village only). Undo of the claim puts the token and card back (as the hut board Undo does) and is
+  refused or blocked with a reason when the card left the hand; nothing may be farmable. If the token is gone from the square
+  at accept time the offer says so; the Chinese +3 and Roman advance still apply.
+- Server: `routes/board.ts` accepts `fightVillage`.
+- Web: `BoardView.tsx` move confirmation (army + village + not Zulu -> the fight question; others unchanged), scroll to the
+  arena once the battle exists (find the battle panel element in `GameView.tsx`), `ConquestPrompt` also rendered in the
+  battle panel area when no battle is active and the viewer has offers. Update `ConquestPrompt` wording for a civ without extra.
+- Files: `conquest.ts`, `assisted-conquest.ts`, `actions/token-collection.ts`, `actions/collect-token.ts`, `state.ts` (conquest
+  types only), `server/src/routes/board.ts`, `web/src/lib/api.ts`, `web/src/views/BoardView.tsx`, `GameView.tsx`,
+  `ConquestPrompt.tsx`, their tests. Do not touch `assisted.ts`, `assisted-core.ts`, `assisted-culture.ts`.
+
+### Package E: Aztec free units for great persons
+
+Aztecs: "each time they gain a great person, may build 2 unlocked units of their choice for free". Model it like Attila's Village
+(`assisted-relics.ts`): each great person gained gives 2 free-unit credits, shown as a button per unlocked unit type (aircraft
+needs Flight, as Attila), drawing one unit card of that type for free (`drawCandidates`, private log line naming the card,
+public line naming the type only) with a reverse that returns the card to its deck and the credit. Hook the credit in
+`gainGreatPerson` (`assisted-culture.ts`; every assisted great person gain goes through it, count each great person really
+kept, the School of Confucius gives two) for Aztec players only. Keep the credit count in server-only state (not projected;
+the owner sees it only through the availability text "N of M left"). Undoing the great person gain takes the credits back as
+far as they are unused (never below 0; log truthfully). A manual Draw-panel great person draw is not covered (limitations).
+Tests: gain gives 2, buttons ready/blocked, using a credit, undo of use, undo of the gain with and without used credits,
+non-Aztecs get nothing, no projection leak. Files: `assisted-culture.ts`, new `assisted-aztecs.ts`, `assisted.ts` and
+`assisted-core.ts` (registration, effect kind), `state.ts` (the one new field), tests. Do not touch the files of Package D.
+
+Rules as above: only your package's files, no commit, no `docs/`; report rationale.
