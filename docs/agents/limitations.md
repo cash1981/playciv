@@ -9,14 +9,16 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   the first build. The remaining production is computed from the first build's recorded cost and production, so a hand-set production
   changed between the two builds is not seen. Engineering is offered only when the build is the city's first action: a build that is
   itself an extra action (Atomic Theory, Lovelace, a confirmed repeat) cannot be split.
-- **Civilization abilities not automated (#368):** Chinese walls, American great person and Indian metropolis
-  (no capital exists at reveal; the player places it); Mongol loot (not modelled); French policy cap (no cap
-  exists); Russian sacrifice (no enemy-army-city model); Egyptian and Spanish free buildings (need new UI and
-  prompts); Arab +2 culture per spent resource (many spend paths); Roman and Chinese conquest triggers; Zulu
-  metropolis hut exploring; the German free resource is a log line only. Chinese villages give no culture, and a
-  Spanish player with Natural Religion gets army speed 3 where the cards may give 4 (`movement.ts` reads any `+`
-  in the typed Movement as the army bonus). The German free unit is per unit type (Logistics gives three), pending
-  the human's confirmation. The Chinese saved unit is the first killed one, with no choice step.
+- **Civilization abilities not automated (#368):** Chinese walls and Indian metropolis are markers put in the area at
+  reveal for the player to place, until a proper setup phase exists (issue #374); the American free great person
+  stays manual (the social policy picked at the same moment, Organized Religion drawing two and keeping one, needs
+  that setup phase too); Mongol loot (not modelled); French policy cap (no cap exists); Russian sacrifice (no
+  enemy-army-city model); Egyptian and Spanish free buildings (need new UI and prompts); Roman and Chinese
+  conquests (no conquer-city action exists and a village is only a token collection, so a Roman advance for a
+  conquest is not automated; a Chinese village gives +3 when its token is collected, and a lost fight is undone
+  with the board Undo, there is no separate conquest event); Zulu metropolis hut exploring; the German free
+  resource is a log line only. Arab culture covers resource spends only: taking a token off the board by hand is not
+  a spend. The Chinese board Undo of a hut or village is refused once the culture it gave is spent.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares

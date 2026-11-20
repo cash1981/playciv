@@ -1368,29 +1368,52 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 
 ### Civilization abilities (#368)
 
+- **Log format:** every line that states a gain gives the amount and, in parentheses, the new total:
+  `gained 3 (14) culture from the hut on B4 as the Chinese`, `gains 3 (10) trade ... as the Aztecs`. A take-back line
+  says the same ("took back 2 of 3 (0) culture", amount really taken, total left). Tests pin the format.
 - **Romans:** a wonder build advances the leader marker one space for free, as a city does
   (`freeAdvanceStatus`, `performAdvance` with `free`). A wonder is refused before it is placed
   while that advance is stopped (card choice waiting, hand over its size); the end of the
   track stops nothing. The build's undo takes the advance back first and refuses if the marker
-  has moved on. Conquests stay manual.
-- **Chinese:** a figure that collects a hut (`travelFigureCollecting`) gives +3 culture and a
-  public line. Villages and relics give none (open question: the card also says "conquer a
-  village"). The culture is kept on the `TokenCollection`; the board Undo takes it back and is
-  refused once it is spent.
+  has moved on. Conquests stay manual: no conquer-city action exists, and a village is only a token
+  collection, so the Roman advance for a conquest is not automated.
+- **Chinese:**
+  - A figure that collects a hut or a village (`collectMapToken`, shared with the figure move) gives +3 culture
+    and a public line that says "hut" or "village". There is no separate conquest event: a village counts when the
+    token is collected, and a lost fight is undone with the board Undo. The culture is kept on the
+    `TokenCollection`; the board Undo takes it back and is refused once it is spent
+    (`BOARD_UNDO_TOKEN_CULTURE_SPENT`, because it also returns the card). Relics give none.
+  - The walled capital marker (`cities/<colour>capitalwalled2`) is put in the player's area at the reveal, as a piece
+    of the reveal (the reveal undo takes it off) and only if none of that colour is on the board; the reveal log
+    says so and the player places it. It stays a marker in the area until a proper setup phase exists (issue #374).
+  - The saved unit is the player's choice: `EndBattleInput.chineseSave` is the arena unit id, validated as a killed,
+    not yet saved unit of the Chinese side (`CHINESE_SAVE_INVALID`, 400), and marked `saved`. Without it nothing
+    is saved and the line says "saves no unit". The Battle panel asks next to End battle (a unit, or "Save none")
+    and keeps the button disabled until one is chosen. Kept on `endedBattle.chineseSaved` and taken back by
+    `undoEndBattle`.
 - **Spanish:** the reveal sets `stats.mvmt` from `2` to `2+1` (the typed bonus `movement.ts`
   reads) and logs it. A value the player already typed is left alone. The `civSetup` records
-  what it set, and the reveal undo restores it only if the value is still the one it set.
+  what it set, and the reveal undo restores it only if the value is still the one it set. With Natural Religion
+  the army travels 4 and a scout 3 (the army gets Natural Religion's +1 on top of Spain's): `travelSpeedOf` takes
+  Spain's 1 out of the typed bonus before the older Natural Religion reading (`3+1`) and adds it back, so a legacy
+  typed `+` is still the army's speed (Spanish `2+2` with Natural Religion: army 4, scout 3). Anarchy turns
+  Natural Religion off, not Spain's +1.
+- **Indians:** besides the resource wildcard below, the reveal puts the metropolis marker (`cities/<colour>metropolis2`)
+  in the player's area, with the same rules as the Chinese walls (one, a piece of the reveal, the player places it;
+  issue #374).
+- **Americans:** the free great person and the social policy picked at the same moment stay manual (Organized
+  Religion draws two and keeps one), which needs the setup phase (issue #374).
 
 - **Aztecs (end of battle):** the Aztec player gains 3 trade for winning and 1 culture for each
   unit killed, both sides counted, in a battle they fought as a player (not the barbarians they
-  only control). **Chinese:** the end of the battle saves the first killed Chinese unit that is
-  not already saved (`ArenaUnit.saved`); there is no unit choice yet. Both are kept on
-  `endedBattle` and taken back by `undoEndBattle` (`actions/arena.ts`).
+  only control). Both are kept on `endedBattle` and taken back by `undoEndBattle` (`actions/arena.ts`).
 
 - **Germans and Greeks (first reveal of a tech, `revealTech`):** never for the starting tech.
   A German reveal of a tech in `UNIT_LEVEL_TECHS` (or Flight) draws one free unit card per unit
   type it upgrades or unlocks, also when the type is already further up, and logs that they may
   take one resource from the market; that resource is taken by hand, so it has no choice step.
+  One free unit per unit type the tech unlocks or upgrades is settled (the human): Logistics gives
+  three, with no cap.
   A Greek reveal gives 1 culture for each other player who has not chosen (hidden or revealed)
   that tech. The amount is public; players and hidden techs are never named. Both are kept in
   `techRevealEffects` (server only) and taken back when the tech is taken back by the undo vote
@@ -1399,29 +1422,39 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
 - **Zulu:** a city founded next to huts collects them at once (`actions/collect-token.ts`, shared
   with figure moves; no Chinese culture). The undo vote returns the tokens and cards; the board
   Undo leaves them to the vote. Metropolis growth next to huts is still by hand.
-- **Arabs:** the civ reveal puts one token of each resource kind (`RESOURCE_KINDS`) in the area, as
-  pieces of the reveal, so its undo removes them; a kind out of supply is skipped and logged.
-- **Indians:** a token of any other resource (Spy and Uranium included) pays a request for
+- **Arabs:**
+  - The civ reveal puts one token of each resource kind (`RESOURCE_KINDS`) in the area, as
+    pieces of the reveal, so its undo removes them; a kind out of supply is skipped and logged.
+  - Each resource the Arab player spends gives +1 culture (`ARAB_RESOURCE_CULTURE`). The human chose 1, the FAQ 2.0
+    ("Advanced Arabia") value; the printed card says 2. Every spend funnels through `spendResource`
+    (`assisted-resources.ts`: single, any N, one of each, chosen payments, event cards, the Spy of a
+    cancellation), so a spend counts once however it was reached; a token, a hut or village in hand and a culture
+    card played as a resource all count. The line is `gained 1 (N) culture for spending <resource> as the Arabs`, and
+    the amount is kept on the `SpentResource` (`arabCulture`). `returnResource` takes back what is still there (never
+    below 0) and says how much. A resource a cancelled ability spent stays spent, so does its culture. Not covered:
+    taking a token off the board by hand is not a spend, a hut used as a hut (a Start of Turn free tech) is not a
+    resource spend, and the free coin investments are not resource spends.
+- **Indians (resources):** a token of any other resource (Spy and Uranium included) pays a request for
   incense, iron, silk or wheat, after the real resource and before a culture card (a card is
   lost, a token is not); Spy and Uranium requests get no wildcard. An Any cost (and its picker)
   has no wildcard options: it already tries every kind, and the named kinds are only a
   preference. The spend is recorded with `asResource` and the line says "spent 1 Silk as Iron".
   Egyptians' free building is not modelled yet (needs its own action and UI).
 
-- **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, a German free unit
+- **Undo of a gain that may be spent** (Greek culture, Aztec trade and culture, Arab culture, a German free unit
   card): the undo takes back as much as is still there and its line says how much ("took back 2
-  of 3 culture"), or that a card could no longer be returned; it never refuses and never goes
-  below 0. A German card also copied into the battle hand is removed from both.
+  of 3 (0) culture"), or that a card could no longer be returned; it never refuses and never goes
+  below 0. A German card also copied into the battle hand is removed from both. The Chinese hut and village
+  culture is the exception: the board Undo is refused once it is spent, because it also returns the card.
 - A Zulu hut on the city's own square is collected too, like the huts around it. The founding
   line names the huts that were collected and says which stayed on the map (no card left).
-- One free German unit per unit type a tech unlocks (Logistics gives three): pending the human's
-  confirmation.
 
 Source: `assisted.ts` (`build`), `assisted-city.ts`, `assisted-resources.ts`,
-`tech-reveal-abilities.ts`, `actions/arena.ts` (`endBattleAction`), `actions/collect-token.ts`,
-`actions/token-collection.ts`, `actions/tile-tokens.ts`, `actions/player.ts`, `actions/undo.ts`;
-tests `assisted-wonders`, `assisted-city`, `tile-tokens`, `undo-civ-reveal`,
-`battle-civ-abilities`, `tech-reveal-abilities`, `indians-resources`.
+`tech-reveal-abilities.ts`, `movement.ts` (`travelSpeedOf`), `actions/arena.ts` (`endBattleAction`),
+`actions/collect-token.ts`, `actions/token-collection.ts`, `actions/tile-tokens.ts`, `actions/player.ts`,
+`actions/undo.ts`; web `GameView.tsx` (`BattlePanel`); tests `assisted-wonders`, `assisted-city`,
+`tile-tokens`, `undo-civ-reveal`, `battle-civ-abilities`, `tech-reveal-abilities`, `indians-resources`,
+`arabs-resources`, `movement`, `BattlePanel.test.tsx`.
 
 ## Reopening a phase (2026-10-23)
 
