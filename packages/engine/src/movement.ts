@@ -176,7 +176,7 @@ const hasRevealedTech = (player: MovementPlayer, name: string): boolean =>
 
 /**
  * The player's travel speed: the larger of the typed base and what the revealed techs give (`techSpeedOf`), plus the typed
- * bonus (Spain's +1), plus Natural Religion for an army (group movement is not implemented, so every army move is
+ * bonus (Natural Religion as typed, `3+1`), Spain's +1, plus Natural Religion for an army (group movement is not implemented, so every army move is
  * individual), plus Henry Ford while his card is faceup, doubled by Captain James Cook for this turn.
  */
 export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNumber: number): number {
@@ -348,9 +348,12 @@ export function figureMovementOptions(
       const [x, y] = centreOf(board, cell)
       const terrain = terrainAt(board, x, y)
       const waterHere = terrain === 'water'
-      // A figure that may only cross water still stops in it next to fog, to open the tile there; the next move takes it out
-      // to land (the next square if it is land, else back where it came from).
-      const mayEndHere = waterHere ? water.end || exploreTargetsFrom(board, cell).length > 0 : true
+      // A figure that may only cross water (Navigation, England) still stops in it next to fog, to open the tile there, but only
+      // with movement left to explore with (1); the next move takes it out to land: the explored square if it is land, else the
+      // nearest legal square.
+      const mayEndHere = waterHere
+        ? water.end || (distance < remaining && exploreTargetsFrom(board, cell).length > 0)
+        : true
       if (
         mayEndHere &&
         (attacker || !occupancy.foreign.has(keyOf(cell))) &&

@@ -280,4 +280,18 @@ describe('Navigation and fog', () => {
     // Water that touches no fog (A3) is still never an ending square
     expect(optionsOf(english).destinations.some((cell) => cell.column === 0 && cell.row === 2)).toBe(false)
   })
+
+  it('does not offer water next to fog as an ending when the last point of movement would be spent getting there', () => {
+    const base = place(withStartTile(game()), 'figures/redarmy', 3, 2)
+    const slow: GameState = {
+      ...base,
+      players: base.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { name: 'England' } as Playerhand['civilization'], stats: { ...player.stats, mvmt: '2' } }
+          : player,
+      ),
+    }
+    // D1 is 2 away and the speed is 2: nothing left to explore E1 with
+    expect(optionsOf(slow).destinations.some((cell) => cell.column === 3 && cell.row === 0)).toBe(false)
+  })
 })

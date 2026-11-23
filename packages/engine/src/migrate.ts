@@ -139,9 +139,9 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
 
 /**
  * A Spanish player whose civilization was revealed before the reveal set Spain's +1 travel speed still has the default
- * Movement (`2`) and no `civSetup.mvmt` on their reveal line. They get `2+1` once, written the way the reveal writes it:
+ * Movement (`2`) and no `civSetup.mvmt` on their reveal line. They get `3` once (Spain's +1 inside the base), written the way the reveal writes it:
  * the stat, and `civSetup.mvmt` on the line so that undoing the reveal restores `2` and a second load finds the entry
- * and does nothing. Any other value is left alone (a typed `3`, `2+1`, `3+1`), as is any other civilization, and so is
+ * and does nothing. Any other value is left alone (a typed `3`, `3+1`); an older `2+k` becomes `3+(k-1)`, as is any other civilization, and so is
  * a player whose reveal line already holds a `mvmt` entry: they typed `2` back on purpose. A reveal line with no
  * `civSetup` (a reveal saved before the setup was recorded) gets only the stat.
  */
@@ -152,8 +152,24 @@ function withSpanishMovement(
   let nextLog = log
   const nextPlayers = players.map((player) => {
     if (player.civilization?.name !== SPANISH) return player
-    // Saves from when Spain's +1 was typed `2+1`: the +1 is now part of the base, `3` (only the stat; undo of the reveal still restores `before`)
-    if (player.stats.mvmt === '2+1') return { ...player, stats: { ...player.stats, mvmt: SPANISH_MVMT } }
+    // Saves from when Spain's +1 was typed as a second term (`2+1`, or `2+2` with a typed Natural Religion): the +1 is now part
+    // of the base, so `2+k` becomes `3+(k-1)` (`3` for `2+1`). The reveal line's `civSetup.mvmt.set` follows, so that undoing
+    // the reveal still finds the value it set and restores `before`.
+    const legacy = /^2((?:\+\d+)+)$/.exec(player.stats.mvmt.trim())
+    if (legacy !== null) {
+      const extra = (legacy[1] ?? '').split('+').reduce((total, part) => total + (part === '' ? 0 : Number(part)), 0)
+      const migrated = extra <= 1 ? SPANISH_MVMT : `${SPANISH_MVMT}+${extra - 1}`
+      const typed = player.stats.mvmt
+      const civId = player.civilization.id
+      const reveal = [...nextLog]
+        .reverse()
+        .find((entry) => entry.logType === 'REVEAL' && entry.item?.kind === 'civ' && entry.item.id === civId && entry.playerId === player.playerId)
+      if (reveal?.civSetup?.mvmt !== undefined && reveal.civSetup.mvmt.set === typed) {
+        const setup = { ...reveal.civSetup, mvmt: { ...reveal.civSetup.mvmt, set: migrated } }
+        nextLog = nextLog.map((entry) => (entry.id === reveal.id ? { ...entry, civSetup: setup } : entry))
+      }
+      return { ...player, stats: { ...player.stats, mvmt: migrated } }
+    }
     if (player.stats.mvmt !== DEFAULT_PLAYER_STATS.mvmt) return player
     // The reveal that handed out the civilization held now: the latest one, so a reveal undone and made again counts once
     const civId = player.civilization.id

@@ -921,8 +921,8 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
   England crosses but cannot end there (no Navigation needed). An unknown (tile-back) square is not water.
   Navigation (human, 2026-11-24) crosses but does not end in water either, with one exception that also holds for England:
-  a figure may stop in water that touches fog, to explore from there; its next move takes it to land (the explored
-  square if that is land, else back where it came from). That return is by hand, not enforced.
+  a figure may stop in water that touches fog, to explore from there, if it has movement left for it; its next move takes it to land (the explored
+  square if that is land, else the nearest legal square). That return is by hand, not enforced.
 - **Huts and villages:** a move must stop on one; with Flight it flies over, but
   may not end there (rule 283).
 - **Stacking:** travel may cross or end on a square with fewer of the player's

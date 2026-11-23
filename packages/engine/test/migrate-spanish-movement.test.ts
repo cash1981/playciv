@@ -92,11 +92,37 @@ describe('migrating the travel speed of a Spanish player', () => {
     expect(mvmtOf(migrateGameState(typed))).toBe('2')
   })
 
-  it.each(['3', '3+1', '4', '2+2'])('never touches another value (%s)', (value) => {
+  it.each(['3', '3+1', '4'])('never touches another value (%s)', (value) => {
     const saved = savedBefore(value)
     const migrated = migrateGameState(saved)
     expect(mvmtOf(migrated)).toBe(value)
     expect(revealLine(migrated).civSetup).toEqual(revealLine(saved).civSetup)
+  })
+
+  /** A save from when the reveal wrote Spain's +1 as `2+1`: the stat and the setup both hold it. */
+  function savedWithOldBonus(mvmt: string): GameState {
+    const saved = savedBefore(mvmt)
+    const line = revealLine(saved)
+    return {
+      ...saved,
+      log: saved.log.map((entry) =>
+        entry.id === line.id && entry.civSetup !== undefined ? { ...entry, civSetup: { ...entry.civSetup, mvmt: { before: '2', set: mvmt } } } : entry,
+      ),
+    }
+  }
+
+  it('turns an old `2+1` into `3`, and the undo of the reveal still restores 2', () => {
+    const migrated = migrateGameState(savedWithOldBonus('2+1'))
+    expect(mvmtOf(migrated)).toBe('3')
+    expect(revealLine(migrated).civSetup?.mvmt).toEqual({ before: '2', set: '3' })
+    expect(mvmtOf(undoReveal(migrated))).toBe('2')
+    expect(migrateGameState(migrated)).toEqual(migrated)
+  })
+
+  it('turns an old `2+2` (a typed Natural Religion on top of Spain) into `3+1`, keeping the speed with a tech', () => {
+    const migrated = migrateGameState(savedWithOldBonus('2+2'))
+    expect(mvmtOf(migrated)).toBe('3+1')
+    expect(revealLine(migrated).civSetup?.mvmt).toEqual({ before: '2', set: '3+1' })
   })
 
   it('never touches another civilization, whatever its Movement', () => {
