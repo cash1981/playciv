@@ -920,6 +920,9 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   takes moves back one at a time.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
   England crosses but cannot end there (no Navigation needed). An unknown (tile-back) square is not water.
+  Navigation (human, 2026-11-24) crosses but does not end in water either, with one exception that also holds for England:
+  a figure may stop in water that touches fog, to explore from there; its next move takes it to land (the explored
+  square if that is land, else back where it came from). That return is by hand, not enforced.
 - **Huts and villages:** a move must stop on one; with Flight it flies over, but
   may not end there (rule 283).
 - **Stacking:** travel may cross or end on a square with fewer of the player's
@@ -1462,12 +1465,11 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
     (400). Only the Chinese player's own view carries the choices (`you.chineseSave`, real arena ids); the opponent
     sees nothing until the public line. The prompt is in the Battle panel after the battle and in "Your actions",
     counted as a waiting choice. There is no separate undo: Undo end battle takes the save back with the battle.
-- **Spanish:** the reveal sets `stats.mvmt` from `2` to `2+1` (the typed bonus `movement.ts`
-  reads) and logs it. A value the player already typed is left alone. The `civSetup` records
+- **Spanish:** the reveal sets `stats.mvmt` from `2` to `3` (human, 2026-11-24: Spain's +1 is part of the base, so `2+1` is kept for Natural Religion on an army; saves with `2+1` become `3` on load) and logs it. A value the player already typed is left alone. The `civSetup` records
   what it set, and the reveal undo restores it only if the value is still the one it set. With Natural Religion
-  the army travels 4 and a scout 3 (the army gets Natural Religion's +1 on top of Spain's): `travelSpeedOf` takes
-  Spain's 1 out of the typed bonus before the older Natural Religion reading (`3+1`) and adds it back, so a legacy
-  typed `+` is still the army's speed (Spanish `2+2` with Natural Religion: army 4, scout 3). Anarchy turns
+  the army travels 4 and a scout 3 (the army gets Natural Religion's +1 on top of Spain's): `splitMovement` takes
+  Spain's 1 out of the typed base (a tech replaces only what is under it: Sailing gives Spain 5) and `travelSpeedOf` adds it
+  back; a typed `+` term (`3+1`) is the army's Natural Religion speed, as for every civilization. Anarchy turns
   Natural Religion off, not Spain's +1.
 - **Indians:** besides the resource wildcard below, the reveal puts the metropolis marker (`cities/<colour>metropolis2`)
   in the player's area, with the same rules as the Chinese walls (one, a piece of the reveal, the player places it;

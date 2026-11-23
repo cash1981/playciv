@@ -92,7 +92,7 @@ const CIV_CITY_MARKER: Readonly<Record<string, { readonly suffix: string; readon
  * for `migrateGameState`, which gives it to a Spanish player revealed before the reveal set it.
  */
 export const SPANISH = 'Spanish'
-export const SPANISH_MVMT = '2+1'
+export const SPANISH_MVMT = '3'
 
 /** Java: `SecurityCheck.hasUserAccess` followed by a 403. */
 function requireAccess(

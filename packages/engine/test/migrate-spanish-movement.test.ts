@@ -1,6 +1,6 @@
 /**
  * A Spanish player revealed before the reveal set Spain's +1 travel speed still has Movement `2` in a saved game.
- * Reading the save gives them `2+1` once (`migrateGameState`), written as the reveal writes it, so undoing the reveal
+ * Reading the save gives them `3` once (`migrateGameState`), written as the reveal writes it, so undoing the reveal
  * restores `2` and a second read does nothing. Any other value and any other civilization stay as they are.
  */
 
@@ -62,25 +62,25 @@ function undoReveal(state: GameState): GameState {
 }
 
 describe('migrating the travel speed of a Spanish player', () => {
-  it('gives Movement 2+1 to a Spanish player who still has the default, and records it on the reveal line', () => {
+  it('gives Movement 3 to a Spanish player who still has the default, and records it on the reveal line', () => {
     const saved = savedBefore(DEFAULT_PLAYER_STATS.mvmt)
     expect(mvmtOf(saved)).toBe('2')
     expect(revealLine(saved).civSetup?.mvmt).toBeUndefined()
     const migrated = migrateGameState(saved)
-    expect(mvmtOf(migrated)).toBe('2+1')
-    expect(revealLine(migrated).civSetup?.mvmt).toEqual({ before: '2', set: '2+1' })
+    expect(mvmtOf(migrated)).toBe('3')
+    expect(revealLine(migrated).civSetup?.mvmt).toEqual({ before: '2', set: '3' })
     // The rest of the setup is what it was, and nobody else's speed changed
     expect(revealLine(migrated).civSetup).toMatchObject({ ...revealLine(saved).civSetup })
     expect(mvmtOf(migrated, KARANDRAS1)).toBe('2')
   })
 
-  it('is restored to 2 by the undo of the reveal, and the next reveal sets 2+1 again', () => {
+  it('is restored to 2 by the undo of the reveal, and the next reveal sets 3 again', () => {
     const undone = undoReveal(migrateGameState(savedBefore('2')))
     expect(mvmtOf(undone)).toBe('2')
     expect(undone.log.at(-1)?.publicLog).toContain('movement went back to 2')
     const card = findPlayer(undone, CASH1981)?.items.find((item) => item.kind === 'civ' && item.hidden)
     if (card === undefined) throw new Error('the civ card is not back in the hand')
-    expect(mvmtOf(unwrap(revealItem(undone, { playerId: CASH1981, sheetName: 'CIV', itemNumber: card.itemNumber })))).toBe('2+1')
+    expect(mvmtOf(unwrap(revealItem(undone, { playerId: CASH1981, sheetName: 'CIV', itemNumber: card.itemNumber })))).toBe('3')
   })
 
   it('changes nothing a second time: reading the migrated save again gives the same game', () => {
@@ -92,7 +92,7 @@ describe('migrating the travel speed of a Spanish player', () => {
     expect(mvmtOf(migrateGameState(typed))).toBe('2')
   })
 
-  it.each(['3', '2+1', '3+1', '4', '2+2'])('never touches another value (%s)', (value) => {
+  it.each(['3', '3+1', '4', '2+2'])('never touches another value (%s)', (value) => {
     const saved = savedBefore(value)
     const migrated = migrateGameState(saved)
     expect(mvmtOf(migrated)).toBe(value)
@@ -113,7 +113,7 @@ describe('migrating the travel speed of a Spanish player', () => {
     const { civSetup: _setup, ...bare } = line
     const old: GameState = { ...saved, log: saved.log.map((entry) => (entry.id === line.id ? bare : entry)) }
     const migrated = migrateGameState(old)
-    expect(mvmtOf(migrated)).toBe('2+1')
+    expect(mvmtOf(migrated)).toBe('3')
     expect(revealLine(migrated).civSetup).toBeUndefined()
     expect(migrateGameState(migrated)).toEqual(migrated)
   })
@@ -126,7 +126,7 @@ describe('migrating the travel speed of a Spanish player', () => {
       players: saved.players.filter((player) => player.playerId !== CASH1981),
       withdrawnPlayers: [holder],
     }
-    expect(migrateGameState(withdrawn).withdrawnPlayers[0]?.stats.mvmt).toBe('2+1')
+    expect(migrateGameState(withdrawn).withdrawnPlayers[0]?.stats.mvmt).toBe('3')
   })
 
   it('makes the travel speed of the Spanish army 3, and of the scout 3', () => {

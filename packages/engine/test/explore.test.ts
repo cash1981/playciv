@@ -249,3 +249,22 @@ describe('exploreSquare', () => {
     expect(refused.kind).toBe('FIGURE_MOVE_ILLEGAL')
   })
 })
+
+describe('Navigation and fog', () => {
+  it('lets a figure that only crosses water stop in water that touches fog, to explore from there', () => {
+    // D3 (forest) -> D2 (forest) -> D1 (water); E1 east of D1 is fog
+    const base = place(withStartTile(game()), 'figures/redarmy', 3, 2)
+    const navigator: GameState = {
+      ...base,
+      players: base.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, techsChosen: [{ name: 'Navigation', hidden: false }] as unknown as Playerhand['techsChosen'] }
+          : player,
+      ),
+    }
+    const withNavigation = optionsOf(navigator)
+    expect(withNavigation.destinations).toContainEqual(expect.objectContaining({ column: 3, row: 0, distance: 2 }))
+    // Without Navigation water is not entered at all
+    expect(optionsOf(base).destinations.some((cell) => cell.column === 3 && cell.row === 0)).toBe(false)
+  })
+})

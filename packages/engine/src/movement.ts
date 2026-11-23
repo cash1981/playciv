@@ -123,16 +123,22 @@ export function techStackingOf(techs: readonly { readonly name: string; readonly
 }
 
 /**
- * The typed Movement split into its base (the first term) and its bonus (every `+` term after it: Spain's +1, or how older
- * saves typed Natural Religion). A revealed tech replaces the base when it gives more; the bonus is added on top.
+ * The typed Movement split into its base (the first term), its bonus (every `+` term after it: how Natural Religion is typed,
+ * `3+1`) and, for Spain, the +1 that is part of the base (typed `3`). A revealed tech replaces the base when it gives more; the bonus is added on top.
  */
-export function splitMovement(expression: string): { readonly base: number; readonly bonus: number } {
+export function splitMovement(
+  expression: string,
+  spanish = false,
+): { readonly base: number; readonly bonus: number; readonly spain: number } {
   const parts = expression
     .split('+')
     .map((part) => Number(part))
     .filter((part) => Number.isFinite(part) && part >= 0)
-  const [base = 0, ...rest] = parts
-  return { base, bonus: rest.reduce((total, part) => total + part, 0) }
+  const [typedBase = 0, ...rest] = parts
+  // Spain's +1 is part of the typed base (`3`, not `2+1`): it is taken out here so a tech replaces only the 2 and the +1 goes on top.
+  // A `+` term after it is still the army-only Natural Religion convention (`3+1`).
+  const spain = spanish && typedBase > 0 ? 1 : 0
+  return { base: typedBase - spain, bonus: rest.reduce((total, part) => total + part, 0), spain }
 }
 
 /** What figure ownership needs to know: the seat's colour and civilization. */
@@ -174,17 +180,14 @@ const hasRevealedTech = (player: MovementPlayer, name: string): boolean =>
  * individual), plus Henry Ford while his card is faceup, doubled by Captain James Cook for this turn.
  */
 export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNumber: number): number {
-  const typed = splitMovement(player.stats.mvmt)
+  const typed = splitMovement(player.stats.mvmt, player.civilization?.name === 'Spanish')
   const naturalReligion = hasPolicy(player, 'Natural Religion') && !inAnarchy(player)
   // Natural Religion is army-only. A `+` in the typed expression is the players'
   // existing way of recording it (issue #102, `3+1`), so that expression is the
   // army's speed and already includes the bonus: a scout gives one point of it
   // back. Without a `+` the engine adds the bonus to an army itself.
-  //
-  // Spain's +1 sits in the same typed bonus (`2+1`, set by the reveal) but is not the older Natural Religion convention:
-  // it is taken out first and added back afterwards, so a Spanish army with Natural Religion travels 4 and a scout 3.
-  const spain = player.civilization?.name === 'Spanish' ? Math.min(1, typed.bonus) : 0
-  const typedBonus = typed.bonus - spain
+  const spain = typed.spain
+  const typedBonus = typed.bonus
   let bonus = typedBonus
   if (naturalReligion) {
     if (typedBonus === 0) {
@@ -210,6 +213,9 @@ export interface WaterAllowed {
 function waterRulesOf(player: MovementPlayer): WaterAllowed {
   const tech = WATER_TECHS.some((name) => hasRevealedTech(player, name))
   if (tech) return { cross: true, end: true }
+  // Navigation: "You may cross water, but you may not end your movement in it." Like England's navy, except that a figure may
+  // stop in water that touches fog, to explore from there (see `mayEndHere` in `figureMovementOptions`).
+  if (hasRevealedTech(player, 'Navigation')) return { cross: true, end: false }
   // England's navy: "English figures may cross water, but may not end their movement in it."
   return player.civilization?.name === 'England' ? { cross: true, end: false } : { cross: false, end: false }
 }
@@ -342,7 +348,9 @@ export function figureMovementOptions(
       const [x, y] = centreOf(board, cell)
       const terrain = terrainAt(board, x, y)
       const waterHere = terrain === 'water'
-      const mayEndHere = waterHere ? water.end : true
+      // A figure that may only cross water still stops in it next to fog, to open the tile there; the next move takes it out
+      // to land (the next square if it is land, else back where it came from).
+      const mayEndHere = waterHere ? water.end || exploreTargetsFrom(board, cell).length > 0 : true
       if (
         mayEndHere &&
         (attacker || !occupancy.foreign.has(keyOf(cell))) &&

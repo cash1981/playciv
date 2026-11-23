@@ -554,8 +554,8 @@ describe("Spain's travel speed", () => {
 
   it('adds +1 to the typed movement when the civilization is revealed, with a public line', () => {
     const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
-    expect(mvmtOf(revealed)).toBe('2+1')
-    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 gets +1 travel speed as the Spanish (movement 2+1)')).toBe(true)
+    expect(mvmtOf(revealed)).toBe('3')
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 gets +1 travel speed as the Spanish (movement 3)')).toBe(true)
     // Nobody else's speed changes, and another civilization leaves it alone
     expect(mvmtOf(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toBe('2')
     expect(findPlayer(revealed, KARANDRAS1)?.stats.mvmt).toBe('2')
@@ -566,7 +566,7 @@ describe("Spain's travel speed", () => {
     const undone = undoByVote(revealed, CASH1981)
     expect(mvmtOf(undone)).toBe('2')
     expect(undone.log.at(-1)?.publicLog).toContain('movement went back to 2')
-    expect(mvmtOf(revealHidden(undone, CASH1981))).toBe('2+1')
+    expect(mvmtOf(revealHidden(undone, CASH1981))).toBe('3')
   })
 
   it('leaves a value the player typed: not set on the reveal, and not restored by the undo', () => {

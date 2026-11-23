@@ -151,7 +151,10 @@ function withSpanishMovement(
 ): { readonly players: readonly Playerhand[]; readonly log: readonly GameLogEntry[] } {
   let nextLog = log
   const nextPlayers = players.map((player) => {
-    if (player.civilization?.name !== SPANISH || player.stats.mvmt !== DEFAULT_PLAYER_STATS.mvmt) return player
+    if (player.civilization?.name !== SPANISH) return player
+    // Saves from when Spain's +1 was typed `2+1`: the +1 is now part of the base, `3` (only the stat; undo of the reveal still restores `before`)
+    if (player.stats.mvmt === '2+1') return { ...player, stats: { ...player.stats, mvmt: SPANISH_MVMT } }
+    if (player.stats.mvmt !== DEFAULT_PLAYER_STATS.mvmt) return player
     // The reveal that handed out the civilization held now: the latest one, so a reveal undone and made again counts once
     const civId = player.civilization.id
     const reveal = [...nextLog]

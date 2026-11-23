@@ -113,11 +113,13 @@ describe('movement speed', () => {
   })
 
   it('splits the typed Movement into its base and its bonus', () => {
-    expect(splitMovement('2')).toEqual({ base: 2, bonus: 0 })
-    expect(splitMovement('2+1')).toEqual({ base: 2, bonus: 1 })
-    expect(splitMovement('3+1+1')).toEqual({ base: 3, bonus: 2 })
-    expect(splitMovement('')).toEqual({ base: 0, bonus: 0 })
-    expect(splitMovement('x+1')).toEqual({ base: 1, bonus: 0 })
+    expect(splitMovement('2')).toEqual({ base: 2, bonus: 0, spain: 0 })
+    expect(splitMovement('2+1')).toEqual({ base: 2, bonus: 1, spain: 0 })
+    expect(splitMovement('3+1+1')).toEqual({ base: 3, bonus: 2, spain: 0 })
+    expect(splitMovement('3', true)).toEqual({ base: 2, bonus: 0, spain: 1 })
+    expect(splitMovement('3+1', true)).toEqual({ base: 2, bonus: 1, spain: 1 })
+    expect(splitMovement('')).toEqual({ base: 0, bonus: 0, spain: 0 })
+    expect(splitMovement('x+1')).toEqual({ base: 1, bonus: 0, spain: 0 })
   })
 
   it('gives Natural Religion +1 to an army but not a scout', () => {
@@ -180,16 +182,16 @@ describe('movement speed', () => {
       } as Playerhand
     }
     // Spain's +1 is not the older typed Natural Religion bonus: the army adds its own +1 on top of it
-    expect(travelSpeedOf(spanish('2+1', true), army, 1)).toBe(4)
-    expect(travelSpeedOf(spanish('2+1', true), scout, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', true), army, 1)).toBe(4)
+    expect(travelSpeedOf(spanish('3', true), scout, 1)).toBe(3)
     // Without Natural Religion both travel 3, and under Anarchy (no policy effect) too
-    expect(travelSpeedOf(spanish('2+1', false), army, 1)).toBe(3)
-    expect(travelSpeedOf(spanish('2+1', false), scout, 1)).toBe(3)
-    expect(travelSpeedOf(spanish('2+1', true, 'Anarchy'), army, 1)).toBe(3)
-    expect(travelSpeedOf(spanish('2+1', true, 'Anarchy'), scout, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', false), army, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', false), scout, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', true, 'Anarchy'), army, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', true, 'Anarchy'), scout, 1)).toBe(3)
     // A legacy typed `+` for Natural Religion on top of Spain's: still the army's speed, the scout gives it back
-    expect(travelSpeedOf(spanish('2+2', true), army, 1)).toBe(4)
-    expect(travelSpeedOf(spanish('2+2', true), scout, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3+1', true), army, 1)).toBe(4)
+    expect(travelSpeedOf(spanish('3+1', true), scout, 1)).toBe(3)
     // Other civilizations keep the older reading of `2+1`
     const roman = { ...spanish('2+1', true), civilization: { kind: 'civ', name: 'Romans' } as unknown as Playerhand['civilization'] }
     expect(travelSpeedOf(roman, army, 1)).toBe(3)
@@ -224,6 +226,19 @@ describe('movement speed', () => {
     expect(speedWith(['Horseback Riding'], false, '2+1')).toBe(4)
     expect(speedWith(['Flight'], false, '2+1')).toBe(7)
     expect(speedWith([], false, '2+1')).toBe(3)
+    // Spain's typed `3` holds its +1: a tech replaces only the 2 under it
+    const spanishWith = (names: readonly string[], mvmt: string): number => {
+      const tech = names.reduce((held, name) => withTech(held, name, false), state)
+      const player = playerOf(tech)
+      return travelSpeedOf(
+        { ...player, civilization: { kind: 'civ', name: 'Spanish' } as unknown as Playerhand['civilization'], stats: { ...player.stats, mvmt } },
+        piece,
+        1,
+      )
+    }
+    expect(spanishWith([], '3')).toBe(3)
+    expect(spanishWith(['Sailing'], '3')).toBe(5)
+    expect(spanishWith(['Horseback Riding'], '3')).toBe(4)
     // A typed base that is higher than the tech's stays, with its bonus
     expect(speedWith(['Sailing'], false, '3+1')).toBe(5)
     expect(speedWith(['Horseback Riding'], false, '5+1')).toBe(6)
@@ -492,6 +507,17 @@ describe('water', () => {
     const noCrossing = figureMovementOptions(blocked.board, playerOf(blocked), figure(blocked), 1)
     if (noCrossing === null) throw new Error('expected movement options')
     expect(noCrossing.destinations.some((cell) => cell.column === 1 && cell.row === 2)).toBe(false)
+  })
+})
+
+describe('Navigation', () => {
+  it('lets a figure cross water, but not end there when no fog touches it', () => {
+    const blocked = place(waterGame(), 'figures/bluearmy', 1, 3, KARANDRAS1)
+    const navigator = withTech(blocked, 'Navigation')
+    const options = figureMovementOptions(navigator.board, playerOf(navigator), figure(navigator), 1)
+    if (options === null) throw new Error('expected movement options')
+    expect(options.destinations).toContainEqual(expect.objectContaining({ column: 1, row: 2, distance: 2 }))
+    expect(options.destinations.some((cell) => cell.column === 0 && cell.row === 2)).toBe(false)
   })
 })
 
