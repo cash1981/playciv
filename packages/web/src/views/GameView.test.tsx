@@ -963,6 +963,24 @@ describe('End game wiring', () => {
     expect(menu()?.canEnd).toBe(false)
   })
 
+  it('also puts an End game button in the game header, next to auto-refresh', async () => {
+    const endGame = vi.spyOn(api, 'endGame').mockResolvedValue(creatorView())
+    await renderWithMenu(creatorView(), 'user')
+
+    const button = await screen.findByRole('button', { name: 'End game' })
+    fireEvent.click(button)
+    const dialog = screen.getByRole('dialog', { name: 'End game' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End game' }))
+
+    await waitFor(() => expect(endGame).toHaveBeenCalledWith('game-1'))
+  })
+
+  it('shows no header End game button to a player who is not the creator', async () => {
+    const view = headerView(seatNo('viewer', 1), [seatNo('s3s3', 2, { gameCreator: true })], null)
+    await renderWithMenu(view, 'user')
+    expect(screen.queryByRole('button', { name: 'End game' })).toBeNull()
+  })
+
   it('ends the game with the chosen winner and leaves the game', async () => {
     const endGame = vi.spyOn(api, 'endGame').mockResolvedValue(creatorView())
     const onEnded = vi.fn()
