@@ -267,4 +267,17 @@ describe('Navigation and fog', () => {
     // Without Navigation water is not entered at all
     expect(optionsOf(base).destinations.some((cell) => cell.column === 3 && cell.row === 0)).toBe(false)
   })
+
+  it('gives England the same: it crosses water and may stop in water that touches fog', () => {
+    const base = place(withStartTile(game()), 'figures/redarmy', 3, 2)
+    const english: GameState = {
+      ...base,
+      players: base.players.map((player) =>
+        player.playerId === CASH1981 ? { ...player, civilization: { name: 'England' } as Playerhand['civilization'] } : player,
+      ),
+    }
+    expect(optionsOf(english).destinations).toContainEqual(expect.objectContaining({ column: 3, row: 0, distance: 2 }))
+    // Water that touches no fog (A3) is still never an ending square
+    expect(optionsOf(english).destinations.some((cell) => cell.column === 0 && cell.row === 2)).toBe(false)
+  })
 })
