@@ -7,15 +7,14 @@
  * what makes this the same donation to the same account. The Patreon link the
  * old footer also had is dropped on purpose — see docs/agents/decisions.md.
  *
- * Beside it sits a Buy Me a Coffee button, added later at the human's request
- * from the exact markup they supplied (there was no Buy Me a Coffee in the old
- * footer). Like Patreon, it is a plain image link, not their JavaScript widget.
+ * Beside it sits a link to the Buy Me a Coffee membership page, added later at
+ * the human's request (there was none in the old footer). It replaced an
+ * earlier one-off "Buy me a coffee" button. Like Patreon, it is a plain link,
+ * not their JavaScript widget.
  */
 
-// The Buy Me a Coffee button the human supplied, kept verbatim.
-const BUYMEACOFFEE_URL = 'https://www.buymeacoffee.com/cash1981'
-const BUYMEACOFFEE_IMAGE =
-  'https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=cash1981&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff'
+// The recurring membership page on the same Buy Me a Coffee account.
+const BUYMEACOFFEE_MEMBERSHIP_URL = 'https://buymeacoffee.com/cash1981/membership'
 
 // The encrypted hosted-button value from old-civ-web/app/index.html.
 const PAYPAL_ENCRYPTED_BUTTON =
@@ -60,12 +59,12 @@ export function Footer(): React.JSX.Element {
           />
         </form>
         <a
-          className="site-footer-coffee"
-          href={BUYMEACOFFEE_URL}
+          className="site-footer-member"
+          href={BUYMEACOFFEE_MEMBERSHIP_URL}
           target="_blank"
           rel="noopener noreferrer"
         >
-          <img src={BUYMEACOFFEE_IMAGE} alt="Buy me a coffee" />
+          Become a member
         </a>
       </div>
     </footer>
