@@ -9,6 +9,7 @@
 
 import { createGame } from '../src/create-game.js'
 import type { GameState } from '../src/state.js'
+import { withPlayer } from '../src/state.js'
 
 export const CASH1981 = 'player-cash1981'
 export const KARANDRAS1 = 'player-karandras1'
@@ -31,4 +32,15 @@ export function firstCivGame(seed: string | number = TEST_SEED): GameState {
       { playerId: CHUL, username: 'Chul', color: 'Red' },
     ],
   })
+}
+
+/**
+ * Marks one player's setup finished without doing its steps, for a test about something else that passes Start of Turn
+ * right after a reveal (the gate of issue #374 would refuse it). Nothing is placed or counted; the setup itself, its gate
+ * and its refusals are tested in `setup.test.ts`.
+ */
+export function withSetupDone(state: GameState, playerId: string): GameState {
+  const player = state.players.find((candidate) => candidate.playerId === playerId)
+  if (player?.setup === undefined) return state
+  return withPlayer(state, { ...player, setup: { ...player.setup, finished: true } })
 }

@@ -897,6 +897,51 @@ describe('the Done button', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  describe('while the setup before turn 1 is not finished (#374)', () => {
+    const GATE = 'Finish your setup before Start of Turn can be marked done: still to do: capital. Open the Setup tab.'
+    const heldView = (blocksTurn: string | null, extra: Record<string, unknown> = {}): PlayerView => {
+      const view = makeView()
+      return { ...view, you: { ...(view.you as object), setup: { steps: [], blocksTurn }, ...extra } } as unknown as PlayerView
+    }
+
+    it('disables End turn and says why, and sends nothing', async () => {
+      await renderPanel(heldView(GATE))
+      await click(screen.getByRole('button', { name: 'Order' }))
+
+      const button = screen.getByRole('button', { name: 'End turn: mark City management as done' }) as HTMLButtonElement
+      expect(button.disabled).toBe(true)
+      expect(button.getAttribute('title')).toBe(GATE)
+      const reason = screen.getByRole('status')
+      expect(reason.textContent).toBe(GATE)
+      expect(button.getAttribute('aria-describedby')).toBe(reason.id)
+      await click(button)
+      expect(markDone).not.toHaveBeenCalled()
+    })
+
+    it('still lets a phase that is done be taken back, which is not End turn', async () => {
+      await renderPanel(heldView(GATE))
+      await click(screen.getByRole('button', { name: 'Order' }))
+      await act(async () => { fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'TRADE' } }) })
+
+      const undo = screen.getByRole('button', { name: 'Not done: unmark Trade as done' }) as HTMLButtonElement
+      expect(undo.disabled).toBe(false)
+      expect(screen.queryByRole('status')).toBeNull()
+    })
+
+    it('works as before when setup lets it through, and for a player without a setup', async () => {
+      const open = await renderPanel(heldView(null))
+      await click(screen.getByRole('button', { name: 'Order' }))
+      expect((screen.getByRole('button', { name: 'End turn: mark City management as done' }) as HTMLButtonElement).disabled).toBe(false)
+      expect(screen.queryByRole('status')).toBeNull()
+      open.unmount()
+
+      await renderPanel(makeView())
+      await click(screen.getByRole('button', { name: 'Order' }))
+      await click(screen.getByRole('button', { name: 'End turn: mark City management as done' }))
+      expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'CM', 4)
+    })
+  })
+
   it('marks the default turn and phase done', async () => {
     await renderPanel(makeView())
     await click(screen.getByRole('button', { name: 'Order' }))

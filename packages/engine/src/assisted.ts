@@ -1833,6 +1833,7 @@ import { agriculture } from './assisted-agriculture.js'
 import { RELIC_ACTIONS } from './assisted-relics.js'
 import { AZTEC_ACTIONS } from './assisted-aztecs.js'
 import { SPANISH_ACTIONS } from './assisted-spanish.js'
+import { SETUP_ACTIONS } from './assisted-setup.js'
 import { MILITARY_TRADITION_ACTIONS, militaryTraditionUndoBlock } from './assisted-military-tradition.js'
 import { CONQUEST_ACTIONS } from './assisted-conquest.js'
 
@@ -1868,6 +1869,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ...RELIC_ACTIONS,
   ...AZTEC_ACTIONS,
   ...SPANISH_ACTIONS,
+  ...SETUP_ACTIONS,
   ...CITY_ACTIONS,
   ...CONQUEST_ACTIONS,
 ]
@@ -2181,6 +2183,8 @@ export function reverseAssistedAction(
     // The Ark moved the leader marker back, and the School of Confucius took its Great Person marker off
     record.kind === 'relic:ark' ||
     (effect.kind === 'relicGreatPerson' && effect.marker !== null) ||
+    // The great person the Americans drew in setup took a marker the same way
+    (effect.kind === 'setupGreatPerson' && effect.marker !== null) ||
     (effect.kind === 'gunpowder' && (effect.wonder !== undefined || effect.building !== undefined)) ||
     (effect.kind === 'combustion' && (effect.building !== undefined || effect.unwalled !== undefined))
   ) {

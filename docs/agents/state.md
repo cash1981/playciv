@@ -43,6 +43,7 @@ deployment reports do not establish present health.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
   Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein, Carnegie, Jim Henson, Jacques Cousteau, Jerry Garcia, Ada Lovelace, Akira
   Kurosawa, Charles Darwin, A. P. Giannini, Frida Kahlo, Zheng He, Leonidas, Joan of Arc, Florence Nightingale, Sun Tzu, Georgy Zhukov and Gustavus Adolphus apply through the engine.
+- Setup (#374): a Setup tab first in "Your actions" until turn 1 (capital, figures, policy, American great person, starting trade, Egypt's wonder); Start of Turn is refused until it is done. French policy and the cap are #378.
 - Trade: free-text trade offers (#265); trade resets to coins at turn start for
   a player who researched, and city trade is collected once when Trade starts.
 - Cancellation (#301, #336): Twain and the culture cancellations act at once;

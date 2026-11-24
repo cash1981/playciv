@@ -28,8 +28,8 @@ export const cityLimitOf = (player: Playerhand): number =>
 
 /**
  * The player's city pieces on the board: a capital, a city or a metropolis is one each. A city piece that lies in a
- * player area is not on the map yet: the walled capital and the metropolis marker of the Chinese and the Indians wait there
- * until the player places them (`placeCivCityMarker`), and a marker in the area is not a city. The piece's centre decides,
+ * player area is not on the map yet: the walled capital and the metropolis marker of the Chinese and the Indians waited there
+ * in a game revealed before setup existed (setup now places them, `setCapital`), and a marker in the area is not a city. The piece's centre decides,
  * as it does for `locationOf`.
  */
 export function ownCityPieces(state: GameState, player: Playerhand): readonly BoardPiece[] {

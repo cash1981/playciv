@@ -57,6 +57,8 @@ import { chineseSaveViewOf } from './chinese-save.js'
 import type { ChineseSaveView } from './chinese-save.js'
 import { playableCardsOf } from './assisted-cards.js'
 import { startOfTurnViewOf } from './assisted-sot.js'
+import { setupViewOf } from './setup.js'
+import type { SetupView } from './setup.js'
 import type { GovernmentOption } from './sot.js'
 import type { PlayableCard } from './card-timing.js'
 import { cultureMarkerOf } from './culture-track.js'
@@ -245,6 +247,38 @@ export interface Playerhand {
    * Own view only, like the rest of the hand.
    */
   readonly curieSubstitute: string | null
+  /**
+   * The one-time setup before turn 1 (issue #374). Absent in a game saved before it existed: such a player has no setup,
+   * no gate and no Setup tab. Private bookkeeping: opponents and spectators never get it, and the owner's view carries
+   * `PlayerViewSelf.setup` instead.
+   */
+  readonly setup?: PlayerSetup
+}
+
+/** What setup puts on the board and in the stats, as pieces and ids to take back. Never projected as is. */
+export interface SetupPlacement {
+  /** `capital` (the city marker), the colour `army` and `scout`, the civilization's `white` figure, or Egypt's `wonder`. */
+  readonly slot: 'capital' | 'army' | 'scout' | 'white' | 'wonder'
+  readonly pieceId: string
+  /**
+   * `true` for a piece setup created (taking the step back removes it); `false` for one that was lying in the player's
+   * area (the white figure, Egypt's wonder, a capital marker from an earlier reveal): taking it back puts it in the area.
+   */
+  readonly created: boolean
+}
+
+/** The setup record of one player. Step status is derived from the board and the hand; this holds only what cannot be. */
+export interface PlayerSetup {
+  /** Set when the civilization is revealed. Start of Turn cannot be marked done until setup is finished. */
+  readonly required: boolean
+  /** Set when the gate let Start of Turn through, so a later manual board edit cannot close it again. */
+  readonly finished: boolean
+  /** The trade the starting count added to `stats.trade`, so a solo undo takes back exactly it. Absent until counted. */
+  readonly trade?: number
+  /** The pieces setup placed, in the order it placed them. */
+  readonly placed: readonly SetupPlacement[]
+  /** Every board history entry setup wrote, so the board Undo leaves them to the setup's own undo. */
+  readonly historyIds: readonly string[]
 }
 
 /** A free tech to learn, with the level it must have (`null` for any level). */
@@ -450,6 +484,8 @@ export type AssistedActionKind =
   | 'switchGovernment'
   | 'invest'
   | 'gianniniBuild'
+  // The American great person drawn in setup (setup.ts), laid out like the School of Confucius'
+  | 'setupGreatPerson'
   // The Spanish free basic building for a tile explored (assisted-spanish.ts); its effect is `gianniniBuild`'s
   | 'spanishBuild'
   | 'foundCity'
@@ -911,6 +947,14 @@ export type AssistedEffect =
       readonly subject: string
       readonly drawn: readonly string[]
       /** Cards discarded faceup because their marker type was out. */
+      readonly rejected: readonly string[]
+      readonly kept: string | null
+      readonly marker: GreatPersonMarker | null
+    }
+  | {
+      /** The great person the Americans draw in setup (`setup.ts`): laid out like the School of Confucius', the cards drawn, those discarded faceup, the one kept and its marker. */
+      readonly kind: 'setupGreatPerson'
+      readonly drawn: readonly string[]
       readonly rejected: readonly string[]
       readonly kept: string | null
       readonly marker: GreatPersonMarker | null
@@ -2093,7 +2137,12 @@ export interface StartOfTurnView {
   }[]
 }
 
-export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
+export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards' | 'setup'> {
+  /**
+   * The setup steps still to do before turn 1 (issue #374), or `null` when the player has none (a game saved before setup,
+   * or setup is finished). Only ever the viewer's own, and blanked for a replayed revision.
+   */
+  readonly setup: SetupView | null
   /** Effective stacking from the typed base, revealed techs, Russia and active Louis Pasteur. */
   readonly stackingLimit: number
   /**
@@ -2356,6 +2405,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           pendingRewards: pendingRewardViews(player),
           conquestOffers: conquestOfferViewsOf(state, player),
           chineseSave: chineseSaveViewOf(state, player),
+          setup: setupViewOf(state, player),
         }
   return {
     id: state.id,

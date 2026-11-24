@@ -378,7 +378,10 @@ describe('cityCountOf and buildingCountOf', () => {
     ['Chinese', 'cities/redcapitalwalled2'],
     ['Indians', 'cities/redmetropolis2'],
   ])('the %s city marker', (civ, markerAsset) => {
-    /** cash1981 reveals the civilization; its marker is put in their own area, where it waits to be placed. */
+    /**
+     * cash1981 reveals the civilization, as in a game revealed before setup existed: its marker lies in their own area, where
+     * it waits to be placed (a reveal no longer hands it out, setup creates it; see `setup.test.ts`).
+     */
     function revealed(): GameState {
       const base = fourColorGame()
       const card = base.items.find((item) => item.kind === 'civ' && item.name === civ)
@@ -390,7 +393,9 @@ describe('cityCountOf and buildingCountOf', () => {
           player.playerId === CASH1981 ? { ...player, items: [...player.items, { ...card, ownerId: CASH1981 }] } : player,
         ),
       }
-      return unwrap(revealItem(handed, { playerId: CASH1981, sheetName: 'CIV', itemNumber: card.itemNumber }))
+      const done = unwrap(revealItem(handed, { playerId: CASH1981, sheetName: 'CIV', itemNumber: card.itemNumber }))
+      const area = playerAreas(done.board, done.players).find((candidate) => candidate.playerId === CASH1981)
+      return unwrap(placePiece(done, { playerId: CASH1981, assetId: markerAsset, x: (area?.x ?? 0) + 20, y: (area?.y ?? 0) + 20 }))
     }
     const markerOf = (state: GameState) => {
       const piece = state.board.pieces.find((candidate) => candidate.assetId === markerAsset)

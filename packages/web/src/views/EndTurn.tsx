@@ -78,6 +78,11 @@ interface Props {
   readonly run: Run
 }
 
+/** Why End turn is held back by the setup before turn 1 (#374), or `null` (no setup, or setup lets it through). */
+export const setupGateOf = (view: PlayerView): string | null => view.you?.setup?.blocksTurn ?? null
+
+const setupGateId = 'end-turn-setup-gate'
+
 /** Renders nothing when there is no turn to end (see {@link endTurnState}). */
 export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
   const state = endTurnState(view)
@@ -149,20 +154,28 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
   const label = TURN_PHASE_LABEL[state.phase]
   const last = state.phase === TURN_PHASES[TURN_PHASES.length - 1]
   const stillEnded = endedLater(view, state)
+  // The setup before turn 1 (#374) is not finished: the server would refuse the press, so the button says why instead
+  const setupGate = setupGateOf(view)
   return (
     <div className="assisted-endturn">
       <button
         ref={endRef}
         type="button"
         className="primary"
-        disabled={busy || readOnly}
+        disabled={busy || readOnly || setupGate !== null}
         // Starts with the visible text (WCAG 2.5.3, Label in Name)
         aria-label={`End turn: mark ${capitalized(label)} as done`}
-        title={`End turn: mark ${capitalized(label)} as done`}
+        title={setupGate ?? `End turn: mark ${capitalized(label)} as done`}
+        aria-describedby={setupGate === null ? undefined : setupGateId}
         onClick={() => void run(() => api.markDone(gameId, state.phase, state.turnNumber))}
       >
         End turn
       </button>
+      {setupGate !== null && (
+        <p id={setupGateId} role="status" className="assisted-endturn-text assisted-warning">
+          {setupGate}
+        </p>
+      )}
       <p className="assisted-endturn-text muted">
         Turn {state.turnNumber}: marks your {label} phase done.
         {last && ' The next turn starts when every player has ended their research phase.'}

@@ -33,6 +33,7 @@ import type { Run } from './GameView.js'
 import { turnTitle } from './ChatOrdersPanel.js'
 import { goToPanel } from './PhaseSummary.js'
 import { PlayableCardList } from './PlayableCards.js'
+import { SetupPanel } from './SetupPanel.js'
 import { SpanishFreeBuild, StartOfTurnChoices } from './SotPanel.js'
 import { focusPlayer } from './turnFocus.js'
 import { TechPanel } from './TechPanel.js'
@@ -44,6 +45,18 @@ const capitalized = (text: string): string => text.charAt(0).toUpperCase() + tex
 
 /** The tab names: the phase labels the rest of the page already uses. */
 export const phaseTabLabel = (phase: TurnPhase): string => capitalized(TURN_PHASE_LABEL[phase])
+
+/**
+ * A tab of "Your actions": a phase of the turn, or the Setup tab (#374) that comes first until the viewer's setup is
+ * over. Setup is not a `TurnPhase`: `TURN_PHASES` drives the turn status and the done marks, and the setup is not one of them.
+ */
+export type TabKey = TurnPhase | 'SETUP'
+
+export const SETUP_TAB_LABEL = 'Setup'
+
+/** What the Setup tab is for, in the words of the issue (#374). */
+export const SETUP_GUIDE =
+  'Before turn 1: place your capital, then your army and scout, choose your social policy and count your starting trade. Do them in any order; a step that needs the capital waits for it.'
 
 /** What a phase is for, from the rulebook, so the tab guides a player who is new to it. */
 export const PHASE_GUIDE: Readonly<Record<TurnPhase, string>> = {
@@ -94,7 +107,7 @@ interface Props {
   /** The Build flow GameView shares with the board; City Management uses it for the Build buttons. */
   readonly build?: BuildFlow | undefined
   /** The tab to open first, instead of the viewer's current phase. The tab then follows the viewer as usual. */
-  readonly initialPhase?: TurnPhase | undefined
+  readonly initialPhase?: TabKey | undefined
   /** Bumped by GameView after each action, so the Research tab fetches the available techs again. */
   readonly reloadCount?: number | undefined
   /** A replayed revision: the Research tab shows its saved techs and no live fetch. */
@@ -114,13 +127,26 @@ export function PhaseActionsPanel({
 }: Props): React.JSX.Element | null {
   const current = currentPhaseOf(view)
   const started = view.activeTurn != null
-  const [selected, setSelected] = useState<TurnPhase>(initialPhase ?? current ?? 'SOT')
-  // The tab follows the viewer to their next phase, and stays where it is otherwise.
+  // The Setup tab is there while the engine projects a setup for the viewer (it is `null` otherwise), and opens first
+  const hasSetup = (view.you?.setup ?? null) !== null
+  const [selected, setSelected] = useState<TabKey>(initialPhase ?? (hasSetup ? 'SETUP' : (current ?? 'SOT')))
+  // The tab follows the viewer to their next phase, and stays where it is otherwise. The Setup tab is not left
+  // for a phase while the setup is open (the game starting must not pull the viewer off it); it is gone when setup
+  // ends, and the tab shown is then the viewer's phase.
   const followed = useRef(current)
   useEffect(() => {
-    if (current !== null && current !== followed.current) setSelected(current)
+    if (current !== null && current !== followed.current) setSelected((previous) => (previous === 'SETUP' && hasSetup ? previous : current))
     followed.current = current
-  }, [current])
+  }, [current, hasSetup])
+  // A setup that appears while the viewer is on a phase (their civilization is revealed in a running game) opens its tab
+  const hadSetup = useRef(hasSetup)
+  useEffect(() => {
+    if (hasSetup && !hadSetup.current) setSelected('SETUP')
+    hadSetup.current = hasSetup
+  }, [hasSetup])
+  // A setup that is over takes its tab with it: the viewer's phase is shown
+  const tab: TabKey = selected === 'SETUP' && !hasSetup ? (current ?? 'SOT') : selected
+  const tabs: readonly TabKey[] = hasSetup ? ['SETUP', ...TURN_PHASES] : TURN_PHASES
   // After a successful Keep the choice unmounts and focus would fall to the page.
   const bodyRef = useRef<HTMLDivElement>(null)
   // The same when a press removes the control that was pressed (a city founded, a card played, a government
@@ -179,21 +205,21 @@ export function PhaseActionsPanel({
     return run(action)
   }
 
-  const select = (phase: TurnPhase, focus: boolean): void => {
-    setSelected(phase)
-    if (focus) document.getElementById(tabId(phase))?.focus()
+  const select = (key: TabKey, focus: boolean): void => {
+    setSelected(key)
+    if (focus) document.getElementById(tabId(key))?.focus()
   }
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, phase: TurnPhase): void => {
-    const index = TURN_PHASES.indexOf(phase)
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, key: TabKey): void => {
+    const index = tabs.indexOf(key)
     const target =
       event.key === 'ArrowRight'
-        ? TURN_PHASES[(index + 1) % TURN_PHASES.length]
+        ? tabs[(index + 1) % tabs.length]
         : event.key === 'ArrowLeft'
-          ? TURN_PHASES[(index + TURN_PHASES.length - 1) % TURN_PHASES.length]
+          ? tabs[(index + tabs.length - 1) % tabs.length]
           : event.key === 'Home'
-            ? TURN_PHASES[0]
+            ? tabs[0]
             : event.key === 'End'
-              ? TURN_PHASES[TURN_PHASES.length - 1]
+              ? tabs[tabs.length - 1]
               : undefined
     if (target === undefined) return
     event.preventDefault()
@@ -234,7 +260,28 @@ export function PhaseActionsPanel({
         <SpanishFreeBuild gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={askOutOfTurn} />
 
         <div className="phase-tabs" role="tablist" aria-label="Phases of the turn">
-          {TURN_PHASES.map((phase) => {
+          {tabs.map((key) => {
+            if (key === 'SETUP') {
+              const todo = view.you?.setup?.blocksTurn != null
+              return (
+                <button
+                  key={key}
+                  id={tabId(key)}
+                  type="button"
+                  role="tab"
+                  aria-selected={key === tab}
+                  aria-controls={panelId(key)}
+                  tabIndex={key === tab ? 0 : -1}
+                  className={`phase-tab${key === tab ? ' active' : ''}${todo ? ' current' : ''}`}
+                  onClick={() => select(key, false)}
+                  onKeyDown={(event) => onKeyDown(event, key)}
+                >
+                  {SETUP_TAB_LABEL}
+                  {todo && <span className="phase-tab-mark"> (to do)</span>}
+                </button>
+              )
+            }
+            const phase = key
             const isCurrent = phase === current
             // Before the game starts nothing is done: the tabs carry no marks
             const done =
@@ -246,10 +293,10 @@ export function PhaseActionsPanel({
                 id={tabId(phase)}
                 type="button"
                 role="tab"
-                aria-selected={phase === selected}
+                aria-selected={phase === tab}
                 aria-controls={panelId(phase)}
-                tabIndex={phase === selected ? 0 : -1}
-                className={`phase-tab${phase === selected ? ' active' : ''}${isCurrent ? ' current' : ''}`}
+                tabIndex={phase === tab ? 0 : -1}
+                className={`phase-tab${phase === tab ? ' active' : ''}${isCurrent ? ' current' : ''}`}
                 onClick={() => select(phase, false)}
                 onKeyDown={(event) => onKeyDown(event, phase)}
               >
@@ -262,33 +309,42 @@ export function PhaseActionsPanel({
         </div>
 
         <div
-          id={panelId(selected)}
+          id={panelId(tab)}
           role="tabpanel"
-          aria-labelledby={tabId(selected)}
+          aria-labelledby={tabId(tab)}
           className="phase-tab-panel"
         >
-          <p className="phase-guide">{PHASE_GUIDE[selected]}</p>
-          <p className="phase-status muted">{phaseStatusText(selected, current, started)}</p>
-          <PhaseBody
-            phase={selected}
-            gameId={gameId}
-            view={view}
-            busy={busy}
-            readOnly={readOnly}
-            run={askOutOfTurn}
-            build={build}
-            reloadCount={reloadCount}
-            historical={historical}
-            onAdvanced={() => setToHand(true)}
-          />
+          {tab === 'SETUP' ? (
+            <>
+              <p className="phase-guide">{SETUP_GUIDE}</p>
+              <SetupPanel gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+            </>
+          ) : (
+            <>
+              <p className="phase-guide">{PHASE_GUIDE[tab]}</p>
+              <p className="phase-status muted">{phaseStatusText(tab, current, started)}</p>
+              <PhaseBody
+                phase={tab}
+                gameId={gameId}
+                view={view}
+                busy={busy}
+                readOnly={readOnly}
+                run={askOutOfTurn}
+                build={build}
+                reloadCount={reloadCount}
+                historical={historical}
+                onAdvanced={() => setToHand(true)}
+              />
+            </>
+          )}
         </div>
       </div>
     </CollapsiblePanel>
   )
 }
 
-const tabId = (phase: TurnPhase): string => `phase-tab-${phase}`
-const panelId = (phase: TurnPhase): string => `phase-panel-${phase}`
+const tabId = (key: TabKey): string => `phase-tab-${key}`
+const panelId = (key: TabKey): string => `phase-panel-${key}`
 
 /** What one tab holds. Every phase lists its assisted actions; Research also holds the Tech panel and City Management the city orders. */
 function PhaseBody({

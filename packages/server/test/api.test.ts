@@ -2691,6 +2691,22 @@ describe('a whole round', () => {
     })
     expect(drawn.status).toBe(200)
 
+    // The civilization is the Germans whatever the shuffle gave: some civilizations have more to do in setup
+    // (the Americans a great person, Egypt its wonder, Russia and Spain a white figure), which is not what this round is about
+    state = await repo.findGame(gameId)
+    const drawnCiv = state?.players.find((player) => player.username === starterName)?.items.find((item) => item.sheetName === 'CIV')
+    const germans = state?.items.find((item) => item.kind === 'civ' && item.name === 'Germans')
+    if (state === undefined || drawnCiv === undefined) throw new Error('no civilization to swap')
+    // The shuffle may already have dealt the Germans: then there is nothing to swap
+    if (germans !== undefined) await repo.saveGame({
+      ...state,
+      items: [...state.items.filter((item) => item.id !== germans.id), { ...drawnCiv, ownerId: null }],
+      players: state.players.map((player) =>
+        player.username === starterName
+          ? { ...player, items: player.items.map((item) => (item.id === drawnCiv.id ? { ...germans, ownerId: player.playerId } : item)) }
+          : player,
+      ),
+    })
     state = await repo.findGame(gameId)
     const civ = state?.players
       .find((player) => player.username === starterName)
@@ -2793,6 +2809,39 @@ describe('a whole round', () => {
     const afterUndo = state?.players.find((player) => player.username === starterName)
     // Only the starting technology from the civilization is left
     expect(afterUndo?.techsChosen.map((tech) => tech.name)).not.toContain(firstTech)
+
+    // The start of turn cannot be finished before the setup of the civilization is done (issue #374)
+    const early = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/turns/done`,
+      headers: bearer(starter),
+      payload: { phase: 'SOT' },
+    })
+    expect(early.status).toBe(409)
+    expect(JSON.parse(early.body)).toMatchObject({ error: 'SETUP_INCOMPLETE' })
+
+    // Setup: the capital, the army and the scout, a social policy and the starting trade
+    interface SetupSteps {
+      you: { setup: { steps: { id: string; squares: { column: number; row: number; direction?: string }[]; items: { id: string; squares: { column: number; row: number }[] }[] }[] } }
+    }
+    const setupView = async (): Promise<SetupSteps> =>
+      (await inject(app, { url: `/api/games/${gameId}`, headers: bearer(starter) })).json<SetupSteps>()
+    const doSetup = async (payload: Record<string, unknown>) => {
+      const response = await inject(app, { method: 'POST', url: `/api/games/${gameId}/setup`, headers: bearer(starter), payload })
+      expect(response.status, response.body).toBe(200)
+    }
+    const stepOf = async (id: string) => (await setupView()).you.setup.steps.find((step) => step.id === id)
+    const capitalSquare = (await stepOf('capital'))?.squares[0]
+    await doSetup({ step: 'capital', column: capitalSquare?.column, row: capitalSquare?.row, ...(capitalSquare?.direction === undefined ? {} : { direction: capitalSquare.direction }) })
+    for (const figure of ['army', 'scout']) {
+      const square = (await stepOf('figures'))?.items.find((item) => item.id === figure)?.squares[0]
+      await doSetup({ step: 'figure', figure, column: square?.column, row: square?.row })
+    }
+    await doSetup({ step: 'trade' })
+    const policy = state?.socialPolicies[0]?.name
+    expect(
+      (await inject(app, { method: 'POST', url: `/api/games/${gameId}/socialpolicy/choose`, headers: bearer(starter), payload: { name: policy } })).status,
+    ).toBe(200)
 
     // Finish the start of turn: the turn passes to the next seat
     const ended = await inject(app, {

@@ -78,16 +78,6 @@ type ActionResult = Result<GameState, EngineError>
 const ARABS = 'Arabs'
 
 /**
- * The marker a civilization is given in its area at the reveal, by civilization name: the Chinese walled capital and the
- * Indian metropolis (`cities/<colour><suffix>`). The player places it themselves; there is no setup phase for it yet
- * (issue #374).
- */
-const CIV_CITY_MARKER: Readonly<Record<string, { readonly suffix: string; readonly label: string }>> = {
-  Chinese: { suffix: 'capitalwalled2', label: 'walled capital marker' },
-  Indians: { suffix: 'metropolis2', label: 'metropolis marker' },
-}
-
-/**
  * Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). Exported
  * for `migrateGameState`, which gives it to a Spanish player revealed before the reveal set it.
  */
@@ -533,6 +523,12 @@ export function revealItem(state: GameState, input: RevealItemInput): ActionResu
   return revealCivilization(state, player, revealed)
 }
 
+/** Whether a reveal now opens setup: it is the first turn and the player has not marked its Start of Turn done. */
+function setupStillOpen(state: GameState, player: Playerhand): boolean {
+  if (turnStatus(state).currentTurn > Math.max(1, state.chatOrdersStartTurn)) return false
+  return !player.playerTurns.some((turn) => turn.done.SOT === true)
+}
+
 /**
  * Java: the sequence in `revealItem` when the item is a Civ. The order is
  * kept: set the starting tech, log REVEAL, draw starting units, discard the
@@ -550,12 +546,19 @@ function revealCivilization(
     ownerId: player.playerId,
   }
 
+  const government = startingGovernmentFor(civ.name)
   let next = withPlayer(state, {
     ...player,
     civilization: civ,
-    government: startingGovernmentFor(civ.name),
+    government,
+    // Democracy's coin is a counter on the sheet, as a government change sets it (the Greeks start with it)
+    stats: government === 'Democracy' ? statsAfterGovernmentChange(player, government) : player.stats,
     items: player.items.map((item) => (item.id === civ.id ? civ : item)),
     techsChosen: [...player.techsChosen, startingTech],
+    // The setup before turn 1 (issue #374): the capital, figures, trade and the rest are done by the player in the Setup
+    // tab. The Chinese walled capital and the Indian metropolis are created there, not handed out here. Only while the
+    // player's first Start of Turn is still to do: a reveal after it, or in a later turn, has no setup to gate
+    ...(setupStillOpen(state, player) ? { setup: { required: true, finished: false, placed: [], historyIds: [] } } : {}),
   })
   next = appendItemLog(next, 'REVEAL', player.username, player.playerId, civ)
   const revealIndex = next.log.length - 1
@@ -581,7 +584,6 @@ function revealCivilization(
   next = placeLeaderMarker(next, player, civ)
   next = placeWhiteFigure(next, player, civ)
   next = placeArabResources(next, player, civ)
-  next = placeCivCityMarker(next, player, civ)
   const ownPieces = newPieces(afterReveal, next)
   const ownWonders = wondersTakenFromDeck(afterReveal, next)
 
@@ -744,32 +746,6 @@ function placeWhiteFigure(
       x: region.x,
       y: region.y,
     }) ?? state
-  )
-}
-
-/**
- * Chinese walled capital and Indian metropolis: the marker of the player's colour goes in their own area, like the white
- * figure, as a piece of the reveal (the reveal undo takes it off). It is one piece: if one of that colour is already on
- * the board, none is added. The player places it themselves, so the line says so.
- */
-function placeCivCityMarker(state: GameState, player: Playerhand, civ: CivItem): GameState {
-  const marker = CIV_CITY_MARKER[civ.name]
-  if (marker === undefined || player.color === null) return state
-  const asset = findBoardAsset(`cities/${player.color.toLowerCase()}${marker.suffix}`)
-  if (asset === undefined) return state
-  // One supply: a second reveal, or a marker already placed by hand, must not add another
-  if (state.board.pieces.some((piece) => piece.assetId === asset.id)) return state
-  const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
-  if (area === undefined) return state
-  const region = areaSlotRegion(area)
-  const [x, y] = nextFreeSlot(state.board, area, state.board.pieces, { x: region.x, y: region.y })
-  const placed = placeUnchecked(state, { playerId: player.playerId, assetId: asset.id, x, y })
-  if (placed === undefined) return state
-  return appendPublicLog(
-    placed,
-    player.username,
-    player.playerId,
-    `has the ${marker.label} in their area to place as the ${civ.name}`,
   )
 }
 

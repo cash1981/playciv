@@ -1452,9 +1452,7 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
     (`BOARD_UNDO_TOKEN_CULTURE_SPENT`, 409; the card and the token stay). This is the one take-back that does not clamp:
     a board Undo is one player alone, so clamping would let them spend the 3, undo, and collect the same hut again for 3
     more. Relics give none.
-  - The walled capital marker (`cities/<colour>capitalwalled2`) is put in the player's area at the reveal, as a piece
-    of the reveal (the reveal undo takes it off) and only if none of that colour is on the board; the reveal log
-    says so and the player places it. It stays a marker in the area until a proper setup phase exists (issue #374).
+  - The walled capital (`cities/<colour>capitalwalled2`) is placed in setup (#374, "Setup phase" below), not at the reveal.
   - Saving a killed unit follows the civ sheet ("may save one of their killed units after each battle, returning it to
     their standing forces") and the human's design in #373. End battle, pressed by either side, discards the killed
     units' cards as any battle does. Then, until the next battle starts, the Chinese combatant (attacker or defender,
@@ -1471,11 +1469,9 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   Spain's 1 out of the typed base (a tech replaces only what is under it: Sailing gives Spain 5) and `travelSpeedOf` adds it
   back; a typed `+` term (`3+1`) is the army's Natural Religion speed, as for every civilization. Anarchy turns
   Natural Religion off, not Spain's +1.
-- **Indians:** besides the resource wildcard below, the reveal puts the metropolis marker (`cities/<colour>metropolis2`)
-  in the player's area, with the same rules as the Chinese walls (one, a piece of the reveal, the player places it;
-  issue #374).
-- **Americans:** the free great person and the social policy picked at the same moment stay manual (Organized
-  Religion draws two and keeps one), which needs the setup phase (issue #374).
+- **Indians:** besides the resource wildcard below, the capital is a metropolis (`cities/<colour>metropolis2`, two
+  squares), placed in setup (#374).
+- **Americans:** the free great person is drawn in setup (#374, "Setup phase" below).
 
 - **Aztecs (end of battle):** the Aztec player gains 3 trade for winning and 1 culture for each
   unit killed, both sides counted, in a battle they fought as a player (not the barbarians they
@@ -1581,6 +1577,48 @@ Source: `assisted.ts` (`build`), `assisted-city.ts`, `assisted-resources.ts`,
 `arabs-resources`, `movement`, `assisted-aztecs`, server `assisted-conquest-api`, `board-api`, `BattlePanel.test.tsx`,
 `BoardView.test.tsx`, `ConquestPrompt.test.tsx`; also `assisted-aztecs.ts`, `assisted-culture.ts`
 (`takeGreatPersonMarker`, `removeGreatPersonMarker`), web `BoardView.tsx`.
+
+### Setup phase (#374)
+
+Human, 2026-11-24 (the answers in issue #374). One-time per player, steps in any order, shown as a **Setup tab first in
+"Your actions"** (not a `TurnPhase`, not part of Start of Turn). Engine: `setup.ts` (`setupViewOf`, `setCapital`,
+`placeSetupFigure`, `countSetupTrade`, `placeSetupWonder`, `undoSetupStep`, `finishSetup`) and `assisted-setup.ts`
+(`setupGreatPerson`). Route `POST /api/games/:id/setup` (steps capital, figure, trade, wonder; `undo`).
+
+- **Who:** `Playerhand.setup` is written when a civilization is revealed while the player's turn-1 Start of Turn is not
+  done (current turn is the first, no done Start of Turn). A reveal later, and every save from before setup existed, has no
+  record: no Setup tab, no gate (limitation: a game revealed under the old code but not started does not get setup).
+- **Derived status:** step status is read from the board and the hand (capital on the map, own figures on the map, a social
+  policy, the great person record, Egypt's wonder on the map), so manual board edits cannot desync it. The record only keeps
+  `required`, `finished`, the counted trade, and which pieces setup placed (`placed`, `historyIds`).
+- **Capital:** one of the four central squares of the player's own starting tile, not water, nothing on it. Chinese get
+  `capitalwalled2`, Indians `metropolis2` (an anchor square and a direction, both squares central), others `capital2`. It can be
+  moved until setup is over; moving lifts the steps that depend on it (the counted trade is taken back, setup's figures and
+  Egypt's wonder go back to the area). A civ marker already in the area from an older reveal is reused. The reveal no longer
+  places a city marker. Setup only moves or undoes a capital it placed itself.
+- **Figures:** one colour army and one scout from the supply on legal squares in the capital's outskirts (on the map, not water,
+  no city, within the stacking limit counting all of the player's figures, no foreign figure for a scout); Russians move their
+  white army and Spanish their white scout from the area (placed at the reveal as before).
+- **Social policy:** unchanged `chooseSocialPolicy`; done at one policy. The French extra policy and any cap are #378.
+- **Great person (Americans):** an assisted action like Philosophy, `phase: 'ANY'`: a random draw of 1, or 2 with a revealed
+  Organized Religion, kept through `chooseReward`, the other discarded public; the marker goes to the player's area. It needs
+  a policy and none hidden (the draw count must not leak a hidden policy). Undo is the normal vote, never solo, so a random
+  draw cannot be re-rolled. The public line names no card (the marker type and item number are public, as for Philosophy).
+- **Starting trade:** the trade icons in the capital's outskirts counted as the Trade phase does (`tradeAroundCitiesOf`, capped
+  by `tradeCeilingOf`), added to `stats.trade` and recorded; solo undo takes back exactly that (floor 0). It does **not**
+  touch turn 1's `tradeCollected`: the normal Trade collection of turn 1 adds more.
+- **Government:** forced by the civilization, an automatic row. `startingGovernmentFor` now gives the Greeks Democracy (with its
+  coin counter; undoing the reveal clears it). Existing Greek players are not migrated.
+- **Egypt's wonder:** the wonder dealt into Egypt's area at the reveal is placed in setup on an empty legal square in the
+  capital's outskirts.
+- **Gate:** `markPhasesDone` refuses Start of Turn done, also through `upToPhase`, with `SETUP_INCOMPLETE` (409) until the steps
+  are done (capital, figures, policy, trade, plus the great person for Americans and the wonder for Egyptians), per player; a
+  pass records `finished`, so removing the capital by hand later does not close it again. Reopening is unchanged. The web
+  disables both End turn buttons with `you.setup.blocksTurn`.
+- **Undo:** each of capital, figure, trade and wonder has a solo undo (one player alone, refused while a later step needs it),
+  idempotent when the step is not done. Setup pieces are sealed against the board Undo (`isAssistedBoardChange`). Undoing the
+  civ reveal is refused after setup progress (`CIV_REVEAL_SETUP_STARTED`, 409; undo the steps first).
+- **Hidden information:** `you.setup` is the viewer's own; opponents and spectators get only the public `SETUP` log lines.
 
 ## Reopening a phase (2026-10-23)
 

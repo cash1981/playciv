@@ -1203,6 +1203,8 @@ describe('hasActionsPanel', () => {
     ['a player with a card choice waiting', viewWithRewards([reward()]), true],
     ['a player with a Spanish free building to place', withYou(viewWith([]), { startOfTurn: { spanish: { status: 'ready', reason: '', choices: [] } } }), true],
     ['a player whose Spanish free building is null', withYou(viewWith([]), { startOfTurn: { spanish: null } }), false],
+    ['a player with a setup to do before turn 1', withYou(viewWith([]), { setup: { steps: [], blocksTurn: null } }), true],
+    ['a player whose setup is null (done, or a save from before setup)', withYou(viewWith([]), { setup: null }), false],
     ['a player with a city on the map', withYou(viewWith([]), { cities: [cityOf()] }), true],
     ['a player whose view lists no cities', withYou(viewWith([]), { cities: [] }), false],
     ['a spectator, whatever cities are on the map', spectatorWith([{ playerId: 'x', cities: [cityOf()] }]), false],

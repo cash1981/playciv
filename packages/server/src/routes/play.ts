@@ -9,9 +9,11 @@ import type {
   BuildPayload,
   DevoteToTheArtsPayload,
   GameState,
+  GrowDirection,
   Government,
   HarvestPayload,
   PlayerStatKey,
+  SetupFigure,
   SheetName,
   StartBuildingProgramPayload,
   UpgradeBuildingsPayload,
@@ -24,8 +26,11 @@ import {
   MAX_DEVOTE_CULTURE,
   RESOURCE_KINDS,
   UNIT_TYPES,
+  SETUP_DIRECTIONS,
+  SETUP_FIGURES,
   WONDER_ASSET_IDS,
   chooseSocialPolicy,
+  countSetupTrade,
   chooseTech,
   discardBarbarians,
   discardItem,
@@ -41,6 +46,8 @@ import {
   loot,
   markPhasesDone,
   placeGreatPersonInPyramid,
+  placeSetupFigure,
+  placeSetupWonder,
   postOrder,
   performAssistedAction,
   playerPutsItemBackInDeck,
@@ -54,6 +61,7 @@ import {
   revealTech,
   revealedTechsForAllPlayers,
   saveNote,
+  setCapital,
   setCoinSource,
   purchaseCoin,
   setPlayerStat,
@@ -62,6 +70,7 @@ import {
   setTechSlot,
   tradeToPlayer,
   turnStatus,
+  undoSetupStep,
   unmarkPhaseDone,
   vote,
 } from '@civ/engine'
@@ -186,6 +195,68 @@ function parseStartBuildingProgramPayload(body: Record<string, unknown>): StartB
     return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
   }
   return { cityPieceId }
+}
+
+const SETUP_FIELDS = ['step', 'undo', 'figure', 'column', 'row', 'direction', 'requestId', 'rev'] as const
+const SETUP_STEPS = ['capital', 'figure', 'trade', 'wonder'] as const
+
+/** One setup request, checked for its shape only: whether the square, the figure and the step are legal is the engine's decision. */
+type SetupRequest =
+  | { readonly step: 'capital'; readonly column: number; readonly row: number; readonly direction?: GrowDirection }
+  | { readonly step: 'figure'; readonly figure: SetupFigure; readonly column: number; readonly row: number }
+  | { readonly step: 'trade' }
+  | { readonly step: 'wonder'; readonly column: number; readonly row: number }
+  | { readonly undo: true; readonly step: 'capital' | 'trade' | 'wonder' }
+  | { readonly undo: true; readonly step: 'figure'; readonly figure: SetupFigure }
+
+/**
+ * The `/setup` body, or a sentence saying what is wrong with it. Exactly the fields of the step and nothing else:
+ * `capital` takes `column` and `row` (and for the Indians `direction`), `figure` a `figure` (`army`, `scout` or `white`)
+ * and `column` and `row`, `trade` nothing, `wonder` `column` and `row`; `undo: true` takes the step back and, for
+ * `figure`, names which. `requestId` and `rev` are the envelope, as the neighbouring routes take them.
+ */
+function parseSetupBody(body: Record<string, unknown>): SetupRequest | string {
+  const stray = Object.keys(body).filter((key) => !(SETUP_FIELDS as readonly string[]).includes(key))
+  if (stray.length > 0) return `setup takes only ${SETUP_FIELDS.join(', ')}, not ${stray.join(', ')}`
+  const step = SETUP_STEPS.find((candidate) => candidate === body['step'])
+  if (step === undefined) return `step must be one of ${SETUP_STEPS.join(', ')}`
+  const undo = body['undo']
+  if (undo !== undefined && typeof undo !== 'boolean') return 'undo must be a boolean'
+  const whole = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_BUILD_COORDINATE
+  const figure = SETUP_FIGURES.find((candidate) => candidate === body['figure'])
+  if (body['figure'] !== undefined && figure === undefined) return `figure must be one of ${SETUP_FIGURES.join(', ')}`
+  const direction = SETUP_DIRECTIONS.find((candidate) => candidate === body['direction'])
+  if (body['direction'] !== undefined && direction === undefined) return `direction must be one of ${SETUP_DIRECTIONS.join(', ')}`
+  const square = ['column', 'row'].filter((field) => body[field] !== undefined)
+
+  if (undo === true) {
+    if (square.length > 0 || direction !== undefined) return 'undo takes no square or direction'
+    if (step === 'figure') {
+      if (figure === undefined) return `undoing a figure needs figure: one of ${SETUP_FIGURES.join(', ')}`
+      return { undo: true, step, figure }
+    }
+    if (figure !== undefined) return 'figure only belongs to the figure step'
+    return { undo: true, step }
+  }
+
+  if (step === 'trade') {
+    if (square.length > 0 || figure !== undefined || direction !== undefined) return 'trade takes no square, figure or direction'
+    return { step }
+  }
+  const { column, row } = body
+  if (!whole(column) || !whole(row)) return `column and row are required: whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
+  if (step === 'figure') {
+    if (figure === undefined) return `figure is required: one of ${SETUP_FIGURES.join(', ')}`
+    if (direction !== undefined) return 'direction only belongs to the capital'
+    return { step, figure, column, row }
+  }
+  if (figure !== undefined) return 'figure only belongs to the figure step'
+  if (step === 'wonder') {
+    if (direction !== undefined) return 'direction only belongs to the capital'
+    return { step, column, row }
+  }
+  return { step, column, row, ...(direction === undefined ? {} : { direction }) }
 }
 
 const DEVOTE_FIELDS = ['cityPieceId', 'scoutPieceIds', 'culture', 'darwin'] as const
@@ -1087,6 +1158,51 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       clientRev,
       // A requestId that is already recorded answers with the same state: no new revision
       { description: `${actor.username} used ${action}`, skipSaveWhenUnchanged: true },
+    )
+  })
+
+  /**
+   * The setup before turn 1 (issue #374): the capital, a figure, the starting trade or Egypt's wonder, each by itself, and
+   * each one's solo undo (`undo: true`). The great person is the `setupGreatPerson` action on `/actions`, and the policy is
+   * the social policy route. `rev` makes a stale request answer 409; a repeat of the request that was just made changes nothing.
+   */
+  app.post('/api/games/:gameId/setup', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const requestId = optionalString(body, 'requestId')
+    if (body['requestId'] !== undefined && (requestId === undefined || !REQUEST_ID.test(requestId))) {
+      return sendError(c, 400, 'BAD_REQUEST', 'requestId must be 1 to 64 characters: letters, digits and . _ : -')
+    }
+    const clientRev = optionalNumber(body, 'rev')
+    if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
+    }
+    const parsed = parseSetupBody(body)
+    if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+    const actor = currentPlayer(c)
+    const at = new Date().toISOString()
+    const playerId = actor.id
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => {
+        if ('undo' in parsed) {
+          return undoSetupStep(state, { playerId, at, step: parsed.step, ...(parsed.step === 'figure' ? { figure: parsed.figure } : {}) })
+        }
+        switch (parsed.step) {
+          case 'capital':
+            return setCapital(state, { playerId, at, column: parsed.column, row: parsed.row, ...(parsed.direction === undefined ? {} : { direction: parsed.direction }) })
+          case 'figure':
+            return placeSetupFigure(state, { playerId, at, figure: parsed.figure, column: parsed.column, row: parsed.row })
+          case 'trade':
+            return countSetupTrade(state, { playerId, at })
+          case 'wonder':
+            return placeSetupWonder(state, { playerId, at, column: parsed.column, row: parsed.row })
+        }
+      },
+      clientRev,
+      { description: `${actor.username} did setup: ${'undo' in parsed ? 'undo ' : ''}${parsed.step}`, skipSaveWhenUnchanged: true, allowIdempotentRetry: true },
     )
   })
 

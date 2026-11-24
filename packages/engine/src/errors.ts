@@ -59,6 +59,12 @@ export type EngineError =
   | { readonly kind: 'UNDO_ALREADY_DONE'; readonly logId: string }
   /** A civilization reveal whose setup cannot be told apart from the log, so it cannot be taken back */
   | { readonly kind: 'CIV_REVEAL_NOT_UNDOABLE'; readonly logId: string }
+  /** Setup has begun for the player (a step is done), so the reveal cannot be taken back until the steps are undone */
+  | { readonly kind: 'CIV_REVEAL_SETUP_STARTED'; readonly logId: string }
+  /** A setup step was refused, with the sentence for the player (issue #374) */
+  | { readonly kind: 'SETUP_REFUSED'; readonly step: string; readonly reason: string }
+  /** Start of Turn cannot be marked done until the player has finished setup; `reason` names what is missing (issue #374) */
+  | { readonly kind: 'SETUP_INCOMPLETE'; readonly reason: string }
   /** Java: 400 "Cannot join the game. Its full!" */
   | { readonly kind: 'GAME_IS_FULL'; readonly numOfPlayers: number }
   /** A private game (issue #348): only the invited players may join */
@@ -239,6 +245,12 @@ export function describeError(error: EngineError): string {
       return 'This undo has already been carried out'
     case 'CIV_REVEAL_NOT_UNDOABLE':
       return 'This civilization reveal cannot be undone'
+    case 'CIV_REVEAL_SETUP_STARTED':
+      return 'Setup has started for this civilization: undo its setup steps before taking the reveal back'
+    case 'SETUP_REFUSED':
+      return error.reason
+    case 'SETUP_INCOMPLETE':
+      return error.reason
     case 'GAME_IS_FULL':
       return 'Cannot join the game. Its full!'
     case 'NOT_INVITED':

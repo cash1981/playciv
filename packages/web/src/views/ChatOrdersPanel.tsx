@@ -20,6 +20,7 @@ import type { NavigationAttempt } from '../lib/navigationGuard.js'
 import { AutoRefreshStatus } from './AutoRefresh.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { setupGateOf } from './EndTurn.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent, MarkdownEditorHandle } from './MarkdownEditor.js'
 import { colorClass } from './playerColor.js'
@@ -349,6 +350,7 @@ export function ChatOrdersPanel({
   const canWrite = (view.you !== null || isAdmin) && !readOnly
   const doneInTurn = view.you?.playerTurns.find((candidate) => candidate.turnNumber === orderTurn)?.done
   const isPhaseDone = (phase: TurnPhase): boolean => doneInTurn?.[phase] === true
+  const setupGate = setupGateOf(view)
   const remoteNote = view.you?.gamenote ?? ''
 
   const load = useCallback(async () => {
@@ -683,7 +685,10 @@ export function ChatOrdersPanel({
                 {mode === 'order' && (
                   <button
                     type="button"
-                    disabled={busy}
+                    // The setup before turn 1 (#374) holds End turn back, never the Not done that takes a mark back
+                    disabled={busy || (setupGate !== null && !isPhaseDone(orderPhase))}
+                    title={setupGate !== null && !isPhaseDone(orderPhase) ? setupGate : undefined}
+                    aria-describedby={setupGate !== null && !isPhaseDone(orderPhase) ? 'chat-orders-setup-gate' : undefined}
                     aria-label={
                       // Starts with the visible text (WCAG 2.5.3, Label in Name)
                       isPhaseDone(orderPhase)
@@ -708,6 +713,11 @@ export function ChatOrdersPanel({
                   Send
                 </button>
               </div>
+              {mode === 'order' && setupGate !== null && !isPhaseDone(orderPhase) && (
+                <p id="chat-orders-setup-gate" role="status" className="assisted-warning">
+                  {setupGate}
+                </p>
+              )}
             </form>
           )}
         </div>

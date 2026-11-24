@@ -186,6 +186,27 @@ describe('api timeline and admin calls (issue #215)', () => {
     expect(lastCall(second).path).toBe('/api/games/g1/chat?before=m%201')
   })
 
+  it('sends a setup step with its request id and revision, and an undo with the step and nothing else', async () => {
+    const placed = respondWith(200, '{}')
+    await api.setup('g1', { step: 'capital', column: 4, row: 3, direction: 'east' }, 'req-1', 7)
+    expect(lastCall(placed)).toEqual({
+      path: '/api/games/g1/setup',
+      body: { step: 'capital', column: 4, row: 3, direction: 'east', requestId: 'req-1', rev: 7 },
+    })
+
+    const figure = respondWith(200, '{}')
+    await api.setup('g1', { step: 'figure', figure: 'white', column: 5, row: 2 }, 'req-2', 8)
+    expect(lastCall(figure).body).toEqual({ step: 'figure', figure: 'white', column: 5, row: 2, requestId: 'req-2', rev: 8 })
+
+    const trade = respondWith(200, '{}')
+    await api.setup('g1', { step: 'trade' }, 'req-3', 9)
+    expect(lastCall(trade).body).toEqual({ step: 'trade', requestId: 'req-3', rev: 9 })
+
+    const undone = respondWith(200, '{}')
+    await api.setup('g1', { undo: true, step: 'figure', figure: 'army' }, 'req-4', 10)
+    expect(lastCall(undone).body).toEqual({ undo: true, step: 'figure', figure: 'army', requestId: 'req-4', rev: 10 })
+  })
+
   it('sends the turn only when it is given', async () => {
     const fetchMock = respondWith(200, '{}')
     await api.postOrder('g1', 'TRADE', 'Buy iron')

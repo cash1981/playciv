@@ -33,7 +33,7 @@ import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
-import { CASH1981, firstCivGame } from './fixture.js'
+import { CASH1981, firstCivGame, withSetupDone } from './fixture.js'
 
 /** A stand-in piece for the geometry helpers, which only read its rectangle. */
 const pieceAt = (x: number, y: number, category: BoardPiece['category'] = 'figure'): BoardPiece => ({
@@ -490,7 +490,7 @@ describe('revealing civilizations, one player at a time (issue #171)', () => {
           }),
         )
         // Finishing the start of turn hands the turn to the next seat
-        state = unwrap(markPhasesDone(state, { playerId: current.playerId, turnNumber: 1, upToPhase: 'SOT' }))
+        state = unwrap(markPhasesDone(withSetupDone(state, current.playerId), { playerId: current.playerId, turnNumber: 1, upToPhase: 'SOT' }))
       }
 
       const civTiles = state.board.pieces.filter((piece) => piece.category === 'civtile')

@@ -1112,6 +1112,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
   const { change } = entry
   // What a cancellation spent again after its rewind (a cancelled ability's resource, a tech's Spy) was taken off the map by it: not the board Undo's to give back
   if (state.cancellations?.events.some((event) => event.keptHistoryIds?.includes(entry.id) === true) === true) return true
+  // The capital, figures and wonder setup placed, and their takebacks: only setup's own undo may take them back (issue #374)
+  if (state.players.some((player) => player.setup?.historyIds.includes(entry.id) === true)) return true
   return state.assistedActions.some((record) => {
     if (record.status !== 'applied') return false
     // A relic whose ability this player claimed: the marker back on the map would leave them the ability as well
@@ -1213,7 +1215,7 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
       if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
     // The Great Person marker the School of Confucius put in the player's area
-    if ((effect.kind === 'relicGreatPerson' || effect.kind === 'philosophy') && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
+    if ((effect.kind === 'relicGreatPerson' || effect.kind === 'philosophy' || effect.kind === 'setupGreatPerson') && change.kind === 'place' && effect.marker?.pieceId === change.piece.id) return true
     // Gunpowder pays several tokens, every other action one
     const spentTokens = 'spent' in effect && effect.spent !== null ? [effect.spent].flat() : []
     return (

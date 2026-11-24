@@ -9,10 +9,12 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   the first build. The remaining production is computed from the first build's recorded cost and production, so a hand-set production
   changed between the two builds is not seen. Engineering is offered only when the build is the city's first action: a build that is
   itself an extra action (Atomic Theory, Lovelace, a confirmed repeat) cannot be split.
-- **Civilization abilities not automated (#368):** Chinese walls and Indian metropolis are markers put in the area at
-  reveal for the player to place, until a proper setup phase exists (issue #374); the American free great person
-  stays manual (the social policy picked at the same moment, Organized Religion drawing two and keeping one, needs
-  that setup phase too); Mongol loot (not modelled); French policy cap (no cap exists); Russian sacrifice (no
+- **Setup phase (#374):** a game revealed before the setup phase existed, and a civilization revealed after turn 1's Start of
+  Turn, has no setup (no tab, no gate); the player places the capital by hand. Existing Greek players keep Despotism. The
+  starting trade counts printed trade icons only (no techs, policies or governments). The American great person needs a
+  revealed policy before the draw. Setup checks a capital square with the founding rules, which cannot refuse on a fresh start tile.
+- **Civilization abilities not automated (#368):** the French extra policy and policy cap (#378, no cap exists); Japanese
+  infantry +1 strength and the tech discount of 3 trade (#368); Mongol loot (not modelled); Russian sacrifice (no
   enemy-army-city model); Zulu metropolis hut
   exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
   the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
@@ -49,8 +51,6 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - **Legacy Egypt setup:** older saves backfill `wondersDealt` from
   `hasWonder || setupComplete`, so an Egypt revealed earlier never gets the
   three-ancient/one-medieval deal. Deliberately forward-only (`migrate.ts`).
-- **Zulu starting units:** `actions/player.ts` deals four artillery; the
-  printed/legacy rule may be three. Ask the human before changing it.
 - **A square another scout sends:** the Start of Turn panel still offers the
   second scout's city choice; choosing a city is refused with a reason (#319).
 - **Scout-held Bank coins:** board derivation does not model scout transfers;

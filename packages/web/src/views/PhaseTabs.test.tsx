@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
-import { resetPendingRequestIds } from './AssistedActions.js'
+import { hasActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { goToPanel } from './PhaseSummary.js'
 import { PHASE_GUIDE, PhaseActionsPanel, currentPhaseOf, phaseStatusText } from './PhaseTabs.js'
@@ -581,5 +581,150 @@ describe('currentPhaseOf and phaseStatusText', () => {
     expect(phaseStatusText('SOT', 'CM')).toBe('You have finished this phase.')
     expect(phaseStatusText('RESEARCH', 'CM')).toMatch(/^Not yet: you are in city management/)
     expect(phaseStatusText('SOT', null)).toBe('You have finished every phase of this turn.')
+  })
+})
+
+describe('the Setup tab (#374)', () => {
+  type Setup = NonNullable<NonNullable<PlayerView['you']>['setup']>
+  const GATE = 'Finish your setup before Start of Turn can be marked done: still to do: capital. Open the Setup tab.'
+  const setupOf = (blocksTurn: string | null = GATE, steps: Setup['steps'] = []): Setup => ({
+    blocksTurn,
+    steps: [
+      { id: 'capital', label: 'Capital', status: 'todo', reason: 'Place your capital.', squares: [], canUndo: false, undoReason: null, items: [] },
+      { id: 'government', label: 'Government', status: 'auto', reason: 'Romans start with Despotism.', squares: [], canUndo: false, undoReason: null, items: [] },
+      ...steps,
+    ],
+  })
+  const withSetup = (phase: Phase | null, setup: Setup | null, extra: Record<string, unknown> = {}): PlayerView =>
+    viewIn(phase, [chivalry, advance], { setup, ...extra })
+  const tabLabels = (): (string | null | undefined)[] => screen.getAllByRole('tab').map((candidate) => candidate.textContent?.replace(/ \((now|done|to do)\)/g, ''))
+
+  it('is the first tab, open first, while the engine projects a setup', () => {
+    renderPanel(withSetup('SOT', setupOf()))
+
+    expect(tabLabels()).toEqual(['Setup', 'Start of turn', 'Trade', 'City management', 'Movement', 'Research'])
+    expect(selected()).toBe('Setup (to do)')
+    expect(tab(/^Setup/).getAttribute('aria-controls')).toBe('phase-panel-SETUP')
+    const panel = screen.getByRole('tabpanel')
+    expect(panel.id).toBe('phase-panel-SETUP')
+    expect(within(panel).getByRole('region', { name: 'Setup' })).toBeTruthy()
+    expect(within(panel).getByText('Place your capital.')).toBeTruthy()
+    // The phase text and the phase actions are not on this tab
+    expect(within(panel).queryByText('This is your current phase.')).toBeNull()
+    expect(within(panel).queryByRole('region', { name: 'Possible actions' })).toBeNull()
+  })
+
+  it.each([
+    ['there is no setup (null)', withSetup('SOT', null)],
+    ['the view carries none (a game saved before setup)', viewIn('SOT')],
+  ])('is not there when %s', (_what, view) => {
+    renderPanel(view)
+    expect(tabLabels()).toEqual(['Start of turn', 'Trade', 'City management', 'Movement', 'Research'])
+    expect(screen.queryByRole('region', { name: 'Setup' })).toBeNull()
+    expect(selected()).toBe('Start of turn (now)')
+  })
+
+  it('is marked to do while End turn is held back, and not once every step is done', () => {
+    const held = renderPanel(withSetup('SOT', setupOf()))
+    expect(tab(/^Setup/).textContent).toContain('(to do)')
+    held.unmount()
+    renderPanel(withSetup('SOT', setupOf(null)))
+    expect(tab(/^Setup/).textContent).toBe('Setup')
+  })
+
+  it('can be left for a phase and come back to', () => {
+    renderPanel(withSetup('SOT', setupOf()))
+    fireEvent.click(tab(/^Trade/))
+    expect(selected()).toBe('Trade')
+    expect(screen.queryByRole('region', { name: 'Setup' })).toBeNull()
+    fireEvent.click(tab(/^Setup/))
+    expect(selected()).toMatch(/^Setup/)
+    expect(screen.getByRole('region', { name: 'Setup' })).toBeTruthy()
+  })
+
+  it('takes part in the arrow keys: Home is Setup, Left from it wraps to Research, Right goes to Start of turn', () => {
+    renderPanel(withSetup('SOT', setupOf()))
+    fireEvent.keyDown(tab(/^Setup/), { key: 'ArrowRight' })
+    expect(selected()).toBe('Start of turn (now)')
+    fireEvent.keyDown(tab(/^Start of turn/), { key: 'ArrowLeft' })
+    expect(selected()).toMatch(/^Setup/)
+    expect(document.activeElement).toBe(tab(/^Setup/))
+    fireEvent.keyDown(tab(/^Setup/), { key: 'ArrowLeft' })
+    expect(selected()).toBe('Research')
+    fireEvent.keyDown(tab(/^Research/), { key: 'ArrowRight' })
+    expect(selected()).toMatch(/^Setup/)
+    fireEvent.keyDown(tab(/^Setup/), { key: 'End' })
+    expect(selected()).toBe('Research')
+    fireEvent.keyDown(tab(/^Research/), { key: 'Home' })
+    expect(selected()).toMatch(/^Setup/)
+  })
+
+  it('has exactly one tab in the tab order, the selected one', () => {
+    renderPanel(withSetup('SOT', setupOf()))
+    const focusable = screen.getAllByRole('tab').filter((candidate) => candidate.getAttribute('tabindex') === '0')
+    expect(focusable.map((candidate) => candidate.textContent)).toEqual(['Setup (to do)'])
+  })
+
+  it('is not left by the game starting or the viewer moving to a phase while the setup is open', () => {
+    // The civilization is revealed before the game starts: no turn, so no current phase
+    const { rerender } = renderPanel(withSetup(null, setupOf()))
+    expect(selected()).toMatch(/^Setup/)
+    rerender(<PhaseActionsPanel gameId="g1" view={withSetup('SOT', setupOf())} busy={false} readOnly={false} run={run} />)
+    expect(selected()).toMatch(/^Setup/)
+    expect(screen.getByRole('region', { name: 'Setup' })).toBeTruthy()
+  })
+
+  it('goes away with the setup, and the tab shown is then the viewer’s phase (the tab disappearing after turn 1 starts)', () => {
+    const { rerender } = renderPanel(withSetup('SOT', setupOf(null)))
+    expect(selected()).toMatch(/^Setup/)
+    // Start of turn is ended: the setup is finished (null) and the viewer is in Trade
+    rerender(<PhaseActionsPanel gameId="g1" view={withSetup('TRADE', null)} busy={false} readOnly={false} run={run} />)
+    expect(tabLabels()).toEqual(['Start of turn', 'Trade', 'City management', 'Movement', 'Research'])
+    expect(selected()).toBe('Trade (now)')
+    expect(screen.queryByRole('region', { name: 'Setup' })).toBeNull()
+  })
+
+  it('falls back to the viewer’s phase when the setup ends and the phase did not change', () => {
+    const { rerender } = renderPanel(withSetup('SOT', setupOf()))
+    rerender(<PhaseActionsPanel gameId="g1" view={withSetup('SOT', null)} busy={false} readOnly={false} run={run} />)
+    expect(selected()).toBe('Start of turn (now)')
+  })
+
+  it('opens when a setup appears for a viewer who is on a phase', () => {
+    const { rerender } = renderPanel(withSetup('SOT', null))
+    expect(selected()).toBe('Start of turn (now)')
+    rerender(<PhaseActionsPanel gameId="g1" view={withSetup('SOT', setupOf())} busy={false} readOnly={false} run={run} />)
+    expect(selected()).toMatch(/^Setup/)
+  })
+
+  it('is enough for the panel to show, in a game that has not started', () => {
+    expect(hasActionsPanel(withSetup(null, setupOf()))).toBe(true)
+    renderPanel({ ...withSetup(null, setupOf()), activeTurn: null } as PlayerView)
+    expect(screen.getByRole('region', { name: 'Setup' })).toBeTruthy()
+  })
+
+  it('shows End turn held back with the reason, above the tabs, whichever tab is open', () => {
+    renderPanel(withSetup('SOT', setupOf()))
+    fireEvent.click(tab(/^Trade/))
+    const endTurn = screen.getByRole('button', { name: /^End turn/ }) as HTMLButtonElement
+    expect(endTurn.disabled).toBe(true)
+    expect(screen.getAllByText(GATE).length).toBeGreaterThan(0)
+  })
+
+  it('names no card before a great person is projected to the viewer, and only in the choice above the tabs after', () => {
+    const greatPerson: Setup['steps'] = [
+      { id: 'greatPerson', label: 'Great person', status: 'todo', reason: 'Draw 1 great person card and keep one.', squares: [], canUndo: false, undoReason: null, items: [] },
+    ]
+    const before = renderPanel(withSetup('SOT', setupOf(GATE, greatPerson)))
+    expect(document.body.textContent).not.toContain('Euclid the Secret')
+    before.unmount()
+
+    const reward = { id: 'gp-1', kind: 'greatPerson', level: 1, step: 0, keep: 1, candidates: [{ id: 'c1', kind: 'greatperson', name: 'Euclid the Secret', hidden: false }] }
+    renderPanel(withSetup('SOT', setupOf(GATE, greatPerson), { pendingRewards: [reward] }))
+    const setup = screen.getByRole('region', { name: 'Setup' })
+    // The card to keep is in the box above the tabs; the setup list itself names none
+    expect(setup.textContent).not.toContain('Euclid the Secret')
+    expect(within(setup).queryByRole('button', { name: 'Draw great person' })).toBeNull()
+    expect(screen.getByRole('button', { name: /Keep this card: / })).toBeTruthy()
   })
 })

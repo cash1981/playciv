@@ -85,6 +85,13 @@ export function statusFor(error: EngineError): number {
     // Out of uses is a conflict, like a coin purchase; everything else is a bad request
     case 'ASSISTED_ACTION_REJECTED':
       return error.status === 'used' ? 409 : 400
+    // A setup step refused for the player's choice (a bad square, an unmet need) is a bad request; the gate on Start of
+    // Turn and a reveal that cannot be taken back while setup stands are conflicts with the game as it is (issue #374)
+    case 'SETUP_REFUSED':
+      return 400
+    case 'SETUP_INCOMPLETE':
+    case 'CIV_REVEAL_SETUP_STARTED':
+      return 409
     case 'ASSISTED_ACTION_ALREADY_UNDONE':
     case 'ASSISTED_UNDO_BLOCKED':
     case 'BOARD_UNDO_ASSISTED':

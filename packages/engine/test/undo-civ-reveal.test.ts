@@ -17,14 +17,14 @@ import { chooseTech, discardItem, removeTech, revealItem } from '../src/actions/
 import { markPhasesDone } from '../src/actions/turn.js'
 import { canInitiateUndo, initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/undo.js'
 import { DEFAULT_GOVERNMENT } from '../src/government.js'
-import { areaAt, findBoardAsset, playerAreas, remainingBoardAssetCount } from '../src/board.js'
+import { findBoardAsset, remainingBoardAssetCount } from '../src/board.js'
 import { isUnit, itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameLogEntry, GameState } from '../src/state.js'
 import { findPlayer, toPlayerView, withPlayer } from '../src/state.js'
 import { turnHolder } from '../src/turn.js'
 
-import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame, withSetupDone } from './fixture.js'
 
 const handOf = (state: GameState, playerId: string) => findPlayer(state, playerId)?.items ?? []
 const wondersOnBoard = (state: GameState) =>
@@ -68,7 +68,7 @@ function revealEveryCiv(start: GameState): GameState {
   for (const playerId of order) {
     state = unwrap(draw(state, { playerId, sheetName: 'CIV' }))
     state = revealHidden(state, playerId)
-    state = unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
+    state = unwrap(markPhasesDone(withSetupDone(state, playerId), { playerId, turnNumber: 1, upToPhase: 'SOT' }))
   }
   return state
 }
@@ -128,7 +128,7 @@ describe('undo of a civilization reveal', () => {
 
   it('lets the former owner reveal again out of turn after the undo', () => {
     let state = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Germans'), CASH1981)
-    state = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    state = unwrap(markPhasesDone(withSetupDone(state, CASH1981), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
     expect(turnHolder(state)?.playerId).not.toBe(CASH1981)
 
     const undone = undoByVote(state, CASH1981)
@@ -508,7 +508,7 @@ describe('undo of a civilization reveal', () => {
       for (const playerId of order) {
         if (playerId !== CASH1981) start = unwrap(draw(start, { playerId, sheetName: 'CIV' }))
         start = revealHidden(start, playerId)
-        start = unwrap(markPhasesDone(start, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
+        start = unwrap(markPhasesDone(withSetupDone(start, playerId), { playerId, turnNumber: 1, upToPhase: 'SOT' }))
       }
       expect(wondersOnBoard(start)).toHaveLength(5)
 
@@ -623,34 +623,25 @@ describe("the Arabs' starting resources", () => {
 })
 
 describe.each([
-  ['Chinese', 'cities/redcapitalwalled2', 'walled capital marker'],
-  ['Indians', 'cities/redmetropolis2', 'metropolis marker'],
-])('the %s city marker', (civ, assetId, label) => {
+  ['Chinese', 'cities/redcapitalwalled2'],
+  ['Indians', 'cities/redmetropolis2'],
+])('the %s city marker', (civ, assetId) => {
   const markers = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId === assetId)
 
-  it('is put in the own area on the reveal with a public line, and only one', () => {
+  it('is not handed out on the reveal any more: setup creates it, and the reveal only marks setup as required', () => {
     const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
-    const [marker, ...rest] = markers(revealed)
-    expect(rest).toEqual([])
-    if (marker === undefined) throw new Error(`no ${assetId} on the board`)
-    expect(marker.placedBy).toBe(CASH1981)
-    expect(areaAt(playerAreas(revealed.board, revealed.players), marker.x + marker.width / 2, marker.y + marker.height / 2)?.playerId).toBe(CASH1981)
-    expect(revealed.log.some((entry) => entry.publicLog === `cash1981 has the ${label} in their area to place as the ${civ}`)).toBe(true)
-    // Nobody else gets one, and another civilization gets none
-    expect(markers(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toHaveLength(0)
+    expect(markers(revealed)).toEqual([])
+    expect(revealed.log.some((entry) => entry.publicLog.includes('marker in their area'))).toBe(false)
+    expect(findPlayer(revealed, CASH1981)?.setup).toEqual({ required: true, finished: false, placed: [], historyIds: [] })
+    // Nobody else's reveal opens a setup for them
+    expect(findPlayer(revealed, KARANDRAS1)?.setup).toBeUndefined()
   })
 
-  it('goes with the reveal undo, and a new reveal hands out one again', () => {
+  it('goes with the reveal undo when setup has not started, and a new reveal opens setup again', () => {
     const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
     const undone = undoByVote(revealed, CASH1981)
     expect(markers(undone)).toHaveLength(0)
-    expect(markers(revealHidden(undone, CASH1981))).toHaveLength(1)
-  })
-
-  it('adds no second one when the player already placed it by hand', () => {
-    const placed = unwrap(placePiece(firstCivGame(), { playerId: CASH1981, assetId, x: 0, y: 0 }))
-    const revealed = revealHidden(giveCiv(placed, CASH1981, civ), CASH1981)
-    expect(markers(revealed)).toHaveLength(1)
-    expect(revealed.log.some((entry) => entry.publicLog.includes(label))).toBe(false)
+    expect(findPlayer(undone, CASH1981)?.setup).toBeUndefined()
+    expect(findPlayer(revealHidden(undone, CASH1981), CASH1981)?.setup?.required).toBe(true)
   })
 })

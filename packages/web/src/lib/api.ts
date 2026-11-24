@@ -32,6 +32,7 @@ import type {
   HarvestOption,
   HighscoreResult,
   Government,
+  GrowDirection,
   Item,
   OutskirtsSquare,
   PlayerStatKey,
@@ -40,6 +41,8 @@ import type {
   RevealedEntry,
   ResourceKind,
   ScoutSquare,
+  SetupFigure,
+  SetupView,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -78,6 +81,7 @@ export type {
   HarvestOption,
   HighscoreResult,
   Government,
+  GrowDirection,
   Item,
   OutskirtsSquare,
   PlayerStatKey,
@@ -86,6 +90,8 @@ export type {
   RevealedEntry,
   ResourceKind,
   ScoutSquare,
+  SetupFigure,
+  SetupView,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -96,6 +102,19 @@ export type {
   WaitingFor,
   WinnerEntry,
 }
+
+/**
+ * One request to `POST /api/games/:id/setup` (#374): a capital, a figure, the starting trade or Egypt's wonder, or its undo.
+ * The shape is the one the server's strict parser takes; whether the square is legal is the engine's decision.
+ * `direction` is only for the Indian metropolis (the neighbouring central square it also covers lies that way).
+ */
+export type SetupRequestBody =
+  | { readonly step: 'capital'; readonly column: number; readonly row: number; readonly direction?: GrowDirection }
+  | { readonly step: 'figure'; readonly figure: SetupFigure; readonly column: number; readonly row: number }
+  | { readonly step: 'trade' }
+  | { readonly step: 'wonder'; readonly column: number; readonly row: number }
+  | { readonly undo: true; readonly step: 'capital' | 'trade' | 'wonder' }
+  | { readonly undo: true; readonly step: 'figure'; readonly figure: SetupFigure }
 
 /** One server-backed page of the Revealed and Discarded Items feed (issue #51). */
 export interface RevealedPage {
@@ -871,6 +890,13 @@ export const api = {
       args,
       ...(confirmedRepeat ? { confirmedRepeat } : {}),
     }),
+  /**
+   * One setup step before turn 1 (#374), or its solo undo. `requestId` is accepted and checked by the server but not stored: a repeat is
+   * harmless because every step is idempotent. `rev` is the revision the caller saw. The great person is `performAction('setupGreatPerson')`
+   * and the social policy is `chooseSocialPolicy`.
+   */
+  setup: (gameId: string, body: SetupRequestBody, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/setup`, { ...body, requestId, rev }),
   /**
    * The card choice after a culture advance: the same route as `performAction`,
    * with the reward and the card to keep. The request id is kept like any other.
