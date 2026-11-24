@@ -115,6 +115,8 @@ describe('repositioning a built figure', () => {
     const squares = await screen.findAllByRole('button', { name: /Put Red army on .* instead/ })
     expect(squares.map((square) => square.textContent)).toEqual(['C2', 'A2'])
     await screen.findByText(/Built this turn: click a blue square/)
+    // The free Move button would bypass the Movement rules, also while the blue squares are up
+    expect(screen.queryByRole('button', { name: 'Move' })).toBeNull()
     fireEvent.click(squares[0] as HTMLElement)
 
     await waitFor(() => expect(reposition).toHaveBeenCalledWith('game', 'army-1', 2, 1))

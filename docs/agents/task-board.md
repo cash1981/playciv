@@ -9,14 +9,7 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-### reposition-built-figure
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `fix/reposition-built-figure`
-- **Brief:** `docs/agents/tasks/reposition-built-figure.md`
-- **Status:** in progress
-- **Claimed paths:** `packages/engine/src/build-reposition.ts`, `packages/engine/src/build-options.ts` (append), `packages/engine/src/state.ts` (own view field), `packages/engine/src/index.ts`, `packages/server/src/routes/board.ts`, `packages/web/src/views/BoardView.tsx`, `packages/web/src/views/GameView.tsx`, `packages/web/src/lib/api.ts`
-- **Notes:** small, self-contained; mergeable into `feat/civ-abilities-romans-chinese-spain` (#373)
+_None._
 
 ## Format
 
@@ -40,8 +33,8 @@ Rewritten wholesale, so only one task may own each at a time. Claim by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | reposition-built-figure |
-| `packages/web/src/lib/api.ts` | reposition-built-figure |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
+| `packages/web/src/lib/api.ts` | free |
 
 ## Queue
 
