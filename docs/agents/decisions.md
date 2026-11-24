@@ -1555,7 +1555,9 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   (`playCard`) gives the Arab culture too and its undo takes it back. The vote undo of a Roman advance (wonder, city),
   an Arab invest with a free advance, Mother Teresa, Sydney Opera House and a Zulu city that collected huts seals the
   board Undo (`undoFloor`), since their reversal writes its own board moves. A plain Advance button is still not sealed.
-  Spanish saves revealed before the +1 get `2+1` once on load (`migrate.ts`, only when the movement is still `2`).
+  Spanish saves revealed before Spain's +1 are migrated once per game (`GameState.spanishMovementMigrated`, set by
+  `createGame` and on the first load, never projected): a plain `2` becomes `3`, and a legacy `b+k` becomes
+  `(b+1)+(k-1)`, which keeps the army and scout speed with Sailing and Natural Religion; later edits are never touched.
 - A Zulu hut on the city's own square is collected too, like the huts around it. The founding
   line names the huts that were collected and says which stayed on the map (no card left).
 - **Aztecs (free units for Great Persons):** "each time they gain a great person, may build 2 unlocked units of their

@@ -159,7 +159,7 @@ function withSpanishMovement(
     // of the base, so `2+k` becomes `3+(k-1)` (`3` for `2+1`). The reveal line's `civSetup.mvmt.set` follows, so that undoing
     // the reveal still finds the value it set and restores `before`.
     // Any typed base counts (`4+1` with Sailing gave 5; read the new way it would give 6): `b+k` is `(b+1)+(k-1)`, which keeps
-    // the speed with and without a tech and with Natural Religion. A `+0` term gave Spain nothing then and reads the same now.
+    // the speed with and without a tech and with Natural Religion. A `+0` term gave Spain nothing then and is left alone (it reads as base plus Spain's 1 now).
     const legacy = /^(\d+)((?:\+\d+)+)$/.exec(player.stats.mvmt.trim())
     const extra = legacy === null ? 0 : (legacy[2] ?? '').split('+').reduce((total, part) => total + (part === '' ? 0 : Number(part)), 0)
     if (legacy !== null && extra >= 1) {

@@ -21,7 +21,9 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);
   the player corrects the culture counter by hand to undo it. The same refusal applies to the End battle undo of an
   Aztec reward that is spent. The Spanish migration cannot tell an old save from a Spanish player who typed `2` on
-  purpose when no reveal setup records the choice: that `2` is set to `2+1` on load. The Spanish free-building credit
+  purpose when no reveal setup records the choice: that `2` is set to `2+1` on load. The Chinese casualties that may still be saved are kept out of every discard reshuffle until the Chinese save
+  or the next battle starts (there is no decline action), so an empty unit deck can answer `NO_MORE_ITEMS` meanwhile. A
+  Spanish `3+1` saved by an earlier build of this branch (no migration marker) loads as `4`. The Spanish free-building credit
   counts every tile explored, also one the players later move or remove by hand, and a great person drawn by hand in
   the Draw panel gives the Greeks and Aztecs nothing extra.
 - **Killed units and the Chinese save (#368):** End battle discards only the players' killed units; killed barbarians
