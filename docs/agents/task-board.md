@@ -40,8 +40,8 @@ Rewritten wholesale, so only one task may own each at a time. Claim by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | reposition-built-figure |
+| `packages/web/src/lib/api.ts` | reposition-built-figure |
 
 ## Queue
 
