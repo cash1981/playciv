@@ -7,14 +7,14 @@
  * what makes this the same donation to the same account. The Patreon link the
  * old footer also had is dropped on purpose — see docs/agents/decisions.md.
  *
- * Beside it sits a link to the Buy Me a Coffee membership page, added later at
- * the human's request (there was none in the old footer). It replaced an
- * earlier one-off "Buy me a coffee" button. Like Patreon, it is a plain link,
- * not their JavaScript widget.
+ * Beside it sits the Buy Me a Coffee button, added later at the human's request
+ * (there was none in the old footer). It replaced a "Become a member" link to
+ * the membership page. Like Patreon, it is a plain link with their button
+ * image, not their JavaScript widget.
  */
 
-// The recurring membership page on the same Buy Me a Coffee account.
-const BUYMEACOFFEE_MEMBERSHIP_URL = 'https://buymeacoffee.com/cash1981/membership'
+const BUYMEACOFFEE_URL = 'https://www.buymeacoffee.com/cash1981'
+const BUYMEACOFFEE_BUTTON = 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png'
 
 // The encrypted hosted-button value from old-civ-web/app/index.html.
 const PAYPAL_ENCRYPTED_BUTTON =
@@ -60,11 +60,15 @@ export function Footer(): React.JSX.Element {
         </form>
         <a
           className="site-footer-member"
-          href={BUYMEACOFFEE_MEMBERSHIP_URL}
+          href={BUYMEACOFFEE_URL}
           target="_blank"
           rel="noopener noreferrer"
         >
-          Become a member
+          <img
+            src={BUYMEACOFFEE_BUTTON}
+            alt="Buy Me a Coffee"
+            style={{ height: 60, width: 217 }}
+          />
         </a>
       </div>
     </footer>

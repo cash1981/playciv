@@ -36,11 +36,14 @@ describe('Footer', () => {
     expect(encrypted?.endsWith('-----END PKCS7-----')).toBe(true)
   })
 
-  it('links to the Buy Me a Coffee membership page beside the PayPal form', () => {
+  it('shows the Buy Me a Coffee button beside the PayPal form', () => {
     const { container } = render(<Footer />)
 
-    const link = screen.getByRole('link', { name: 'Become a member' })
-    expect(link.getAttribute('href')).toBe('https://buymeacoffee.com/cash1981/membership')
+    const link = screen.getByRole('link', { name: 'Buy Me a Coffee' })
+    expect(link.getAttribute('href')).toBe('https://www.buymeacoffee.com/cash1981')
+    expect(link.querySelector('img')?.getAttribute('src')).toBe(
+      'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png',
+    )
     expect(link.getAttribute('target')).toBe('_blank')
     expect(link.getAttribute('rel')).toBe('noopener noreferrer')
 
@@ -49,10 +52,10 @@ describe('Footer', () => {
     expect(support?.contains(link)).toBe(true)
   })
 
-  it('no longer shows the one-off Buy me a coffee button', () => {
+  it('no longer has the Become a member link', () => {
     const { container } = render(<Footer />)
-    expect(screen.queryByRole('link', { name: 'Buy me a coffee' })).toBeNull()
-    expect(container.innerHTML).not.toContain('img.buymeacoffee.com')
+    expect(screen.queryByRole('link', { name: 'Become a member' })).toBeNull()
+    expect(container.innerHTML).not.toContain('/membership')
   })
 
   it('does not carry the Patreon link the old footer also had', () => {
