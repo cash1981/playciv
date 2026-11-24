@@ -1013,6 +1013,12 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   village is left, the move stands and the token stays on its square, to be drawn by hand as before. Flight cannot end on a
   hut or village, so it collects none. Tests: `tile-tokens`, `BoardView`.
 - **Not done:** automated battle, loot and figure removal.
+- **Overlay only in Movement** (human, 2026-11-24): the yellow movement squares of a
+  selected figure are drawn only while the viewer's current phase is Movement
+  (`currentPhaseOf`; none after every phase is done). Before that players are just
+  arranging. The figure is still a movement figure in every phase: no free Move button
+  and a drag only arranges it inside its square, so the Movement rules are not bypassed.
+  Test: `BoardView.reposition.test.tsx`, `GameView.test.tsx`.
 
 Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`), `actions/board.ts`
 (`travelFigure`), `actions/tile-tokens.ts`, `actions/token-collection.ts`, `tile-icons.ts`, `disband.ts`, `explore.ts`, `actions/explore.ts`, `actions/draw.ts`
@@ -1636,8 +1642,25 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   the record's `phase` reads CM when every phase is done.
 - No automatic city-action-used marker for the phase: the player ends City
   Management themselves (human).
+- **Reposition a built figure** (human, 2026-11-24): an army or scout that a Build
+  placed can be put on another legal square of the same city, free, while that City
+  Management is open (the `takeBackOpenBuild` boundary: applied build, owner, current
+  turn, CM not marked done). Nothing is paid or refunded and the build stays one
+  applied action. The squares are the build's own rules (`figureSquaresFor`:
+  outskirts, a capital's held city-states, Navy at a Shipyard, stacking, water,
+  blockade) computed without the figure itself, and its own square is not offered.
+  Refused when the figure has travelled this turn, was dragged off its square, or a
+  later applied action names it (a scout sent to a city, a city founded). The build's
+  record follows the figure (`square`, `position`) so its undo vote still removes it,
+  and the move's board history entry is listed in `effect.repositioned` so the board
+  Undo, which is sealed for a build's entries, cannot send the figure back. One
+  public history line, no new log line. Buildings, wonders, units and walls are not
+  moved. The list `you.repositionableFigures` is own view only and blanked in a
+  replay; the web shows blue squares for the selected figure. The `/travel` route
+  was not given a phase check. Tests: `build-reposition.test.ts`,
+  `board-reposition-api.test.ts`, `BoardView.reposition.test.tsx`.
 
-Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`,
+Source: `engine/src/build-options.ts`, `build-reposition.ts`, `city-actions.ts`, `building-data.ts`,
 `wonder-data.ts`, `assisted.ts` (`build`, `startBuildingProgram`,
 `upgradeBuildings`, `takeBackOpenBuild`), `actions/board.ts`,
 `server/src/routes/board.ts`, `web/src/views/BuildPicker.tsx`, `CityActions.tsx`,
