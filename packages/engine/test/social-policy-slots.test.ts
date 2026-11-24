@@ -10,7 +10,8 @@ import { chooseSocialPolicy, removeSocialPolicy, setPlayerGovernment } from '../
 import { unwrap, unwrapErr } from '../src/result.js'
 import { socialPolicySlots } from '../src/social-policy-slots.js'
 import type { GameState, Playerhand } from '../src/state.js'
-import { findPlayer, toPlayerView } from '../src/state.js'
+import { findPlayer, toPlayerView, withPlayer } from '../src/state.js'
+import { ownCityPieces } from '../src/city-founding.js'
 
 import { withCivilization } from './culture-advance-fixture.js'
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -59,6 +60,30 @@ describe('socialPolicySlots', () => {
     expect(slots(french)).toEqual({ maximum: 2, held: 0, free: 2 })
     expect(slots(withCities(french, 1))).toEqual({ maximum: 2, held: 0, free: 2 })
     expect(slots(withCities(french, 2))).toEqual({ maximum: 3, held: 0, free: 3 })
+  })
+
+  it('holds a player whose setup is finished to the cities they really have: no floor of one, the French keep their extra', () => {
+    const finished = (state: GameState): GameState =>
+      withPlayer(state, { ...me(state), setup: { required: true, finished: true, placed: [], historyIds: [] } })
+    const game = finished(firstCivGame())
+    expect(slots(game)).toEqual({ maximum: 0, held: 0, free: 0 })
+    expect(unwrapErr(choose(game, policyNames(game, 1)[0] as string)).kind).toBe('SOCIAL_POLICY_LIMIT')
+    expect(slots(withCities(game, 1)).maximum).toBe(1)
+    expect(slots(finished(withCivilization(firstCivGame(), 'French'))).maximum).toBe(1)
+    // Until setup is finished the starting policy can come before the capital
+    const open = withPlayer(firstCivGame(), { ...me(firstCivGame()), setup: { required: true, finished: false, placed: [], historyIds: [] } })
+    expect(slots(open).maximum).toBe(1)
+  })
+
+  it('counts a city piece only when its centre is on the map: not off the board, not in a player area', () => {
+    const game = withCities(firstCivGame(), 1)
+    expect(ownCityPieces(game, me(game))).toHaveLength(1)
+    const moved = (x: number, y: number): GameState => ({
+      ...game,
+      board: { ...game.board, pieces: game.board.pieces.map((piece) => (piece.category === 'city' ? { ...piece, x, y } : piece)) },
+    })
+    expect(ownCityPieces(moved(-4000, -4000), me(game))).toHaveLength(0)
+    expect(slots(moved(-4000, -4000)).maximum).toBe(1) // only the floor of the starting policy
   })
 
   it("does not count another player's city", () => {

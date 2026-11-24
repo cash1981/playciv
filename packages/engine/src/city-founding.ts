@@ -10,7 +10,7 @@
  */
 
 import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
-import { areaAt, isMapCell, mapTop, playerAreas, whiteFigureCivilization } from './board.js'
+import { isMapCell, mapTop, whiteFigureCivilization } from './board.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import type { GameState, Playerhand } from './state.js'
@@ -27,20 +27,17 @@ export const cityLimitOf = (player: Playerhand): number =>
     : MAX_CITIES
 
 /**
- * The player's city pieces on the board: a capital, a city or a metropolis is one each. A city piece that lies in a
- * player area is not on the map yet: the walled capital and the metropolis marker of the Chinese and the Indians waited there
- * in a game revealed before setup existed (setup now places them, `setCapital`), and a marker in the area is not a city. The piece's centre decides,
- * as it does for `locationOf`.
+ * The player's city pieces on the board: a capital, a city or a metropolis is one each. A city piece counts only when its
+ * centre is on a playable map square: one lying in a player area (the walled capital and the metropolis marker of the Chinese
+ * and the Indians wait there in a game revealed before setup existed, `setCapital` places them now), in the wonders area, in a
+ * gutter or over a hole in a stepped map has no city footprint and is not a city. The piece's centre decides, as it does for
+ * `locationOf`.
  */
 export function ownCityPieces(state: GameState, player: Playerhand): readonly BoardPiece[] {
   const colour = player.color?.toLowerCase()
   if (colour === undefined) return []
-  const areas = playerAreas(state.board, state.players)
   return state.board.pieces.filter(
-    (piece) =>
-      piece.category === 'city' &&
-      pieceColorOf(piece) === colour &&
-      areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2) === undefined,
+    (piece) => piece.category === 'city' && pieceColorOf(piece) === colour && mapCellOf(state.board, piece) !== null,
   )
 }
 

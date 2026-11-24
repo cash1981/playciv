@@ -22,11 +22,15 @@ export interface SocialPolicySlots {
 }
 
 /**
- * The policy maximum of a player. It is at least one city, so the starting policy can be chosen before the capital is placed
- * (step 1 of Player Setup), and one more for the French.
+ * The policy maximum of a player: their built cities, and one more for the French. Until setup is finished it is at least one
+ * city, so the starting policy can be chosen before the capital is placed (step 1 of Player Setup). A player whose setup is
+ * finished is held to the cities they really have, so losing the last one leaves no slot. A game saved before setup existed
+ * has no setup record and keeps the floor.
  */
 export function socialPolicyMaximumOf(state: GameState, player: Playerhand): number {
-  return Math.max(1, ownCityPieces(state, player).length) + (player.civilization?.name === FRENCH ? 1 : 0)
+  const cities = ownCityPieces(state, player).length
+  const counted = player.setup?.finished === true ? cities : Math.max(1, cities)
+  return counted + (player.civilization?.name === FRENCH ? 1 : 0)
 }
 
 /** The policies a player adopts in setup: one, and one more for the French. */

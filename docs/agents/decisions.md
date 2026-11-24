@@ -548,6 +548,8 @@ combatant for a card.
 - **Joan of Arc:** the defender only, discarded, adds the unspent culture the player has when playing it (the culture
   is not spent). Refused with no culture. "At the start of a battle" is not enforced, as with Leonidas (the arena
   has no start): she can be played until End battle.
+- **Florence Nightingale after End battle** is refused (and saves nothing) when none of the killed units' discarded cards is
+  still on the pile (a reshuffle took them); only units whose cards come back are marked saved and counted.
 - **Florence Nightingale:** discarded; every killed unit of the player, also one a later unit replaced on its
   front, gets `ArenaUnit.saved`, shown as SAVED. It still counts as killed for the result, and End battle does not discard
   its card. Refused when none of the player's units is killed. She is played "after a battle" (human
@@ -1569,7 +1571,7 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   back and is refused (`BOARD_UNDO_SPANISH_BUILDING_USED`) when it is spent. The build reuses effect kind
   `gianniniBuild`, so its seals apply.
 - **Philosophy and great person draws:** Philosophy draws as a Great Person space does (`rewardDrawCount`: one,
-  +1 Organized Religion, +1 Greeks), keeping one through a pending reward whose choice takes the marker
+  +1 Organized Religion, +1 Greeks; Organized Religion adds nothing in Anarchy), keeping one through a pending reward whose choice takes the marker
   (the Greeks' extra draw is for every assisted great person gain).
 - **Aztec great person units:** each great person kept gives 2 free-unit credits (`assisted-aztecs.ts`, buttons per
   unlocked unit type like Attila's Village); undoing the gain takes back the unused credits only, and undoing a use is
@@ -1678,9 +1680,12 @@ Human, 2026-11-24: keep the flow (the player is scrolled to the Social policy pa
 policy, the pick after a new city and a limit. Rule: Wisdom and Warfare rulebook p. 10, "Social Policies". Engine:
 `social-policy-slots.ts` (`socialPolicySlots`, `startingSocialPolicies`), `chooseSocialPolicy`.
 
-- **Derived, never stored:** `maximum = max(1, own city pieces) + (French ? 1 : 0)` (`ownCityPieces`: capital, city and
-  metropolis pieces of the player's colour on the map; a conquered city counts like any other city piece), `held` = policies
-  held, `free = max(0, maximum - held)`. The `max(1, ...)` lets the starting policy be chosen before the capital is placed. A
+- **Derived, never stored:** `maximum = cities + (French ? 1 : 0)` (`ownCityPieces`: capital, city and metropolis pieces of
+  the player's colour whose centre is on a playable map square, so a marker in a player area, the wonders area, a gutter or
+  off the board does not count; a conquered city counts like any other city piece), `held` = policies held,
+  `free = max(0, maximum - held)`. Until the player's setup is finished `cities` is at least 1, so the starting policy can be
+  chosen before the capital is placed; after it the real count rules, so losing the last city leaves no slot (a game saved
+  before setup existed has no setup record and keeps the floor). A
   manual city, a conquest, a nuke or an undo of the city moves the maximum with no bookkeeping.
 - **Enforced on choosing only:** `chooseSocialPolicy` answers `SOCIAL_POLICY_LIMIT` (400) when `free` is 0, after the
   already-held and flipside checks. Removing is unchanged, so a switch (Bureaucracy, culture cards) is remove then choose.

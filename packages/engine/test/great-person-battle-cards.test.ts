@@ -355,6 +355,35 @@ describe('Florence Nightingale after End battle', () => {
     expect(card.reason).toContain('just ended')
   })
 
+  it('is refused, and saves nothing, when End battle has discarded the card and a reshuffle has since taken it off the pile', () => {
+    const { state, cardId } = ended()
+    // The exhausted deck reshuffled the discard pile into the deck: the killed unit's card is no longer on it
+    const reshuffled: GameState = { ...state, discardedItems: [] }
+    const card = statusOf(reshuffled, CASH1981, 'Florence Nightingale')
+    expect(card.status).toBe('wrong-phase')
+    expect(card.reason).toContain('no longer on the discard pile')
+    expect(unwrapErr(play(reshuffled, CASH1981, cardId)).kind).toBeDefined()
+  })
+
+  it('marks as saved, and counts, only the killed units whose cards are still on the pile', () => {
+    let fought = fight(2, 2)
+    for (const unit of fought.battle!.arena.filter((candidate) => candidate.placedBy === CASH1981)) {
+      fought = unwrap(killArenaUnit(fought, { playerId: CASH1981, arenaUnitId: unit.id }))
+    }
+    const { state, cardId } = holding(fought, 'Florence Nightingale', CASH1981)
+    const over = unwrap(endBattleAction(state, { playerId: KARANDRAS1 }))
+    const killed = over.endedBattle!.battle.arena.filter((unit) => unit.placedBy === CASH1981 && unit.killed)
+    expect(killed).toHaveLength(2)
+    // A reshuffle took one of the two cards off the pile
+    const gone = killed[0]!.unit.id
+    const partial: GameState = { ...over, discardedItems: over.discardedItems.filter((item) => item.id !== gone) }
+    const after = unwrap(play(partial, CASH1981, cardId))
+    const saved = after.endedBattle!.battle.arena.filter((unit) => unit.placedBy === CASH1981 && unit.saved === true)
+    expect(saved.map((unit) => unit.unit.id)).toEqual([killed[1]!.unit.id])
+    expect(after.log.at(-1)?.publicLog).toContain('saving 1 killed unit: they go back to the hand')
+    expect(findPlayer(after, CASH1981)!.items.some((item) => item.id === killed[1]!.unit.id)).toBe(true)
+  })
+
   it('marks the killed units of the final arena as saved, and the undo takes the mark back', () => {
     const { state, cardId } = ended()
     const after = unwrap(play(state, CASH1981, cardId))

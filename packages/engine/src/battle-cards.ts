@@ -110,6 +110,19 @@ export function healsDone(state: GameState, actionId: string): number {
   return entries.find((entry) => entry.actionId === actionId)?.healed ?? 0
 }
 
+/** The discarded cards of `killed` that End battle put on the pile and that are still there, for their owner to take back. */
+function recoverableKilled(
+  state: GameState,
+  ended: NonNullable<GameState['endedBattle']>,
+  playerId: string,
+  killed: readonly ArenaUnit[],
+): readonly DiscardedKilledCard[] {
+  const cardIds = new Set(killed.map((unit) => unit.unit.id))
+  return (ended.killedDiscarded ?? []).filter(
+    (record) => record.ownerId === playerId && cardIds.has(record.cardId) && killedCardOnPile(state, record),
+  )
+}
+
 /**
  * Why the player cannot play a battle card now, or `undefined` when they can. Leonidas and Joan of Arc are for the
  * defender; Leonidas also needs fewer units played than the opponent, which is judged when it is played.
@@ -142,8 +155,15 @@ export function battleCardBlock(state: GameState, player: Playerhand, name: stri
       return (battle.zhukov ?? []).some((entry) => entry.playerId === player.playerId)
         ? 'Georgy Zhukov has already been played in this battle.'
         : undefined
-    case NIGHTINGALE:
-      return killedOf(battle, side).length === 0 ? 'None of your units has been killed in this battle.' : undefined
+    case NIGHTINGALE: {
+      const killed = killedOf(battle, side)
+      if (killed.length === 0) return 'None of your units has been killed in this battle.'
+      // After the battle only a card still on the discard pile can come back: a reshuffle may have taken it into the deck
+      if (state.battle === null && state.endedBattle !== null && recoverableKilled(state, state.endedBattle, player.playerId, killed).length === 0) {
+        return 'None of your killed units can come back: their cards are no longer on the discard pile.'
+      }
+      return undefined
+    }
     default:
       return undefined
   }
@@ -180,7 +200,11 @@ export function applyBattleCard(
     const own = target === null ? null : playerSideOf(target, player.playerId)
     if (target === null || own === null) return undefined
     const killed = killedOf(target, own)
-    const saved = killed.map((unit) => unit.id)
+    // After the battle only the units whose cards can come back are saved
+    const returned = ended === null ? [] : recoverableKilled(state, ended, player.playerId, killed)
+    const savedUnits = ended === null ? killed : killed.filter((unit) => returned.some((record) => record.cardId === unit.unit.id))
+    if (ended !== null && returned.length === 0) return undefined
+    const saved = savedUnits.map((unit) => unit.id)
     const mark = (unit: ArenaUnit): ArenaUnit => (saved.includes(unit.id) ? { ...unit, saved: true } : unit)
     const marked = { ...target, arena: target.arena.map(mark), departedUnits: target.departedUnits.map(mark) }
     if (ended === null) {
@@ -191,14 +215,10 @@ export function applyBattleCard(
       }
     }
     // After the battle End battle has discarded the killed units' cards: the saved ones go back to the hand
-    const cardIds = new Set(killed.map((unit) => unit.unit.id))
-    const returned = (ended.killedDiscarded ?? []).filter(
-      (record) => record.ownerId === player.playerId && cardIds.has(record.cardId) && killedCardOnPile(state, record),
-    )
     const back = returned.reduce((next, record) => returnKilledCard(next, record), state)
     return {
       state: { ...back, endedBattle: { ...ended, battle: marked } },
-      effect: { battleId: target.id, saved, ...(returned.length === 0 ? {} : { returned }) },
+      effect: { battleId: target.id, saved, returned },
       said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they go back to the hand`,
     }
   }
