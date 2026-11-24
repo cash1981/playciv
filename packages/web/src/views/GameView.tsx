@@ -34,7 +34,7 @@ import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary, handItemId } from './PhaseSummary.js'
-import { PhaseActionsPanel } from './PhaseTabs.js'
+import { PhaseActionsPanel, notYourTurnQuestion } from './PhaseTabs.js'
 import { PlayerStatusSidebar } from './PlayerStatusSidebar.js'
 import { MapPickerContext } from './mapPick.js'
 import type { MapPicker, MapPickRequest } from './mapPick.js'
@@ -45,6 +45,7 @@ import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { focusPlayer } from './turnFocus.js'
 import { AutoRefreshSwitch } from './AutoRefresh.js'
+import { EndGameDialog } from './EndGameDialog.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { DigitInput } from './DigitInput.js'
 import { groupByOldClientBucket } from './itemBuckets.js'
@@ -289,6 +290,9 @@ export function GameView({
   const [view, setView] = useState<PlayerView | null>(null)
   const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
+  // The same actions the site menu gets, so End game can also sit in the header.
+  const [menuActions, setMenuActions] = useState<GameMenuActions | null>(null)
+  const [showEndGame, setShowEndGame] = useState(false)
   const [historical, setHistorical] = useState<GameRevisionView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -458,10 +462,11 @@ export function GameView({
     const busyNow = busy || (selectedRevision !== null && historical !== null)
     const gate = gameMenuGate(currentView, player?.role === 'admin', busyNow)
     if (gate === null) {
+      setMenuActions(null)
       onGameActions(null)
       return
     }
-    onGameActions({
+    const actions: GameMenuActions = {
       ...gate,
       // A replayed revision of an ended game was still active at that point,
       // so End game follows the live game, not the revision on screen.
@@ -509,7 +514,9 @@ export function GameView({
           }
         })()
       },
-    })
+    }
+    setMenuActions(actions)
+    onGameActions(actions)
     return () => onGameActions(null)
   }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, reload, run])
 
@@ -611,6 +618,17 @@ export function GameView({
   return (
     <MapPickerContext.Provider value={mapPicker}>
       <>
+      {showEndGame && menuActions !== null && menuActions.canEnd && (
+        <EndGameDialog
+          players={menuActions.endPlayers}
+          busy={menuActions.endDisabled}
+          onClose={() => setShowEndGame(false)}
+          onConfirm={(winner) => {
+            setShowEndGame(false)
+            menuActions.onEnd(winner)
+          }}
+        />
+      )}
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
           {/* Civ, then colour, then the name in the title: who is up (the
@@ -630,6 +648,17 @@ export function GameView({
             seconds={AUTO_REFRESH_MS / 1000}
             onToggle={() => setAutoRefresh((v) => !v)}
           />
+          {/* A shortcut to the menu's End game: players missed it in the hamburger menu. */}
+          {menuActions !== null && menuActions.canEnd && (
+            <button
+              type="button"
+              className="small danger"
+              disabled={menuActions.endDisabled}
+              onClick={() => setShowEndGame(true)}
+            >
+              End game
+            </button>
+          )}
         </div>
 
         {!ended && <PhaseSummary view={displayedView} />}
@@ -683,6 +712,7 @@ export function GameView({
         movementTurn={displayedView.activeTurn?.turnNumber ?? null}
         movementLocks={displayedView.communismLocks}
         movementForbidden={movementForbidden}
+        outOfTurnQuestion={notYourTurnQuestion(displayedView)}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         statusSidebar={
           <PlayerStatusSidebar

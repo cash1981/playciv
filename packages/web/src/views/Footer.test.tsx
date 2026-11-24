@@ -36,24 +36,23 @@ describe('Footer', () => {
     expect(encrypted?.endsWith('-----END PKCS7-----')).toBe(true)
   })
 
-  it('shows the Buy Me a Coffee button beside the PayPal form', () => {
+  it('links to the Buy Me a Coffee membership page beside the PayPal form', () => {
     const { container } = render(<Footer />)
 
-    const link = screen.getByRole('link', { name: 'Buy me a coffee' })
-    expect(link.getAttribute('href')).toBe('https://www.buymeacoffee.com/cash1981')
+    const link = screen.getByRole('link', { name: 'Become a member' })
+    expect(link.getAttribute('href')).toBe('https://buymeacoffee.com/cash1981/membership')
     expect(link.getAttribute('target')).toBe('_blank')
     expect(link.getAttribute('rel')).toBe('noopener noreferrer')
 
-    const image = within(link).getByRole('img', { name: 'Buy me a coffee' })
-    const src = image.getAttribute('src') ?? ''
-    expect(src.startsWith('https://img.buymeacoffee.com/button-api/?')).toBe(true)
-    expect(src).toContain('slug=cash1981')
-
-    // It sits in the same right-hand area as the donate form, so it shows
-    // wherever the footer does.
     const support = container.querySelector('.site-footer-support')
     expect(support?.querySelector('form')).toBeTruthy()
-    expect(support?.querySelector('a.site-footer-coffee')).toBe(link)
+    expect(support?.contains(link)).toBe(true)
+  })
+
+  it('no longer shows the one-off Buy me a coffee button', () => {
+    const { container } = render(<Footer />)
+    expect(screen.queryByRole('link', { name: 'Buy me a coffee' })).toBeNull()
+    expect(container.innerHTML).not.toContain('img.buymeacoffee.com')
   })
 
   it('does not carry the Patreon link the old footer also had', () => {

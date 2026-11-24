@@ -126,6 +126,8 @@ interface Props {
   readonly movementLocks?: readonly { readonly column: number; readonly row: number }[]
   /** Squares the viewer's figures may not end a move on: the outskirts of another player's Brandenburg Gate. */
   readonly movementForbidden?: readonly { readonly column: number; readonly row: number }[]
+  /** Asked before a figure moves or explores when it is not the viewer's turn; `null` when it is. */
+  readonly outOfTurnQuestion?: string | null
   /** The player status sidebar, drawn to the right of the map (below it on a narrow screen). */
   readonly statusSidebar?: ReactNode
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
@@ -359,6 +361,7 @@ export function BoardView({
   movementTurn = null,
   movementLocks = [],
   movementForbidden = [],
+  outOfTurnQuestion = null,
   statusSidebar,
   run,
 }: Props): React.JSX.Element {
@@ -1226,6 +1229,7 @@ export function BoardView({
                     onClick={(event) => {
                       event.stopPropagation()
                       if (selected === null) return
+                      if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
                       if (
                         cell.contact === true &&
                         !window.confirm(
@@ -1330,6 +1334,7 @@ export function BoardView({
                     onClick={(event) => {
                       event.stopPropagation()
                       if (selected === null) return
+                      if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
                       if (
                         !window.confirm(
                           `Spend 1 movement to explore ${cell.label}? The next map tile is drawn and placed there.`,
