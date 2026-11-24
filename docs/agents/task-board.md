@@ -9,7 +9,14 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 
 ## Live claims
 
-_None._
+### reposition-built-figure
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `fix/reposition-built-figure`
+- **Brief:** `docs/agents/tasks/reposition-built-figure.md`
+- **Status:** in progress
+- **Claimed paths:** `packages/engine/src/build-reposition.ts`, `packages/engine/src/build-options.ts` (append), `packages/engine/src/state.ts` (own view field), `packages/engine/src/index.ts`, `packages/server/src/routes/board.ts`, `packages/web/src/views/BoardView.tsx`, `packages/web/src/views/GameView.tsx`, `packages/web/src/lib/api.ts`
+- **Notes:** small, self-contained; mergeable into `feat/civ-abilities-romans-chinese-spain` (#373)
 
 ## Format
 
