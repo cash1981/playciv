@@ -553,10 +553,7 @@ combatant for a card.
   its card. Refused when none of the player's units is killed. She is played "after a battle" (human
   2026-11-03): also on the battle End battle has just set aside, by whichever combatant holds her, until the next battle
   starts; then the cards End battle discarded go back to the hand (`BattleCardEffect.returned`; her vote undo discards
-  them again). The SAVED marks show in the final arena, and Undo end battle brings the battle back with them.
-  Undoing a Nightingale played during a battle is refused once End battle has run ("Undo End battle first"): her saved
-  units' cards stayed in the hand, and the undo could not put them back on the pile with the others. A play after the battle
-  is flagged `BattleCardEffect.after` and undoes at any time until the next battle.
+  them again). A play made during the battle cannot be undone once End battle has closed it while the saved units' cards are still in the hand ("Undo End battle first"). The SAVED marks show in the final arena, and Undo end battle brings the battle back with them.
   The mark goes when the death is taken back (kill toggle, face-off undo). A saved unit another unit has replaced on its
   front is no longer in the arena: it is listed as saved casualties, in the active battle and in the final arena
   (`LastBattleView.savedDeparted`).
@@ -895,7 +892,8 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   `TECH_SPEEDS`, `techSpeedOf` in `movement.ts`). The highest counts and they do not add up; the base is the larger of the
   typed base (the first term of `mvmt`) and that speed, so a typed base that is higher (a correction by hand) still wins. Typed
   `+` terms after the base are bonuses and are added on top (`splitMovement`). Spain's "travel speed increased by 1" is part of
-  the base the reveal writes (`3`, see Spanish below), so Spain with Sailing is 5 (`splitMovement` takes Spain's 1 out of the typed base, and it counts on top of the tech speed) plus any typed bonus. A hidden tech gives
+  the base the reveal writes (`3`, see Spanish below), so Spain with Sailing is 5 (`splitMovement` takes Spain's 1 out of the
+  typed base, and it counts on top of the tech speed) plus any typed bonus. A hidden tech gives
   nothing. Flight also flies over huts, villages and other players' figures (see Water and Huts below). Natural Religion, Henry Ford and Captain James Cook
   apply on top. The status sidebar shows the tech's speed as the Movement value (with the tech named in its tooltip) when it
   is more than what is typed. Tests: `movement.test.ts`, `PlayerStatusSidebar.test.tsx`.
@@ -1466,11 +1464,7 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
     (400). Only the Chinese player's own view carries the choices (`you.chineseSave`, real arena ids); the opponent
     sees nothing until the public line. The prompt is in the Battle panel after the battle and in "Your actions",
     counted as a waiting choice. There is no separate undo: Undo end battle takes the save back with the battle.
-    The casualties still pending the save stay out of every reshuffle (`pendingChineseSaveCardIds`: `reshuffleItems`,
-    `unitCardAvailable`) until the save is made, the next battle starts or Undo end battle runs, so another player's draw
-    or build of that unit type can be refused as "no more cards" while the choice is open (there is no decline button;
-    see limitations).
-- **Spanish:** the reveal sets `stats.mvmt` from `2` to `3` (human, 2026-11-24: Spain's +1 is part of the base, so `2+1` is kept for Natural Religion on an army; old saves with `2+1` become `3` on load, see the migration note below) and logs it. A value the player already typed is left alone. The `civSetup` records
+- **Spanish:** the reveal sets `stats.mvmt` from `2` to `3` (human, 2026-11-24: Spain's +1 is part of the base, so `2+1` is kept for Natural Religion on an army; saves with `2+1` become `3` on load) and logs it. A value the player already typed is left alone. The `civSetup` records
   what it set, and the reveal undo restores it only if the value is still the one it set. With Natural Religion
   the army travels 4 and a scout 3 (the army gets Natural Religion's +1 on top of Spain's): `splitMovement` takes
   Spain's 1 out of the typed base (a tech replaces only what is under it: Sailing gives Spain 5) and `travelSpeedOf` adds it
@@ -1562,10 +1556,9 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   (`playCard`) gives the Arab culture too and its undo takes it back. The vote undo of a Roman advance (wonder, city),
   an Arab invest with a free advance, Mother Teresa, Sydney Opera House and a Zulu city that collected huts seals the
   board Undo (`undoFloor`), since their reversal writes its own board moves. A plain Advance button is still not sealed.
-  Spanish saves revealed before the +1 are converted once on load (`migrate.ts`): `2` becomes `3`, `X+k` becomes
-  `(X+1)+(k-1)` for X of 2 or from 4 (the speed the old rules gave stays), and `civSetup.spanishSpeed` on the reveal line
-  (set by every Spanish reveal) keeps later typed values from being read as an old save. `3+1`, a plain `3` and an `X+k` from X=4 on a reveal line without `civSetup` are left as typed (`2+k` is converted there, as
-  the stat alone). The era is read from what the reveal wrote: an old-style `civSetup.mvmt.set` (`2+1`) or no entry is an old save, today's `3` is not.
+  Spanish saves revealed before Spain's +1 are migrated once per game (`GameState.spanishMovementMigrated`, set by
+  `createGame` and on the first load, never projected): a plain `2` becomes `3`, and a legacy `b+k` becomes
+  `(b+1)+(k-1)`, which keeps the army and scout speed with Sailing and Natural Religion; later edits are never touched.
 - A Zulu hut on the city's own square is collected too, like the huts around it. The founding
   line names the huts that were collected and says which stayed on the map (no card left).
 - **Aztecs (free units for Great Persons):** "each time they gain a great person, may build 2 unlocked units of their

@@ -29,8 +29,8 @@ const killedUnsaved = (battle: Battle): readonly ArenaUnit[] =>
   [...battle.arena, ...battle.departedUnits].filter((unit) => unit.killed && unit.saved !== true)
 
 /**
- * Discards the cards of the killed, unsaved units of the player sides. A card that is no longer in `items` (discarded or
- * traded away during the battle) is left alone, whatever the battlehand still shows of it.
+ * Discards the cards of the killed, unsaved units of the player sides. A card that is no longer in the hand (discarded or
+ * traded away during the battle) is left alone.
  */
 export function discardKilledUnits(
   state: GameState,
@@ -45,10 +45,15 @@ export function discardKilledUnits(
     if (owner === undefined) continue
     const itemIndex = owner.items.findIndex((item) => item.id === unit.unit.id)
     const battlehandIndex = owner.battlehand.findIndex((item) => item.id === unit.unit.id)
-    // Only the card the player still holds counts: a battlehand entry can be a stale snapshot of a card that was discarded
-    // by hand, and discarding it again would put it on the pile twice
+    // The live card is the one in the hand; a battlehand entry is only a snapshot of it. A card that has left the hand
+    // (discarded or traded away by hand) is not on the pile again, and its stale snapshot goes out of the battlehand
     const card: Item | undefined = owner.items[itemIndex]
-    if (card === undefined) continue
+    if (card === undefined) {
+      if (battlehandIndex !== -1) {
+        next = withPlayer(next, { ...owner, battlehand: owner.battlehand.filter((item) => item.id !== unit.unit.id) })
+      }
+      continue
+    }
     const onPile = { ...card, inBattle: false, hidden: true } as Item
     const without: GameState = {
       ...withPlayer(next, {
@@ -110,8 +115,8 @@ export function rediscardKilledCard(state: GameState, record: DiscardedKilledCar
   const owner = findPlayer(state, record.ownerId)
   const card = owner?.items.find((item) => item.id === record.cardId)
   if (owner === undefined || card === undefined) return state
-  // Also out of the battlehand: the player may have drawn a new one holding the card, which would keep it placeable
   const next: GameState = {
+    // Also out of the battlehand, where a draw since the return may have put a copy
     ...withPlayer(state, {
       ...owner,
       items: owner.items.filter((item) => item.id !== card.id),
@@ -154,4 +159,20 @@ export function restoreKilledCard(state: GameState, record: DiscardedKilledCard)
     },
   )
   return onPile === undefined ? next : markLine(next, record.logId, true)
+}
+
+/**
+ * The ids of the cards the Chinese may still save (their player fought in the battle End battle has set aside and has not
+ * saved one yet). They stay out of a reshuffle of the discard pile: another player's draw from an empty deck would
+ * otherwise shuffle them away and erase the choice. Kept here, not in `chinese-save.ts`, so the draw code can use it
+ * without a circular import.
+ */
+export function pendingChineseSaveCardIds(state: GameState): ReadonlySet<string> {
+  const ended = state.endedBattle
+  if (state.battle !== null || ended === null || ended.chineseSaved !== undefined) return new Set()
+  return new Set(
+    (ended.killedDiscarded ?? [])
+      .filter((record) => findPlayer(state, record.ownerId)?.civilization?.name === 'Chinese' && killedCardOnPile(state, record))
+      .map((record) => record.cardId),
+  )
 }

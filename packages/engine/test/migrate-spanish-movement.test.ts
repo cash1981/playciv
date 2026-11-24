@@ -13,7 +13,7 @@ import { migrateGameState } from '../src/migrate.js'
 import { travelSpeedOf } from '../src/movement.js'
 import { unwrap } from '../src/result.js'
 import type { GameLogEntry, GameState, Playerhand } from '../src/state.js'
-import { DEFAULT_PLAYER_STATS, findPlayer, withPlayer } from '../src/state.js'
+import { DEFAULT_PLAYER_STATS, findPlayer, toPlayerView, withPlayer } from '../src/state.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -45,10 +45,10 @@ function savedBefore(mvmt: string, civ = 'Spanish'): GameState {
   const state = revealed(civ)
   const holder = findPlayer(state, CASH1981) as Playerhand
   const line = revealLine(state)
-  // An old save has neither the entry nor the mark that a reveal made today writes
-  const { mvmt: _mvmt, spanishSpeed: _settled, ...setup } = line.civSetup ?? { unitIds: [], discardedCivIds: [], pieceIds: [], wonders: [] }
+  const { mvmt: _mvmt, ...setup } = line.civSetup ?? { unitIds: [], discardedCivIds: [], pieceIds: [], wonders: [] }
+  const { spanishMovementMigrated: _marker, ...unmarked } = state
   return {
-    ...withPlayer(state, { ...holder, stats: { ...holder.stats, mvmt } }),
+    ...withPlayer(unmarked as GameState, { ...holder, stats: { ...holder.stats, mvmt } }),
     log: state.log.map((entry) => (entry.id === line.id ? { ...entry, civSetup: setup } : entry)),
   }
 }
@@ -93,7 +93,7 @@ describe('migrating the travel speed of a Spanish player', () => {
     expect(mvmtOf(migrateGameState(typed))).toBe('2')
   })
 
-  it.each(['3', '3+1', '4'])('never touches another value (%s)', (value) => {
+  it.each(['3', '4'])('never touches another value (%s)', (value) => {
     const saved = savedBefore(value)
     const migrated = migrateGameState(saved)
     expect(mvmtOf(migrated)).toBe(value)
@@ -124,97 +124,6 @@ describe('migrating the travel speed of a Spanish player', () => {
     const migrated = migrateGameState(savedWithOldBonus('2+2'))
     expect(mvmtOf(migrated)).toBe('3+1')
     expect(revealLine(migrated).civSetup?.mvmt).toEqual({ before: '2', set: '3+1' })
-  })
-
-  it('turns an old `4+1` (Sailing typed, and Spain) into `5`, so the speed with Sailing stays 5, not 6', () => {
-    const saved = savedBefore('4+1')
-    const migrated = migrateGameState(saved)
-    expect(mvmtOf(migrated)).toBe('5')
-    expect(revealLine(migrated).civSetup).toMatchObject({ mvmt: { before: '2', set: '5' }, spanishSpeed: true })
-    expect(mvmtOf(undoReveal(migrated))).toBe('2')
-    const sailing = (state: GameState): GameState => {
-      const holder = findPlayer(state, CASH1981) as Playerhand
-      return withPlayer(state, { ...holder, techsChosen: [...holder.techsChosen, { name: 'Sailing', hidden: false } as Playerhand['techsChosen'][number]] })
-    }
-    const army = (state: GameState) => {
-      const next = unwrap(placePiece(state, { playerId: CASH1981, assetId: 'figures/redarmy', x: 200, y: 300 }))
-      const piece = next.board.pieces.find((candidate) => candidate.assetId === 'figures/redarmy')
-      if (piece === undefined) throw new Error('no piece')
-      return travelSpeedOf(findPlayer(next, CASH1981) as Playerhand, piece, 1)
-    }
-    // Before the Spanish +1 was part of the base, `4+1` read as base 4 plus a bonus of 1
-    expect(army(sailing(migrated))).toBe(5)
-    expect(migrateGameState(migrated)).toEqual(migrated)
-  })
-
-  it('leaves `3+1` alone, which is Natural Religion on Spain in a save from the review of this change', () => {
-    const migrated = migrateGameState(savedBefore('3+1'))
-    expect(mvmtOf(migrated)).toBe('3+1')
-  })
-
-  it('leaves `4+1` alone on a reveal line without civSetup, which cannot carry the mark', () => {
-    const saved = savedBefore('4+1')
-    const line = revealLine(saved)
-    const { civSetup: _setup, ...bare } = line
-    const old: GameState = { ...saved, log: saved.log.map((entry) => (entry.id === line.id ? bare : entry)) }
-    expect(mvmtOf(migrateGameState(old))).toBe('4+1')
-  })
-
-  it('does not rewrite a value typed after the reveal of a new game: `2+1`, `2`, `2+2` and `4+1` stay on every load', () => {
-    const fresh = revealed('Spanish')
-    expect(revealLine(fresh).civSetup?.spanishSpeed).toBe(true)
-    // Only the mark protects the value when the reveal wrote no entry (a typed value kept at the reveal)
-    const { mvmt: _mvmt, ...markOnly } = revealLine(fresh).civSetup ?? { unitIds: [], discardedCivIds: [], pieceIds: [], wonders: [] }
-    const onlyMarked: GameState = {
-      ...fresh,
-      log: fresh.log.map((entry) => (entry.id === revealLine(fresh).id ? { ...entry, civSetup: markOnly } : entry)),
-    }
-    expect(revealLine(onlyMarked).civSetup?.mvmt).toBeUndefined()
-    expect(revealLine(onlyMarked).civSetup?.spanishSpeed).toBe(true)
-    for (const base of [fresh, onlyMarked]) {
-      const holder = findPlayer(base, CASH1981) as Playerhand
-      for (const typed of ['2+1', '2', '2+2', '4+1']) {
-        const edited = withPlayer(base, { ...holder, stats: { ...holder.stats, mvmt: typed } })
-        expect(mvmtOf(migrateGameState(edited))).toBe(typed)
-      }
-    }
-  })
-
-  it.each([
-    ['2+2', '3+1'],
-    ['4+1', '5'],
-  ])('converts `%s` typed after an old reveal that wrote `2+1`, and the undo of the reveal still restores 2', (typed, expected) => {
-    const saved = savedBefore(typed)
-    const line = revealLine(saved)
-    const old: GameState = {
-      ...saved,
-      log: saved.log.map((entry) =>
-        entry.id === line.id && entry.civSetup !== undefined ? { ...entry, civSetup: { ...entry.civSetup, mvmt: { before: '2', set: '2+1' } } } : entry,
-      ),
-    }
-    const migrated = migrateGameState(old)
-    expect(mvmtOf(migrated)).toBe(expected)
-    expect(revealLine(migrated).civSetup).toMatchObject({ mvmt: { before: '2', set: expected }, spanishSpeed: true })
-    expect(mvmtOf(undoReveal(migrated))).toBe('2')
-    expect(migrateGameState(migrated)).toEqual(migrated)
-  })
-
-  it('marks a Spanish reveal that kept a typed value, so that value is not read as an old save later', () => {
-    const base = firstCivGame()
-    const card = base.items.find((item) => item.kind === 'civ' && item.name === 'Spanish')
-    if (card === undefined) throw new Error('no Spanish civ in the deck')
-    const handed: GameState = {
-      ...base,
-      items: base.items.filter((item) => item.id !== card.id),
-      players: base.players.map((player) =>
-        player.playerId === CASH1981
-          ? { ...player, items: [...player.items, { ...card, ownerId: CASH1981 }], stats: { ...player.stats, mvmt: '2+1' } }
-          : player,
-      ),
-    }
-    const state = unwrap(revealItem(handed, { playerId: CASH1981, sheetName: 'CIV', itemNumber: card.itemNumber }))
-    expect(mvmtOf(state)).toBe('2+1')
-    expect(migrateGameState(state)).toEqual(state)
   })
 
   it('never touches another civilization, whatever its Movement', () => {
@@ -262,5 +171,65 @@ describe('migrating the travel speed of a Spanish player', () => {
     expect(travelSpeedOf(findPlayer(after, CASH1981) as Playerhand, armyAfter, 1)).toBe(3)
     const { next: scouted, piece: scout } = place(migrated, 'figures/redscout')
     expect(travelSpeedOf(findPlayer(scouted, CASH1981) as Playerhand, scout, 1)).toBe(3)
+  })
+
+  describe('keeps the effective speed and runs once', () => {
+    type Tech = { readonly name: string; readonly hidden: boolean }
+    const sailing: Tech = { name: 'Sailing', hidden: false }
+    const naturalReligion = { name: 'Natural Religion', flipside: 'Natural Religion', hidden: false }
+    const piece = (assetId: string) => ({ assetId, category: 'figure' }) as unknown as Parameters<typeof travelSpeedOf>[1]
+    /** The player as the old rules (Spain's +1 was `min(1, typed bonus)`) saw them, and as the migrated save reads. */
+    const speeds = (state: GameState, withSailing: boolean, withReligion: boolean): readonly number[] => {
+      const holder = findPlayer(state, CASH1981) as Playerhand
+      const player = {
+        ...holder,
+        techsChosen: withSailing ? [sailing] : [],
+        socialPolicies: withReligion ? [naturalReligion] : [],
+      } as unknown as Playerhand
+      return [piece('figures/redarmy'), piece('figures/redscout')].map((each) => travelSpeedOf(player, each, 1))
+    }
+    // Old speeds (army, scout), worked out from the rules of the commit before `Give Spain Movement 3 instead of 2+1`
+    const legacy: readonly { mvmt: string; plain: number[]; sailing: number[]; religion: number[]; both: number[] }[] = [
+      { mvmt: '2+1', plain: [3, 3], sailing: [5, 5], religion: [4, 3], both: [6, 5] },
+      { mvmt: '2+2', plain: [4, 4], sailing: [6, 6], religion: [4, 3], both: [6, 5] },
+      { mvmt: '3+1', plain: [4, 4], sailing: [5, 5], religion: [5, 4], both: [6, 5] },
+      { mvmt: '4+1', plain: [5, 5], sailing: [5, 5], religion: [6, 5], both: [6, 5] },
+    ]
+    it.each(legacy)('keeps the speed of an old $mvmt with and without Sailing and Natural Religion', ({ mvmt, plain, sailing: s, religion, both }) => {
+      const migrated = migrateGameState(savedWithOldBonus(mvmt))
+      expect(speeds(migrated, false, false)).toEqual(plain)
+      expect(speeds(migrated, true, false)).toEqual(s)
+      expect(speeds(migrated, false, true)).toEqual(religion)
+      expect(speeds(migrated, true, true)).toEqual(both)
+      expect(migrateGameState(migrated)).toEqual(migrated)
+    })
+
+    it('turns an old `4+1` into `5`, an old `3+2` into `4+1`', () => {
+      expect(mvmtOf(migrateGameState(savedWithOldBonus('4+1')))).toBe('5')
+      expect(mvmtOf(migrateGameState(savedWithOldBonus('3+2')))).toBe('4+1')
+    })
+
+    it('leaves a `+0` term alone, which gave Spain nothing', () => {
+      expect(mvmtOf(migrateGameState(savedWithOldBonus('2+0')))).toBe('2+0')
+    })
+
+    it('marks a migrated game and a new game, and rewrites nothing typed afterwards', () => {
+      expect(revealed('Spanish').spanishMovementMigrated).toBe(true)
+      expect(migrateGameState(savedBefore('2')).spanishMovementMigrated).toBe(true)
+      for (const typed of ['2+1', '2+2', '4+1']) {
+        const game = revealed('Spanish')
+        const holder = findPlayer(game, CASH1981) as Playerhand
+        const edited = withPlayer(game, { ...holder, stats: { ...holder.stats, mvmt: typed } })
+        expect(mvmtOf(migrateGameState(edited))).toBe(typed)
+        // Also after the migration of an old save
+        const once = migrateGameState(savedWithOldBonus('2+1'))
+        const again = findPlayer(once, CASH1981) as Playerhand
+        expect(mvmtOf(migrateGameState(withPlayer(once, { ...again, stats: { ...again.stats, mvmt: typed } })))).toBe(typed)
+      }
+    })
+
+    it('does not leak the marker into the player view', () => {
+      expect(Object.keys(toPlayerView(revealed('Spanish'), CASH1981))).not.toContain('spanishMovementMigrated')
+    })
   })
 })

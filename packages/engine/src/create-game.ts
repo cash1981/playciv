@@ -229,6 +229,7 @@ export function createGame(options: CreateGameOptions): GameState {
     // Nothing to copy: a new game writes its orders to the timeline itself
     legacyOrdersCopied: true,
     legacyRevealsCopied: true,
+    spanishMovementMigrated: true,
     turnStarters: {},
     battle: null,
     endedBattle: null,

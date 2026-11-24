@@ -56,7 +56,7 @@ import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
 import { stackingLimitOf } from './great-person-effects.js'
 import { capitalOf } from './sot.js'
-import { pendingChineseSaveCardIds } from './chinese-save.js'
+import { pendingChineseSaveCardIds } from './killed-units.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {

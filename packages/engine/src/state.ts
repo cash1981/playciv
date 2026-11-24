@@ -860,8 +860,8 @@ export type AssistedEffect =
         readonly battleId: string
         readonly bonus?: number
         readonly saved?: readonly string[]
+        /** Florence Nightingale after the battle: the discarded cards she took back, for an undo to discard again. */
         readonly returned?: readonly DiscardedKilledCard[]
-        readonly after?: true
         readonly zhukov?: boolean
       }
       /** Nikola Tesla: the tech placed one row lower and where it was, so an undo can move it back. Never projected. */
@@ -1519,11 +1519,6 @@ export interface CivRevealSetup {
   }
   /** The civilization's travel speed bonus (Spain) written into `stats.mvmt`: what it was and what the reveal set it to. */
   readonly mvmt?: { readonly before: string; readonly set: string }
-  /**
-   * Spanish reveals only: Spain's +1 travel speed is settled for this reveal (set, or left to what the player typed).
-   * `migrateGameState` converts a save's old way of typing it once, and leaves a speed typed after this mark alone.
-   */
-  readonly spanishSpeed?: true
 }
 
 export interface GameState {
@@ -1651,6 +1646,12 @@ export interface GameState {
    * that old saves load as before. Public, but not in the view.
    */
   readonly legacyRevealsCopied: boolean
+  /**
+   * Spain's +1 travel speed is part of the typed Movement (`3`, not `2+1`). True for a game created by this code and for a save
+   * that `migrateGameState` has converted; absent in an older save, which is converted once on its next load. After that a
+   * Movement typed by hand is never rewritten. Public, but not in the view.
+   */
+  readonly spanishMovementMigrated?: boolean
   /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.

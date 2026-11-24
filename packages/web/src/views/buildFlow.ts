@@ -117,7 +117,8 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
       : undefined
   // The free build was used up (or undone) since: the choice is no longer free
   const freeGone = plan.free === true && choice?.freeBuild !== true
-  // The city can no longer pay for it: it is only offered as free now, and a paid plan would be refused on every confirm
+  // The paid plan can no longer be paid for and only the Egyptian free build is left: the player
+  // chooses that explicitly, since it takes the free turn action
   const nowFreeOnly = plan.free !== true && choice?.freeOnly === true
   if (city === undefined || choice === undefined || freeGone || nowFreeOnly) {
     // Back to the picker of the same city, if it is still there, with fresh choices.

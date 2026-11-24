@@ -16,7 +16,7 @@
 import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
-import { BATTLE_CARDS, applyBattleCard, battleCardBlock, battleCardUndoBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
+import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
 import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './gustavus.js'
 import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, undoTesla } from './tesla.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
@@ -1412,9 +1412,21 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${effect.name} has already dealt wounds in this battle, which cannot be taken back.`)
     }
 
-    if (effect.battleCard !== undefined) {
-      const stuck = battleCardUndoBlock(state, effect.battleCard)
-      if (stuck !== undefined) return blockedBy(`${effect.name} cannot be undone: ${stuck}`)
+    // A card played during a battle that End battle has since closed: its saved units were left in the hand, so taking the
+    // marks back would leave killed units in the hand that End battle should have discarded
+    const closedBattle = state.endedBattle
+    if (
+      effect.battleCard !== undefined &&
+      effect.battleCard.returned === undefined &&
+      state.battle?.id !== effect.battleCard.battleId &&
+      closedBattle !== null &&
+      closedBattle.battle.id === effect.battleCard.battleId
+    ) {
+      const savedIds = new Set(effect.battleCard.saved ?? [])
+      const stillHeld = [...closedBattle.battle.arena, ...closedBattle.battle.departedUnits].some(
+        (unit) => savedIds.has(unit.id) && player.items.some((item) => item.id === unit.unit.id),
+      )
+      if (stillHeld) return blockedBy(`${effect.name} was played during a battle that has ended. Undo End battle first.`)
     }
 
     // What the game did besides logging goes first, checked before anything changes

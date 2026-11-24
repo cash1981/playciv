@@ -19,6 +19,7 @@ import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll, revealPublic } from '../item.js'
 import { deckWith } from '../item-number.js'
+import { pendingChineseSaveCardIds } from '../killed-units.js'
 import {
   appendInfoLog,
   appendItemLog,
@@ -45,7 +46,6 @@ import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
-import { pendingChineseSaveCardIds } from '../chinese-save.js'
 import { turnHolder } from '../turn.js'
 import { TOKEN_SHEET_NAMES, releaseLooseToken, releaseTokenOf } from '../zheng-he.js'
 
@@ -449,7 +449,7 @@ export function reshuffleItems(state: GameState, sheetName: SheetName): DrawResu
     return err({ kind: 'NOT_SHUFFLABLE', sheetName })
   }
 
-  // The Chinese casualties still waiting for the save stay on the pile
+  // The casualties the Chinese may still save stay on the pile until they have chosen or the next battle starts
   const pending = pendingChineseSaveCardIds(state)
   const toPutBack = state.discardedItems.filter((item) => item.sheetName === sheetName && !pending.has(item.id))
   if (toPutBack.length === 0) {
