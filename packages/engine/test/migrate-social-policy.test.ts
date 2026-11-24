@@ -15,6 +15,7 @@ import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
 import { CASH1981, firstCivGame } from './fixture.js'
+import { put } from './sot-fixture.js'
 
 /** Simulates a game saved before the correction existed. */
 function withOldFlipside(state: GameState): GameState {
@@ -59,9 +60,9 @@ describe('migrating the social policy flipside (issue #175)', () => {
   })
 
   it('reproduces issue #175 on an old save, then shows migration fixes it', () => {
-    const heldPacifism = unwrap(
-      chooseSocialPolicy(firstCivGame(), { playerId: CASH1981, name: 'Pacifism' }),
-    )
+    // Two built cities: two policies are allowed (issue #378), so only the flipside decides
+    const twoCities = put(put(firstCivGame(), CASH1981, 'cities/redcity2', 1, 1), CASH1981, 'cities/redcity2', 5, 5)
+    const heldPacifism = unwrap(chooseSocialPolicy(twoCities, { playerId: CASH1981, name: 'Pacifism' }))
     const broken = withOldFlipside(heldPacifism)
 
     // The bug itself: on an old save the engine still accepts Military

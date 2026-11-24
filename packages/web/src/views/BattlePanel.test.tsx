@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PlayerView } from '../lib/api.js'
@@ -13,6 +13,7 @@ vi.mock('../lib/api.js', () => ({
     drawBattlehand: vi.fn(),
     revealBattlehand: vi.fn(),
     endBattle: vi.fn(),
+    endBattleArena: vi.fn(),
     initiateBattle: vi.fn(),
     placeUnitInArena: vi.fn(),
     moveArenaUnit: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('../lib/api.js', () => ({
     zhukovWound: vi.fn(),
     techWound: vi.fn(),
     healUnits: vi.fn(),
+    chineseSave: vi.fn(),
     performAction: vi.fn(),
     actionWithArgs: vi.fn(),
   },
@@ -896,5 +898,121 @@ describe('BattlePanel Animal Husbandry and Biology heal', () => {
     const none = render(<BattlePanel gameId="game" busy={false} run={run} view={healView([], [], [])} />)
     fireEvent.click(none.getByText('Battle'))
     expect(none.queryByRole('group', { name: 'Biology heal' })).toBeNull()
+  })
+})
+
+describe('BattlePanel End battle and the Chinese save', () => {
+  afterEach(() => {
+    cleanup()
+    localStorage.removeItem('civ.panel.battle')
+  })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(api.endBattleArena).mockResolvedValue(view)
+    vi.mocked(api.chineseSave).mockResolvedValue(view)
+  })
+
+  const killedArena = {
+    ...view.battle,
+    arena: [{ id: 'a1', side: 'attacker', position: 0, unit: { ...infantry, inBattle: true }, attack: 1, health: 0, placedBy: 'me', rotation: 0, killed: true }],
+  }
+  const ended = (chineseSave: unknown) =>
+    ({
+      you: { playerId: 'me', battlehand: [], barbarians: [], items: [], conquestOffers: [], chineseSave },
+      opponents: [],
+      battle: null,
+      battleSummary: [],
+      rev: 4,
+    }) as unknown as PlayerView
+
+  it('lets either combatant end the battle with a killed Chinese unit, asks nothing and sends no choice', () => {
+    for (const civ of ['Chinese', null]) {
+      const v = {
+        ...view,
+        you: { ...view.you, civilization: civ === null ? null : { name: civ } },
+        opponents: [{ playerId: 'other', username: 'Other', civilization: civ === null ? { name: 'Chinese' } : null }],
+        battle: killedArena,
+      } as unknown as PlayerView
+      const rendered = render(<BattlePanel gameId="game" busy={false} run={run} view={v} />)
+      fireEvent.click(rendered.getByText('Battle'))
+      expect(rendered.queryByRole('combobox', { name: 'Killed unit to save' })).toBeNull()
+      expect(rendered.queryByText(/Chinese/)).toBeNull()
+      const endButton = rendered.getByText('End battle') as HTMLButtonElement
+      expect(endButton.disabled).toBe(false)
+      fireEvent.click(endButton)
+      expect(api.endBattleArena).toHaveBeenLastCalledWith('game', 4)
+      cleanup()
+    }
+  })
+
+  it('offers the Chinese player their killed units once the battle has ended, and saves the one chosen', async () => {
+    localStorage.setItem('civ.panel.battle', 'true')
+    const units = [
+      { arenaUnitId: 'a1', name: 'Infantry 1.3', position: 0 },
+      { arenaUnitId: 'a2', name: 'Cavalry 2.2', position: 1 },
+    ]
+    render(<BattlePanel gameId="game" busy={false} run={run} view={ended({ units })} />)
+    const region = screen.getByRole('region', { name: 'Chinese save (battle)' })
+    expect(region.textContent).toContain('its card goes back to your hand')
+    const save = screen.getByRole('button', { name: 'Save unit' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    const picker = screen.getByRole('combobox', { name: 'Killed unit to save' }) as HTMLSelectElement
+    expect(Array.from(picker.options).map((option) => option.text)).toEqual(['Choose a unit…', 'Infantry 1.3 (front 1)', 'Cavalry 2.2 (front 2)'])
+    fireEvent.change(picker, { target: { value: 'a2' } })
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+    await waitFor(() => expect(api.chineseSave).toHaveBeenCalledWith('game', 'a2', 4))
+  })
+
+  it('shows no save without a choice for the viewer, during a battle, or read-only', () => {
+    localStorage.setItem('civ.panel.battle', 'true')
+    const units = [{ arenaUnitId: 'a1', name: 'Infantry 1.3', position: 0 }]
+    for (const v of [ended(null), ended({ units: [] }), { ...ended({ units }), battle: view.battle } as unknown as PlayerView]) {
+      render(<BattlePanel gameId="game" busy={false} run={run} view={v} />)
+      expect(screen.queryByRole('region', { name: 'Chinese save (battle)' })).toBeNull()
+      cleanup()
+    }
+    render(<BattlePanel gameId="game" busy={false} readOnly run={run} view={ended({ units })} />)
+    expect((screen.getByRole('button', { name: 'Save unit' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('BattlePanel conquest offer', () => {
+  const offer = { id: 'offer-1', kind: 'village', square: 'C2', civ: 'Japanese', blocked: null, nothing: null, villageGone: false }
+  const ended = (conquestOffers: readonly unknown[], battle: unknown = null) =>
+    ({
+      you: { playerId: 'me', battlehand: [], barbarians: [], items: [], conquestOffers },
+      opponents: [],
+      battle,
+      battleSummary: [],
+      rev: 4,
+    }) as unknown as PlayerView
+
+  beforeEach(() => localStorage.setItem('civ.panel.battle', 'true'))
+  afterEach(() => {
+    cleanup()
+    localStorage.removeItem('civ.panel.battle')
+    vi.clearAllMocks()
+  })
+
+  it('shows the offer a won battle made in the battle panel once the battle has ended, and answers it from there', async () => {
+    vi.mocked(api.actionWithArgs).mockResolvedValue({} as PlayerView)
+    render(<BattlePanel gameId="game" busy={false} run={run} view={ended([offer])} />)
+    expect(screen.getByRole('region', { name: 'Conquest (battle)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Take the village' }))
+    await waitFor(() =>
+      expect(api.actionWithArgs).toHaveBeenCalledWith('game', 'claimConquest', expect.any(String), 4, { offerId: 'offer-1', accept: true }),
+    )
+  })
+
+  it('shows no offer while a battle is active, without an offer, or to a viewer without a seat', () => {
+    render(<BattlePanel gameId="game" busy={false} run={run} view={{ ...ended([offer]), battle: view.battle } as PlayerView} />)
+    expect(screen.queryByRole('region', { name: 'Conquest (battle)' })).toBeNull()
+    cleanup()
+    render(<BattlePanel gameId="game" busy={false} run={run} view={ended([])} />)
+    expect(screen.queryByRole('region', { name: 'Conquest (battle)' })).toBeNull()
+    cleanup()
+    render(<BattlePanel gameId="game" busy={false} run={run} view={{ rev: 1, you: null, opponents: [], battle: null, battleSummary: [] } as unknown as PlayerView} />)
+    expect(screen.queryByRole('region', { name: 'Conquest (battle)' })).toBeNull()
   })
 })

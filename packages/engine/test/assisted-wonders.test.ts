@@ -28,7 +28,7 @@ import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction, takeBackOpenBuild } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
-import { SQUARE_SIZE, findBoardAsset, isInWondersArea, mapTop, slotOrigin, wonderAssetId, wondersArea } from '../src/board.js'
+import { SQUARE_SIZE, cultureStepOf, findBoardAsset, isInWondersArea, mapTop, slotOrigin, wonderAssetId, wondersArea } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { buildOptionsOf, buildSquareRefusal, marketWondersOf } from '../src/build-options.js'
 import type { BuildChoice, CityBuildOptions } from '../src/build-options.js'
@@ -37,6 +37,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { earnTechCoin } from '../src/tech-coins.js'
 import type { Item } from '../src/item.js'
 import { findPlayer } from '../src/state.js'
+import { withCivilization, withMarkerAt } from './culture-advance-fixture.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -889,5 +890,149 @@ describe('Education: a coin for a wonder, once per turn, max 4', () => {
     // The next turn it can be earned again
     const next = { ...first, players: first.players.map((p) => (p.playerId === CASH1981 ? { ...p, playerTurns: [] } : p)) }
     expect(coins(earnTechCoin(next, CASH1981, 'Education').state)).toBe(2)
+  })
+})
+
+describe('the Romans and wonders', () => {
+  /** The scene with cash1981 as the Romans, their leader marker on `step`, and Mysticism when a card choice is wanted. */
+  const roman = (step = 9, techs: readonly string[] = []): GameState =>
+    withMarkerAt(withCivilization(ready({ techs }), 'Romans'), step, 'Romans')
+  const markerStep = (state: GameState): number | null => {
+    const marker = state.board.pieces.find((piece) => piece.assetId.startsWith('leaders/'))
+    if (marker === undefined) throw new Error('no marker')
+    return cultureStepOf(state.board, marker)
+  }
+
+  it('advance one space for free with every wonder, and nobody else does', () => {
+    const state = roman()
+    const built = build(state, STONEHENGE, C2)
+    expect(markerStep(built)).toBe(10)
+    expect(built.log.some((entry) => entry.publicLog.startsWith('cash1981 advanced for free on the culture track to space 10'))).toBe(true)
+    // The advance's line is not a target of the undo vote: only the build's line is
+    expect(built.log.filter((entry) => entry.assistedActionId === 'req-1')).toHaveLength(1)
+    const record = built.assistedActions.at(-1)
+    expect(record?.effect).toMatchObject({ kind: 'build', advance: { kind: 'cultureAdvance', fromStep: 9, toStep: 10 } })
+
+    const japanese = withMarkerAt(withCivilization(ready(), 'Japanese'), 9, 'Japanese')
+    expect(markerStep(build(japanese, STONEHENGE, C2))).toBe(9)
+  })
+
+  it('does not stop a Roman at the end of the track', () => {
+    const built = build(roman(21), STONEHENGE, C2)
+    expect(markerStep(built)).toBe(21)
+    expect(piecesOf(built, STONEHENGE)[0]?.ownerId).toBe(CASH1981)
+  })
+
+  it('refuses the wonder before it is placed while the free advance is stopped by a waiting card choice', () => {
+    const after = me(build(roman(9, ['Mysticism']), STONEHENGE, C2))
+    const pending = after.pendingRewards
+    expect(pending).toHaveLength(1)
+    // A fresh scene with that choice still waiting: the city has not acted this turn
+    const first: GameState = {
+      ...roman(9, ['Mysticism']),
+      players: roman(9, ['Mysticism']).players.map((p) => (p.playerId === CASH1981 ? { ...p, pendingRewards: pending, items: after.items } : p)),
+    }
+    const refused = unwrapErr(tryBuild(first, COLOSSUS, C2, 'req-2'))
+    if (refused.kind !== 'ASSISTED_ACTION_REJECTED') throw new Error(`unexpected error ${refused.kind}`)
+    expect(refused.reason).toMatch(/advance one space for free with every wonder, and that is stopped now/)
+    // The same pending choice does not stop a civilization without the free advance
+    const japanese = withCivilization(first, 'Japanese')
+    expect(tryBuild(japanese, COLOSSUS, C2, 'req-3').ok).toBe(true)
+    // Nothing was placed or paid
+    expect(piecesOf(first, COLOSSUS)[0]?.ownerId ?? null).toBeNull()
+    expect(piecesOf(first, STONEHENGE)[0]?.ownerId ?? null).toBeNull()
+  })
+
+  it('leaves the free advance to the undo vote: the board Undo refuses and the marker stays', () => {
+    const built = build(roman(), STONEHENGE, C2)
+    const error = unwrapErr(undoLastBoardChange(built, CASH1981))
+    expect(error.kind).toBe('BOARD_UNDO_ASSISTED')
+    expect(markerStep(built)).toBe(10)
+  })
+
+  it('removes the wonder by hand as any other piece when the marker has moved on', () => {
+    const built = build(roman(), STONEHENGE, C2)
+    const marker = built.board.pieces.find((piece) => piece.assetId.startsWith('leaders/'))
+    const wonder = piecesOf(built, STONEHENGE)[0]
+    if (marker === undefined || wonder === undefined) throw new Error('missing piece')
+    const moved = unwrap(movePiece(built, { playerId: CASH1981, pieceId: marker.id, x: marker.x + 40, y: marker.y, snap: false }))
+    const result = takeBackOpenBuild(moved, { playerId: CASH1981, pieceId: wonder.id, at: AT })
+    expect(result).toBeUndefined()
+  })
+
+  it('removes the wonder by hand as any other piece when the Great Person marker its advance placed has left the player area', () => {
+    // From space 2 the free advance reaches the Great Person space 3, which puts a marker in the player's area
+    const built = build(roman(2), STONEHENGE, C2)
+    const wonder = piecesOf(built, STONEHENGE)[0]
+    const effect = built.assistedActions.at(-1)?.effect
+    const advance = effect?.kind === 'build' && 'advance' in effect ? effect.advance : undefined
+    const placed = advance?.marker
+    if (wonder === undefined || placed === undefined || placed === null) throw new Error('the advance placed no marker')
+    // The marker is on the map now: the advance cannot be taken back, so neither can the build
+    const marker = built.board.pieces.find((piece) => piece.id === placed.pieceId) as BoardPiece
+    const away = unwrap(
+      movePiece(built, { playerId: CASH1981, pieceId: marker.id, x: 6 * SQUARE_SIZE, y: mapTop(built.board) + 6 * SQUARE_SIZE, snap: false }),
+    )
+    expect(takeBackOpenBuild(away, { playerId: CASH1981, pieceId: wonder.id, at: AT })).toBeUndefined()
+    // The board route then removes the wonder as an ordinary piece: the build stays applied and nothing is refunded
+    expect(away.assistedActions.at(-1)?.status).toBe('applied')
+    // With the marker where it was, the same take-back works
+    const back = takeBackOpenBuild(built, { playerId: CASH1981, pieceId: wonder.id, at: AT })
+    if (back === undefined) throw new Error('not an open build')
+    expect(unwrap(back).assistedActions.at(-1)?.status).toBe('undone')
+    expect(markerStep(unwrap(back))).toBe(2)
+  })
+
+  it('removes the wonder by hand as any other piece when a card its advance drew has left the hand', () => {
+    const built = build(roman(), STONEHENGE, C2)
+    const wonder = piecesOf(built, STONEHENGE)[0]
+    const effect = built.assistedActions.at(-1)?.effect
+    const kept = effect?.kind === 'build' && 'advance' in effect ? effect.advance?.kept : undefined
+    if (wonder === undefined || kept === undefined || kept === null) throw new Error('the advance kept no card')
+    const spent: GameState = {
+      ...built,
+      players: built.players.map((p) => (p.playerId === CASH1981 ? { ...p, items: p.items.filter((item) => item.id !== kept) } : p)),
+    }
+    expect(takeBackOpenBuild(spent, { playerId: CASH1981, pieceId: wonder.id, at: AT })).toBeUndefined()
+    expect(takeBackOpenBuild(built, { playerId: CASH1981, pieceId: wonder.id, at: AT })).toBeDefined()
+  })
+
+  it.each([
+    ['replaces the wonder in the market', DECK, true],
+    ['finds no wonder left to draw', { only: [] }, false],
+  ])('after the vote undo of a Roman wonder that %s, the board Undo cannot walk past the reversal and Redo is empty', (_name, deck, drawsReplacement) => {
+    const built = build(withMarkerAt(withCivilization(ready({ deck }), 'Romans'), 9, 'Romans'), STONEHENGE, C2)
+    const effect = built.assistedActions.at(-1)?.effect
+    expect(effect?.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined).toBe(drawsReplacement)
+    const undone = undoByVote(built, 'req-1')
+    expect(markerStep(undone)).toBe(9)
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.board.redo).toEqual([])
+    // A later ordinary change can still be taken back, and only that one
+    const marker = undone.board.pieces.find((piece) => piece.assetId.startsWith('leaders/')) as BoardPiece
+    const moved = unwrap(movePiece(undone, { playerId: CASH1981, pieceId: marker.id, x: marker.x + 40, y: marker.y, snap: false }))
+    const back = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(back.board.history).toHaveLength(undone.board.history.length)
+    expect(unwrapErr(undoLastBoardChange(back, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+  })
+
+  it('takes the advance back with the wonder on undo, and refuses when the marker has moved on', () => {
+    const state = roman()
+    const built = build(state, STONEHENGE, C2)
+    const undone = undoByVote(built, 'req-1')
+    expect(markerStep(undone)).toBe(9)
+    expect(piecesOf(undone, STONEHENGE)[0]?.ownerId ?? null).toBeNull()
+    expect(undone.log.at(-1)?.publicLog).toContain('and the free advance was taken back')
+    // And it can be built again
+    expect(markerStep(build(undone, STONEHENGE, C2, 'req-2'))).toBe(10)
+
+    const marker = built.board.pieces.find((piece) => piece.assetId.startsWith('leaders/'))
+    if (marker === undefined) throw new Error('no marker')
+    const moved = unwrap(movePiece(built, { playerId: CASH1981, pieceId: marker.id, x: marker.x + 40, y: marker.y, snap: false }))
+    const entry = moved.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no line')
+    let next = unwrap(initiateUndo(moved, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of OTHERS.slice(0, 2)) next = unwrap(vote(next, { logId: entry.id, playerId, vote: true, at: AT }))
+    expect(unwrapErr(vote(next, { logId: entry.id, playerId: OTHERS[2] as string, vote: true, at: AT })).kind).toBe('ASSISTED_UNDO_BLOCKED')
   })
 })

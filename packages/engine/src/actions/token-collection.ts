@@ -13,23 +13,31 @@
 import { performAssistedAction } from '../assisted.js'
 import { IMMEDIATE_RELIC_CLAIMS } from '../assisted-relics.js'
 import { mapCellOf } from '../blockade.js'
-import { areaSlotRegion, boardAreas, nextFreeSlot } from '../board.js'
 import { squareLabel } from '../build-options.js'
 import type { EngineError } from '../errors.js'
 import type { Result } from '../result.js'
 import { ok } from '../result.js'
-import type { GameState, TokenCollection } from '../state.js'
+import type { GameState } from '../state.js'
 import { findPlayer } from '../state.js'
 import { appendPublicLog } from '../log.js'
 import { occupancyOf } from '../movement.js'
 import { mapTokensOf } from '../zheng-he.js'
-import { movePieceUnchecked, removePiece, travelFigure } from './board.js'
+import { removePiece, travelFigure } from './board.js'
+import { collectMapToken } from './collect-token.js'
+import { conquestCivOf, pendingConquestOf, withPendingConquest } from '../conquest.js'
+import { figureKindOf } from '../disband.js'
+import { initiateBattle } from './arena.js'
 import type { TravelFigureInput } from './board.js'
-import { draw } from './draw.js'
 
 export interface TravelCollectingInput extends TravelFigureInput {
   /** The player agreed to draw the hut or village the figure ends on. Without it the token stays where it is. */
   readonly collectToken?: boolean
+  /**
+   * An army that ends on a village fights the barbarians for it: the battle starts after the move and the token is never
+   * collected by the move (the village is got from the conquest offer after a won battle, `conquest.ts`). Ignored for a scout,
+   * a disbanding move, a square with another player's figures, a square without a village and while a battle is active.
+   */
+  readonly fightVillage?: boolean
 }
 
 /** What the owner gains by removing a relic marker (Fame and Fortune p. 9, Wisdom and Warfare). */
@@ -57,61 +65,54 @@ function relicForArmyAt(state: GameState, input: TravelCollectingInput) {
   })
 }
 
+/**
+ * A figure's move, with the hut or village it ends on collected when the player agreed. An army of a Roman or Chinese player
+ * that ends on a village or (Romans) another player's city also records a pending conquest, which the next battle it wins
+ * there may turn into an offer (`conquest.ts`).
+ */
 export function travelFigureCollecting(state: GameState, input: TravelCollectingInput): Result<GameState, EngineError> {
+  const fights = fightsForVillage(state, input)
+  const moved = travelAndCollect(state, fights ? { ...input, collectToken: false } : input)
+  if (!moved.ok || input.disband === true) return moved
+  // Judged on the board before the move: a village token that was collected on it is gone from the square now
+  const conquest = pendingConquestOf(state, input.playerId, input.pieceId, { column: input.column, row: input.row })
+  // A village drawn on the move is nothing left to offer, unless the civ has an extra reward (Roman advance, Chinese culture)
+  const drawn = conquest?.kind === 'village' && !villageTokenAt(moved.value, input)
+  const recorded =
+    conquest === undefined || (drawn && conquestCivOf(findPlayer(state, input.playerId)) === undefined)
+      ? moved.value
+      : withPendingConquest(moved.value, conquest)
+  if (!fights) return ok(recorded)
+  // The army stands on the village: the fight for it starts at once, against the barbarians
+  return initiateBattle(recorded, { initiatorId: input.playerId, opponentId: 'barbarians' })
+}
+
+const villageTokenAt = (state: GameState, input: TravelCollectingInput): boolean =>
+  mapTokensOf(state.board).some(
+    (token) => token.sheet === 'VILLAGES' && token.cell.column === input.column && token.cell.row === input.row,
+  )
+
+/** Whether this move is an army's fight for the village it ends on (`fightVillage`). */
+function fightsForVillage(state: GameState, input: TravelCollectingInput): boolean {
+  if (input.fightVillage !== true || input.disband === true || state.battle !== null) return false
+  const mover = state.board.pieces.find((piece) => piece.id === input.pieceId)
+  if (mover === undefined || figureKindOf(mover) !== 'army') return false
+  return villageTokenAt(state, input) && !contested(state, input)
+}
+
+function travelAndCollect(state: GameState, input: TravelCollectingInput): Result<GameState, EngineError> {
   const collecting = input.collectToken === true && input.disband !== true && !contested(state, input)
   const relic = collecting ? relicForArmyAt(state, input) : undefined
   const travelled = travelFigure(state, relic === undefined ? input : { ...input, endsMove: true })
   if (relic !== undefined) return travelled.ok ? takeRelic(travelled.value, input, relic.id) : travelled
   if (!travelled.ok || !collecting) return travelled
   const moved = travelled.value
-  const player = findPlayer(moved, input.playerId)
   const token = mapTokensOf(moved.board).find(
     (candidate) => candidate.cell.column === input.column && candidate.cell.row === input.row,
   )
-  if (player === undefined || token === undefined) return travelled
-  const area = boardAreas(moved.board, moved.players).find((candidate) => candidate.playerId === input.playerId)
-  if (area === undefined) return travelled
-
-  const under = (moved.underTokens ?? []).find((candidate) => candidate.pieceId === token.piece.id) ?? null
-  const held = new Set(player.items.map((item) => item.id))
-  const drawn = draw(moved, {
-    playerId: input.playerId,
-    sheetName: token.sheet,
-    fromPieceId: token.piece.id,
-    confirmedOutOfTurn: true,
-  })
-  // No hut or village left in the deck: the move stands and the token stays on its square
-  if (!drawn.ok) return travelled
-  const card = findPlayer(drawn.value, input.playerId)?.items.find((item) => !held.has(item.id))
-  if (card === undefined) return travelled
-
-  // A full area still takes the token, at the area's first slot: it must leave the map either way
-  const region = areaSlotRegion(area)
-  const [x, y] = nextFreeSlot(drawn.value.board, area, drawn.value.board.pieces, { x: region.x, y: region.y })
-  const placed = movePieceUnchecked(drawn.value, {
-    playerId: input.playerId,
-    pieceId: token.piece.id,
-    x,
-    y,
-    snap: false,
-    ...(input.at === undefined ? {} : { at: input.at }),
-  })
-  // The draw's own log line cannot be voted back on its own: the board Undo returns the token and the card together
-  const sealed =
-    placed === undefined
-      ? undefined
-      : { ...placed, log: placed.log.map((line) => (line.item?.id === card.id && line.logType === 'ITEM' ? { ...line, undo: null, superseded: true } : line)) }
-  const entry = placed?.board.history.at(-1)
-  if (placed === undefined || sealed === undefined || entry === undefined) return travelled
-  const collection: TokenCollection = {
-    historyId: entry.id,
-    playerId: input.playerId,
-    pieceId: token.piece.id,
-    itemId: card.id,
-    under,
-    square: squareLabel(token.cell),
-  }
-  return ok({ ...sealed, tokenCollections: [...(sealed.tokenCollections ?? []), collection] })
+  if (token === undefined) return travelled
+  const collected = collectMapToken(moved, input.playerId, token, { at: input.at, chineseCulture: true })
+  return collected === undefined ? travelled : ok(collected)
 }
 
 /**

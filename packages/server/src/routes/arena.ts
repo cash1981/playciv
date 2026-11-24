@@ -8,6 +8,7 @@
 
 import type { ArenaStatKey } from '@civ/engine'
 import {
+  chineseSaveAction,
   endBattleAction,
   endBattleTurn,
   initiateBattle,
@@ -363,7 +364,7 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
 
   /**
    * End the battle entirely. Body: `{ rev: number }`.
-   * Clears the arena and resets `inBattle` on all involved units.
+   * Clears the arena, resets `inBattle` on all involved units and discards the killed units' cards.
    * If no battle is active, falls back to clearing `inBattle` on the
    * caller's own hand (the existing standalone behaviour).
    */
@@ -379,6 +380,20 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       (state) => endBattleAction(state, { playerId: currentPlayer(c).id, at: new Date().toISOString() }),
       clientRev,
     )
+  })
+
+  /**
+   * The Chinese save one of their killed units after the battle: its card goes from the discard pile back to the hand.
+   * Body: `{ rev: number, arenaUnitId: string }`, an id from `you.chineseSave`.
+   */
+  app.post('/api/games/:gameId/battle/arena/chinese-save', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+    const arenaUnitId = requireString(body, 'arenaUnitId')
+    if (arenaUnitId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'arenaUnitId is required')
+
+    return applyToGame(context, c, gameId, (state) => chineseSaveAction(state, { playerId: currentPlayer(c).id, arenaUnitId }), clientRev)
   })
 
   /**

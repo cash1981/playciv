@@ -144,13 +144,20 @@ export function carriedTileTokens(board: Board, tile: BoardPiece, x: number, y: 
 /**
  * The state part of taking a collected token back: the card leaves the hand and is bound back under the piece
  * (what Zheng He had seen there, or the card the player drew), and a public line says so. The pieces are
- * the caller's. `undefined` when the card is no longer in that player's hand.
+ * the caller's. `undefined` when the card is no longer in that player's hand, or when the culture the hut gave (Chinese) is spent.
  */
 export function returnCollectedCard(state: GameState, collection: TokenCollection): GameState | undefined {
   const player = findPlayer(state, collection.playerId)
   const card = player?.items.find((item) => item.id === collection.itemId)
   if (player === undefined || card === undefined) return undefined
-  const withoutCard = withPlayer(state, { ...player, items: player.items.filter((item) => item !== card) })
+  const culture = collection.culture ?? 0
+  // The culture a hut gave the Chinese goes back with it; once it is spent it cannot be taken back
+  if (player.stats.culture < culture) return undefined
+  const withoutCard = withPlayer(state, {
+    ...player,
+    items: player.items.filter((item) => item !== card),
+    stats: { ...player.stats, culture: player.stats.culture - culture },
+  })
   const rest = (withoutCard.tokenCollections ?? []).filter((other) => other !== collection)
   // The card stays with its token, so what the player saw is not the next card anyone draws (issue #364)
   const bound = collection.under ?? { pieceId: collection.pieceId, item: card as HutItem | VillageItem, square: collection.square }
@@ -161,7 +168,7 @@ export function returnCollectedCard(state: GameState, collection: TokenCollectio
     // The draw's own line can no longer be voted back: the card is not in the hand
     log: withoutCard.log.map((entry) => (entry.item?.id === collection.itemId && entry.logType === 'ITEM' ? { ...entry, undo: null, superseded: true } : entry)),
   }
-  return appendPublicLog(back, player.username, player.playerId, `put the ${card.kind === 'village' ? 'village' : 'hut'} token on ${collection.square} back and returned its card`)
+  return appendPublicLog(back, player.username, player.playerId, `put the ${card.kind === 'village' ? 'village' : 'hut'} token on ${collection.square} back and returned its card${culture > 0 ? `, and took back ${culture} (${player.stats.culture - culture}) culture` : ''}`)
 }
 
 /** The pieces of hut and village tokens a figure collected: they belong to a player's area now, not to a tile. */

@@ -21,7 +21,7 @@ import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
 import { describeError } from '../src/errors.js'
-import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
+import { SQUARE_SIZE, findBoardAsset, mapTop, playerAreas } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
 import { foundCity, scoutViewsOf } from '../src/assisted-city.js'
 import { cityActionsOf } from '../src/city-actions.js'
@@ -173,6 +173,32 @@ describe('where a city can be founded', () => {
     expect(check(fourth).reasons).toEqual(['You have 3 cities, the most you can have.'])
   })
 
+  it.each([
+    ['Chinese', 'cities/redcapitalwalled2'],
+    ['Indians', 'cities/redmetropolis2'],
+  ])('does not count the %s city marker waiting in the own area: the second city can be founded, and the marker counts once placed', (civ, markerAsset) => {
+    const capital = put(withScout({ civ }), CASH1981, 'cities/redcapital2', 8, 8)
+    const area = playerAreas(capital.board, capital.players).find((candidate) => candidate.playerId === CASH1981)
+    if (area === undefined) throw new Error('no area')
+    const waiting = unwrap(placePiece(capital, { playerId: CASH1981, assetId: markerAsset, x: area.x + 20, y: area.y + 20 }))
+    const marker = waiting.board.pieces.find((piece) => piece.assetId === markerAsset)
+    if (marker === undefined) throw new Error('no marker')
+
+    // One capital on the map: the marker in the area is not the second city
+    expect(toPlayerView(waiting, CASH1981).you?.cityCount).toBe(1)
+    expect(check(waiting)).toMatchObject({ ok: true, reasons: [] })
+    const founded = unwrap(found(waiting, scoutOf(waiting).id))
+    expect(cityAt(founded, 1, 1)?.assetId).toBe('cities/redcity2')
+    expect(toPlayerView(founded, CASH1981).you?.cityCount).toBe(2)
+
+    // Placed on the map, the marker is a city: the limit is reached and the scout cannot found a second one
+    const placed = unwrap(
+      movePiece(waiting, { playerId: CASH1981, pieceId: marker.id, x: 12 * SQUARE_SIZE, y: mapTop(waiting.board) + 12 * SQUARE_SIZE, snap: false }),
+    )
+    expect(toPlayerView(placed, CASH1981).you?.cityCount).toBe(2)
+    expect(check(placed).reasons).toEqual(['You have 2 cities, the most you can have without Irrigation.'])
+  })
+
   it('refuses a square next to a relic or a city-state, and one with a building on it', () => {
     expect(check(put(withScout(), CASH1981, 'relics/atlantis', 2, 1)).reasons).toEqual([
       'A relic is next to B2. No city may be built next to a relic.',
@@ -258,6 +284,13 @@ describe('founding a city', () => {
     expect(second.log.at(-1)?.publicLog).toBe('cash1981 founded a city on B2 with a scout, and may now adopt another social policy')
   })
 
+  it('adds the policy note for the French with one policy and one city: their maximum is one higher (issue #378)', () => {
+    const state = withScout({ policies: ['Pacifism'] })
+    const french = { ...state, players: state.players.map((player) => (player.playerId === CASH1981 ? { ...player, civilization: { ...player.civilization, name: 'French' } as NonNullable<typeof player.civilization> } : player)) }
+    const result = unwrap(found(french, scoutOf(french).id))
+    expect(result.log.at(-1)?.publicLog).toBe('cash1981 founded a city on B2 with a scout, and may now adopt another social policy')
+  })
+
   it('needs Start of Turn to be open', () => {
     const state = unwrap(markPhasesDone(withScout(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
     expect(assistedAvailability(state, CASH1981, 'foundCity').status).toBe('wrong-phase')
@@ -305,7 +338,115 @@ describe('founding a city', () => {
   it('names the huts a Zulu city is next to', () => {
     const state = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
     const result = unwrap(found(state, scoutOf(state).id))
-    expect(result.log.at(-1)?.publicLog).toContain('next to a hut they may explore (C2)')
+    expect(result.log.at(-1)?.publicLog).toContain(', exploring the hut at C2 at once')
+  })
+
+  it('collects two adjacent huts and the hut on the city square, names exactly those, and gives back all of them on undo', () => {
+    let state = withScout({ civ: 'Zulu' })
+    for (const [column, row] of [[2, 1], [1, 2], [1, 1]] as const) state = put(state, CASH1981, 'resources/hut', column, row)
+    const result = unwrap(found(state, scoutOf(state).id))
+    expect(result.tokenCollections).toHaveLength(3)
+    expect(me(result).items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(3)
+    expect(result.log.some((entry) => entry.publicLog.includes('exploring the huts at B2, C2 and B3 at once'))).toBe(true)
+    const undone = undoByVote(result, 'req-1')
+    expect(me(undone).items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(0)
+    expect(undone.tokenCollections ?? []).toHaveLength(0)
+    expect(undone.board.pieces.filter((piece) => piece.assetId === 'resources/hut').map((piece) => [piece.x, piece.y]).sort()).toEqual(
+      state.board.pieces.filter((piece) => piece.assetId === 'resources/hut').map((piece) => [piece.x, piece.y]).sort(),
+    )
+  })
+
+  it('still founds the city when no hut card is left, the hut stays on the map and the line says so', () => {
+    const base = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
+    const empty: GameState = {
+      ...base,
+      items: base.items.filter((item) => item.sheetName !== 'HUTS'),
+      discardedItems: base.discardedItems.filter((item) => item.sheetName !== 'HUTS'),
+    }
+    const result = unwrap(found(empty, scoutOf(empty).id))
+    expect(cityAt(result, 1, 1)).toBeDefined()
+    expect(result.tokenCollections).toBeUndefined()
+    expect(result.board.pieces.some((piece) => piece.assetId === 'resources/hut' && mapCellOf(result.board, piece) !== null)).toBe(true)
+    expect(result.log.some((entry) => entry.publicLog.includes('but the hut at C2 stays on the map (no hut card could be drawn)'))).toBe(true)
+    expect(result.log.some((entry) => entry.publicLog.includes('exploring'))).toBe(false)
+  })
+
+  it('refuses the undo once the hut card has left the hand, and leaks neither the card nor the collection', () => {
+    const state = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
+    const result = unwrap(found(state, scoutOf(state).id))
+    const card = me(result).items.find((item) => item.sheetName === 'HUTS')
+    if (card === undefined) throw new Error('no hut card')
+    // Nobody else sees the card or the collection, and the public lines name no card
+    const view = JSON.stringify(toPlayerView(result, KARANDRAS1))
+    expect(view).not.toContain(card.id)
+    expect(view).not.toContain('tokenCollections')
+    expect(result.log.filter((entry) => entry.publicLog !== '').every((entry) => !entry.publicLog.includes(card.id))).toBe(true)
+    // The card is spent
+    const spent: GameState = {
+      ...result,
+      players: result.players.map((p) => (p.playerId === CASH1981 ? { ...p, items: p.items.filter((item) => item.id !== card.id) } : p)),
+    }
+    const entry = spent.log.find((candidate) => candidate.assistedActionId === 'req-1')
+    if (entry === undefined) throw new Error('no line')
+    let next = unwrap(initiateUndo(spent, { logId: entry.id, playerId: CASH1981 }))
+    next = unwrap(vote(next, { logId: entry.id, playerId: KARANDRAS1, vote: true, at: AT }))
+    next = unwrap(vote(next, { logId: entry.id, playerId: ITCHI, vote: true, at: AT }))
+    const error = unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    if (error.kind !== 'ASSISTED_UNDO_BLOCKED') throw new Error(`unexpected error ${error.kind}`)
+    expect(error.reason).toMatch(/The hut card from C2 has left the hand/)
+  })
+
+  it('has the Zulu explore the huts next to the city at once, and the undo vote puts them back', () => {
+    const state = put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1)
+    const hut = state.board.pieces.find((piece) => piece.assetId === 'resources/hut')
+    const handBefore = me(state).items.length
+    const result = unwrap(found(state, scoutOf(state).id))
+    expect(me(result).items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(1)
+    expect(me(result).items.length).toBe(handBefore + 1)
+    expect(result.tokenCollections).toHaveLength(1)
+    expect(mapCellOf(result.board, result.board.pieces.find((piece) => piece.id === hut?.id) as never)).toBeNull()
+    // No Chinese culture for a Zulu city, and the board Undo leaves it to the vote
+    expect(me(result).stats.culture).toBe(me(state).stats.culture)
+    expect(unwrapErr(undoLastBoardChange(result, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+
+    const undone = undoByVote(result, 'req-1')
+    expect(me(undone).items.some((item) => item.sheetName === 'HUTS')).toBe(false)
+    expect(undone.tokenCollections ?? []).toHaveLength(0)
+    const back = undone.board.pieces.find((piece) => piece.id === hut?.id)
+    expect(back).toMatchObject({ x: hut?.x, y: hut?.y })
+    // A Zulu city next to no hut collects nothing
+    const plain = withScout({ civ: 'Zulu' })
+    expect(unwrap(found(plain, scoutOf(plain).id)).tokenCollections).toBeUndefined()
+  })
+
+  it('seals the board Undo after the vote undo of a Zulu city that explored huts, so the tokens cannot be taken off again with their cards in the deck', () => {
+    const state = put(put(withScout({ civ: 'Zulu' }), CASH1981, 'resources/hut', 2, 1), CASH1981, 'resources/hut', 1, 2)
+    const founded = unwrap(found(state, scoutOf(state).id))
+    expect(founded.tokenCollections).toHaveLength(2)
+    const undone = undoByVote(founded, 'req-1')
+    expect(me(undone).items.some((item) => item.sheetName === 'HUTS')).toBe(false)
+    // The vote's own moves (the tokens back on their squares, the city off, the scout back) cannot be undone one by one, and nothing is left to redo
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.board.redo).toEqual([])
+    const huts = (board: GameState['board']) => board.pieces.filter((piece) => piece.assetId === 'resources/hut').map((piece) => [piece.x, piece.y]).sort()
+    expect(huts(undone.board)).toEqual(huts(state.board))
+    // A later ordinary change is still the board Undo's, and only that one
+    const scout = scoutOf(undone)
+    const moved = unwrap(movePiece(undone, { playerId: CASH1981, pieceId: scout.id, x: scout.x + SQUARE_SIZE, y: scout.y, snap: false }))
+    const back = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(back.board.history).toHaveLength(undone.board.history.length)
+    expect(unwrapErr(undoLastBoardChange(back, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+  })
+
+  it('seals the board Undo after the vote undo of a Roman city, and leaves a plain city as it was', () => {
+    const roman = withScout({ civ: 'Romans', step: 9 })
+    const undone = undoByVote(unwrap(found(roman, scoutOf(roman).id)), 'req-1')
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.board.redo).toEqual([])
+    // A city that took no free advance and explored no hut keeps its ordinary board history after the vote
+    const plain = withScout({ civ: 'Japanese' })
+    const plainUndone = undoByVote(unwrap(found(plain, scoutOf(plain).id)), 'req-1')
+    expect(undoLastBoardChange(plainUndone, CASH1981).ok).toBe(true)
   })
 
   it('gives the Romans a free advance on the culture track, and nobody else', () => {
@@ -693,7 +834,7 @@ describe('sending a scout’s square to a city', () => {
       const army = english.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
       expect(scoutViewsOf(english, me(english)).find((view) => view.pieceId === army?.id)).toMatchObject({ canSend: false })
       expect(describeError(unwrapErr(assign(english, army?.id ?? '', near(english)?.pieceId ?? '')))).toBe(
-        'B2 is the centre of your city, and a scout there sends no square.',
+        'B2 is the centre of your city, and an army there sends no square.',
       )
     })
 
@@ -803,7 +944,7 @@ describe('sending a scout’s square to a city', () => {
       const cityId = near(english)?.pieceId ?? ''
       const sent = unwrap(assign(english, army?.id ?? '', cityId))
       const stopped = unwrap(assign(sent, army?.id ?? '', null, 'req-2'))
-      expect(stopped.log.at(-1)?.publicLog).toBe('cash1981 stopped sending the square of the scout on D3 to a city')
+      expect(stopped.log.at(-1)?.publicLog).toBe('cash1981 stopped sending the square of the army on D3 to a city')
     })
 
     it('does not send an English army to the capital on its own', () => {
@@ -885,6 +1026,53 @@ describe('sending a scout’s square to a city', () => {
     other = put(other, CASH1981, 'figures/redarmy', 3, 2)
     const otherArmy = other.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
     expect(unwrapErr(assign(other, otherArmy?.id ?? '', near(other)?.pieceId ?? '')).kind).toBe('ASSISTED_ACTION_REJECTED')
+  })
+
+  describe('an English army that gathers as a scout would', () => {
+    const harvestOf = (state: GameState, label: string): readonly string[] =>
+      cityActionsOf(state, me(state))
+        .find((city) => city.label.endsWith(label))
+        ?.harvest.choices.map((choice) => choice.label) ?? []
+
+    const withFigure = (civ: string | undefined, assetId: string): { state: GameState; id: string } => {
+      let state = withAmerica(sotTurn({ ...(civ === undefined ? {} : { civ }), techs: ['Irrigation'] }))
+      state = put(state, CASH1981, 'cities/redcapital2', 1, 1)
+      state = put(state, CASH1981, 'cities/redcity2', 8, 8)
+      state = put(state, CASH1981, assetId, 2, 2)
+      const piece = state.board.pieces.find((candidate) => candidate.assetId === assetId)
+      return { state, id: piece?.id ?? '' }
+    }
+
+    it('offers the resource under a sent army to that city, as it does for a scout', () => {
+      const scout = withFigure(undefined, 'figures/redscout')
+      const army = withFigure('England', 'figures/redarmy')
+      const sentScout = unwrap(assign(scout.state, scout.id, far(scout.state)?.pieceId ?? ''))
+      const sentArmy = unwrap(assign(army.state, army.id, far(army.state)?.pieceId ?? ''))
+      expect(harvestOf(sentScout, 'I9')).toEqual(['Incense under a scout at C3'])
+      expect(harvestOf(sentArmy, 'I9')).toEqual(['Incense under an army at C3'])
+      // The city the square left no longer offers it
+      expect(harvestOf(army.state, 'B2')).toContain('Incense at C3')
+      expect(harvestOf(sentArmy, 'B2')).not.toContain('Incense at C3')
+    })
+
+    it('does not offer the square of an army that was not sent, to the capital or to any city', () => {
+      const { state } = withFigure('England', 'figures/redarmy')
+      expect(harvestOf(state, 'B2').filter((label) => label.includes('under'))).toEqual([])
+      expect(harvestOf(state, 'I9')).toEqual([])
+      // Without a capital a scout is offered to every city, an army is not
+      let noCapital = withAmerica(sotTurn({ civ: 'England', techs: ['Irrigation'] }))
+      noCapital = put(noCapital, CASH1981, 'cities/redcity2', 8, 8)
+      noCapital = put(noCapital, CASH1981, 'figures/redarmy', 2, 2)
+      expect(harvestOf(noCapital, 'I9')).toEqual([])
+    })
+
+    it('says "army" in the log and stops offering the resource once the send is cleared', () => {
+      const { state, id } = withFigure('England', 'figures/redarmy')
+      const sent = unwrap(assign(state, id, far(state)?.pieceId ?? ''))
+      expect(sent.log.at(-1)?.publicLog).toBe('cash1981 sent the square of the army on C3 to City I9')
+      const cleared = unwrap(assign(sent, id, null, 'req-2'))
+      expect(harvestOf(cleared, 'I9')).toEqual([])
+    })
   })
 
   it('does not change what another player sees of the cities, except the production figure', () => {

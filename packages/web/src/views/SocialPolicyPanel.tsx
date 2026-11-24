@@ -18,6 +18,7 @@ import { api } from '../lib/api.js'
 import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { ItemCard, itemImageUrl } from './ItemCard.js'
+import { goToPanel } from './PhaseSummary.js'
 import { PlayerTabs } from './PlayerTabs.js'
 import type { PlayerTab } from './PlayerTabs.js'
 import { ReferenceCard } from './ReferenceCard.js'
@@ -46,6 +47,21 @@ interface PolicyTab {
   /** Java: the public `numberOfSocialPolicies`, shown in the opponent empty state. */
   readonly chosenCount: number
   readonly own: boolean
+}
+
+/**
+ * What the viewer may do about the number of policies (issue #378), from `you.socialPolicySlots`: how many more they may adopt,
+ * or why they may not. The caller passes no slots for a spectator or a replayed revision.
+ */
+function slotsMessage(
+  slots: { readonly maximum: number; readonly held: number; readonly free: number },
+  french: boolean,
+): string {
+  if (slots.free > 0) return `You may adopt ${slots.free} more social ${slots.free === 1 ? 'policy' : 'policies'}`
+  if (slots.held > slots.maximum) {
+    return `You hold ${slots.held}, more than the ${slots.maximum} you may: remove one`
+  }
+  return `You hold the most social policies you may (${slots.maximum}): one per built city${french ? ', one more for the French' : ''}`
 }
 
 const tabId = (key: string): string => `social-policy-tab-${key}`
@@ -112,6 +128,21 @@ export function SocialPolicyPanel({
     return null
   }
   const noMutations = readOnly || view.you === null
+  const slots = historical === null ? (view.you?.socialPolicySlots ?? null) : null
+  const slotsText = slots === null ? null : slotsMessage(slots, view.you?.civilization?.name === 'French')
+  const noFreeSlot = slots !== null && slots.free === 0
+
+  // A new slot (a city built, a conquest) takes the page to this panel, as a tech grant does to the tech tree. It follows a rise
+  // in the maximum, so taking a policy back (a switch, an undo vote) does not move the page. Not on the first render, and not
+  // for a replayed revision, which has no slots (null) and so no change in them.
+  const maximum = slots?.maximum ?? null
+  const seenMaximum = useRef(maximum)
+  useEffect(() => {
+    if (maximum === null) return
+    if (seenMaximum.current !== null && maximum > seenMaximum.current && (slots?.free ?? 0) > 0) goToPanel('social-policy', true)
+    seenMaximum.current = maximum
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a change of the maximum matters, not of the held count
+  }, [maximum])
   const unavailablePolicies = policies.filter((policy) => policyUnavailableReason(policy) !== null)
   const chosenPolicyBlocked =
     chosenPolicy !== '' &&
@@ -149,6 +180,12 @@ export function SocialPolicyPanel({
     <CollapsiblePanel id="social-policy" title="Social policy">
       {loadError !== null && <div className="error">{loadError}</div>}
 
+      {slotsText !== null && (
+        <p className={noFreeSlot ? 'muted' : undefined} role="status">
+          {slotsText}
+        </p>
+      )}
+
       <div className="row">
         <span className="card-control" style={{ flex: 1 }}>
           <select
@@ -180,7 +217,8 @@ export function SocialPolicyPanel({
           </button>
         </span>
         <button
-          disabled={busy || noMutations || chosenPolicy === '' || chosenPolicyBlocked}
+          disabled={busy || noMutations || noFreeSlot || chosenPolicy === '' || chosenPolicyBlocked}
+          title={noFreeSlot && slotsText !== null ? slotsText : undefined}
           onClick={() =>
             void run(async () => {
               const result = await api.chooseSocialPolicy(gameId, chosenPolicy)

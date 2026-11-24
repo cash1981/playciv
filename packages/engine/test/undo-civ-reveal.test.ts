@@ -17,13 +17,14 @@ import { chooseTech, discardItem, removeTech, revealItem } from '../src/actions/
 import { markPhasesDone } from '../src/actions/turn.js'
 import { canInitiateUndo, initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/undo.js'
 import { DEFAULT_GOVERNMENT } from '../src/government.js'
+import { findBoardAsset, remainingBoardAssetCount } from '../src/board.js'
 import { isUnit, itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameLogEntry, GameState } from '../src/state.js'
 import { findPlayer, toPlayerView, withPlayer } from '../src/state.js'
 import { turnHolder } from '../src/turn.js'
 
-import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame, withSetupDone } from './fixture.js'
 
 const handOf = (state: GameState, playerId: string) => findPlayer(state, playerId)?.items ?? []
 const wondersOnBoard = (state: GameState) =>
@@ -67,7 +68,7 @@ function revealEveryCiv(start: GameState): GameState {
   for (const playerId of order) {
     state = unwrap(draw(state, { playerId, sheetName: 'CIV' }))
     state = revealHidden(state, playerId)
-    state = unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
+    state = unwrap(markPhasesDone(withSetupDone(state, playerId), { playerId, turnNumber: 1, upToPhase: 'SOT' }))
   }
   return state
 }
@@ -127,7 +128,7 @@ describe('undo of a civilization reveal', () => {
 
   it('lets the former owner reveal again out of turn after the undo', () => {
     let state = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Germans'), CASH1981)
-    state = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    state = unwrap(markPhasesDone(withSetupDone(state, CASH1981), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
     expect(turnHolder(state)?.playerId).not.toBe(CASH1981)
 
     const undone = undoByVote(state, CASH1981)
@@ -416,7 +417,9 @@ describe('undo of a civilization reveal', () => {
       expect(after?.techsChosen).toEqual([])
       expect(handOf(undone, CASH1981).filter((item) => item.kind === 'civ')).toHaveLength(3)
       expect(handOf(undone, CASH1981).some(isUnit)).toBe(false)
-      expect(undone.board.pieces).toEqual([])
+      // The Chinese walled capital and the Indian metropolis are not rebuilt: a reveal saved before they were handed out
+      // never had one, and a rebuild cannot tell the piece from one the player placed by hand
+      expect(undone.board.pieces.filter((piece) => !/^cities\/[a-z]+(capitalwalled2|metropolis2)$/.test(piece.assetId))).toEqual([])
       const ids = undone.items.map((item) => item.id)
       expect(new Set(ids).size).toBe(ids.length)
     })
@@ -505,7 +508,7 @@ describe('undo of a civilization reveal', () => {
       for (const playerId of order) {
         if (playerId !== CASH1981) start = unwrap(draw(start, { playerId, sheetName: 'CIV' }))
         start = revealHidden(start, playerId)
-        start = unwrap(markPhasesDone(start, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
+        start = unwrap(markPhasesDone(withSetupDone(start, playerId), { playerId, turnNumber: 1, upToPhase: 'SOT' }))
       }
       expect(wondersOnBoard(start)).toHaveLength(5)
 
@@ -543,5 +546,102 @@ describe('undo of a civilization reveal', () => {
       expect(opponent).not.toContain('civSetup')
       expect(opponent).not.toContain(unitId)
     })
+  })
+})
+
+describe("Spain's travel speed", () => {
+  const mvmtOf = (state: GameState): string | undefined => findPlayer(state, CASH1981)?.stats.mvmt
+
+  it('adds +1 to the typed movement when the civilization is revealed, with a public line', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
+    expect(mvmtOf(revealed)).toBe('3')
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 gets +1 travel speed as the Spanish (movement 3)')).toBe(true)
+    // Nobody else's speed changes, and another civilization leaves it alone
+    expect(mvmtOf(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toBe('2')
+    expect(findPlayer(revealed, KARANDRAS1)?.stats.mvmt).toBe('2')
+  })
+
+  it('is restored by the undo of the reveal, so the next reveal does not add it twice', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
+    const undone = undoByVote(revealed, CASH1981)
+    expect(mvmtOf(undone)).toBe('2')
+    expect(undone.log.at(-1)?.publicLog).toContain('movement went back to 2')
+    expect(mvmtOf(revealHidden(undone, CASH1981))).toBe('3')
+  })
+
+  it('leaves a value the player typed: not set on the reveal, and not restored by the undo', () => {
+    const base = giveCiv(firstCivGame(), CASH1981, 'Spanish')
+    const player = findPlayer(base, CASH1981)
+    if (player === undefined) throw new Error('no player')
+    const typed = withPlayer(base, { ...player, stats: { ...player.stats, mvmt: '3' } })
+    const revealed = revealHidden(typed, CASH1981)
+    expect(mvmtOf(revealed)).toBe('3')
+    expect(revealed.log.some((entry) => entry.publicLog.includes('travel speed as the Spanish'))).toBe(false)
+    expect(mvmtOf(undoByVote(revealed, CASH1981))).toBe('3')
+
+    // Typed after the reveal: the undo keeps it
+    const spanish = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Spanish'), CASH1981)
+    const holder = findPlayer(spanish, CASH1981)
+    if (holder === undefined) throw new Error('no player')
+    const edited = withPlayer(spanish, { ...holder, stats: { ...holder.stats, mvmt: '4' } })
+    expect(mvmtOf(undoByVote(edited, CASH1981))).toBe('4')
+  })
+})
+
+describe("the Arabs' starting resources", () => {
+  const resources = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId.startsWith('resources/') && piece.assetId !== 'resources/hut' && piece.assetId !== 'resources/village')
+
+  it('puts one token of each resource in the area on the reveal, and the undo takes them off again', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Arabs'), CASH1981)
+    expect(resources(revealed).map((piece) => piece.assetId).sort()).toEqual(['resources/incense', 'resources/iron', 'resources/silk', 'resources/wheat'])
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 starts with one of each resource from the market as the Arabs (Wheat, Silk, Incense, Iron)')).toBe(true)
+    expect(resources(undoByVote(revealed, CASH1981))).toHaveLength(0)
+  })
+
+  it('gives nothing to another civilization', () => {
+    expect(resources(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981))).toHaveLength(0)
+  })
+
+  it('skips a resource whose supply is used up, and says so', () => {
+    const base = giveCiv(firstCivGame(), CASH1981, 'Arabs')
+    const asset = findBoardAsset('resources/iron')
+    if (asset === undefined) throw new Error('no iron asset')
+    // Put iron pieces on the board until the market has none left
+    let state = base
+    for (let guard = 0; guard < 100 && (remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? 0) > 0; guard += 1) {
+      state = unwrap(placePiece(state, { playerId: KARANDRAS1, assetId: 'resources/iron', x: 5 + guard * 3, y: 5 }))
+    }
+    expect(remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)).toBe(0)
+    const revealed = revealHidden(state, CASH1981)
+    expect(revealed.log.some((entry) => entry.publicLog === 'cash1981 starts with one of each resource from the market as the Arabs (Wheat, Silk, Incense); the market has no Iron left')).toBe(true)
+    const own = (s: GameState) => s.board.pieces.filter((piece) => piece.assetId.startsWith('resources/') && piece.placedBy === CASH1981 && piece.assetId !== 'resources/iron')
+    expect(own(revealed)).toHaveLength(3)
+    expect(undoByVote(revealed, CASH1981).board.pieces.filter((piece) => piece.assetId === 'resources/iron')).toHaveLength(
+      state.board.pieces.filter((piece) => piece.assetId === 'resources/iron').length,
+    )
+  })
+})
+
+describe.each([
+  ['Chinese', 'cities/redcapitalwalled2'],
+  ['Indians', 'cities/redmetropolis2'],
+])('the %s city marker', (civ, assetId) => {
+  const markers = (state: GameState) => state.board.pieces.filter((piece) => piece.assetId === assetId)
+
+  it('is not handed out on the reveal any more: setup creates it, and the reveal only marks setup as required', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
+    expect(markers(revealed)).toEqual([])
+    expect(revealed.log.some((entry) => entry.publicLog.includes('marker in their area'))).toBe(false)
+    expect(findPlayer(revealed, CASH1981)?.setup).toEqual({ required: true, finished: false, placed: [], historyIds: [] })
+    // Nobody else's reveal opens a setup for them
+    expect(findPlayer(revealed, KARANDRAS1)?.setup).toBeUndefined()
+  })
+
+  it('goes with the reveal undo when setup has not started, and a new reveal opens setup again', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
+    const undone = undoByVote(revealed, CASH1981)
+    expect(markers(undone)).toHaveLength(0)
+    expect(findPlayer(undone, CASH1981)?.setup).toBeUndefined()
+    expect(findPlayer(revealHidden(undone, CASH1981), CASH1981)?.setup?.required).toBe(true)
   })
 })

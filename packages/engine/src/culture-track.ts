@@ -118,7 +118,8 @@ export function cultureAdvanceCost(
  * How many cards an advance to a space of this kind draws, of which the player keeps
  * one. A culture event draws 1, plus 1 with Mysticism revealed. A Great Person space
  * draws 1, plus 1 for a revealed Organized Religion, plus 1 for the Greeks; the
- * extras stack.
+ * extras stack. Anarchy switches the social policies off, so Organized Religion adds nothing
+ * under it; the Greeks' own bonus stays.
  */
 export function rewardDrawCount(
   _state: GameState,
@@ -129,7 +130,7 @@ export function rewardDrawCount(
   if (kind === 'event') return 1 + (hasRevealedTech(player, MYSTICISM) ? 1 : 0)
   return (
     1 +
-    (hasRevealedPolicy(player, ORGANIZED_RELIGION) ? 1 : 0) +
+    (hasRevealedPolicy(player, ORGANIZED_RELIGION) && player.government !== 'Anarchy' ? 1 : 0) +
     (player.civilization?.name === GREEKS ? 1 : 0)
   )
 }

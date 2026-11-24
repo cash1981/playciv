@@ -8,7 +8,7 @@
  *
  * The rules it follows are the Agriculture rulings 116 to 128 and the founding rules already in `city-founding.ts`:
  * - The new squares are the capital's square plus the neighbour, and every square around the neighbour must be on the map
- *   and revealed (as for any city), the neighbour not water.
+ *   and revealed (as for any city); the neighbour may be water (Fame and Fortune p. 10), and then counts as land for movement.
  * - No hut (except for the Zulu, ruling 108), village or city-state in the new outskirts or on the new square (ruling 118),
  *   and no other city's centre within three squares of the new square, so the outskirts do not overlap (ruling 118).
  *   An unclaimed relic in the new outskirts also stops growth (human, 2026-11-16).
@@ -202,11 +202,8 @@ export function metropolisGrowthsOf(scene: Scene, grower: Grower, capital: Board
       reasons.push('The metropolis marker would not lie on the capital and the square to the ' + direction + '.')
     }
 
-    // As for any city: the square is land and all eight squares around it are on the map and revealed
+    // The expansion square may be water (Fame and Fortune p. 10); all eight squares around it must be on the map and revealed
     const ring = around(second)
-    if (isMapCell(board, second.column, second.row) && terrainOfCell(board, second) === 'water') {
-      reasons.push(`${square} is a water square.`)
-    }
     if (ring.some((cell) => !isMapCell(board, cell.column, cell.row) || terrainOfCell(board, cell) === null)) {
       reasons.push(`${square} is at the edge of the map or next to a facedown tile: a metropolis needs the squares around both its city squares on the map and revealed.`)
     }

@@ -108,6 +108,7 @@ interface TableOptions {
   /** Leave City Management closed. */
   readonly closed?: boolean
   readonly americans?: boolean
+  readonly egyptians?: boolean
   /** A Building Program marker on the city. */
   readonly marker?: boolean
 }
@@ -165,6 +166,9 @@ async function buildTable(name: string, options: TableOptions = {}): Promise<Tab
             stats: { ...player.stats, trade: options.trade ?? 0 },
             ...(options.americans === true
               ? { civilization: { kind: 'civ', name: 'Americans' } as unknown as CivItem }
+              : {}),
+            ...(options.egyptians === true
+              ? { civilization: { kind: 'civ', name: 'Egyptians' } as unknown as CivItem }
               : {}),
           }
         : player,
@@ -327,6 +331,25 @@ describe('building over HTTP', () => {
     expect((await rushed.json<View>()).you?.stats.trade).toBe(6)
   })
 
+  it('the Egyptians build for free: the flag is needed, nothing is paid, and a bad flag is refused', async () => {
+    const table = await buildTable('Egypt', { techs: ['Printing Press'], trade: 0, egyptians: true })
+    const mine = await view(table.gameId, table.starter)
+    expect(mine.you?.buildOptions?.[0]?.choices.find((choice) => choice.assetId === UNIVERSITY)).toMatchObject({ freeBuild: true, freeOnly: true })
+
+    const bad = await post(table.starter, `/api/games/${table.gameId}/actions`, { ...buildBody(table, 'req-1', mine.rev, UNIVERSITY), free: 'yes' })
+    expect(bad.status).toBe(400)
+    expect(JSON.stringify(await bad.json())).toContain('free must be a boolean')
+
+    const plain = await sendBuild(table, 'req-2', mine.rev, UNIVERSITY)
+    expect(plain.status).toBe(400)
+    expect(JSON.stringify(await plain.json())).toContain('for free instead')
+
+    const free = await post(table.starter, `/api/games/${table.gameId}/actions`, { ...buildBody(table, 'req-3', mine.rev, UNIVERSITY), free: true })
+    expect(free.status).toBe(200)
+    expect((await free.json<View>()).you?.stats.trade).toBe(0)
+    expect(piecesOf(await stored(table), UNIVERSITY)).toHaveLength(1)
+  })
+
   it('uses up the Building Program marker', async () => {
     const table = await buildTable('Program', { techs: ['Writing'], marker: true })
     const mine = await view(table.gameId, table.starter)
@@ -467,7 +490,7 @@ describe('the payload', () => {
   it('the build fields belong to build only, and the reward fields to chooseReward only', async () => {
     const table = await buildTable('Stray', { techs: ['Writing'] })
     const rev = (await view(table.gameId, table.starter)).rev
-    for (const extra of [{ cityPieceId: table.cityId }, { item: { kind: 'building', assetId: LIBRARY } }, { target: C2 }, { rush: true }]) {
+    for (const extra of [{ cityPieceId: table.cityId }, { item: { kind: 'building', assetId: LIBRARY } }, { target: C2 }, { rush: true }, { free: true }]) {
       const response = await post(table.starter, `/api/games/${table.gameId}/actions`, {
         action: 'cultureAdvance', requestId: 'req-1', rev, ...extra,
       })

@@ -17,6 +17,7 @@ import { travelFigureCollecting } from '../src/actions/token-collection.js'
 import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE, areaAt, findBoardAsset, mapTop, playerAreas } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
+import { describeError } from '../src/errors.js'
 import { itemName } from '../src/item.js'
 import { unwrap } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
@@ -371,6 +372,122 @@ describe('collecting a token by ending a move on it', () => {
     expect(areaAt(playerAreas(moved.board, moved.players), token.x + token.width / 2, token.y + token.height / 2)?.playerId).toBe(CASH1981)
     const card = me(moved).items.find((item) => item.sheetName === 'HUTS')
     expect(moved.log.filter((entry) => entry.item?.id === card?.id && entry.logType === 'ITEM').every((entry) => entry.superseded === true && entry.undo === null)).toBe(true)
+  })
+})
+
+describe('the Chinese and huts', () => {
+  const chinese = (civ: string, culture = 5) => {
+    const scene = put(put(START(), 'figures/redarmy', 3, 2), 'resources/hut', 3, 1)
+    const withCiv: GameState = {
+      ...scene,
+      players: scene.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { kind: 'civ', name: civ } as unknown as Playerhand['civilization'], stats: { ...player.stats, culture } }
+          : player,
+      ),
+    }
+    const army = withCiv.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
+    const hut = withCiv.board.pieces.find((piece) => piece.assetId === 'resources/hut') as BoardPiece
+    return { state: withCiv, armyId: army.id, hutId: hut.id }
+  }
+  const collect = (state: GameState, armyId: string) =>
+    unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1, collectToken: true }))
+
+  it('gain 3 (8) culture and say so publicly when a figure collects a hut, and nobody else does', () => {
+    const { state, armyId } = chinese('Chinese')
+    const moved = collect(state, armyId)
+    expect(me(moved).stats.culture).toBe(8)
+    expect(moved.log.some((entry) => entry.publicLog === 'cash1981 gained 3 (8) culture from the hut on D2 as the Chinese')).toBe(true)
+    // The line is counted into the token's board entry, and no other player's view carries the card
+    expect(moved.board.history.at(-1)?.logLength).toBe(moved.log.length)
+    const drawn = me(moved).items.find((item) => item.sheetName === 'HUTS')
+    expect(JSON.stringify(toPlayerView(moved, KARANDRAS1))).not.toContain(drawn?.id ?? 'x')
+
+    const roman = chinese('Romans')
+    const plain = collect(roman.state, roman.armyId)
+    expect(me(plain).stats.culture).toBe(5)
+    expect(plain.log.some((entry) => entry.publicLog.includes('as the Chinese'))).toBe(false)
+  })
+
+  it('gain nothing for collecting a village token: its 3 culture comes only through a won battle, as an offer', () => {
+    const scene = put(put(START(), 'figures/redarmy', 3, 2), 'resources/village', 3, 1)
+    const state: GameState = {
+      ...scene,
+      players: scene.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { kind: 'civ', name: 'Chinese' } as unknown as Playerhand['civilization'], stats: { ...player.stats, culture: 5 } }
+          : player,
+      ),
+    }
+    const army = state.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
+    const moved = collect(state, army.id)
+    // The token was collected (its card is in the hand) but no culture was given and no line says so
+    expect(me(moved).items.some((item) => item.sheetName === 'VILLAGES')).toBe(true)
+    expect(me(moved).stats.culture).toBe(5)
+    expect(moved.log.some((entry) => entry.publicLog.includes('as the Chinese'))).toBe(false)
+    expect(moved.tokenCollections?.at(-1)?.culture).toBeUndefined()
+    // So the board Undo has no culture to take back
+    const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(me(undone).stats.culture).toBe(5)
+    expect(undone.log.at(-1)?.publicLog).toContain('put the village token on D2 back and returned its card')
+    expect(undone.log.at(-1)?.publicLog).not.toContain('culture')
+  })
+
+  it('gain nothing when the figure does not collect, and nothing for a relic', () => {
+    const { state, armyId } = chinese('Chinese')
+    const declined = unwrap(travelFigureCollecting(state, { playerId: CASH1981, pieceId: armyId, column: 3, row: 1 }))
+    expect(me(declined).stats.culture).toBe(5)
+
+    const relic = put(put(START(), 'figures/redarmy', 3, 2), 'relics/atlantis', 3, 1)
+    const chineseRelic: GameState = {
+      ...relic,
+      players: relic.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { kind: 'civ', name: 'Chinese' } as unknown as Playerhand['civilization'], stats: { ...player.stats, culture: 5 } }
+          : player,
+      ),
+    }
+    const relicArmy = chineseRelic.board.pieces.find((piece) => piece.category === 'figure') as BoardPiece
+    expect(me(collect(chineseRelic, relicArmy.id)).stats.culture).toBe(5)
+  })
+
+  it('lose the culture again when the board Undo returns the token', () => {
+    const { state, armyId } = chinese('Chinese')
+    const moved = collect(state, armyId)
+    const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(me(undone).stats.culture).toBe(5)
+    expect(undone.log.at(-1)?.publicLog).toContain('took back 3 (5) culture')
+  })
+
+  it('refuse the board Undo once the culture the hut gave is no longer all there, and keep the card and the token', () => {
+    // The board Undo is one player alone: if it clamped, a player could spend the 3, undo, and collect the same hut again for 3 more
+    const { state, armyId, hutId } = chinese('Chinese')
+    const moved = collect(state, armyId)
+    const card = me(moved).items.find((item) => item.sheetName === 'HUTS')
+    const spendTo = (culture: number): GameState => ({
+      ...moved,
+      players: moved.players.map((player) => (player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture } } : player)),
+    })
+    for (const left of [2, 1, 0]) {
+      const spent = spendTo(left)
+      const refused = undoLastBoardChange(spent, CASH1981)
+      expect(refused.ok, `${left} left`).toBe(false)
+      if (!refused.ok) {
+        expect(refused.error.kind).toBe('BOARD_UNDO_TOKEN_CULTURE_SPENT')
+        expect(describeError(refused.error)).toContain('culture the hut gave has been spent')
+      }
+      // Nothing moved: the card is in the hand, the token is off the map, the collection is still on record
+      expect(me(spent).items.some((item) => item.id === card?.id)).toBe(true)
+      expect(mapTokensOf(spent.board).some((token) => token.piece.id === hutId)).toBe(false)
+      expect(spent.tokenCollections).toHaveLength(1)
+    }
+    // Exactly the 3 is left: it all goes back, and the Undo is allowed
+    const exact = unwrap(undoLastBoardChange(spendTo(3), CASH1981))
+    expect(me(exact).stats.culture).toBe(0)
+    expect(exact.log.at(-1)?.publicLog).toContain('took back 3 (0) culture')
+    expect(mapTokensOf(exact.board).some((token) => token.piece.id === hutId)).toBe(true)
+    // More than the 3 is left (earned since): only the 3 goes
+    expect(me(unwrap(undoLastBoardChange(spendTo(10), CASH1981))).stats.culture).toBe(7)
   })
 })
 

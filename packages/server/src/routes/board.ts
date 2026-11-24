@@ -115,6 +115,7 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     }
     const disband = optionalBoolean(body, 'disband')
     const collectToken = optionalBoolean(body, 'collectToken')
+    const fightVillage = optionalBoolean(body, 'fightVillage')
 
     return applyToGame(context, c, gameId, (state) =>
       travelFigureCollecting(state, {
@@ -124,6 +125,7 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
         row,
         ...(disband === true ? { disband } : {}),
         ...(collectToken === true ? { collectToken } : {}),
+        ...(fightVillage === true ? { fightVillage } : {}),
         at: now(),
       }),
     )

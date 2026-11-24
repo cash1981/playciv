@@ -44,6 +44,8 @@ export type EngineError =
       readonly name: string
       readonly flipside: string
     }
+  /** Issue #378: the player holds as many social policies as they may (one per built city, one more for the French) */
+  | { readonly kind: 'SOCIAL_POLICY_LIMIT'; readonly maximum: number; readonly held: number }
   /** Java: 304 Not Modified "Item already revealed" */
   | { readonly kind: 'ITEM_ALREADY_REVEALED'; readonly name: string }
   /** Java: 400 "Civilization already chosen" */
@@ -59,6 +61,12 @@ export type EngineError =
   | { readonly kind: 'UNDO_ALREADY_DONE'; readonly logId: string }
   /** A civilization reveal whose setup cannot be told apart from the log, so it cannot be taken back */
   | { readonly kind: 'CIV_REVEAL_NOT_UNDOABLE'; readonly logId: string }
+  /** Setup has begun for the player (a step is done), so the reveal cannot be taken back until the steps are undone */
+  | { readonly kind: 'CIV_REVEAL_SETUP_STARTED'; readonly logId: string }
+  /** A setup step was refused, with the sentence for the player (issue #374) */
+  | { readonly kind: 'SETUP_REFUSED'; readonly step: string; readonly reason: string }
+  /** Start of Turn cannot be marked done until the player has finished setup; `reason` names what is missing (issue #374) */
+  | { readonly kind: 'SETUP_INCOMPLETE'; readonly reason: string }
   /** Java: 400 "Cannot join the game. Its full!" */
   | { readonly kind: 'GAME_IS_FULL'; readonly numOfPlayers: number }
   /** A private game (issue #348): only the invited players may join */
@@ -100,6 +108,9 @@ export type EngineError =
   | { readonly kind: 'BOARD_UNDO_ASSISTED' }
   /** The card drawn from a hut or village token is no longer in the player's hand, so collecting it cannot be undone (issue #364). */
   | { readonly kind: 'BOARD_UNDO_TOKEN_CARD_GONE' }
+  | { readonly kind: 'BOARD_UNDO_TOKEN_CULTURE_SPENT' }
+  /** The free building the Spanish got for exploring that tile has been used, so the exploration cannot be undone. */
+  | { readonly kind: 'BOARD_UNDO_SPANISH_BUILDING_USED' }
   /** Nothing has been undone since the last board change, so there is nothing to redo */
   | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
   /** The game has not started: there is no player to the left of the caller yet (barbarians) */
@@ -161,6 +172,15 @@ export type EngineError =
   | { readonly kind: 'UNIT_ALREADY_IN_BATTLE'; readonly unitId: string }
   /** No arena unit with the given id was found */
   | { readonly kind: 'ARENA_UNIT_NOT_FOUND'; readonly arenaUnitId: string }
+  /** The unit the Chinese chose to save is not one of their killed units whose card End battle discarded and that is still on the pile */
+  | { readonly kind: 'CHINESE_SAVE_INVALID'; readonly arenaUnitId: string }
+  /**
+   * Undoing End battle would take back what the Aztecs gained, and they no longer hold all of it (they spent it): the ender
+   * alone may undo, so the take-back is refused instead of paying out a reward that was already used.
+   */
+  | { readonly kind: 'END_BATTLE_UNDO_AZTEC_SPENT' }
+  /** The player has no killed unit to save as the Chinese now: not Chinese, not in the battle that has just ended, or one is already saved */
+  | { readonly kind: 'CHINESE_SAVE_UNAVAILABLE' }
   /** An arena stat value is not a non-negative integer */
   | { readonly kind: 'INVALID_ARENA_STAT_VALUE'; readonly value: number }
   /** A player cannot initiate a battle against themselves */
@@ -211,6 +231,8 @@ export function describeError(error: EngineError): string {
       return `Player tried to add same social policy as they had: ${error.name}`
     case 'SOCIAL_POLICY_FLIPSIDE_TAKEN':
       return `Player tried to add a social policy on same flipside: ${error.flipside}`
+    case 'SOCIAL_POLICY_LIMIT':
+      return `You may hold ${error.maximum} social ${error.maximum === 1 ? 'policy' : 'policies'} (one per built city, one more for the French) and hold ${error.held}: remove one to choose another`
     case 'ITEM_ALREADY_REVEALED':
       return 'Item already revealed'
     case 'CIVILIZATION_ALREADY_CHOSEN':
@@ -227,6 +249,12 @@ export function describeError(error: EngineError): string {
       return 'This undo has already been carried out'
     case 'CIV_REVEAL_NOT_UNDOABLE':
       return 'This civilization reveal cannot be undone'
+    case 'CIV_REVEAL_SETUP_STARTED':
+      return 'Setup has started for this civilization: undo its setup steps before taking the reveal back'
+    case 'SETUP_REFUSED':
+      return error.reason
+    case 'SETUP_INCOMPLETE':
+      return error.reason
     case 'GAME_IS_FULL':
       return 'Cannot join the game. Its full!'
     case 'NOT_INVITED':
@@ -271,6 +299,10 @@ export function describeError(error: EngineError): string {
       return 'The last board change was made by an assisted action. Ask for an undo vote on its log line instead'
     case 'BOARD_UNDO_TOKEN_CARD_GONE':
       return 'The card drawn from that token has left the hand, so collecting it cannot be undone'
+    case 'BOARD_UNDO_TOKEN_CULTURE_SPENT':
+      return 'The culture the hut gave has been spent, so collecting it cannot be undone'
+    case 'BOARD_UNDO_SPANISH_BUILDING_USED':
+      return 'The free building that tile gave has been used, so exploring it cannot be undone. Undo the building first'
     case 'NOTHING_TO_REDO_ON_BOARD':
       return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':
@@ -319,6 +351,12 @@ export function describeError(error: EngineError): string {
       return 'This unit is already in the arena'
     case 'ARENA_UNIT_NOT_FOUND':
       return `No arena unit with id ${error.arenaUnitId}`
+    case 'CHINESE_SAVE_INVALID':
+      return `The unit ${error.arenaUnitId} cannot be saved: only a killed unit of yours from the battle that has just ended, still on the discard pile, can`
+    case 'END_BATTLE_UNDO_AZTEC_SPENT':
+      return 'The trade or culture the Aztecs gained for that battle has been spent, so ending it cannot be undone'
+    case 'CHINESE_SAVE_UNAVAILABLE':
+      return 'There is no killed unit to save as the Chinese: one can be saved after each battle, until the next one starts'
     case 'INVALID_ARENA_STAT_VALUE':
       return `Arena stat must be a non-negative whole number, got ${error.value}`
     case 'CANNOT_BATTLE_YOURSELF':

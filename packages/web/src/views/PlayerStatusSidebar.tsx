@@ -497,13 +497,13 @@ function PlayerBlock({
   const heading = `${block.username} - ${block.civilizationName ?? 'hidden'}`
   // The speed the revealed techs give, when it is more than what is typed: shown as the value, with the tech that gives it
   const techSpeed = techSpeedOf(block.techs)
-  const typedMovement = splitMovement(stats.mvmt)
+  const typedMovement = splitMovement(stats.mvmt, block.civilizationName === 'Spanish')
   const techSpeedShown = techSpeed !== null && techSpeed.speed > typedMovement.base ? techSpeed : null
-  // The typed bonus (Spain's +1) stays on top of the tech's speed
-  const movementValue = techSpeedShown === null ? 0 : techSpeedShown.speed + typedMovement.bonus
+  // Spain's +1 and a typed bonus stay on top of the tech's speed
+  const movementValue = techSpeedShown === null ? 0 : techSpeedShown.speed + typedMovement.bonus + typedMovement.spain
   const movementShown: React.ReactNode =
     techSpeedShown !== null ? (
-      <span title={`${techSpeedShown.tech} gives ${techSpeedShown.speed}${typedMovement.bonus > 0 ? `, plus the typed ${typedMovement.bonus}` : ''} (the typed value is ${stats.mvmt.trim() || 'empty'})`}>{movementValue}</span>
+      <span title={`${techSpeedShown.tech} gives ${techSpeedShown.speed}${typedMovement.bonus + typedMovement.spain > 0 ? `, plus ${typedMovement.bonus + typedMovement.spain}` : ''} (the typed value is ${stats.mvmt.trim() || 'empty'})`}>{movementValue}</span>
     ) : (
       stats.mvmt
     )

@@ -16,8 +16,11 @@ import type { TeslaEffect } from './tesla.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece, PieceFace, PieceMovement } from './board.js'
 import { boardAreas } from './board.js'
-import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
+import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
+import { ownCityPieces } from './city-founding.js'
+import { socialPolicySlots } from './social-policy-slots.js'
+import type { SocialPolicySlots } from './social-policy-slots.js'
 import { cityDefenceOf } from './city-defence.js'
 import { stackingLimitOf } from './great-person-effects.js'
 import { brandenburgZonesOf } from './brandenburg.js'
@@ -42,18 +45,24 @@ import type { WaitingFor } from './turn.js'
 import {
   gameHasStarted,
   startPlayerName,
-  turnHolder,
+  turnHolderStage,
   turnStatus,
 } from './turn.js'
 import type { Undo } from './undo.js'
 import type { ArenaRefight, ArenaUnit, Battle, BattleSideId, BattleSideSummary } from './battle.js'
 import type { TechCoinGrant } from './tech-coins.js'
+import type { DiscardedKilledCard } from './killed-units.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import type { ResourcePaymentOption } from './assisted-resources.js'
 import { livePendingRewards } from './assisted-culture.js'
+import { conquestOfferViewsOf } from './assisted-conquest.js'
+import { chineseSaveViewOf } from './chinese-save.js'
+import type { ChineseSaveView } from './chinese-save.js'
 import { playableCardsOf } from './assisted-cards.js'
 import { startOfTurnViewOf } from './assisted-sot.js'
+import { setupViewOf } from './setup.js'
+import type { SetupView } from './setup.js'
 import type { GovernmentOption } from './sot.js'
 import type { PlayableCard } from './card-timing.js'
 import { cultureMarkerOf } from './culture-track.js'
@@ -242,6 +251,46 @@ export interface Playerhand {
    * Own view only, like the rest of the hand.
    */
   readonly curieSubstitute: string | null
+  /**
+   * The one-time setup before turn 1 (issue #374). Absent in a game saved before it existed: such a player has no setup,
+   * no gate and no Setup tab. Private bookkeeping: opponents and spectators never get it, and the owner's view carries
+   * `PlayerViewSelf.setup` instead.
+   */
+  readonly setup?: PlayerSetup
+}
+
+/** What setup puts on the board and in the stats, as pieces and ids to take back. Never projected as is. */
+export interface SetupPlacement {
+  /** `capital` (the city marker), the colour `army` and `scout`, the civilization's `white` figure, or Egypt's `wonder`. */
+  readonly slot: 'capital' | 'army' | 'scout' | 'white' | 'wonder'
+  readonly pieceId: string
+  /**
+   * `true` for a piece setup created (taking the step back removes it); `false` for one that was lying in the player's
+   * area (the white figure, Egypt's wonder, a capital marker from an earlier reveal): taking it back puts it in the area.
+   */
+  readonly created: boolean
+}
+
+/** The setup record of one player. Step status is derived from the board and the hand; this holds only what cannot be. */
+export interface PlayerSetup {
+  /** Set when the civilization is revealed. Start of Turn cannot be marked done until setup is finished. */
+  readonly required: boolean
+  /**
+   * Set when setup is finished (the Finish setup button or the gate letting Start of Turn through), so a later manual board
+   * edit cannot close it again.
+   */
+  readonly finished: boolean
+  /**
+   * Set when the player passed the turn on from the Setup tab without finishing (issue #374): the next player may choose
+   * their civilization, and this player's steps stay doable. Public through the log line only.
+   */
+  readonly passed?: boolean
+  /** The trade the starting count added to `stats.trade`, so a solo undo takes back exactly it. Absent until counted. */
+  readonly trade?: number
+  /** The pieces setup placed, in the order it placed them. */
+  readonly placed: readonly SetupPlacement[]
+  /** Every board history entry setup wrote, so the board Undo leaves them to the setup's own undo. */
+  readonly historyIds: readonly string[]
 }
 
 /** A free tech to learn, with the level it must have (`null` for any level). */
@@ -447,8 +496,14 @@ export type AssistedActionKind =
   | 'switchGovernment'
   | 'invest'
   | 'gianniniBuild'
+  // The American great person drawn in setup (setup.ts), laid out like the School of Confucius'
+  | 'setupGreatPerson'
+  // The Spanish free basic building for a tile explored (assisted-spanish.ts); its effect is `gianniniBuild`'s
+  | 'spanishBuild'
   | 'foundCity'
   | 'assignScout'
+  // The answer to a conquest offer (the Romans' free advance, the Chinese 3 culture, or no thanks): `conquest.ts`
+  | 'claimConquest'
   | 'devoteToTheArts'
   | 'harvest'
   | 'communism'
@@ -481,6 +536,8 @@ export type AssistedActionKind =
   | 'agriculture'
   // Military Tradition's free unit after an army figure is built, one button per unit type (assisted-military-tradition.ts)
   | `militaryTradition:${UnitType}`
+  // The Aztecs' free unit for a Great Person gained, one button per unit type (assisted-aztecs.ts)
+  | `aztecs:${UnitType}`
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
   | `sot:${string}`
   // The one-time ability of a relic that is claimed as soon as an army has taken it: `relic:<ability>` (assisted-relics.ts)
@@ -505,6 +562,8 @@ export type AssistedStatus =
  * The resource an action paid, exactly, so an undo puts back the same
  * one: a hut/village from the hand (moved to `discardedItems`) with its collected
  * icon if present, the board resource with its position, or the culture card played as the resource.
+ * `arabCulture` is the culture the Arabs were given for this spend, taken back as far as it is still there when the
+ * resource is returned.
  */
 export type SpentResource =
   | {
@@ -514,10 +573,13 @@ export type SpentResource =
       /** The collected icon removed with the held item; absent in older saves or when no matching icon remained. */
       readonly tokenPiece?: BoardPiece
       readonly curieSubstitute?: string
+      /** The Indians spent this token as the named resource (incense, iron, silk or wheat); `resource` is what it really is. */
+      readonly asResource?: string
+      readonly arabCulture?: number
     }
-  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string }
+  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece; readonly curieSubstitute?: string; readonly asResource?: string; readonly arabCulture?: number }
   // A culture card played as the resource (A Gift from Afar, A Generous Gift, A Princely Gift), discarded like a played card
-  | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string }
+  | { readonly kind: 'card'; readonly resource: string; readonly itemId: string; readonly curieSubstitute?: string; readonly arabCulture?: number }
 
 /**
  * The Great Person marker a culture advance put in the player's area: which piece, where it
@@ -529,6 +591,11 @@ export interface GreatPersonMarker {
   readonly pieceId: string
   readonly position: { readonly x: number; readonly y: number }
   readonly historyId: string
+  /**
+   * The free-unit credits this Great Person gave its owner as the Aztecs (`aztecFreeUnits`), so an undo takes back
+   * exactly these, as far as they are unused. Absent for every other civilization. Never projected.
+   */
+  readonly aztecCredits?: number
 }
 
 /**
@@ -644,8 +711,35 @@ export type AssistedEffect =
       readonly cityState: { readonly piece: BoardPiece; readonly historyId: string } | null
       /** The culture the destroyed city-state gave. */
       readonly culture: number
+      /** The huts a Zulu city explored at once: the collection's board entry, the token and where it lay, and the card. */
+      readonly huts?: readonly {
+        readonly historyId: string
+        readonly pieceId: string
+        readonly from: { readonly x: number; readonly y: number }
+        readonly itemId: string
+      }[]
       /** The free advance the Romans get for a new city, or `null`. */
       readonly advance: CultureAdvanceEffect | null
+    }
+  | {
+      /** The answer to a conquest offer. The offer is kept as it stood, so an undo opens it again. */
+      readonly kind: 'conquestClaim'
+      readonly offer: ConquestOffer
+      readonly accepted: boolean
+      /** The culture the Chinese were given; 0 for the Romans and for a decline. */
+      readonly culture: number
+      /** The free advance the Romans took, or `null` (declined, or no space left to advance to). */
+      readonly advance: CultureAdvanceEffect | null
+      /**
+       * The village token the answer took into the player's area: its board entry, the token and where it lay, and the card.
+       * `null` when nothing was drawn (declined, a city, or the token was no longer on the square); absent in older saves.
+       */
+      readonly village?: {
+        readonly historyId: string
+        readonly pieceId: string
+        readonly from: { readonly x: number; readonly y: number }
+        readonly itemId: string
+      } | null
     }
   | {
       /** A scout's square sent to a city for the turn, or `cityPieceId: null` to stop sending it. */
@@ -721,6 +815,8 @@ export type AssistedEffect =
       /** The players the card named, in the order they were chosen. */
       readonly targets: readonly string[]
       readonly resource: string | null
+      /** The culture an Arab player was given for playing the card as `resource` (`awardArabCulture`), so an undo takes it back as far as it is still there. Absent for any other player. */
+      readonly arabCulture?: number
       /** The card's name as the line printed it. */
       readonly name: string
       /** What the game did for the card besides logging it: trade and culture gained, as actually added. Negative for what Albert Einstein spent. */
@@ -776,6 +872,8 @@ export type AssistedEffect =
         readonly battleId: string
         readonly bonus?: number
         readonly saved?: readonly string[]
+        /** Florence Nightingale after the battle: the discarded cards she took back, for an undo to discard again. */
+        readonly returned?: readonly DiscardedKilledCard[]
         readonly zhukov?: boolean
       }
       /** Nikola Tesla: the tech placed one row lower and where it was, so an undo can move it back. Never projected. */
@@ -863,6 +961,14 @@ export type AssistedEffect =
       readonly subject: string
       readonly drawn: readonly string[]
       /** Cards discarded faceup because their marker type was out. */
+      readonly rejected: readonly string[]
+      readonly kept: string | null
+      readonly marker: GreatPersonMarker | null
+    }
+  | {
+      /** The great person the Americans draw in setup (`setup.ts`): laid out like the School of Confucius', the cards drawn, those discarded faceup, the one kept and its marker. */
+      readonly kind: 'setupGreatPerson'
+      readonly drawn: readonly string[]
       readonly rejected: readonly string[]
       readonly kept: string | null
       readonly marker: GreatPersonMarker | null
@@ -957,6 +1063,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
+      readonly free?: true
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
       /** The caravan the build used up (Fame and Fortune p. 7), as `marker` is kept. Absent without one. */
@@ -967,6 +1075,8 @@ export type AssistedEffect =
       readonly hensonWound?: true
       /** Education added a coin for this wonder (once per turn, max 4), so an undo takes it off again. */
       readonly educationCoin?: TechCoinGrant
+      /** The free culture advance the Romans get for a wonder, so an undo takes it back. Absent for other builds and civs. */
+      readonly advance?: CultureAdvanceEffect | null
     }
   | {
       readonly kind: 'build'
@@ -1019,6 +1129,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
+      readonly free?: true
     }
   | {
       readonly kind: 'startBuildingProgram'
@@ -1226,6 +1338,20 @@ export interface UnderToken {
   readonly square?: string
 }
 
+/** What revealing a tech gave a civilization: culture, and free unit cards by their id and deck. */
+export interface TechRevealEffect {
+  readonly playerId: string
+  readonly techName: string
+  readonly culture: number
+  readonly units: readonly { readonly itemId: string; readonly sheetName: SheetName }[]
+  /**
+   * Set on what is left of an effect when the tech was taken back but some of its reward could not be recovered
+   * (culture that is spent, a unit card that left the hand): the reward was paid once and stays paid, so revealing the
+   * same tech again does not pay it twice. Such a record carries no culture and no units.
+   */
+  readonly paid?: true
+}
+
 /** One hut or village a figure collected: the token's move into the player's area, and the card it gave. Server only. */
 export interface TokenCollection {
   /** The board history entry that moved the token into the player's area. */
@@ -1238,6 +1364,52 @@ export interface TokenCollection {
   readonly under: UnderToken | null
   /** "J6": where the token lay. */
   readonly square: string
+  /** Culture the collection gave (the Chinese for a hut), taken back with the token. Absent when it gave none. */
+  readonly culture?: number
+}
+
+/**
+ * An own army of a Roman or Chinese player ended its move on a village token, or (Romans) on another player's city: the
+ * conquest the next battle that player wins with that army may settle (`conquest.ts`). At most one per player, a newer
+ * qualifying move replaces it. Server only: it names a piece, so a projection must never carry it.
+ */
+export interface PendingConquest {
+  readonly playerId: string
+  /** The army that made the move. */
+  readonly pieceId: string
+  readonly column: number
+  readonly row: number
+  /** "B4": where it stands. */
+  readonly square: string
+  readonly kind: 'village' | 'city'
+}
+
+/** The civilizations whose conquests give an extra reward (the civ cards, issue #368). Any other civ only gets the village. */
+export type ConquestCiv = 'Romans' | 'Chinese'
+
+/**
+ * A conquest the player won a battle for and has not answered yet: take the civ reward (the Romans' free advance, the
+ * Chinese 3 culture) or leave it. Public in effect (the log says the battle was won), but only shown to its owner.
+ */
+export interface ConquestOffer {
+  readonly id: string
+  readonly playerId: string
+  readonly kind: 'village' | 'city'
+  readonly square: string
+  /** The player's civilization name (`''` before one is chosen); only the Romans and the Chinese have an extra reward. */
+  readonly civ: string
+}
+
+/**
+ * An open offer as its owner sees it: `blocked` says why accepting is stopped now (a card choice waiting, a hand over its
+ * size), `nothing` why a Roman advance has nothing to move (no leader marker on the track, or already on the last space),
+ * in which case accepting only closes the offer.
+ */
+export interface ConquestOfferView extends Omit<ConquestOffer, 'playerId'> {
+  readonly blocked: string | null
+  readonly nothing: string | null
+  /** A village offer whose token is no longer on the square: accepting then gives only the civ's extra (if it has one). */
+  readonly villageGone: boolean
 }
 
 /** A hut or village piece a draw can be made from (`drawTokens` in the view). Positions are public. */
@@ -1363,6 +1535,8 @@ export interface CivRevealSetup {
     readonly wonders: readonly Item[]
     readonly pieceIds: readonly string[]
   }
+  /** The civilization's travel speed bonus (Spain) written into `stats.mvmt`: what it was and what the reveal set it to. */
+  readonly mvmt?: { readonly before: string; readonly set: string }
 }
 
 export interface GameState {
@@ -1398,6 +1572,12 @@ export interface GameState {
    * back and return the card. Server only: it names the drawn card, so a projection must never carry it.
    */
   readonly tokenCollections?: readonly TokenCollection[]
+  /** What the first reveal of a tech gave its player (Germans, Greeks), so taking the tech back takes it back. Server only, never projected. */
+  readonly techRevealEffects?: readonly TechRevealEffect[]
+  /** The conquests an army may have made with its last move (Romans, Chinese), one per player. Server only, never projected. */
+  readonly pendingConquests?: readonly PendingConquest[]
+  /** The conquests won and not answered yet. Each owner sees their own in the view (`you.conquestOffers`), nobody else's. */
+  readonly conquestOffers?: readonly ConquestOffer[]
   readonly players: readonly Playerhand[]
   /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]
@@ -1426,6 +1606,18 @@ export interface GameState {
    * or the numbers could be matched against the tech list again.
    */
   readonly logSecret: string
+  /**
+   * The free-unit credits an Aztec player holds, by player id: two for every Great Person gained, one spent per free
+   * unit drawn (`assisted-aztecs.ts`). Absent or missing for a player means none. Server only: a projection must never
+   * carry it; the owner sees only the "N of M left" of the buttons.
+   */
+  readonly aztecFreeUnits?: Readonly<Record<string, number>>
+  /**
+   * The free buildings a Spanish player was given for exploring, one per tile: the board entry that laid the tile and who
+   * explored it (`spanish-credit.ts`). What is left is these minus the applied `spanishBuild` records. Server only: a
+   * projection must never carry it; the owner sees only the "N of M left" of the availability text.
+   */
+  readonly spanishFreeBuildings?: readonly { readonly playerId: string; readonly historyId: string }[]
   /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
   /**
@@ -1473,6 +1665,12 @@ export interface GameState {
    */
   readonly legacyRevealsCopied: boolean
   /**
+   * Spain's +1 travel speed is part of the typed Movement (`3`, not `2+1`). True for a game created by this code and for a save
+   * that `migrateGameState` has converted; absent in an older save, which is converted once on its next load. After that a
+   * Movement typed by hand is never rewritten. Public, but not in the view.
+   */
+  readonly spanishMovementMigrated?: boolean
+  /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.
    */
@@ -1509,6 +1707,17 @@ export interface EndedBattle {
   readonly fortification?: BoardPiece
   /** The Code of Laws coin the winner earned for this battle, so an undo takes it off again. */
   readonly codeOfLawsCoin?: TechCoinGrant
+  /** What the Aztecs gained for this battle (3 trade for a win, 1 culture per killed unit), so an undo takes it off again. */
+  readonly aztecs?: { readonly playerId: string; readonly trade: number; readonly culture: number }
+  /** The killed Chinese unit (its arena unit id) the Chinese saved after this battle, so an undo marks it killed again. */
+  readonly chineseSaved?: string
+  /** The cards of the killed units this end discarded, so a save can take one back and an undo all of them. */
+  readonly killedDiscarded?: readonly DiscardedKilledCard[]
+  /**
+   * The conquests this end settled: the offers it made (an undo removes the ones still open, and is refused for one that was
+   * answered) and the pending conquests it used up (an undo gives them back, so ending the battle again can offer again).
+   */
+  readonly conquest?: { readonly offerIds: readonly string[]; readonly pending: readonly PendingConquest[] }
 }
 
 // ---------------------------------------------------------------------------
@@ -1537,6 +1746,11 @@ export interface ActiveTurnStatus {
   readonly waitingFor: readonly WaitingFor[]
   /** The username of whoever started this turn, `null` when there is nobody. Public. */
   readonly startPlayer: string | null
+  /**
+   * `'setup'` while the holder was picked by the setup stage (issue #374): a player passed the turn on in setup and this
+   * one still has to choose their civilization or do their setup. Absent otherwise.
+   */
+  readonly stage?: 'setup'
 }
 
 /**
@@ -1546,8 +1760,9 @@ export interface ActiveTurnStatus {
  */
 export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
   if (!gameHasStarted(state)) return null
-  const holder = turnHolder(state)
-  if (holder === undefined) return null
+  const picked = turnHolderStage(state)
+  if (picked === undefined) return null
+  const holder = picked.holder
   const status = turnStatus(state)
   const phase = status.players.find((player) => player.playerId === holder.playerId)?.phase
   return {
@@ -1559,6 +1774,7 @@ export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
     phase: phase ?? 'SOT',
     waitingFor: status.waitingFor,
     startPlayer: startPlayerName(state, status.currentTurn),
+    ...(picked.stage === 'setup' ? { stage: 'setup' as const } : {}),
   }
 }
 
@@ -1615,19 +1831,17 @@ export function cultureMarkerLevelOf(state: GameState, playerId: string): number
 /**
  * How many city pieces (capital, city or metropolis, walled or not) belong to a
  * player. A city's colour is read off its asset id — for example "cities/redcity2"
- * belongs to Red (see `pieceColorOf`). There is no equivalent for `building`
- * pieces: the manifest has one generic image per building type, with no
- * per-colour artwork, so `buildingCountOf` below falls back to `placedBy`
- * instead.
+ * belongs to Red (see `pieceColorOf`). A city piece still lying in a player area
+ * is a marker waiting to be placed (the Chinese walled capital, the Indian
+ * metropolis), not a city, and is not counted (see `ownCityPieces`). There is no
+ * equivalent for `building` pieces: the manifest has one generic image per building
+ * type, with no per-colour artwork, so `buildingCountOf` below falls back to
+ * `placedBy` instead.
  */
 export function cityCountOf(state: GameState, playerId: string): number {
   const player = findPlayer(state, playerId)
   if (player === undefined || player.color === null) return 0
-
-  const colour = player.color.toLowerCase()
-  return state.board.pieces.filter(
-    (piece) => piece.category === 'city' && pieceColorOf(piece) === colour,
-  ).length
+  return ownCityPieces(state, player).length
 }
 
 /**
@@ -1931,6 +2145,12 @@ export interface StartOfTurnView {
    * name the viewer's own cities and the buildings they have unlocked: own view only.
    */
   readonly giannini: (NowAnswer & { readonly choices: readonly FreeBuildingChoice[] }) | null
+  /**
+   * The Spanish free basic building for a tile explored: `null` unless the viewer is Spanish and holds a credit. Its
+   * reason says "N of M left"; the credit itself is server-only. Own view only, like the choices, which are basic
+   * buildings (unlocked or not) with every legal square of the viewer's cities.
+   */
+  readonly spanish: (NowAnswer & { readonly choices: readonly FreeBuildingChoice[] }) | null
   /** The cities the player has and may have: building one needs fewer than the limit. */
   readonly cityLimit: { readonly have: number; readonly max: number }
   /** The player's own cities on the map, for choosing where a scout sends its square. */
@@ -1950,7 +2170,12 @@ export interface StartOfTurnView {
   }[]
 }
 
-export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
+export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards' | 'setup'> {
+  /**
+   * The setup steps still to do before turn 1 (issue #374), or `null` when the player has none (a game saved before setup,
+   * or setup is finished). Only ever the viewer's own, and blanked for a replayed revision.
+   */
+  readonly setup: SetupView | null
   /** Effective stacking from the typed base, revealed techs, Russia and active Louis Pasteur. */
   readonly stackingLimit: number
   /**
@@ -1959,8 +2184,23 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    * not even a count.
    */
   readonly pendingRewards: readonly PendingRewardView[]
+  /**
+   * The viewer's own open conquest offers (a won battle for a village or a city, as the Romans or the Chinese). Only ever the
+   * viewer's own, like `pendingRewards`; empty for a replayed revision.
+   */
+  readonly conquestOffers: readonly ConquestOfferView[]
+  /**
+   * The killed units the viewer may save as the Chinese after the battle that has just ended, or null. Only ever the
+   * viewer's own; null for a replayed revision.
+   */
+  readonly chineseSave: ChineseSaveView | null
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
+  /**
+   * How many social policies the viewer may hold and holds (issue #378): counts only, no policy name. Own view only, like
+   * `setup`; `null` for a replayed revision. The opponents' view keeps `numberOfSocialPolicies`.
+   */
+  readonly socialPolicySlots: SocialPolicySlots | null
   readonly buildingCount: number
   /** The viewer's cities, as `OpaquePlayerhand.cities` gives them for everybody. */
   readonly cities: readonly CityProduction[]
@@ -2195,6 +2435,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           stackingLimit: stackingLimitOf(state, player),
           cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
           cityCount: cityCountOf(state, viewerId),
+          socialPolicySlots: socialPolicySlots(state, player),
           buildingCount: buildingCountOf(state, viewerId),
           cities: cityProductionsOf(state, player),
           tradeEstimate: tradeEstimateOf(state, player),
@@ -2207,6 +2448,9 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           upgradeOptions: upgradeOptionsOf(state, player),
           repositionableFigures: repositionableFiguresOf(state, player),
           pendingRewards: pendingRewardViews(player),
+          conquestOffers: conquestOfferViewsOf(state, player),
+          chineseSave: chineseSaveViewOf(state, player),
+          setup: setupViewOf(state, player),
         }
   return {
     id: state.id,

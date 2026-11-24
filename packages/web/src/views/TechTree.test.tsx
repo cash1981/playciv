@@ -22,14 +22,39 @@ describe('TechTree', () => {
     expect(rows[4]?.querySelectorAll('.tech-slot')).toHaveLength(5)
   })
 
-  it('shows the trade cost on an empty slot, and nothing on a level 5 empty slot', () => {
+  it('shows the trade cost on an empty slot, 27 on level 5 too', () => {
     const { container } = render(<TechTree techs={[]} />)
 
-    const level1Row = container.querySelectorAll('.tech-pyramid-row')[4]
-    expect(level1Row?.querySelector('.tech-slot.available')?.textContent).toBe('6')
+    const rows = container.querySelectorAll('.tech-pyramid-row')
+    expect(rows[4]?.querySelector('.tech-slot.available')?.textContent).toBe('6')
+    expect(rows[0]?.querySelector('.tech-slot.available')?.textContent).toBe('27')
+  })
 
-    const level5Row = container.querySelectorAll('.tech-pyramid-row')[0]
-    expect(level5Row?.querySelector('.tech-slot.available')?.textContent).toBe('')
+  // Apex (level 5) first, base (level 1) last.
+  const costs = (container: HTMLElement): readonly (string | null | undefined)[] =>
+    [...container.querySelectorAll('.tech-pyramid-row')].map((row) => row.querySelector('.tech-slot.available')?.textContent)
+  const titles = (container: HTMLElement): readonly (string | null | undefined)[] =>
+    [...container.querySelectorAll('.tech-pyramid-row')].map((row) => row.querySelector('.tech-slot.available')?.getAttribute('title'))
+
+  it('shows 6, 11, 16, 21 and 27 to every civilization but the Japanese, with the tooltip', () => {
+    for (const civilization of [undefined, null, 'Romans']) {
+      const { container } = render(<TechTree techs={[]} civilization={civilization} />)
+      expect(costs(container)).toEqual(['27', '21', '16', '11', '6'])
+      expect(titles(container)[2]).toBe('16 trade needed to learn a level 3 tech')
+      cleanup()
+    }
+  })
+
+  it('shows 3, 8, 13, 18 and 24 to the Japanese, and the tooltip says it is 3 less', () => {
+    const { container } = render(<TechTree techs={[]} civilization="Japanese" />)
+    expect(costs(container)).toEqual(['24', '18', '13', '8', '3'])
+    expect(titles(container)).toEqual([
+      '24 trade needed to learn a level 5 tech (Japanese: 3 less)',
+      '18 trade needed to learn a level 4 tech (Japanese: 3 less)',
+      '13 trade needed to learn a level 3 tech (Japanese: 3 less)',
+      '8 trade needed to learn a level 2 tech (Japanese: 3 less)',
+      '3 trade needed to learn a level 1 tech (Japanese: 3 less)',
+    ])
   })
 
   it('gives a researched slot the card image, the name as a fallback, and marks a hidden one', () => {

@@ -49,6 +49,7 @@ import {
   figureMovementOptions,
   findBoardAsset,
   locationOf,
+  mapCellOf,
   mapHeight,
   mapTop,
   nearestSlotOrigin,
@@ -65,6 +66,7 @@ import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { DisplaySettings, formatZoom, useDisplaySettings } from './DisplaySettings.js'
+import { revealPanel } from '../lib/reveal.js'
 import { BOARD_PANEL_ID } from './PhaseSummary.js'
 
 /** A map square the player may pick, as the engine lists it for a Build. */
@@ -853,6 +855,18 @@ export function BoardView({
     return pointerType !== 'mouse' && tileTapsSurface(piece)
   }
 
+  /**
+   * Puts a figure the viewer's Build placed this City Management on another square of its city, with no Undo. Tapping a blue
+   * square and dropping the figure on it both come here, so both ask the same questions first: it is not the viewer's turn, or
+   * the square carries a warning (an enemy figure stands there, which is not automated).
+   */
+  function putBuiltFigureOn(figure: BoardPiece, cell: { readonly column: number; readonly row: number; readonly label: string; readonly note?: string }): void {
+    if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
+    if (cell.note !== undefined && !window.confirm(`${cell.note} Put ${figure.label} on ${cell.label} anyway?`)) return
+    setMoveModeId(null)
+    void run(() => api.repositionBuiltFigure(gameId, figure.id, cell.column, cell.row))
+  }
+
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     // While a palette asset is armed, the board surface owns the tap—even if
     // the user taps an existing piece such as a starting tile.
@@ -962,6 +976,15 @@ export function BoardView({
     // tap on the board does not move it a second time.
     setMoveModeId(null)
     if (piece !== undefined && movementOptionsFor(piece) !== null) {
+      // A figure the viewer's Build placed this City Management, dropped on one of the squares it may be put on instead:
+      // the same call as tapping the blue square, with no movement spent and no Undo.
+      const placedHere = repositionFigures.find((entry) => entry.pieceId === piece.id)
+      const droppedOn = placedHere === undefined ? null : mapCellOf(board, { ...piece, x: drag.x, y: drag.y })
+      const target = droppedOn === null ? undefined : placedHere?.squares.find((cell) => cell.column === droppedOn.column && cell.row === droppedOn.row)
+      if (target !== undefined) {
+        putBuiltFigureOn(piece, target)
+        return
+      }
       // Arranged inside its own square, with no movement spent; a drop in another square springs back.
       const spot = arrangeWithinSquare(board, piece, drag.x, drag.y)
       if (spot !== undefined) void run(() => api.movePiece(gameId, piece.id, spot[0], spot[1], false))
@@ -1281,20 +1304,43 @@ export function BoardView({
                                 Math.floor((piece.x + piece.width / 2) / board.squareSize) === cell.column &&
                                 Math.floor((piece.y + piece.height / 2 - mapStart) / board.squareSize) === cell.row,
                             )
+                      // An army on a village (not Zulu: they draw it on the move) fights the barbarians for it instead of drawing it
+                      const fightsForVillage =
+                        token !== undefined &&
+                        token.sheet === 'VILLAGES' &&
+                        selected.assetId.endsWith('army') &&
+                        viewerCivilization !== 'Zulu' &&
+                        window.confirm(
+                          `${selected.label} ends its move on a village on ${cell.label}. ` +
+                            'Fight the barbarians for it? OK moves it there and starts the battle; if you win, you are offered the village with the army still on the square. ' +
+                            'Cancel just moves there and leaves the village.',
+                        )
                       const collectToken =
-                        (token !== undefined &&
+                        !fightsForVillage &&
+                        ((token !== undefined &&
+                          !(token.sheet === 'VILLAGES' && selected.assetId.endsWith('army') && viewerCivilization !== 'Zulu') &&
                           window.confirm(
                             `${selected.label} ends its move on a ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} on ${cell.label}. ` +
                               `Draw the ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} now? OK takes the token into your area and the card into your hand; ` +
                               'Cancel just moves there and leaves the token.',
                           )) ||
-                        // An army ending its move on a relic removes the marker and gains its one-time ability (Fame and Fortune p. 9)
-                        (relic !== undefined &&
-                          window.confirm(
-                            `${selected.label} ends its move on the ${relic.label} relic on ${cell.label}. ` +
-                              'OK removes the marker and ends the move; the Ark and the School of Confucius take effect at once, and the other abilities are buttons under Possible actions. Cancel just moves there and leaves the marker.',
-                          ))
+                          // An army ending its move on a relic removes the marker and gains its one-time ability (Fame and Fortune p. 9)
+                          (relic !== undefined &&
+                            window.confirm(
+                              `${selected.label} ends its move on the ${relic.label} relic on ${cell.label}. ` +
+                                'OK removes the marker and ends the move; the Ark and the School of Confucius take effect at once, and the other abilities are buttons under Possible actions. Cancel just moves there and leaves the marker.',
+                            )))
                       setMoveModeId(null)
+                      if (fightsForVillage) {
+                        // The battle exists once the move is done: bring the Battle panel (the arena) into view. The engine
+                        // ignores the fight on a contested square or while a battle is active, so only a started battle scrolls.
+                        void run(async () => {
+                          const result = await api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, false, true)
+                          if (result.battle != null) revealPanel('battle')
+                          return result
+                        })
+                        return
+                      }
                       void run(() =>
                         collectToken
                           ? api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, true)
@@ -1326,10 +1372,7 @@ export function BoardView({
                     onClick={(event) => {
                       event.stopPropagation()
                       if (selected === null) return
-                      if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
-                      if (cell.note !== undefined && !window.confirm(`${cell.note} Put ${selected.label} on ${cell.label} anyway?`)) return
-                      setMoveModeId(null)
-                      void run(() => api.repositionBuiltFigure(gameId, selected.id, cell.column, cell.row))
+                      putBuiltFigureOn(selected, cell)
                     }}
                     onPointerDown={(event) => event.stopPropagation()}
                   >

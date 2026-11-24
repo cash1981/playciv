@@ -223,7 +223,7 @@ export function CityCard({
           note={buildFlow.note}
           message={buildFlow.message}
           busy={controls.busy}
-          onChoose={(choice: BuildChoice) => buildFlow.start(buildOptions, choice)}
+          onChoose={(choice: BuildChoice, free?: boolean) => buildFlow.start(buildOptions, choice, free)}
           onClose={buildFlow.closePicker}
         />
       )}

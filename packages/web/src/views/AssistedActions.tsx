@@ -1186,7 +1186,7 @@ interface PanelProps {
 
 /**
  * Whether "Your actions" is on the page: the viewer has an action for a card they
- * hold, a card choice waiting, a city on the map, or a turn to end (a player in a
+ * hold, a card choice, a conquest offer or the Chinese save waiting, a setup to do, a city on the map, or a turn to end (a player in a
  * game that is running). Never for a spectator. The game page asks too, so the
  * Actions shortcut is not a dead button.
  */
@@ -1195,6 +1195,11 @@ export function hasActionsPanel(view: PlayerView): boolean {
     endTurnState(view) !== null ||
     (view.you?.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned') ||
     (view.you?.pendingRewards?.length ?? 0) > 0 ||
+    (view.you?.conquestOffers?.length ?? 0) > 0 ||
+    (view.you?.chineseSave?.units.length ?? 0) > 0 ||
+    (view.you?.startOfTurn?.spanish ?? null) !== null ||
+    // The setup before turn 1 (#374) is the first tab of the panel
+    (view.you?.setup ?? null) !== null ||
     (view.you?.cities?.length ?? 0) > 0
   )
 }

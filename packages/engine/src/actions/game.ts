@@ -431,7 +431,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
   // that has left the pile may have been renumbered since, so only one still in the pile is named.
   const inPile = (item: Item): boolean => state.discardedItems.some((candidate) => candidate.id === item.id)
   const advanceOf = (record: (typeof state.assistedActions)[number]): { readonly drawn: readonly string[] } | undefined => {
-    if (record.effect.kind === 'cultureAdvance' || record.effect.kind === 'relicGreatPerson') return record.effect
+    if (record.effect.kind === 'cultureAdvance' || record.effect.kind === 'relicGreatPerson' || record.effect.kind === 'philosophy' || record.effect.kind === 'setupGreatPerson') return record.effect
     if ('advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
       return record.effect.advance
     }
@@ -514,6 +514,14 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
 
   state.log.forEach((entry, logIndex) => {
     if (entry.item === null) return
+    // A drawn tile goes straight to the discard pile; its draw line dates the row.
+    if (entry.logType === 'ITEM' && entry.item.kind === 'tile') {
+      const tileRow = rows.get(entry.item.itemNumber)
+      if (tileRow === undefined || !tileRow.discarded) return
+      tileRow.createdAt = newer(tileRow.createdAt, entry.createdAt)
+      tileRow.logOrder = Math.max(tileRow.logOrder, logIndex)
+      return
+    }
     if (entry.logType !== 'REVEAL' && entry.logType !== 'DISCARD') return
     let row = rows.get(entry.item.itemNumber)
     if (row === undefined) {

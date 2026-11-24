@@ -122,6 +122,10 @@ describe('the registry and the tech map', () => {
       'writing',
       // Batch 2: Metalworking, Atomic Theory, Bureaucracy
       'atomicTheory',
+      'aztecs:aircraft',
+      'aztecs:artillery',
+      'aztecs:infantry',
+      'aztecs:mounted',
       'bureaucracy',
       'metalworking',
       // Agriculture grows the capital into a metropolis (issue #354)

@@ -21,7 +21,7 @@
  */
 
 import { CARAVAN_PRODUCTION, cityLabelOf } from './disband.js'
-import { PHASE_REASON, engineeringSecondBuild, openCityManagementTurn } from './assisted-core.js'
+import { PHASE_REASON, egyptFreeBuildOpen, engineeringSecondBuild, openCityManagementTurn } from './assisted-core.js'
 import type { EngineeringSecondBuild } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
@@ -56,6 +56,7 @@ import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
 import { stackingLimitOf } from './great-person-effects.js'
 import { capitalOf } from './sot.js'
+import { pendingChineseSaveCardIds } from './killed-units.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
@@ -70,6 +71,8 @@ interface BuildPayloadBase {
    * when the choice has `tradeToPay` above 0; with nothing to pay it changes nothing.
    */
   readonly rush?: boolean
+  /** The Egyptians build a building or City Walls for free (once per turn). Needed to use it: a choice with `freeBuild` is paid for as usual without it. */
+  readonly free?: boolean
 }
 
 /**
@@ -115,6 +118,10 @@ export interface BuildChoice {
   readonly costNote?: string
   /** Trade the player pays to cover what the city's production lacks. 0 when the production is enough. */
   readonly tradeToPay: number
+  /** The Egyptians may build this for free, as their once a turn ability (rulings 80 and 164). Only buildings and City Walls. */
+  readonly freeBuild?: true
+  /** The city cannot pay for this, not even with trade, so it can only be built for free. Set with `freeBuild`. */
+  readonly freeOnly?: true
   /** Every square the item may be put on, in reading order. Never empty when `placement` is `square`, always empty when it is `none`. */
   readonly squares: readonly BuildSquare[]
 }
@@ -742,15 +749,34 @@ export function freeBuildingSquaresOf(
  * a building can only replace one of the same supply. A building with no legal square is left out.
  */
 export function freeBuildingChoicesOf(state: GameState, player: Playerhand): readonly FreeBuildingChoice[] {
-  if (player.color === null) return []
   const techs = techViewOf(player)
+  return legalFreeBuildings(state, player, (assetId) => {
+    const upgrade = BUILDING_UPGRADES[assetId]
+    return !(upgrade !== undefined && isUnlocked(techs, upgrade)) && isUnlocked(techs, assetId)
+  })
+}
+
+/**
+ * The buildings the Spanish may build for free after exploring a tile: the basic (non-upgraded) form of any building,
+ * whether or not it is unlocked. An upgraded form (a University, a Bank) is not offered, nor is anything that is not a
+ * building. The squares are the same as {@link freeBuildingChoicesOf}'s, star limit and replacement included.
+ */
+export function basicBuildingChoicesOf(state: GameState, player: Playerhand): readonly FreeBuildingChoice[] {
+  const upgraded = new Set(Object.values(BUILDING_UPGRADES))
+  return legalFreeBuildings(state, player, (assetId) => !upgraded.has(assetId))
+}
+
+function legalFreeBuildings(
+  state: GameState,
+  player: Playerhand,
+  eligible: (assetId: string) => boolean,
+): readonly FreeBuildingChoice[] {
+  if (player.color === null) return []
   const footprints = cityFootprintsOf(state, player.color.toLowerCase())
   const scene = sceneOf(state)
   const choices: FreeBuildingChoice[] = []
   for (const { assetId, label } of BUILDABLE_BUILDINGS) {
-    const upgrade = BUILDING_UPGRADES[assetId]
-    if (upgrade !== undefined && isUnlocked(techs, upgrade)) continue
-    if (!isUnlocked(techs, assetId)) continue
+    if (!eligible(assetId)) continue
     const asset = findBoardAsset(assetId)
     if (asset === undefined) continue
     const item = { kind: 'building', assetId } as const
@@ -970,10 +996,10 @@ export function buildItemName(item: BuildItem): string {
  * card), asked without drawing.
  */
 export function unitCardAvailable(state: GameState, sheetName: SheetName): boolean {
-  return (
-    state.items.some((item) => item.sheetName === sheetName) ||
-    (SHUFFLABLE_ITEMS.has(sheetName) && state.discardedItems.some((item) => item.sheetName === sheetName))
-  )
+  if (state.items.some((item) => item.sheetName === sheetName)) return true
+  if (!SHUFFLABLE_ITEMS.has(sheetName)) return false
+  const pending = pendingChineseSaveCardIds(state)
+  return state.discardedItems.some((item) => item.sheetName === sheetName && !pending.has(item.id))
 }
 
 /** The part of a production check every item shares: what the city has against what the item costs. */
@@ -1070,6 +1096,7 @@ function optionsForCity(
   const { state } = scene
   const techs = techViewOf(player)
   const outskirts = mapOutskirts(state.board, footprint)
+  const egyptFree = egyptFreeBuildOpen(state, player)
   const choices: BuildChoice[] = []
   const unavailable: BuildUnavailable[] = []
 
@@ -1119,10 +1146,14 @@ function optionsForCity(
 
     const payment = paymentFor(data.cost, `Costs ${data.cost} production`, city, production, player)
     if ('short' in payment) {
-      skip(payment.short)
+      if (!egyptFree) {
+        skip(payment.short)
+        continue
+      }
+      choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: 0, freeBuild: true, freeOnly: true, squares })
       continue
     }
-    choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: payment.tradeToPay, squares })
+    choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: payment.tradeToPay, ...(egyptFree ? { freeBuild: true as const } : {}), squares })
   }
 
   // City Walls (base rules p. 17, Masonry): a building in the city centre. They turn the city marker over, so no square is picked
@@ -1141,8 +1172,12 @@ function optionsForCity(
       skip('The walled city marker is not in the game data.')
     } else {
       const payment = paymentFor(WALLS_COST, `Costs ${WALLS_COST} production`, city, production, player)
-      if ('short' in payment) skip(payment.short)
-      else choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: payment.tradeToPay, squares: [] })
+      if ('short' in payment) {
+        if (egyptFree) choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: 0, freeBuild: true, freeOnly: true, squares: [] })
+        else skip(payment.short)
+      } else {
+        choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: payment.tradeToPay, ...(egyptFree ? { freeBuild: true as const } : {}), squares: [] })
+      }
     }
   }
 

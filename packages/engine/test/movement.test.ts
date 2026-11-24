@@ -113,11 +113,13 @@ describe('movement speed', () => {
   })
 
   it('splits the typed Movement into its base and its bonus', () => {
-    expect(splitMovement('2')).toEqual({ base: 2, bonus: 0 })
-    expect(splitMovement('2+1')).toEqual({ base: 2, bonus: 1 })
-    expect(splitMovement('3+1+1')).toEqual({ base: 3, bonus: 2 })
-    expect(splitMovement('')).toEqual({ base: 0, bonus: 0 })
-    expect(splitMovement('x+1')).toEqual({ base: 1, bonus: 0 })
+    expect(splitMovement('2')).toEqual({ base: 2, bonus: 0, spain: 0 })
+    expect(splitMovement('2+1')).toEqual({ base: 2, bonus: 1, spain: 0 })
+    expect(splitMovement('3+1+1')).toEqual({ base: 3, bonus: 2, spain: 0 })
+    expect(splitMovement('3', true)).toEqual({ base: 2, bonus: 0, spain: 1 })
+    expect(splitMovement('3+1', true)).toEqual({ base: 2, bonus: 1, spain: 1 })
+    expect(splitMovement('')).toEqual({ base: 0, bonus: 0, spain: 0 })
+    expect(splitMovement('x+1')).toEqual({ base: 1, bonus: 0, spain: 0 })
   })
 
   it('gives Natural Religion +1 to an army but not a scout', () => {
@@ -163,6 +165,39 @@ describe('movement speed', () => {
     expect(travelSpeedOf(playerOf(anarchy), armyPiece, 1)).toBe(2)
   })
 
+  it('gives a Spanish army 4 and a Spanish scout 3 with Natural Religion, and Spain keeps its +1 without it or in Anarchy', () => {
+    let state = place(game(), 'figures/redarmy', 1, 1)
+    state = place(state, 'figures/redscout', 4, 1)
+    const army = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+    const scout = state.board.pieces.find((piece) => piece.assetId === 'figures/redscout')
+    if (army === undefined || scout === undefined) throw new Error('missing figure')
+    const spanish = (mvmt: string, religion: boolean, government?: string): Playerhand => {
+      const player = playerOf(state)
+      return {
+        ...player,
+        civilization: { kind: 'civ', name: 'Spanish' } as unknown as Playerhand['civilization'],
+        stats: { ...player.stats, mvmt },
+        socialPolicies: religion ? [{ name: 'Natural Religion', hidden: false } as Playerhand['socialPolicies'][number]] : [],
+        ...(government === undefined ? {} : { government }),
+      } as Playerhand
+    }
+    // Spain's +1 is not the older typed Natural Religion bonus: the army adds its own +1 on top of it
+    expect(travelSpeedOf(spanish('3', true), army, 1)).toBe(4)
+    expect(travelSpeedOf(spanish('3', true), scout, 1)).toBe(3)
+    // Without Natural Religion both travel 3, and under Anarchy (no policy effect) too
+    expect(travelSpeedOf(spanish('3', false), army, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', false), scout, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', true, 'Anarchy'), army, 1)).toBe(3)
+    expect(travelSpeedOf(spanish('3', true, 'Anarchy'), scout, 1)).toBe(3)
+    // A legacy typed `+` for Natural Religion on top of Spain's: still the army's speed, the scout gives it back
+    expect(travelSpeedOf(spanish('3+1', true), army, 1)).toBe(4)
+    expect(travelSpeedOf(spanish('3+1', true), scout, 1)).toBe(3)
+    // Other civilizations keep the older reading of `2+1`
+    const roman = { ...spanish('2+1', true), civilization: { kind: 'civ', name: 'Romans' } as unknown as Playerhand['civilization'] }
+    expect(travelSpeedOf(roman, army, 1)).toBe(3)
+    expect(travelSpeedOf(roman, scout, 1)).toBe(2)
+  })
+
   it('takes the highest speed a revealed tech gives, never below the typed one, and the techs do not add up', () => {
     const state = place(game(), 'figures/redarmy', 1, 1)
     const piece = figure(state)
@@ -191,6 +226,19 @@ describe('movement speed', () => {
     expect(speedWith(['Horseback Riding'], false, '2+1')).toBe(4)
     expect(speedWith(['Flight'], false, '2+1')).toBe(7)
     expect(speedWith([], false, '2+1')).toBe(3)
+    // Spain's typed `3` holds its +1: a tech replaces only the 2 under it
+    const spanishWith = (names: readonly string[], mvmt: string): number => {
+      const tech = names.reduce((held, name) => withTech(held, name, false), state)
+      const player = playerOf(tech)
+      return travelSpeedOf(
+        { ...player, civilization: { kind: 'civ', name: 'Spanish' } as unknown as Playerhand['civilization'], stats: { ...player.stats, mvmt } },
+        piece,
+        1,
+      )
+    }
+    expect(spanishWith([], '3')).toBe(3)
+    expect(spanishWith(['Sailing'], '3')).toBe(5)
+    expect(spanishWith(['Horseback Riding'], '3')).toBe(4)
     // A typed base that is higher than the tech's stays, with its bonus
     expect(speedWith(['Sailing'], false, '3+1')).toBe(5)
     expect(speedWith(['Horseback Riding'], false, '5+1')).toBe(6)
@@ -331,6 +379,69 @@ describe('reachable squares', () => {
 const waterGame = (): GameState =>
   place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 0, 3)
 
+describe('a metropolis on a water square (Fame and Fortune p. 10)', () => {
+  /** Tile 05: row 1 is water, water, grass, forest. A horizontal metropolis lies on (1,1) water and (2,1) grass. */
+  const withMetropolis = (on: boolean): GameState => {
+    let state = place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 3, 1)
+    if (!on) return state
+    const asset = findBoardAsset('cities/redmetropolis2')
+    if (asset === undefined) throw new Error('missing metropolis')
+    state = unwrap(
+      placePiece(state, {
+        playerId: CASH1981,
+        assetId: asset.id,
+        x: Math.round(2 * SQUARE_SIZE - 1 - asset.width / 2),
+        y: Math.round(mapTop(state.board) + SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    return state
+  }
+  const reach = (state: GameState, column: number, row: number): number | undefined => {
+    const army = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+    if (army === undefined) throw new Error('army missing')
+    const options = figureMovementOptions(state.board, playerOf(state), army, 1)
+    if (options === null) throw new Error('expected movement options')
+    return options.destinations.find((cell) => cell.column === column && cell.row === row)?.distance
+  }
+
+  it('is land for movement: an army may end its move on the water square the metropolis covers', () => {
+    const water = (state: GameState): string | null => terrainAt(state.board, 1.5 * SQUARE_SIZE, mapTop(state.board) + 1.5 * SQUARE_SIZE)
+    expect(water(withMetropolis(false))).toBe('water')
+    expect(reach(withMetropolis(false), 1, 1)).toBeUndefined()
+    expect(reach(withMetropolis(true), 1, 1)).toBe(2)
+  })
+})
+
+describe('a vertical metropolis on a water square (Fame and Fortune p. 10)', () => {
+  /** Tile 05 column 0 is water, water, water, grass: a vertical metropolis lies on (0,2) water and (0,3) grass. */
+  const withVertical = (on: boolean): GameState => {
+    let state = place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 1, 3)
+    if (!on) return state
+    const asset = findBoardAsset('cities/redmetropolis2')
+    if (asset === undefined) throw new Error('missing metropolis')
+    state = unwrap(
+      placePiece(state, {
+        playerId: CASH1981,
+        assetId: asset.id,
+        rotation: 90,
+        x: Math.round(SQUARE_SIZE / 2 - asset.width / 2),
+        y: Math.round(mapTop(state.board) + 3 * SQUARE_SIZE - 1 - asset.height / 2),
+      }),
+    )
+    return state
+  }
+
+  it('is land for travel on both of its squares (the water square is reachable and the figure may end on it)', () => {
+    for (const [on, expected] of [[false, undefined], [true, 2]] as const) {
+      const state = withVertical(on)
+      const army = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+      if (army === undefined) throw new Error('army missing')
+      const travel = figureMovementOptions(state.board, playerOf(state), army, 1)?.destinations.find((cell) => cell.column === 0 && cell.row === 2)
+      expect(travel?.distance).toBe(expected)
+    }
+  })
+})
+
 describe('Flight', () => {
   const distanceTo = (state: GameState, column: number, row: number): number | undefined => {
     const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
@@ -459,6 +570,17 @@ describe('water', () => {
     const noCrossing = figureMovementOptions(blocked.board, playerOf(blocked), figure(blocked), 1)
     if (noCrossing === null) throw new Error('expected movement options')
     expect(noCrossing.destinations.some((cell) => cell.column === 1 && cell.row === 2)).toBe(false)
+  })
+})
+
+describe('Navigation', () => {
+  it('lets a figure cross water, but not end there when no fog touches it', () => {
+    const blocked = place(waterGame(), 'figures/bluearmy', 1, 3, KARANDRAS1)
+    const navigator = withTech(blocked, 'Navigation')
+    const options = figureMovementOptions(navigator.board, playerOf(navigator), figure(navigator), 1)
+    if (options === null) throw new Error('expected movement options')
+    expect(options.destinations).toContainEqual(expect.objectContaining({ column: 1, row: 2, distance: 2 }))
+    expect(options.destinations.some((cell) => cell.column === 0 && cell.row === 2)).toBe(false)
   })
 })
 

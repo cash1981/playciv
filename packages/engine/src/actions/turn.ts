@@ -12,6 +12,7 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, LogType, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
+import { finishSetup, setupGateOf } from '../setup.js'
 import { collectTradeForTurn, undoTradeCollection } from '../trade-collection.js'
 import type { PlayerTurn, TurnPhase } from '../turn.js'
 import {
@@ -98,16 +99,28 @@ export interface MarkPhasesDoneInput {
  * played through Movement in one go says so once. Creates the turn when the
  * player has nothing saved for it. Marking what is already done changes and
  * logs nothing.
+ *
+ * Start of Turn is the one phase that needs setup to be finished first (issue #374),
+ * whichever phase `upToPhase` names. When the gate lets it through, the setup record
+ * says so, so a later board edit cannot close it again.
  */
 export function markPhasesDone(state: GameState, input: MarkPhasesDoneInput): ActionResult {
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
-  const player = access.value
+  const first = access.value
 
-  const turn = findOrCreateTurn(player, input.turnNumber)
+  const turn = findOrCreateTurn(first, input.turnNumber)
   const phases = TURN_PHASES.slice(0, TURN_PHASES.indexOf(input.upToPhase) + 1)
   const newlyDone = phases.filter((phase) => turn.done[phase] !== true)
   if (newlyDone.length === 0) return ok(state)
+
+  let opened = state
+  if (newlyDone.includes('SOT')) {
+    const reason = setupGateOf(state, first)
+    if (reason !== undefined) return err({ kind: 'SETUP_INCOMPLETE', reason })
+    opened = finishSetup(state, input.playerId, input.at)
+  }
+  const player = findPlayer(opened, input.playerId) ?? first
 
   const updated: PlayerTurn = {
     ...turn,
@@ -122,7 +135,7 @@ export function markPhasesDone(state: GameState, input: MarkPhasesDoneInput): Ac
       : `all phases up to ${TURN_PHASE_LABEL[input.upToPhase]}`
   const collected = collectTradeAtTradeStart(state, player, updated, newlyDone)
   const message = `Turn ${input.turnNumber} - ${player.username} marked ${what} done`
-  const marked = appendLog(withPlayerTurn(state, collected.player, collected.turn), {
+  const marked = appendLog(withPlayerTurn(opened, collected.player, collected.turn), {
     username: player.username,
     playerId: player.playerId,
     logType: PHASE_LOG_TYPE[input.upToPhase],

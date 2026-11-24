@@ -9,6 +9,7 @@
 import {
   areaSlotRegion,
   civTileAssetId,
+  nextFreeSlot,
   cultureCellCenter,
   cultureStepOf,
   cultureTrackHeight,
@@ -46,6 +47,7 @@ import {
   appendInfoLog,
   appendItemLog,
   appendLog,
+  appendPublicLog,
   appendRandomDiscardLog,
   createLogTexts,
   loggedItemNumber,
@@ -53,10 +55,14 @@ import {
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import { shuffle } from '../random.js'
+import { RESOURCE_KINDS } from '../tile-icons.js'
+import { applyTechRevealAbilities, undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
+import { socialPolicySlots } from '../social-policy-slots.js'
 import type { CivRevealSetup, GameState, Playerhand, PlayerStats } from '../state.js'
 import {
+  DEFAULT_PLAYER_STATS,
   findPlayer,
   hasUserAccess,
   isCombatHandSizeValue,
@@ -68,6 +74,16 @@ import { placeUnchecked, setWonderCoinTokens } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
+
+/** The civilizations whose reveal does something by itself. */
+const ARABS = 'Arabs'
+
+/**
+ * Spain's +1 travel speed, set as the typed bonus when the civilization is revealed (`movement.ts` reads it). Exported
+ * for `migrateGameState`, which gives it to a Spanish player revealed before the reveal set it.
+ */
+export const SPANISH = 'Spanish'
+export const SPANISH_MVMT = '3'
 
 /** Java: `SecurityCheck.hasUserAccess` followed by a 403. */
 function requireAccess(
@@ -197,7 +213,7 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
     },
   })
 
-  return ok(appendItemLog(next, 'REMOVED_TECH', player.username, player.playerId, tech))
+  return ok(appendItemLog(undoTechRevealAbilities(next, player.playerId, tech.name), 'REMOVED_TECH', player.username, player.playerId, tech))
 }
 
 /**
@@ -286,9 +302,11 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     researchedTurn !== undefined && turnStatus(logged).currentTurn > researchedTurn
       ? payArchimedesOnReveal(logged, player.playerId, tech.name, researchedTurn)
       : logged
-  if (grant === undefined) return ok(archimedes)
+  // Germans and Greeks: what the first reveal gives (never the starting tech, which does not come through here)
+  const abilities = tech.hidden ? applyTechRevealAbilities(archimedes, player.playerId, tech.name) : archimedes
+  if (grant === undefined) return ok(abilities)
   return ok(
-    appendLog(archimedes, {
+    appendLog(abilities, {
       username: player.username,
       playerId: player.playerId,
       publicLog: `${player.username} learned ${tech.name} with ${grant.source}`,
@@ -506,6 +524,12 @@ export function revealItem(state: GameState, input: RevealItemInput): ActionResu
   return revealCivilization(state, player, revealed)
 }
 
+/** Whether a reveal now opens setup: it is the first turn and the player has not marked its Start of Turn done. */
+function setupStillOpen(state: GameState, player: Playerhand): boolean {
+  if (turnStatus(state).currentTurn > Math.max(1, state.chatOrdersStartTurn)) return false
+  return !player.playerTurns.some((turn) => turn.done.SOT === true)
+}
+
 /**
  * Java: the sequence in `revealItem` when the item is a Civ. The order is
  * kept: set the starting tech, log REVEAL, draw starting units, discard the
@@ -523,12 +547,19 @@ function revealCivilization(
     ownerId: player.playerId,
   }
 
+  const government = startingGovernmentFor(civ.name)
   let next = withPlayer(state, {
     ...player,
     civilization: civ,
-    government: startingGovernmentFor(civ.name),
+    government,
+    // Democracy's coin is a counter on the sheet, as a government change sets it (the Greeks start with it)
+    stats: government === 'Democracy' ? statsAfterGovernmentChange(player, government) : player.stats,
     items: player.items.map((item) => (item.id === civ.id ? civ : item)),
     techsChosen: [...player.techsChosen, startingTech],
+    // The setup before turn 1 (issue #374): the capital, figures, trade and the rest are done by the player in the Setup
+    // tab. The Chinese walled capital and the Indian metropolis are created there, not handed out here. Only while the
+    // player's first Start of Turn is still to do: a reveal after it, or in a later turn, has no setup to gate
+    ...(setupStillOpen(state, player) ? { setup: { required: true, finished: false, placed: [], historyIds: [] } } : {}),
   })
   next = appendItemLog(next, 'REVEAL', player.username, player.playerId, civ)
   const revealIndex = next.log.length - 1
@@ -553,6 +584,7 @@ function revealCivilization(
   next = placeStartingTile(next, player, civ)
   next = placeLeaderMarker(next, player, civ)
   next = placeWhiteFigure(next, player, civ)
+  next = placeArabResources(next, player, civ)
   const ownPieces = newPieces(afterReveal, next)
   const ownWonders = wondersTakenFromDeck(afterReveal, next)
 
@@ -565,17 +597,33 @@ function revealCivilization(
     dealt = { wonders: wondersTakenFromDeck(beforeDeal, next), pieceIds: newPieces(beforeDeal, next) }
   }
 
+  // Spain: +1 travel speed, written as the typed bonus (`2` becomes `2+1`). A value the player typed is left alone.
+  let mvmt: CivRevealSetup['mvmt']
+  if (civ.name === SPANISH) {
+    const holder = findPlayer(next, player.playerId)
+    if (holder !== undefined && holder.stats.mvmt === DEFAULT_PLAYER_STATS.mvmt) {
+      mvmt = { before: holder.stats.mvmt, set: SPANISH_MVMT }
+      next = withPlayer(next, { ...holder, stats: { ...holder.stats, mvmt: SPANISH_MVMT } })
+    }
+  }
+
   const civSetup: CivRevealSetup = {
     unitIds,
     discardedCivIds,
     pieceIds: ownPieces,
     wonders: ownWonders,
     ...(dealt === undefined ? {} : { dealt }),
+    ...(mvmt === undefined ? {} : { mvmt }),
   }
-  return ok({
+  const withSetup: GameState = {
     ...next,
     log: next.log.map((entry, index) => (index === revealIndex ? { ...entry, civSetup } : entry)),
-  })
+  }
+  return ok(
+    mvmt === undefined
+      ? withSetup
+      : appendPublicLog(withSetup, player.username, player.playerId, `gets +1 travel speed as the Spanish (movement ${mvmt.set})`),
+  )
 }
 
 /** The ids of the board pieces that `after` has and `before` did not. */
@@ -699,6 +747,45 @@ function placeWhiteFigure(
       x: region.x,
       y: region.y,
     }) ?? state
+  )
+}
+
+const capitalised = (kind: string): string => kind.charAt(0).toUpperCase() + kind.slice(1)
+
+/**
+ * Arabs (civilization card): the game starts with one of each resource from the market. Each token is put in the
+ * player's area and counts as a piece of the reveal, so undoing the reveal takes them off again. A resource whose
+ * supply is used up is skipped and the log says so.
+ */
+function placeArabResources(state: GameState, player: Playerhand, civ: CivItem): GameState {
+  if (civ.name !== ARABS) return state
+  const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
+  if (area === undefined) return state
+  const region = areaSlotRegion(area)
+  let next = state
+  const taken: string[] = []
+  const missing: string[] = []
+  for (const kind of RESOURCE_KINDS) {
+    const asset = findBoardAsset(`resources/${kind}`)
+    if (asset === undefined || (remainingBoardAssetCount(asset, next.board.pieces, next.numOfPlayers) ?? Infinity) <= 0) {
+      missing.push(kind)
+      continue
+    }
+    const [x, y] = nextFreeSlot(next.board, area, next.board.pieces, { x: region.x, y: region.y })
+    const placed = placeUnchecked(next, { playerId: player.playerId, assetId: asset.id, x, y })
+    if (placed === undefined) {
+      missing.push(kind)
+      continue
+    }
+    next = placed
+    taken.push(kind)
+  }
+  return appendPublicLog(
+    next,
+    player.username,
+    player.playerId,
+    `starts with one of each resource from the market as the Arabs (${taken.map(capitalised).join(', ') || 'none'})` +
+      (missing.length === 0 ? '' : `; the market has no ${missing.map(capitalised).join(', ')} left`),
   )
 }
 
@@ -878,6 +965,12 @@ export function chooseSocialPolicy(
       name: policy.name,
       flipside: policy.flipside,
     })
+  }
+
+  // Issue #378: one policy per built city, one more for the French. Removing one first (a switch) frees the slot.
+  const slots = socialPolicySlots(state, player)
+  if (slots.free === 0) {
+    return err({ kind: 'SOCIAL_POLICY_LIMIT', maximum: slots.maximum, held: slots.held })
   }
 
   const itemNumber = state.itemCounter + 1

@@ -95,7 +95,7 @@ function harvestOptionOf(state: GameState, gathering: HarvestGathering, label: s
   const base = { choices, notes: gathering.notes }
   if (!open) return { ...base, status: 'wrong-phase', reason: PHASE_REASON }
   if (choices.length === 0) {
-    return { ...base, status: 'unavailable', reason: `No resource icon in the outskirts of ${label}, and none under a scout of yours.` }
+    return { ...base, status: 'unavailable', reason: `No resource icon in the outskirts of ${label}, and none under a scout of yours (or an English army you sent).` }
   }
   if (!choices.some((choice) => choice.available)) {
     return { ...base, status: 'unavailable', reason: 'The market has no token left of the resources there.' }

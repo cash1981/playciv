@@ -17,7 +17,7 @@ import type { GameState, Playerhand } from '../src/state.js'
 import { unwrap } from '../src/result.js'
 
 import { withCardInHand } from './assisted-fixture.js'
-import { withStats } from './culture-advance-fixture.js'
+import { withCivilization, withStats } from './culture-advance-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-03T10:00:00.000Z'
@@ -104,6 +104,23 @@ describe('Nikola Tesla', () => {
     const okFour = withCardInHand(learn(research(21), four), 'Nikola Tesla')
     expect(card(okFour.state, okFour.itemId)?.status).toBe('ready')
     expect(rowOf(unwrap(play(okFour.state, okFour.itemId, four.name)), four.name)).toBe(3)
+  })
+
+  it('costs the Japanese 3 less: a level III tech with 13 trade is allowed, and refused for another civilization', () => {
+    const tech = techOfLevel(firstCivGame(), 3)
+    const japanese = withCardInHand(learn(withCivilization(research(13), 'Japanese'), tech), 'Nikola Tesla')
+    expect(card(japanese.state, japanese.itemId)).toMatchObject({ status: 'ready', tesla: [{ name: tech.name, level: 3, trade: 13, to: 2 }] })
+    expect(rowOf(unwrap(play(japanese.state, japanese.itemId, tech.name)), tech.name)).toBe(2)
+
+    const roman = withCardInHand(learn(withCivilization(research(13), 'Romans'), tech), 'Nikola Tesla')
+    const listed = card(roman.state, roman.itemId)
+    expect(listed?.status).toBe('unavailable')
+    expect(listed?.reason).toContain('needs 16 trade')
+    expect(play(roman.state, roman.itemId, tech.name).ok).toBe(false)
+
+    // 12 is not enough for the Japanese, and the reason names the discounted 13
+    const short = withCardInHand(learn(withCivilization(research(12), 'Japanese'), tech), 'Nikola Tesla')
+    expect(card(short.state, short.itemId)?.reason).toContain('needs 13 trade')
   })
 
   it('does not place a level I or a level V tech', () => {

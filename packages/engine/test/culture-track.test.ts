@@ -35,7 +35,7 @@ import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
-import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, KARANDRAS1, firstCivGame, withSetupDone } from './fixture.js'
 
 const place = (state: GameState, assetId: string, x: number, y: number): GameState =>
   unwrap(placePiece(state, { playerId: CASH1981, assetId, x, y }))
@@ -277,7 +277,7 @@ describe('choosing a civilization', () => {
   it('a second player lands on START without covering the first', () => {
     let state = chooseCiv(firstCivGame(), CASH1981)
     // Karandras1 needs the turn before the reveal can draw starting units
-    state = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    state = unwrap(markPhasesDone(withSetupDone(state, CASH1981), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
     state = chooseCiv(state, KARANDRAS1)
 
     const markers = state.board.pieces.filter((piece) => piece.category === 'leader')

@@ -198,9 +198,9 @@ describe('PlayerStatusSidebar', () => {
     cleanup()
     cleanup()
     // A typed bonus (Spain's +1) is added on top of the tech's speed, in the cell and in the label
-    const spanish = { ...view, you: { ...view.you!, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '2+1' } } } as unknown as PlayerView
+    const spanish = { ...view, you: { ...view.you!, civilization: { name: 'Spanish' }, stats: { ...DEFAULT_PLAYER_STATS, mvmt: '3' } } } as unknown as PlayerView
     render(<PlayerStatusSidebar {...EDITABLE} view={spanish} />)
-    expect(within(block('Alice')).getByRole('button', { name: 'Edit Alice Movement, currently 2+1, shown as 5 because of Sailing' }).textContent).toContain('5')
+    expect(within(block('Alice')).getByRole('button', { name: 'Edit Alice Movement, currently 3, shown as 5 because of Sailing' }).textContent).toContain('5')
     cleanup()
     // Without a higher tech speed the label is as before
     render(<PlayerStatusSidebar {...EDITABLE} view={makeView()} />)

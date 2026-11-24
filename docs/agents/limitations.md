@@ -4,11 +4,50 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 
 ## Game behavior
 
-- **Engineering:** Egypt's free build (ruling 164 to 168) is not modelled. The cancel list does not say that cancelling the first build of
+- **Engineering:** The cancel list does not say that cancelling the first build of
   an Engineering split also takes back the second; cancelling only the second leaves the first, and the players are trusted to pick
   the first build. The remaining production is computed from the first build's recorded cost and production, so a hand-set production
   changed between the two builds is not seen. Engineering is offered only when the build is the city's first action: a build that is
   itself an extra action (Atomic Theory, Lovelace, a confirmed repeat) cannot be split.
+- **Setup phase (#374):** a game revealed before the setup phase existed, and a civilization revealed after turn 1's Start of
+  Turn, has no setup (no tab, no gate); the player places the capital by hand. Existing Greek players keep Despotism. The
+  starting trade counts printed trade icons only (no techs, policies or governments). The American great person needs a
+  revealed policy before the draw. Setup checks a capital square with the founding rules, which cannot refuse on a fresh start tile.
+  A player passes the turn on only with End turn on the Setup tab (the Order tab's End turn stays held back while a step is
+  missing), and the holder only follows a pass: before any pass the holder is the start player as before.
+- **Social policy cap (#378):** a lost city does not force a policy to be returned: the panel shows a prompt and blocks
+  choosing until the player removes one. The cap counts city pieces on the map, so a city piece placed by hand counts.
+- **Japanese research discount (#368):** research spends no trade in the engine, so the discount of 3 is shown (Tech tree,
+  Tesla's check) and not charged. Rationalism's learning gets no discount (unofficial rulings 93, 398). Notre-Dame's second research and Porcelain Tower are not modelled.
+- **Civilization abilities not automated (#368):** Mongol loot (not modelled); Russian sacrifice (no
+  enemy-army-city model); Zulu metropolis hut
+  exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
+  the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is
+  spent (deliberate: it is one player alone, and a clamped take-back would let them collect the hut again for 3 more);
+  the player corrects the culture counter by hand to undo it. The same refusal applies to the End battle undo of an
+  Aztec reward that is spent. The Spanish migration cannot tell an old save from a Spanish player who typed `2` on
+  purpose when no reveal setup records the choice: that `2` is set to `2+1` on load. The Chinese casualties that may still be saved are kept out of every discard reshuffle until the Chinese save
+  or the next battle starts (there is no decline action), so an empty unit deck can answer `NO_MORE_ITEMS` meanwhile. A
+  Spanish `3+1` saved by an earlier build of this branch (no migration marker) loads as `4`. The Spanish free-building credit
+  counts every tile explored, also one the players later move or remove by hand, and a great person drawn by hand in
+  the Draw panel gives the Greeks and Aztecs nothing extra.
+- **Killed units and the Chinese save (#368):** End battle discards only the players' killed units; killed barbarians
+  are still discarded by hand with Discard barbarians. The Chinese save has no undo of its own (only Undo end battle,
+  by the player who ended the battle), and its window closes when the next battle starts.
+- **Conquests (#368):** the offer (a village for every civ, with the Roman free advance or the Chinese 3 culture; a city
+  for the Romans) is made from a heuristic,
+  not from a conquest the game knows: an own army ended its last qualifying move on a village or (Romans) another
+  player's city, and that player won a battle in the arena against the barbarians (village) or the city's owner (city)
+  with the army still on that square. It cannot tell what the battle was really fought for, so a win elsewhere with the
+  army standing on the square counts; a battle settled by hand outside the arena, or a city walked into with no
+  defender, makes no offer (the player takes the reward by hand); a city that changes owner is not modelled; the pending
+  move is only the last qualifying one of each player, and a board Undo of that move leaves it in place: it only counts while
+  the army stands on the recorded square, and a newer move or the next battle of the player replaces or uses it up.
+  The village fight question is asked by the web client from what it sees; when the engine ignores it (another player's
+  figures on the square, a battle already active) the army just moves.
+- **Aztec free units (#368):** a Great Person drawn by hand in the Draw panel, or gained outside an assisted action,
+  gives no credits; the player draws the units by hand. A free unit drawn before its Great Person was undone stays in
+  the hand.
 - **Legacy board layouts:** pre-shape three- and five-player saves that already
   hold pieces keep 16×16 rectangular slots; only an empty three-player board is
   moved into the pyramid. On the legacy five-player rectangle, player 5 shares
@@ -19,8 +58,6 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - **Legacy Egypt setup:** older saves backfill `wondersDealt` from
   `hasWonder || setupComplete`, so an Egypt revealed earlier never gets the
   three-ancient/one-medieval deal. Deliberately forward-only (`migrate.ts`).
-- **Zulu starting units:** `actions/player.ts` deals four artillery; the
-  printed/legacy rule may be three. Ask the human before changing it.
 - **A square another scout sends:** the Start of Turn panel still offers the
   second scout's city choice; choosing a city is refused with a reason (#319).
 - **Scout-held Bank coins:** board derivation does not model scout transfers;

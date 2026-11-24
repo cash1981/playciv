@@ -1,0 +1,27 @@
+/* The conquest prompt (ConquestPrompt.tsx): a sentence and the two answers, one box per open offer. Wraps so it never
+   forces a horizontal scroll at 320 px. */
+.assisted-conquest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0 0 0.75rem;
+  min-width: 0;
+}
+
+.assisted-conquest-offer {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.assisted-conquest-text,
+.assisted-conquest-stopped {
+  margin: 0 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+
+.assisted-conquest-stopped {
+  margin: 0.4rem 0 0;
+}

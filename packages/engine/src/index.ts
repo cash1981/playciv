@@ -24,6 +24,10 @@ export * from './communism.js'
 export * from './combustion.js'
 export * from './atomic-theory.js'
 export * from './metropolis.js'
+export * from './setup.js'
+export * from './social-policy-slots.js'
+export * from './civ-strength.js'
+export * from './research-cost.js'
 export * from './obsolete-wonders.js'
 export * from './destroy-buildings.js'
 export * from './tile-icons.js'
@@ -82,6 +86,7 @@ export type {
   AgriculturePayload,
   AssignScoutPayload,
   ChooseRewardPayload,
+  ClaimConquestPayload,
   CombustionPayload,
   CommunismPayload,
   GunpowderPayload,
@@ -108,6 +113,7 @@ export * from './gamedata.js'
 export * from './create-game.js'
 export * from './battle.js'
 export * from './battle-cards.js'
+export * from './chinese-save.js'
 export * from './government.js'
 export * from './actions/draw.js'
 export * from './actions/player.js'

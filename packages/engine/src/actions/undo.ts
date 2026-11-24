@@ -14,6 +14,7 @@
 
 import { assistedRecordOf, assistedSubject, reverseAssistedAction } from '../assisted.js'
 import { grantsAfterTechRemoved } from '../sot.js'
+import { setupStarted } from '../setup.js'
 import { civTileAssetId, leaderAssetId } from '../board.js'
 import { techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
@@ -41,6 +42,7 @@ import {
   withLogEntry,
   withPlayer,
 } from '../state.js'
+import { undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import { castVote, createUndo, resultOfVotes } from '../undo.js'
 
 import { removePieceAsSystem } from './board.js'
@@ -118,7 +120,13 @@ function civSetupOf(state: GameState, entry: GameLogEntry): CivRevealSetup | und
 export function canInitiateUndo(state: GameState, entry: GameLogEntry): boolean {
   if (entry.superseded === true) return false
   if (entry.item === null || entry.undo !== null) return false
-  return !isCivReveal(entry) || civSetupOf(state, entry) !== undefined
+  return !isCivReveal(entry) || (civSetupOf(state, entry) !== undefined && !setupStartedFor(state, entry))
+}
+
+/** A civilization reveal whose owner has made setup progress (issue #374): the reveal cannot go while their capital, figures, trade or great person stand. */
+function setupStartedFor(state: GameState, entry: GameLogEntry): boolean {
+  const owner = entry.playerId === null ? undefined : findPlayer(state, entry.playerId)
+  return owner !== undefined && setupStarted(state, owner)
 }
 
 /**
@@ -140,7 +148,11 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
   if (entry.undo !== null) {
     return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
   }
-  if (!canInitiateUndo(state, entry)) return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
+  if (!canInitiateUndo(state, entry)) {
+    // An unreadable reveal is not undoable whatever setup did; setup progress is only the reason when the reveal could go
+    const readable = !isCivReveal(entry) || civSetupOf(state, entry) !== undefined
+    return err({ kind: readable && setupStartedFor(state, entry) ? 'CIV_REVEAL_SETUP_STARTED' : 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
+  }
   if (!hasUserAccess(state, input.playerId)) {
     return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })
   }
@@ -257,6 +269,8 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   if (entry.logType === 'REVEAL' && entry.item.kind === 'civ') {
     const setup = civSetupOf(state, entry)
     if (setup === undefined) return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
+    // Setup may have moved on since the vote was asked
+    if (setupStartedFor(state, entry)) return err({ kind: 'CIV_REVEAL_SETUP_STARTED', logId: input.logId })
     return undoCivReveal(next, ownerId, entry.item, setup, input.logId)
   }
 
@@ -333,6 +347,9 @@ function undoCivReveal(
     setup.discardedCivIds.includes(item.id),
   )
   const current = findPlayer(units.state, playerId) as Playerhand
+  // The setup record goes with the reveal (the reveal is refused while setup has progress, so nothing of it is left on the board)
+  const { setup: _setup, ...currentWithoutSetup } = current
+  void _setup
   let next = withPlayer(
     {
       ...units.state,
@@ -341,7 +358,7 @@ function undoCivReveal(
       ),
     },
     {
-      ...current,
+      ...currentWithoutSetup,
       civilization: null,
       government: DEFAULT_GOVERNMENT,
       items: [
@@ -352,6 +369,8 @@ function undoCivReveal(
       stats: {
         ...current.stats,
         coinSources: clearedCoinSources(current, civ, techsChosen),
+        // Spain's +1 travel speed goes with the reveal, unless the player typed another value since
+        ...(setup.mvmt !== undefined && current.stats.mvmt === setup.mvmt.set ? { mvmt: setup.mvmt.before } : {}),
       },
     },
   )
@@ -392,7 +411,8 @@ function undoCivReveal(
       'REVEAL',
       (name) =>
         `has undone ${current.username}'s reveal of ${name}. Its starting units, wonders, tile, ` +
-        `marker and white figure are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}. ` +
+        `marker and white figure are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}` +
+        `${setup.mvmt !== undefined && current.stats.mvmt === setup.mvmt.set ? `, and movement went back to ${setup.mvmt.before}` : ''}. ` +
         'Deck is reshuffled',
     ),
   )
@@ -554,7 +574,7 @@ function putTechBack(
       },
     })
     return ok(
-      logUndo(next, player, tech, logType, (name) => `has removed ${name} from ${player.username}`),
+      logUndo(undoTechRevealAbilities(next, player.playerId, tech.name), player, tech, logType, (name) => `has removed ${name} from ${player.username}`),
     )
   }
 

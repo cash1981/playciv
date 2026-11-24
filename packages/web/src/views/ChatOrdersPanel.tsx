@@ -20,6 +20,7 @@ import type { NavigationAttempt } from '../lib/navigationGuard.js'
 import { AutoRefreshStatus } from './AutoRefresh.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { setupGateOf } from './EndTurn.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent, MarkdownEditorHandle } from './MarkdownEditor.js'
 import { colorClass } from './playerColor.js'
@@ -170,7 +171,7 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
 }
 
 /**
- * `Turn 4 · Alice's turn — city management phase`, or `Turn 4 · Your turn — ...`
+ * `Turn 4 · Alice's turn — city management phase` (`choosing civilization / setup` in the setup stage), or `Turn 4 · Your turn — ...`
  * when the player in focus (see `focusPlayer`) is the viewer, with that
  * player's own phase. The full list of who is missing what is the status strip
  * below the title.
@@ -181,6 +182,8 @@ export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerUsername?: 
   const focus = focusPlayer(activeTurn)
   if (focus === null) return `${turn} · everyone is done`
   const who = focus.username === viewerUsername ? 'Your turn' : `${focus.username}'s turn`
+  // The setup stage (#374): the holder is choosing a civilization or doing setup, which is before any phase
+  if (activeTurn.stage === 'setup' && focus.username === activeTurn.username) return `${turn} · ${who} — choosing civilization / setup`
   return `${turn} · ${who} — ${TURN_PHASE_LABEL[focus.phase]} phase`
 }
 
@@ -349,6 +352,7 @@ export function ChatOrdersPanel({
   const canWrite = (view.you !== null || isAdmin) && !readOnly
   const doneInTurn = view.you?.playerTurns.find((candidate) => candidate.turnNumber === orderTurn)?.done
   const isPhaseDone = (phase: TurnPhase): boolean => doneInTurn?.[phase] === true
+  const setupGate = setupGateOf(view)
   const remoteNote = view.you?.gamenote ?? ''
 
   const load = useCallback(async () => {
@@ -683,7 +687,10 @@ export function ChatOrdersPanel({
                 {mode === 'order' && (
                   <button
                     type="button"
-                    disabled={busy}
+                    // The setup before turn 1 (#374) holds End turn back, never the Not done that takes a mark back
+                    disabled={busy || (setupGate !== null && !isPhaseDone(orderPhase))}
+                    title={setupGate !== null && !isPhaseDone(orderPhase) ? setupGate : undefined}
+                    aria-describedby={setupGate !== null && !isPhaseDone(orderPhase) ? 'chat-orders-setup-gate' : undefined}
                     aria-label={
                       // Starts with the visible text (WCAG 2.5.3, Label in Name)
                       isPhaseDone(orderPhase)
@@ -708,6 +715,11 @@ export function ChatOrdersPanel({
                   Send
                 </button>
               </div>
+              {mode === 'order' && setupGate !== null && !isPhaseDone(orderPhase) && (
+                <p id="chat-orders-setup-gate" role="status" className="assisted-warning">
+                  {setupGate}
+                </p>
+              )}
             </form>
           )}
         </div>

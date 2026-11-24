@@ -33,7 +33,7 @@ import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
-import { CASH1981, firstCivGame } from './fixture.js'
+import { CASH1981, firstCivGame, withSetupDone } from './fixture.js'
 
 /** A stand-in piece for the geometry helpers, which only read its rectangle. */
 const pieceAt = (x: number, y: number, category: BoardPiece['category'] = 'figure'): BoardPiece => ({
@@ -394,8 +394,8 @@ describe('automatic placement', () => {
     expect(tiles).toHaveLength(1)
     expect([tiles[0]?.x, tiles[0]?.y]).toEqual([0, mapTop(after.board)])
 
-    // The piece has to match the card that landed in the hand
-    const drawn = findPlayer(after, CASH1981)?.items.at(-1)
+    // The piece has to match the card, which went straight to the discard pile
+    const drawn = after.discardedItems.at(-1)
     if (drawn?.kind !== 'tile') throw new Error('drew something other than a tile')
     expect(tiles[0]?.assetId).toBe(tileAssetIdForNumber(Number(drawn.name)))
   })
@@ -490,7 +490,7 @@ describe('revealing civilizations, one player at a time (issue #171)', () => {
           }),
         )
         // Finishing the start of turn hands the turn to the next seat
-        state = unwrap(markPhasesDone(state, { playerId: current.playerId, turnNumber: 1, upToPhase: 'SOT' }))
+        state = unwrap(markPhasesDone(withSetupDone(state, current.playerId), { playerId: current.playerId, turnNumber: 1, upToPhase: 'SOT' }))
       }
 
       const civTiles = state.board.pieces.filter((piece) => piece.category === 'civtile')

@@ -32,6 +32,7 @@ import type {
   HarvestOption,
   HighscoreResult,
   Government,
+  GrowDirection,
   Item,
   OutskirtsSquare,
   PlayerStatKey,
@@ -40,6 +41,8 @@ import type {
   RevealedEntry,
   ResourceKind,
   ScoutSquare,
+  SetupFigure,
+  SetupView,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -78,6 +81,7 @@ export type {
   HarvestOption,
   HighscoreResult,
   Government,
+  GrowDirection,
   Item,
   OutskirtsSquare,
   PlayerStatKey,
@@ -86,6 +90,8 @@ export type {
   RevealedEntry,
   ResourceKind,
   ScoutSquare,
+  SetupFigure,
+  SetupView,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -96,6 +102,22 @@ export type {
   WaitingFor,
   WinnerEntry,
 }
+
+/**
+ * One request to `POST /api/games/:id/setup` (#374): a capital, a figure, the starting trade or Egypt's wonder, or its undo;
+ * or `finish` (the Finish setup button) and `pass` (End turn on the Setup tab).
+ * The shape is the one the server's strict parser takes; whether the square is legal is the engine's decision.
+ * `direction` is only for the Indian metropolis (the neighbouring central square it also covers lies that way).
+ */
+export type SetupRequestBody =
+  | { readonly step: 'capital'; readonly column: number; readonly row: number; readonly direction?: GrowDirection }
+  | { readonly step: 'figure'; readonly figure: SetupFigure; readonly column: number; readonly row: number }
+  | { readonly step: 'trade' }
+  | { readonly step: 'wonder'; readonly column: number; readonly row: number }
+  | { readonly step: 'finish' }
+  | { readonly step: 'pass' }
+  | { readonly undo: true; readonly step: 'capital' | 'trade' | 'wonder' }
+  | { readonly undo: true; readonly step: 'figure'; readonly figure: SetupFigure }
 
 /** One server-backed page of the Revealed and Discarded Items feed (issue #51). */
 export interface RevealedPage {
@@ -741,8 +763,10 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/arena/tech-wound`, { tech, arenaUnitId, wounds, rev }),
   healUnits: (gameId: string, tech: string, arenaUnitId: string, wounds: number, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/heal`, { tech, arenaUnitId, wounds, rev }),
-  endBattleArena: (gameId: string, rev: number) =>
-    post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+  endBattleArena: (gameId: string, rev: number) => post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+  /** The Chinese save one of their killed units after the battle: `arenaUnitId` from `you.chineseSave`. */
+  chineseSave: (gameId: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/chinese-save`, { rev, arenaUnitId }),
   undoEndBattle: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/end/undo`, { rev }),
 
@@ -870,6 +894,19 @@ export const api = {
       ...(confirmedRepeat ? { confirmedRepeat } : {}),
     }),
   /**
+   * One setup step before turn 1 (#374), or its solo undo. `requestId` is accepted and checked by the server but not stored: a repeat is
+   * harmless because every step is idempotent. `rev` is the revision the caller saw. The great person is `performAction('setupGreatPerson')`
+   * and the social policy is `chooseSocialPolicy`.
+   */
+  setup: (gameId: string, body: SetupRequestBody, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/setup`, { ...body, requestId, rev }),
+  /** The Finish setup button (#374): setup is over for the viewer, and the Setup tab goes. Refused while a step is missing. */
+  setupFinish: (gameId: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/setup`, { step: 'finish', requestId, rev }),
+  /** End turn on the Setup tab (#374): passes the turn on without finishing setup; no phase is marked. Idempotent. */
+  setupPass: (gameId: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/setup`, { step: 'pass', requestId, rev }),
+  /**
    * The card choice after a culture advance: the same route as `performAction`,
    * with the reward and the card to keep. The request id is kept like any other.
    */
@@ -898,6 +935,7 @@ export const api = {
       item: payload.item,
       ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
+      ...(payload.free === undefined ? {} : { free: payload.free }),
     }),
   /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
   startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>
@@ -993,12 +1031,13 @@ export const api = {
       ...(snap === undefined ? {} : { snap }),
     }),
   /** Moves a figure by the Movement rules (issue #302) to a map square. */
-  travelFigure: (gameId: string, pieceId: string, column: number, row: number, disband = false, collectToken = false) =>
+  travelFigure: (gameId: string, pieceId: string, column: number, row: number, disband = false, collectToken = false, fightVillage = false) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/travel`, {
       column,
       row,
       ...(disband ? { disband } : {}),
       ...(collectToken ? { collectToken } : {}),
+      ...(fightVillage ? { fightVillage } : {}),
     }),
   /** A figure the viewer's Build placed this City Management goes on another legal square of the city: no Undo, no payment, no movement. */
   repositionBuiltFigure: (gameId: string, pieceId: string, column: number, row: number) =>

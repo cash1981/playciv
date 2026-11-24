@@ -12,8 +12,9 @@ import { createBoard, createBoardForPlayers } from './board.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { CancellationHistory } from './cancellation.js'
 import type { SocialPolicyItem } from './item.js'
-import type { GameState, Playerhand, PlayerStats, TradeOffer } from './state.js'
+import type { GameLogEntry, GameState, Playerhand, PlayerStats, TradeOffer } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
+import { SPANISH, SPANISH_MVMT } from './actions/player.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
 import type { PlayerTurn } from './turn.js'
 import { TURN_PHASES, migratePlayerTurn, startPlayerOf, turnStatus } from './turn.js'
@@ -135,6 +136,64 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   hensonWounds: player.hensonWounds ?? 0,
   curieSubstitute: player.curieSubstitute ?? null,
 })
+
+/**
+ * A Spanish player whose civilization was revealed before the reveal set Spain's +1 travel speed still has the default
+ * Movement (`2`) and no `civSetup.mvmt` on their reveal line. They get `3` (Spain's +1 inside the base), written the way the reveal writes it:
+ * the stat, and `civSetup.mvmt` on the line so that undoing the reveal restores `2`. A reveal line with no `civSetup` (a reveal saved
+ * before the setup was recorded) gets only the stat. An older `b+k` (k at least 1) becomes `(b+1)+(k-1)`, which keeps the speed. A plain
+ * value (`3`, `4`) and any other civilization stay. The whole conversion runs once per game: `spanishMovementMigrated` marks a game that
+ * has had it (every new game does), and nothing typed afterwards is touched.
+ */
+function withSpanishMovement(
+  players: readonly Playerhand[],
+  log: readonly GameLogEntry[],
+  alreadyMigrated: boolean,
+): { readonly players: readonly Playerhand[]; readonly log: readonly GameLogEntry[] } {
+  // Runs once per game: `spanishMovementMigrated` is set by createGame and by this migration, so a Movement typed later is never rewritten
+  if (alreadyMigrated) return { players, log }
+  let nextLog = log
+  const nextPlayers = players.map((player) => {
+    if (player.civilization?.name !== SPANISH) return player
+    // Saves from when Spain's +1 was typed as a second term (`2+1`, or `2+2` with a typed Natural Religion): the +1 is now part
+    // of the base, so `2+k` becomes `3+(k-1)` (`3` for `2+1`). The reveal line's `civSetup.mvmt.set` follows, so that undoing
+    // the reveal still finds the value it set and restores `before`.
+    // Any typed base counts (`4+1` with Sailing gave 5; read the new way it would give 6): `b+k` is `(b+1)+(k-1)`, which keeps
+    // the speed with and without a tech and with Natural Religion. A `+0` term gave Spain nothing then and is left alone (it reads as base plus Spain's 1 now).
+    const legacy = /^(\d+)((?:\+\d+)+)$/.exec(player.stats.mvmt.trim())
+    const extra = legacy === null ? 0 : (legacy[2] ?? '').split('+').reduce((total, part) => total + (part === '' ? 0 : Number(part)), 0)
+    if (legacy !== null && extra >= 1) {
+      const base = Number(legacy[1]) + 1
+      const migrated = extra === 1 ? `${base}` : `${base}+${extra - 1}`
+      const typed = player.stats.mvmt
+      const civId = player.civilization.id
+      const reveal = [...nextLog]
+        .reverse()
+        .find((entry) => entry.logType === 'REVEAL' && entry.item?.kind === 'civ' && entry.item.id === civId && entry.playerId === player.playerId)
+      if (reveal?.civSetup?.mvmt !== undefined && reveal.civSetup.mvmt.set === typed) {
+        const setup = { ...reveal.civSetup, mvmt: { ...reveal.civSetup.mvmt, set: migrated } }
+        nextLog = nextLog.map((entry) => (entry.id === reveal.id ? { ...entry, civSetup: setup } : entry))
+      }
+      return { ...player, stats: { ...player.stats, mvmt: migrated } }
+    }
+    if (player.stats.mvmt !== DEFAULT_PLAYER_STATS.mvmt) return player
+    // The reveal that handed out the civilization held now: the latest one, so a reveal undone and made again counts once
+    const civId = player.civilization.id
+    const reveal = [...nextLog]
+      .reverse()
+      .find(
+        (entry) =>
+          entry.logType === 'REVEAL' && entry.item?.kind === 'civ' && entry.item.id === civId && entry.playerId === player.playerId,
+      )
+    if (reveal?.civSetup?.mvmt !== undefined) return player
+    if (reveal?.civSetup !== undefined) {
+      const setup = { ...reveal.civSetup, mvmt: { before: DEFAULT_PLAYER_STATS.mvmt, set: SPANISH_MVMT } }
+      nextLog = nextLog.map((entry) => (entry.id === reveal.id ? { ...entry, civSetup: setup } : entry))
+    }
+    return { ...player, stats: { ...player.stats, mvmt: SPANISH_MVMT } }
+  })
+  return { players: nextPlayers, log: nextLog }
+}
 
 /** A board from before the player areas, history, redo stack or shapes existed. */
 type MaybeOlderBoard = Omit<
@@ -311,6 +370,18 @@ export function migrateGameState(state: GameState): GameState {
     return { ...piece, coinTokens: legacyPanamaCoins }
   })
 
+  // Spain's travel speed for a player revealed before the reveal set it
+  const spanishLog = withSpanishMovement(
+    migratedPlayers,
+    older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
+    older.spanishMovementMigrated === true,
+  )
+  const spanishWithdrawn = withSpanishMovement(
+    (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
+    spanishLog.log,
+    older.spanishMovementMigrated === true,
+  )
+
   const migrated: GameState = {
     ...older,
     createdAt: older.createdAt ?? null,
@@ -329,8 +400,8 @@ export function migrateGameState(state: GameState): GameState {
       chosenId: offer.chosenId ?? (offer.status === 'accepted' && recipientId !== undefined ? recipientId : null),
       transitionRequests: offer.transitionRequests ?? [],
     })),
-    log: older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
-    players: migratedPlayers,
+    log: spanishWithdrawn.log,
+    players: spanishLog.players,
     board:
       board === undefined
         ? fresh
@@ -345,7 +416,7 @@ export function migrateGameState(state: GameState): GameState {
             redo: board.redo ?? [],
           },
     socialPolicies: correctSocialPolicyFlipsides(older.socialPolicies),
-    withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
+    withdrawnPlayers: spanishWithdrawn.players,
     publicTurns: Object.fromEntries(
       Object.entries(older.publicTurns ?? {}).map(([key, turn]) => [key, migratePlayerTurn(turn)]),
     ),
@@ -371,6 +442,7 @@ export function migrateGameState(state: GameState): GameState {
     legacyOrdersCopied: older.legacyOrdersCopied ?? chatOrders === true,
     // A loaded save that lacks the flag is treated as not checked (the admin tool that checked it is gone)
     legacyRevealsCopied: older.legacyRevealsCopied ?? false,
+    spanishMovementMigrated: true,
     turnStarters: older.turnStarters ?? {},
   }
   // The old baton view is gone, and every game is a chat game. Adopt one that was
