@@ -15,6 +15,7 @@ import type {
   AtomicTheoryPayload,
   AssignScoutPayload,
   AssistedPayload,
+  ClaimConquestPayload,
   CombustionPayload,
   CommunismPayload,
   GunpowderPayload,
@@ -363,7 +364,7 @@ function parseInvest(args: Record<string, unknown>): InvestPayload | string {
 
 function parseGianniniBuild(args: Record<string, unknown>): GianniniBuildPayload | string {
   const extra = extraKeys(args, ['cityPieceId', 'assetId', 'column', 'row'])
-  if (extra.length > 0) return `gianniniBuild takes only cityPieceId, assetId, column and row, not ${extra.join(', ')}`
+  if (extra.length > 0) return `a free building takes only cityPieceId, assetId, column and row, not ${extra.join(', ')}`
   const { cityPieceId, assetId, column, row } = args
   if (!isId(cityPieceId)) return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
   if (typeof assetId !== 'string' || !BUILDABLE_BUILDING_IDS.includes(assetId)) return 'assetId must be one of the buildings'
@@ -401,6 +402,14 @@ function parseAssignScout(args: Record<string, unknown>): AssignScoutPayload | s
   return { scoutPieceId: args['scoutPieceId'], cityPieceId: city }
 }
 
+function parseClaimConquest(args: Record<string, unknown>): ClaimConquestPayload | string {
+  const extra = extraKeys(args, ['offerId', 'accept'])
+  if (extra.length > 0) return `claimConquest takes only offerId and accept, not ${extra.join(', ')}`
+  if (!isId(args['offerId'])) return 'offerId is required: 1 to 64 characters, letters, digits and . _ : -'
+  if (typeof args['accept'] !== 'boolean') return 'accept must be true (take the reward) or false (no thanks)'
+  return { offerId: args['offerId'], accept: args['accept'] }
+}
+
 type Parser = (args: Record<string, unknown>) => AssistedPayload | string
 
 /** The actions whose payload is `args`, with the parser of each. A map, so a request can only pick an entry that is here. */
@@ -428,9 +437,11 @@ const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
   ['switchGovernment', parseSwitchGovernment],
   ['invest', parseInvest],
   ['gianniniBuild', parseGianniniBuild],
+  ['spanishBuild', parseGianniniBuild],
   ['feudalismHarvest', parseHarvest],
   ['foundCity', parseFoundCity],
   ['assignScout', parseAssignScout],
+  ['claimConquest', parseClaimConquest],
 ])
 
 /** Whether `action` takes `args`. */

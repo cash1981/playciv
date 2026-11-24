@@ -16,7 +16,7 @@ import type { Cell } from './blockade.js'
 import type { Board, BoardPiece } from './board.js'
 import { columnLabel, isMapCell, mapTop } from './board.js'
 import { isExploredCell } from './explore.js'
-import { canCultureMoveFigure, figureBelongsTo, figuresAt, occupancyOf } from './movement.js'
+import { canCultureMoveFigure, figureBelongsTo, figuresAt, metropolisSquares, occupancyOf } from './movement.js'
 import type { FigureOwner } from './movement.js'
 import { terrainAt } from './terrain.js'
 
@@ -53,9 +53,10 @@ export function steamPowerSources(board: Board, owner: FigureOwner, turnNumber: 
   return [...sources.values()].sort((a, b) => a.row - b.row || a.column - b.column)
 }
 
-/** Every explored water square on the map. */
+/** Every explored water square on the map, except one a metropolis covers: that is no longer water for movement (Fame and Fortune p. 10). */
 export function waterCells(board: Board): readonly Cell[] {
   const cells: Cell[] = []
+  const bridges = metropolisSquares(board)
   for (let row = 0; row < board.rows; row += 1) {
     for (let column = 0; column < board.columns; column += 1) {
       if (!isMapCell(board, column, row) || !isExploredCell(board, { column, row })) continue
@@ -64,7 +65,7 @@ export function waterCells(board: Board): readonly Cell[] {
         column * board.squareSize + board.squareSize / 2,
         mapTop(board) + row * board.squareSize + board.squareSize / 2,
       )
-      if (terrain === 'water') cells.push({ column, row })
+      if (terrain === 'water' && !bridges.has(keyOf({ column, row }))) cells.push({ column, row })
     }
   }
   return cells

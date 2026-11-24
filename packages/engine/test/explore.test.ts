@@ -9,6 +9,7 @@ import { placePiece, travelFigure, undoLastBoardChange } from '../src/actions/bo
 import { exploreSquare } from '../src/actions/explore.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
+import { tileTokenSquares } from '../src/tile-icons.js'
 import { isExploredCell, isUnexploredCell } from '../src/explore.js'
 import { figureMovementOptions, movementOf } from '../src/movement.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -107,6 +108,30 @@ describe('exploreSquare', () => {
     expect(after.destinations).toContainEqual(expect.objectContaining({ column: 4, row: 1, distance: 1 }))
   })
 
+  // The art has its arrow on the bottom edge: it goes on the edge the figure explored from
+  it.each([
+    ['west', { column: 7, row: 5 }, { column: 8, row: 5 }, 90],
+    ['north', { column: 5, row: 3 }, { column: 5, row: 4 }, 180],
+    ['east', { column: 4, row: 5 }, { column: 3, row: 5 }, 270],
+    ['south', { column: 5, row: 4 }, { column: 5, row: 3 }, 0],
+  ] as const)('turns the tile so its arrow faces the figure exploring from the %s', (_side, at, target, rotation) => {
+    // The tile in slot (4, 0) for the north case, (4, 4) otherwise
+    const slotRow = at.row <= 3 ? 0 : 4
+    const start = unwrap(
+      placePiece(game(), {
+        playerId: CASH1981,
+        assetId: 'tiles/tile05',
+        x: 4 * SQUARE_SIZE,
+        y: mapTop(game().board) + slotRow * SQUARE_SIZE,
+      }),
+    )
+    const state = place(start, 'figures/redarmy', at.column, at.row)
+    const explored = unwrap(exploreSquare(state, { playerId: CASH1981, pieceId: armyOf(state).id, ...target }))
+
+    const laid = explored.board.pieces.filter((piece) => piece.category === 'tile' && piece.assetId !== 'tiles/tile05')
+    expect(laid.map((piece) => piece.rotation)).toEqual([rotation])
+  })
+
   it('keeps the whole speed: after exploring, travel cannot go past what is left', () => {
     const state = place(withStartTile(game()), 'figures/redarmy', 3, 3)
     const explored = unwrap(
@@ -197,11 +222,17 @@ describe('exploreSquare', () => {
     expect(refused.kind).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
-  it('is taken back by two board Undos: the tile first, then the movement', () => {
+  it('is taken back by board Undos: the tokens first, then the tile, then the movement', () => {
     const state = place(withStartTile(game()), 'figures/redarmy', 3, 1)
-    const explored = unwrap(
+    let explored = unwrap(
       exploreSquare(state, { playerId: CASH1981, pieceId: armyOf(state).id, column: 4, row: 1 }),
     )
+    // The hut and village icons of the laid tile became tokens after it (issue #364)
+    const laid = explored.board.pieces.find((piece) => piece.category === 'tile' && piece.id !== state.board.pieces.find((other) => other.category === 'tile')?.id)
+    const tokens = explored.board.pieces.filter((piece) => piece.tileId === laid?.id)
+    expect(tokens).toHaveLength(tileTokenSquares(laid?.assetId ?? '').length)
+    for (const _ of tokens) explored = unwrap(undoLastBoardChange(explored, CASH1981))
+    expect(explored.board.pieces.some((piece) => piece.tileId !== undefined)).toBe(false)
     const noTile = unwrap(undoLastBoardChange(explored, CASH1981))
     expect(tilesOn(noTile)).toBe(1)
     expect(movementOf(armyOf(noTile), 1)).toMatchObject({ used: 1 })
@@ -216,5 +247,51 @@ describe('exploreSquare', () => {
       exploreSquare(state, { playerId: CASH1981, pieceId: armyOf(state).id, column: 4, row: 1 }),
     )
     expect(refused.kind).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+})
+
+describe('Navigation and fog', () => {
+  it('lets a figure that only crosses water stop in water that touches fog, to explore from there', () => {
+    // D3 (forest) -> D2 (forest) -> D1 (water); E1 east of D1 is fog
+    const base = place(withStartTile(game()), 'figures/redarmy', 3, 2)
+    const navigator: GameState = {
+      ...base,
+      players: base.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, techsChosen: [{ name: 'Navigation', hidden: false }] as unknown as Playerhand['techsChosen'] }
+          : player,
+      ),
+    }
+    const withNavigation = optionsOf(navigator)
+    expect(withNavigation.destinations).toContainEqual(expect.objectContaining({ column: 3, row: 0, distance: 2 }))
+    // Without Navigation water is not entered at all
+    expect(optionsOf(base).destinations.some((cell) => cell.column === 3 && cell.row === 0)).toBe(false)
+  })
+
+  it('gives England the same: it crosses water and may stop in water that touches fog', () => {
+    const base = place(withStartTile(game()), 'figures/redarmy', 3, 2)
+    const english: GameState = {
+      ...base,
+      players: base.players.map((player) =>
+        player.playerId === CASH1981 ? { ...player, civilization: { name: 'England' } as Playerhand['civilization'] } : player,
+      ),
+    }
+    expect(optionsOf(english).destinations).toContainEqual(expect.objectContaining({ column: 3, row: 0, distance: 2 }))
+    // Water that touches no fog (A3) is still never an ending square
+    expect(optionsOf(english).destinations.some((cell) => cell.column === 0 && cell.row === 2)).toBe(false)
+  })
+
+  it('does not offer water next to fog as an ending when the last point of movement would be spent getting there', () => {
+    const base = place(withStartTile(game()), 'figures/redarmy', 3, 2)
+    const slow: GameState = {
+      ...base,
+      players: base.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, civilization: { name: 'England' } as Playerhand['civilization'], stats: { ...player.stats, mvmt: '2' } }
+          : player,
+      ),
+    }
+    // D1 is 2 away and the speed is 2: nothing left to explore E1 with
+    expect(optionsOf(slow).destinations.some((cell) => cell.column === 3 && cell.row === 0)).toBe(false)
   })
 })

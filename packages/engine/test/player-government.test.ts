@@ -59,6 +59,7 @@ describe('player government', () => {
     ['Romans', 'Republic'],
     ['Russians', 'Communism'],
     ['Japanese', 'Feudalism'],
+    ['Greeks', 'Democracy'],
     ['Americans', 'Despotism'],
   ] as const)(
     'sets %s to its documented starting government %s when revealed',

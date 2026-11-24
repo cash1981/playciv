@@ -176,6 +176,47 @@ describe('End turn in Your actions', () => {
     expect(markDone).not.toHaveBeenCalled()
   })
 
+  describe('while the setup before turn 1 is not finished (#374)', () => {
+    const GATE = 'Finish your setup before Start of Turn can be marked done: still to do: capital, figures. Open the Setup tab.'
+    const withSetup = (blocksTurn: string | null): PlayerView => {
+      const view = viewIn(activeTurn(1, [alice('SOT'), bob('SOT')]))
+      return { ...view, you: { ...(view.you as object), setup: { steps: [], blocksTurn } } } as unknown as PlayerView
+    }
+
+    it('is disabled and says why, in the text and on the button, and sends nothing', () => {
+      const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+      renderPanel(withSetup(GATE))
+
+      const button = screen.getByRole('button', { name: 'End turn: mark Start of turn as done' }) as HTMLButtonElement
+      expect(button.disabled).toBe(true)
+      expect(button.getAttribute('title')).toBe(GATE)
+      const reason = screen.getByRole('status')
+      expect(reason.textContent).toBe(GATE)
+      expect(button.getAttribute('aria-describedby')).toBe(reason.id)
+      fireEvent.click(button)
+      expect(markDone).not.toHaveBeenCalled()
+    })
+
+    it('works as before once setup lets it through (blocksTurn is null)', async () => {
+      const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+      renderPanel(withSetup(null))
+
+      const button = screen.getByRole('button', { name: 'End turn: mark Start of turn as done' }) as HTMLButtonElement
+      expect(button.disabled).toBe(false)
+      expect(button.getAttribute('title')).toBe('End turn: mark Start of turn as done')
+      expect(button.hasAttribute('aria-describedby')).toBe(false)
+      expect(screen.queryByRole('status')).toBeNull()
+      fireEvent.click(button)
+      await waitFor(() => expect(markDone).toHaveBeenCalledExactlyOnceWith('game-1', 'SOT', 1))
+    })
+
+    it('is untouched for a player with no setup at all', () => {
+      renderPanel(viewIn(activeTurn(4, [alice('CM')])))
+      expect((screen.getByRole('button', { name: /^End turn/ }) as HTMLButtonElement).disabled).toBe(false)
+      expect(screen.queryByRole('status')).toBeNull()
+    })
+  })
+
   it('on Research says that ending it is what starts the next turn', () => {
     renderPanel(viewIn(activeTurn(4, [alice('RESEARCH'), bob('RESEARCH')])))
 

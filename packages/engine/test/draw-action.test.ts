@@ -10,18 +10,21 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw, drawUnitsForBattle, revealAndDiscardBattlehand } from '../src/actions/draw.js'
+import { discardItem } from '../src/actions/player.js'
 import { drawBarbarians, discardBarbarians, drawWonder, drawWonderToBoard, loot } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
+import { initiateUndo, vote } from '../src/actions/undo.js'
 import { playerAreas, wondersArea } from '../src/board.js'
 import type { Item, ItemKind } from '../src/item.js'
 import { isUnit, itemImage, itemName, itemValueEquals } from '../src/item.js'
+import { deckWith } from '../src/item-number.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { SheetName } from '../src/sheet-name.js'
-import { findSheetName } from '../src/sheet-name.js'
+import { SHUFFLABLE_ITEMS, findSheetName } from '../src/sheet-name.js'
 import type { GameState } from '../src/state.js'
-import { findPlayer } from '../src/state.js'
+import { findPlayer, toPlayerView } from '../src/state.js'
 
-import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const countInDeck = (state: GameState, sheetName: SheetName): number =>
   state.items.filter((item) => item.sheetName === sheetName).length
@@ -73,12 +76,41 @@ describe('draw takes the item out of the deck and hands it to the player', () =>
       expect(countInDeck(after, sheetName)).toBe(countBefore - 1)
       // Java: assertThat(pbf.getItems()).doesNotContain(item)
       expect(after.items.some((deckItem) => deckItem.id === item.id)).toBe(false)
-      // The item now sits in the hand of the player, hidden, with an owner
-      expect(handOf(after, CASH1981).map((handItem) => handItem.id)).toContain(item.id)
+      // The item now sits in the hand of the player, hidden, with an owner;
+      // a tile goes straight to the discard pile instead
+      const destination = kind === 'tile' ? after.discardedItems : handOf(after, CASH1981)
+      expect(destination.map((held) => held.id)).toContain(item.id)
       expect(item.hidden).toBe(true)
       expect(item.ownerId).toBe(CASH1981)
     })
   }
+
+  it('a drawn tile is never in the hand: its card is discarded and shown in the revealed feed', () => {
+    // An earlier public discard, so the feed order has to come from the draw line
+    const withHut = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'HUTS' }))
+    const hut = lastDrawn(withHut)
+    const before = unwrap(
+      discardItem(withHut, { playerId: CASH1981, sheetName: 'HUTS', itemNumber: hut.itemNumber, name: itemName(hut) }),
+    )
+    const after = unwrap(draw(before, { playerId: CASH1981, sheetName: 'TILES' }))
+    const tile = lastDrawn(after)
+
+    expect(handOf(after, CASH1981)).toEqual(handOf(before, CASH1981))
+    expect(after.discardedItems.at(-1)?.id).toBe(tile.id)
+    const feed = revealedFeed(after)
+    expect(feed[0]?.item.id).toBe(tile.id)
+    expect(feed[0]).toMatchObject({ discarded: true, playerId: CASH1981 })
+
+    // A vote undo of the draw line still takes the card back to the deck
+    const line = after.log.filter((entry) => entry.item?.id === tile.id).at(-1)
+    if (line === undefined) throw new Error('no draw line')
+    let undone = unwrap(initiateUndo(after, { logId: line.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI, CHUL]) {
+      undone = unwrap(vote(undone, { logId: line.id, playerId, vote: true }))
+    }
+    expect(undone.discardedItems.some((held) => held.id === tile.id)).toBe(false)
+    expect(undone.items.some((deckItem) => deckItem.id === tile.id)).toBe(true)
+  })
 })
 
 /**
@@ -337,6 +369,36 @@ describe('reshuffle', () => {
     expect(after.discardedItems.map((i) => i.id)).toEqual([someHut.id])
   })
 
+  it('a discarded card comes back with a number nobody can predict from the counter', () => {
+    let state = firstCivGame()
+    const aircrafts = countInDeck(state, 'AIRCRAFT')
+    for (let i = 0; i < aircrafts; i++) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'AIRCRAFT' }))
+    }
+    const card = handOf(state, CASH1981).find((item) => item.sheetName === 'AIRCRAFT')
+    if (card === undefined) throw new Error('missing aircraft')
+    state = unwrap(discardItem(state, { playerId: CASH1981, sheetName: 'AIRCRAFT', name: itemName(card) }))
+    const counterBefore = state.itemCounter
+
+    const after = unwrap(draw(state, { playerId: CASH1981, sheetName: 'AIRCRAFT' }))
+    const drawn = lastDrawn(after)
+
+    expect(drawn.id).toBe(card.id)
+    expect(drawn.itemNumber).not.toBe(card.itemNumber)
+    expect(drawn.itemNumber).not.toBe(counterBefore + 1)
+    expect(drawn.itemNumber).toBeGreaterThanOrEqual(100_000)
+    expect(after.itemCounter).toBe(counterBefore + 1)
+    expect(handOf(after, CASH1981).some((item) => item.itemNumber === card.itemNumber)).toBe(false)
+  })
+
+  it('gives every returned card its own number', () => {
+    const state = firstCivGame()
+    const cards = state.items.filter((item) => SHUFFLABLE_ITEMS.has(item.sheetName)).slice(0, 400)
+    const numbers = deckWith({ ...state, items: [] }, cards).items.map((item) => item.itemNumber)
+    expect(new Set(numbers).size).toBe(cards.length)
+    expect(Math.min(...numbers)).toBeGreaterThanOrEqual(100_000)
+  })
+
   it('kinds outside SHUFFLABLE_ITEMS cannot be reshuffled', () => {
     // Java: reshuffleItems throws IllegalArgumentException for huts and
     // villages. The brief for this port assumed they are collected back from
@@ -399,6 +461,60 @@ describe('battle hand', () => {
     for (const id of battlehandIds) {
       expect(feedById.get(id)?.revealed).toBe(true)
     }
+  })
+
+  it('every draw and redraw is a public log line, also when there is no unit to draw', () => {
+    let state = firstCivGame()
+    const drawLines = (): number => state.log.filter((entry) => /has drawn \d+ units/.test(entry.publicLog ?? '')).length
+
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
+    expect(drawLines()).toBe(1)
+
+    for (const sheetName of ['INFANTRY', 'ARTILLERY', 'MOUNTED'] as const) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
+    }
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 3 }))
+    expect(drawLines()).toBe(3)
+    expect(findPlayer(state, CASH1981)?.battlehand).toHaveLength(3)
+  })
+
+  it('opponents and spectators see how many units are drawn for a battle, not which', () => {
+    let state = firstCivGame()
+    for (const sheetName of ['INFANTRY', 'ARTILLERY', 'MOUNTED', 'MOUNTED'] as const) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
+    }
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
+    const battlehand = findPlayer(state, CASH1981)?.battlehand ?? []
+    expect(battlehand).toHaveLength(2)
+
+    for (const viewerId of [KARANDRAS1, 'onlooker']) {
+      const view = toPlayerView(state, viewerId)
+      const cash = view.opponents.find((opponent) => opponent.playerId === CASH1981)
+      expect(cash?.numberOfBattlehandUnits).toBe(2)
+      expect(cash).not.toHaveProperty('battlehand')
+      const serialised = JSON.stringify(view)
+      for (const unit of battlehand) {
+        expect(serialised).not.toContain(unit.id)
+        expect(serialised).not.toContain(`"itemNumber":${unit.itemNumber}`)
+      }
+    }
+    expect(toPlayerView(state, CASH1981).you?.battlehand).toHaveLength(2)
+  })
+
+  it('shows the units only once they are revealed', () => {
+    let state = firstCivGame()
+    for (const sheetName of ['INFANTRY', 'ARTILLERY'] as const) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
+    }
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
+    const battlehand = findPlayer(state, CASH1981)?.battlehand ?? []
+    state = unwrap(revealAndDiscardBattlehand(state, CASH1981))
+
+    const cash = toPlayerView(state, KARANDRAS1).opponents.find((opponent) => opponent.playerId === CASH1981)
+    expect(cash?.numberOfBattlehandUnits).toBe(0)
+    const feed = revealedFeed(state)
+    for (const unit of battlehand) expect(feed.some((entry) => entry.item.id === unit.id)).toBe(true)
   })
 
   it('does not reveal a unit that was never drawn into the battlehand', () => {

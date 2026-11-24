@@ -35,7 +35,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer, withPlayer } from '../src/state.js'
 
-import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame, withSetupDone } from './fixture.js'
 
 const handOf = (state: GameState, playerId: string) =>
   findPlayer(state, playerId)?.items ?? []
@@ -326,7 +326,7 @@ describe('reveal civilization', () => {
     for (const playerId of order) {
       state = unwrap(draw(state, { playerId, sheetName: 'CIV' }))
       state = unwrap(revealCivFor(state, playerId))
-      state = unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
+      state = unwrap(markPhasesDone(withSetupDone(state, playerId), { playerId, turnNumber: 1, upToPhase: 'SOT' }))
     }
     return state
   }
@@ -403,7 +403,7 @@ describe('reveal civilization', () => {
           ? giveCiv(state, playerId, 'Egyptians')
           : unwrap(draw(state, { playerId, sheetName: 'CIV' }))
       state = unwrap(revealCivFor(state, playerId))
-      state = unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
+      state = unwrap(markPhasesDone(withSetupDone(state, playerId), { playerId, turnNumber: 1, upToPhase: 'SOT' }))
     }
     return state
   }

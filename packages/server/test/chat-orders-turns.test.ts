@@ -5,7 +5,17 @@
  */
 
 import type { GameState, PlayerView } from '@civ/engine'
-import { markPhasesDone, turnHolder, unwrap } from '@civ/engine'
+import {
+  chooseSocialPolicy,
+  countSetupTrade,
+  markPhasesDone,
+  placeSetupFigure,
+  revealItem,
+  setCapital,
+  toPlayerView,
+  turnHolder,
+  unwrap,
+} from '@civ/engine'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { App } from '../src/app.js'
@@ -370,6 +380,182 @@ describe('the mail to a new turn holder', () => {
     expect(mailer.sent).toHaveLength(0)
   })
 
+})
+
+describe('the mail in the setup stage (#374)', () => {
+  const mailsTo = (username: string): OutgoingEmail[] =>
+    mailer.sent.filter((mail) => mail.to === `${username}@example.com`)
+
+  /** The seat is dealt a civilization it has not revealed yet, and reveals it, which opens its setup. */
+  async function reveal(table: Table, seat: number, civ: string): Promise<void> {
+    const who = table.seats[seat]
+    if (who === undefined) throw new Error(`no seat ${seat}`)
+    const state = await loadGame(table.gameId)
+    const card = state.items.find((item) => item.kind === 'civ' && item.name === civ)
+    if (card === undefined) throw new Error(`no ${civ} card`)
+    const handed: GameState = {
+      ...state,
+      items: state.items.filter((item) => item.id !== card.id),
+      players: state.players.map((player) =>
+        player.playerId === who.id ? { ...player, items: [...player.items, { ...card, ownerId: who.id }] } : player,
+      ),
+    }
+    await repo.saveGame(unwrap(revealItem(handed, { playerId: who.id, sheetName: 'CIV', itemNumber: card.itemNumber })))
+  }
+
+  const pass = (table: Table, seat: number) => {
+    const who = table.seats[seat]
+    if (who === undefined) throw new Error(`no seat ${seat}`)
+    return post(who.token, `/api/games/${table.gameId}/setup`, { step: 'pass' })
+  }
+
+  it('tells the next player without a civilization to choose it and do their setup, and nobody else', async () => {
+    const table = await threePlayerGame('setup-mail')
+    const [, two] = table.seats
+    if (two === undefined) throw new Error('no seat 2')
+    await reveal(table, 0, 'Germans')
+    await everyoneOpens(table.gameId)
+    mailer.sent.length = 0
+
+    expect((await pass(table, 0)).status).toBe(200)
+
+    expect(mailer.sent).toHaveLength(1)
+    expect(mailsTo(two.username)).toHaveLength(1)
+    expect(mailsTo(two.username)[0]).toMatchObject({ subject: 'It is your turn' })
+    expect(mailsTo(two.username)[0]?.text).toContain('It is your turn to choose your civilization and do your setup, turn 1')
+    expect(mailsTo(two.username)[0]?.text).toContain(`https://playciv.app/game/${table.gameId}`)
+    // The mail names no card
+    expect(mailsTo(two.username)[0]?.text).not.toContain('Germans')
+
+    // A repeat of the pass changes nothing and mails nobody
+    await everyoneOpens(table.gameId)
+    mailer.sent.length = 0
+    expect((await pass(table, 0)).status).toBe(200)
+    expect(mailer.sent).toHaveLength(0)
+  })
+
+  it('tells the first player to finish their setup once everybody has passed', async () => {
+    const table = await threePlayerGame('setup-mail-all')
+    const [one, , three] = table.seats
+    if (one === undefined || three === undefined) throw new Error('no seats')
+    await reveal(table, 0, 'Germans')
+    await reveal(table, 1, 'Chinese')
+    await reveal(table, 2, 'Romans')
+    expect((await pass(table, 0)).status).toBe(200)
+    expect((await pass(table, 1)).status).toBe(200)
+    await everyoneOpens(table.gameId)
+    mailer.sent.length = 0
+
+    // Seat 3 holds the turn in the stage; their pass hands it back to seat 1, whose own setup is open
+    expect((await pass(table, 2)).status).toBe(200)
+
+    expect(mailer.sent).toHaveLength(1)
+    expect(mailsTo(one.username)).toHaveLength(1)
+    expect(mailsTo(one.username)[0]?.text).toContain('It is your turn to finish your setup, turn 1')
+    expect(mailsTo(three.username)).toHaveLength(0)
+  })
+
+  /** Does every step of the seat's setup (capital, army, scout, trade, policy) with the engine, and saves it. Not the finish. */
+  async function completeSetupOf(table: Table, seat: number): Promise<void> {
+    const who = table.seats[seat]
+    if (who === undefined) throw new Error(`no seat ${seat}`)
+    const squares = async (id: string, figure?: string) => {
+      const steps = toPlayerView(await loadGame(table.gameId), who.id).you?.setup?.steps ?? []
+      const step = steps.find((candidate) => candidate.id === id)
+      const found = figure === undefined ? step?.squares[0] : step?.items.find((item) => item.id === figure)?.squares[0]
+      if (found === undefined) throw new Error(`no square for ${id} ${figure ?? ''}`)
+      return found
+    }
+    let state = await loadGame(table.gameId)
+    const capital = await squares('capital')
+    state = unwrap(setCapital(state, { playerId: who.id, column: capital.column, row: capital.row }))
+    await repo.saveGame(state)
+    for (const figure of ['army', 'scout'] as const) {
+      const square = await squares('figures', figure)
+      state = unwrap(placeSetupFigure(await loadGame(table.gameId), { playerId: who.id, figure, column: square.column, row: square.row }))
+      await repo.saveGame(state)
+    }
+    const policy = (await loadGame(table.gameId)).socialPolicies[0]?.name ?? ''
+    state = unwrap(chooseSocialPolicy(await loadGame(table.gameId), { playerId: who.id, name: policy }))
+    state = unwrap(countSetupTrade(state, { playerId: who.id }))
+    await repo.saveGame(state)
+  }
+
+  const finish = (table: Table, seat: number) => {
+    const who = table.seats[seat]
+    if (who === undefined) throw new Error(`no seat ${seat}`)
+    return post(who.token, `/api/games/${table.gameId}/setup`, { step: 'finish' })
+  }
+
+  it('keeps the holder and mails nobody when the passer finishes; the ordinary text follows once the others have passed', async () => {
+    const table = await threePlayerGame('setup-mail-plain')
+    const [one, two, three] = table.seats
+    if (one === undefined || two === undefined || three === undefined) throw new Error('no seats')
+    await reveal(table, 0, 'Germans')
+    expect((await pass(table, 0)).status).toBe(200)
+    await completeSetupOf(table, 0)
+    await everyoneOpens(table.gameId)
+    mailer.sent.length = 0
+
+    // Seat 1 finishes after passing: seat 2 still has to choose a civilization, so nothing moves and nobody is mailed
+    expect((await finish(table, 0)).status).toBe(200)
+    const finished = await loadGame(table.gameId)
+    expect(turnHolder(finished)?.playerId).toBe(two.id)
+    expect(mailer.sent).toHaveLength(0)
+
+    await reveal(table, 1, 'Chinese')
+    await reveal(table, 2, 'Romans')
+    expect((await pass(table, 1)).status).toBe(200)
+    await everyoneOpens(table.gameId)
+    mailer.sent.length = 0
+    expect((await pass(table, 2)).status).toBe(200)
+
+    // Everybody has passed: the normal rule hands the turn to seat 1, whose setup is over
+    expect(mailsTo(one.username)).toHaveLength(1)
+    expect(mailsTo(one.username)[0]?.text).toContain('It is your turn: start of turn, turn 1')
+    expect(mailsTo(one.username)[0]?.text).not.toContain('finish your setup')
+  })
+
+  it('mails the new holder when Finish setup changes who holds the turn, and never the player who pressed it', async () => {
+    const table = await threePlayerGame('setup-mail-finish')
+    const [one, , three] = table.seats
+    if (one === undefined || three === undefined) throw new Error('no seats')
+    await reveal(table, 0, 'Germans')
+    expect((await pass(table, 0)).status).toBe(200)
+    await reveal(table, 1, 'Chinese')
+    expect((await pass(table, 1)).status).toBe(200)
+    await reveal(table, 2, 'Romans')
+    await completeSetupOf(table, 2)
+    expect(turnHolder(await loadGame(table.gameId))?.playerId).toBe(three.id)
+    await everyoneOpens(table.gameId)
+    mailer.sent.length = 0
+
+    expect((await finish(table, 2)).status).toBe(200)
+
+    // The stage is over for lack of anybody to wait for: seat 1, whose own setup is open, is told to finish it
+    expect(mailer.sent).toHaveLength(1)
+    expect(mailsTo(one.username)).toHaveLength(1)
+    expect(mailsTo(one.username)[0]?.text).toContain('It is your turn to finish your setup, turn 1')
+    expect(mailsTo(three.username)).toHaveLength(0)
+  })
+
+  it('does not mail the player who made the change, even when they become the holder', async () => {
+    const table = await threePlayerGame('setup-mail-actor')
+    const [one] = table.seats
+    if (one === undefined) throw new Error('no seat 1')
+    const before = await loadGame(table.gameId)
+    // Seat 1 marks Start of Turn done: the holder moves to seat 2, and a call that names seat 2 as the actor mails nobody
+    const after = unwrap(markPhasesDone(before, { playerId: one.id, turnNumber: 1, upToPhase: 'SOT' }))
+    const holder = turnHolder(after)
+    expect(holder?.playerId).not.toBe(one.id)
+    await everyoneOpens(table.gameId)
+    mailer.sent.length = 0
+    const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
+    await notifications.turnHolderChanged(before, after, holder?.playerId)
+    expect(mailer.sent).toHaveLength(0)
+    await notifications.turnHolderChanged(before, after, one.id)
+    expect(mailer.sent).toHaveLength(1)
+  })
 })
 
 describe('the mail for an order', () => {

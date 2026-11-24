@@ -17,6 +17,8 @@ import {
 } from '../src/culture-track.js'
 import type { TechItem } from '../src/item.js'
 import type { GameState, Playerhand, SocialPolicyItem } from '../src/index.js'
+import { setPlayerGovernment } from '../src/actions/player.js'
+import { unwrap } from '../src/result.js'
 import { findPlayer } from '../src/state.js'
 
 import { advanceTurn, withStats } from './culture-advance-fixture.js'
@@ -167,6 +169,15 @@ describe('how many cards an advance draws', () => {
     const religion = advanceTurn({ policies: ['Organized Religion'] })
     expect(rewardDrawCount(religion, me(religion), 'greatPerson')).toBe(2)
     const greeks = advanceTurn({ civ: 'Greeks' })
+    expect(rewardDrawCount(greeks, me(greeks), 'greatPerson')).toBe(2)
+  })
+
+  it('Organized Religion draws nothing extra in Anarchy, where social policies have no effect, but the Greeks keep theirs', () => {
+    const inAnarchy = (state: GameState): GameState =>
+      unwrap(setPlayerGovernment(state, { editorPlayerId: CASH1981, targetPlayerId: CASH1981, government: 'Anarchy' }))
+    const religion = inAnarchy(advanceTurn({ policies: ['Organized Religion'] }))
+    expect(rewardDrawCount(religion, me(religion), 'greatPerson')).toBe(1)
+    const greeks = inAnarchy(advanceTurn({ civ: 'Greeks', policies: ['Organized Religion'] }))
     expect(rewardDrawCount(greeks, me(greeks), 'greatPerson')).toBe(2)
   })
 

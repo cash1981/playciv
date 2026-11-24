@@ -24,6 +24,8 @@ import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { DEFAULT_PLAYER_STATS } from '../state.js'
 import { startMissingTurns } from './new-turn.js'
+import { BOARD_SYSTEM_ACTOR, movePieceUnchecked, rotatePieceUnchecked } from './board.js'
+import { civTileAssetId, startingCorner } from '../board.js'
 import {
   PLAYER_COLORS,
   findPlayer,
@@ -167,13 +169,51 @@ export function startIfAllPlayers(state: GameState): GameState {
     yourTurn: index === 0,
   }))
 
-  let next: GameState = { ...state, players, rng }
+  let next: GameState = seatCivilizationTiles({ ...state, players, rng })
   next = appendInfoLog(next, 'Game has now started. Good luck, and have fun!')
 
   const order = players
     .map((player, index) => `${ORDINAL_NAMES[index] ?? ''} player is ${player.username}. `)
     .join('')
   return appendInfoLog(next, order)
+}
+
+/**
+ * A civilization can be revealed before the game starts, while every player is
+ * still numbered 0 and so is laid out in the first corner. Starting numbers the
+ * seats, so those tiles are moved to the corner of the seat their owner got;
+ * otherwise two tiles share a corner and one hides the other.
+ */
+function seatCivilizationTiles(state: GameState): GameState {
+  let next = state
+  for (const player of state.players) {
+    if (player.civilization === null) continue
+    const assetId = civTileAssetId(player.civilization.name)
+    const tile = next.board.pieces.find(
+      (piece) =>
+        piece.category === 'civtile' && piece.assetId === assetId && piece.placedBy === player.playerId,
+    )
+    if (tile === undefined) continue
+
+    const corner = startingCorner(next.board, player.playernumber)
+    if (tile.x === corner.x && tile.y === corner.y && tile.rotation === corner.rotation) continue
+    const moved = movePieceUnchecked(next, {
+      playerId: BOARD_SYSTEM_ACTOR,
+      pieceId: tile.id,
+      x: corner.x,
+      y: corner.y,
+    })
+    if (moved !== undefined) next = moved
+    if (tile.rotation !== corner.rotation) {
+      next =
+        rotatePieceUnchecked(next, {
+          playerId: BOARD_SYSTEM_ACTOR,
+          pieceId: tile.id,
+          rotation: corner.rotation,
+        }) ?? next
+    }
+  }
+  return next
 }
 
 /** Java: `getNameForPlayerNumber`. */
@@ -387,8 +427,11 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     state.discardedItems.find((item) => item.id === id) ??
     state.players.flatMap((player) => player.items).find((item) => item.id === id)
 
+  // A record from before the discards were kept (`effect.discarded`) names its cards by where they are now. A card
+  // that has left the pile may have been renumbered since, so only one still in the pile is named.
+  const inPile = (item: Item): boolean => state.discardedItems.some((candidate) => candidate.id === item.id)
   const advanceOf = (record: (typeof state.assistedActions)[number]): { readonly drawn: readonly string[] } | undefined => {
-    if (record.effect.kind === 'cultureAdvance') return record.effect
+    if (record.effect.kind === 'cultureAdvance' || record.effect.kind === 'relicGreatPerson' || record.effect.kind === 'philosophy' || record.effect.kind === 'setupGreatPerson') return record.effect
     if ('advance' in record.effect && record.effect.advance !== undefined && record.effect.advance !== null) {
       return record.effect.advance
     }
@@ -446,12 +489,16 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
       (candidate) => candidate.id === effect.rewardId || effect.rewardId.startsWith(`${candidate.id}:`),
     )
     if (origin === undefined || origin.status === 'undone') continue
+    if (effect.discarded !== undefined) {
+      for (const item of effect.discarded) rememberDiscard(item, record, false)
+      continue
+    }
     const advance = advanceOf(origin)
     if (advance === undefined) continue
     for (const id of advance.drawn) {
       if (id === effect.itemId) continue
       const item = itemById(id)
-      if (item !== undefined) rememberDiscard(item, record, false)
+      if (item !== undefined && inPile(item)) rememberDiscard(item, record, false)
     }
   }
 
@@ -467,6 +514,14 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
 
   state.log.forEach((entry, logIndex) => {
     if (entry.item === null) return
+    // A drawn tile goes straight to the discard pile; its draw line dates the row.
+    if (entry.logType === 'ITEM' && entry.item.kind === 'tile') {
+      const tileRow = rows.get(entry.item.itemNumber)
+      if (tileRow === undefined || !tileRow.discarded) return
+      tileRow.createdAt = newer(tileRow.createdAt, entry.createdAt)
+      tileRow.logOrder = Math.max(tileRow.logOrder, logIndex)
+      return
+    }
     if (entry.logType !== 'REVEAL' && entry.logType !== 'DISCARD') return
     let row = rows.get(entry.item.itemNumber)
     if (row === undefined) {

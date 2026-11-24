@@ -14,7 +14,7 @@
  * reset step.
  */
 
-import { mapCellOf, pieceColorOf } from './blockade.js'
+import { cityCenterCells, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import type { Board, BoardPiece, PieceMovement } from './board.js'
 import { columnLabel, isMapCell, mapTop, whiteFigureCivilization } from './board.js'
@@ -123,16 +123,22 @@ export function techStackingOf(techs: readonly { readonly name: string; readonly
 }
 
 /**
- * The typed Movement split into its base (the first term) and its bonus (every `+` term after it: Spain's +1, or how older
- * saves typed Natural Religion). A revealed tech replaces the base when it gives more; the bonus is added on top.
+ * The typed Movement split into its base (the first term), its bonus (every `+` term after it: how Natural Religion is typed,
+ * `3+1`) and, for Spain, the +1 that is part of the base (typed `3`). A revealed tech replaces the base when it gives more; the bonus is added on top.
  */
-export function splitMovement(expression: string): { readonly base: number; readonly bonus: number } {
+export function splitMovement(
+  expression: string,
+  spanish = false,
+): { readonly base: number; readonly bonus: number; readonly spain: number } {
   const parts = expression
     .split('+')
     .map((part) => Number(part))
     .filter((part) => Number.isFinite(part) && part >= 0)
-  const [base = 0, ...rest] = parts
-  return { base, bonus: rest.reduce((total, part) => total + part, 0) }
+  const [typedBase = 0, ...rest] = parts
+  // Spain's +1 is part of the typed base (`3`, not `2+1`): it is taken out here so a tech replaces only the 2 and the +1 goes on top.
+  // A `+` term after it is still the army-only Natural Religion convention (`3+1`).
+  const spain = spanish && typedBase > 0 ? 1 : 0
+  return { base: typedBase - spain, bonus: rest.reduce((total, part) => total + part, 0), spain }
 }
 
 /** What figure ownership needs to know: the seat's colour and civilization. */
@@ -170,25 +176,27 @@ const hasRevealedTech = (player: MovementPlayer, name: string): boolean =>
 
 /**
  * The player's travel speed: the larger of the typed base and what the revealed techs give (`techSpeedOf`), plus the typed
- * bonus (Spain's +1), plus Natural Religion for an army (group movement is not implemented, so every army move is
+ * bonus (Natural Religion as typed, `3+1`), Spain's +1, plus Natural Religion for an army (group movement is not implemented, so every army move is
  * individual), plus Henry Ford while his card is faceup, doubled by Captain James Cook for this turn.
  */
 export function travelSpeedOf(player: MovementPlayer, piece: BoardPiece, turnNumber: number): number {
-  const typed = splitMovement(player.stats.mvmt)
+  const typed = splitMovement(player.stats.mvmt, player.civilization?.name === 'Spanish')
   const naturalReligion = hasPolicy(player, 'Natural Religion') && !inAnarchy(player)
   // Natural Religion is army-only. A `+` in the typed expression is the players'
   // existing way of recording it (issue #102, `3+1`), so that expression is the
   // army's speed and already includes the bonus: a scout gives one point of it
   // back. Without a `+` the engine adds the bonus to an army itself.
-  let bonus = typed.bonus
+  const spain = typed.spain
+  const typedBonus = typed.bonus
+  let bonus = typedBonus
   if (naturalReligion) {
-    if (typed.bonus === 0) {
+    if (typedBonus === 0) {
       if (isArmy(piece)) bonus = 1
     } else if (!isArmy(piece)) {
-      bonus = Math.max(0, typed.bonus - 1)
+      bonus = Math.max(0, typedBonus - 1)
     }
   }
-  let speed = Math.max(typed.base, techSpeedOf(player.techsChosen)?.speed ?? 0) + bonus
+  let speed = Math.max(typed.base, techSpeedOf(player.techsChosen)?.speed ?? 0) + bonus + spain
   if (hasActiveGreatPerson(player, 'Henry Ford')) speed += 1
   const cook = player.playerTurns
     .find((turn) => turn.turnNumber === turnNumber)
@@ -205,6 +213,9 @@ export interface WaterAllowed {
 function waterRulesOf(player: MovementPlayer): WaterAllowed {
   const tech = WATER_TECHS.some((name) => hasRevealedTech(player, name))
   if (tech) return { cross: true, end: true }
+  // Navigation: "You may cross water, but you may not end your movement in it." Like England's navy, except that a figure may
+  // stop in water that touches fog, to explore from there (see `mayEndHere` in `figureMovementOptions`).
+  if (hasRevealedTech(player, 'Navigation')) return { cross: true, end: false }
   // England's navy: "English figures may cross water, but may not end their movement in it."
   return player.civilization?.name === 'England' ? { cross: true, end: false } : { cross: false, end: false }
 }
@@ -216,6 +227,25 @@ const centreOf = (board: Board, cell: Cell): readonly [number, number] => [
 ]
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
+
+/**
+ * The squares a metropolis covers. Its expansion square may be water, and "the square is no longer considered to be water for
+ * purposes of movement" (Fame and Fortune p. 10: a makeshift bridge), so these squares are land for every move.
+ */
+export function metropolisSquares(board: Board): ReadonlySet<string> {
+  const squares = new Set<string>()
+  for (const piece of board.pieces) {
+    if (piece.category !== 'city' || !piece.assetId.includes('metropolis')) continue
+    for (const cell of cityCenterCells(board, piece) ?? []) squares.add(keyOf(cell))
+  }
+  return squares
+}
+
+/** Whether a square is water for movement: water terrain, unless a metropolis stands on it. */
+const isWaterForMovement = (board: Board, cell: Cell, bridges: ReadonlySet<string>): boolean => {
+  const [x, y] = centreOf(board, cell)
+  return terrainAt(board, x, y) === 'water' && !bridges.has(keyOf(cell))
+}
 
 /** The map squares holding a piece that matches `wanted`. */
 function pieceSquares(board: Board, wanted: (piece: BoardPiece) => boolean): ReadonlySet<string> {
@@ -258,6 +288,20 @@ const HUT_AND_VILLAGE_ASSETS: ReadonlySet<string> = new Set(['resources/hut', 'r
 
 const hutAndVillageSquares = (board: Board): ReadonlySet<string> =>
   pieceSquares(board, (piece) => HUT_AND_VILLAGE_ASSETS.has(piece.assetId))
+
+/**
+ * The squares a scout may not enter (base rules p. 15 and 20, Fame and Fortune p. 9): a hut or village, and a relic
+ * square unless an army of the player already stands there. Flight and a Republic make no difference. A revealed
+ * Pacifism ("Your scouts can explore huts, but not villages") lets scouts onto huts; it does not help on relics,
+ * which the Wisdom and Warfare rules name expressly.
+ */
+function scoutForbiddenSquares(board: Board, player: MovementPlayer): ReadonlySet<string> {
+  const accompanied = pieceSquares(board, (piece) => figureBelongsTo(player, piece) && isArmy(piece))
+  const relics = pieceSquares(board, (piece) => piece.category === 'relic')
+  const huts = hasPolicy(player, 'Pacifism') && !inAnarchy(player) ? new Set<string>() : pieceSquares(board, (piece) => piece.assetId === 'resources/hut')
+  const villages = pieceSquares(board, (piece) => piece.assetId === 'resources/village')
+  return new Set([...huts, ...villages, ...[...relics].filter((key) => !accompanied.has(key))])
+}
 
 /**
  * The movement options for one of the player's figures, or `null` when the
@@ -307,7 +351,7 @@ export function figureMovementOptions(
     const cell = queue.shift() as Cell
     const distance = distances.get(keyOf(cell)) ?? 0
     if (distance > 0) {
-      const destination = rules.endingAt(cell, distance)
+      const destination = rules.endingAt(cell, distance, remaining)
       if (destination !== undefined) destinations.push(destination)
     }
     // The allowance left, not the whole speed: exploring spends 1 without locking the figure
@@ -336,7 +380,7 @@ interface FigureRules {
   /** Whether a figure that has already travelled onto the square may carry on from it. */
   readonly canLeave: (cell: Cell) => boolean
   /** The destination the figure may end its move on after `distance` squares, or `undefined` when it may not end there. */
-  readonly endingAt: (cell: Cell, distance: number) => MovementDestination | undefined
+  readonly endingAt: (cell: Cell, distance: number, remaining: number) => MovementDestination | undefined
 }
 
 function figureRulesOf(
@@ -349,6 +393,7 @@ function figureRulesOf(
   const water = waterRulesOf(player)
   const flight = hasRevealedTech(player, 'Flight')
   const occupancy = occupancyOf(board, player)
+  const bridges = metropolisSquares(board)
   const limit = Math.max(1, player.stackingLimit ?? 1)
   const lockedKeys = new Set(lockedCells.map(keyOf))
   const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
@@ -359,6 +404,7 @@ function figureRulesOf(
   const attacker = isArmy(piece)
   const hasRoom = (key: string): boolean => (occupancy.own.get(key) ?? 0) < limit
   const mustStop = hutAndVillageSquares(board)
+  const scoutForbidden = attacker ? new Set<string>() : scoutForbiddenSquares(board, player)
 
   return {
     canEnter: (next) => {
@@ -366,11 +412,11 @@ function figureRulesOf(
       // A scout never attacks, so it does not enter another player's square at all without Flight.
       // A square at the stacking limit cannot be crossed either.
       if (occupancy.foreign.has(keyOf(next)) && !flight && !attacker) return false
+      if (scoutForbidden.has(keyOf(next))) return false
       if (!hasRoom(keyOf(next))) return false
       // Fog is not walked onto: it is explored first, from the square next to it.
       if (isUnexploredCell(board, next)) return false
-      const [x, y] = centreOf(board, next)
-      return !(terrainAt(board, x, y) === 'water' && !water.cross)
+      return !(isWaterForMovement(board, next, bridges) && !water.cross)
     },
     canLeave: (cell) => {
       // A figure may enter a Communism-locked square but never leave it.
@@ -383,9 +429,12 @@ function figureRulesOf(
       // Landing on another player's figures ends the move unless Flight flies over them (rule 52)
       return flight || !occupancy.foreign.has(keyOf(cell))
     },
-    endingAt: (cell, distance) => {
-      const [x, y] = centreOf(board, cell)
-      const mayEndHere = terrainAt(board, x, y) === 'water' ? water.end : true
+    endingAt: (cell, distance, remaining) => {
+      // A figure that may only cross water (Navigation, England) still stops in it next to fog, to open the tile there, but only
+      // with movement left to explore with (1); the next move takes it out to land.
+      const mayEndHere = isWaterForMovement(board, cell, bridges)
+        ? water.end || (distance < remaining && exploreTargetsFrom(board, cell).length > 0)
+        : true
       const key = keyOf(cell)
       if (
         !mayEndHere ||
@@ -485,7 +534,7 @@ export function checkRoute(
     seen.add(keyOf(cell))
     previous = cell
   }
-  const destination = rules.endingAt(previous, route.length)
+  const destination = rules.endingAt(previous, route.length, blocked.remaining)
   if (destination === undefined) {
     return { ok: false, reason: `${piece.label} cannot end its move on ${labelOf(previous)}.` }
   }
@@ -623,6 +672,7 @@ export function cardMoveDestinations(
   const limit = Math.max(1, crossing?.stackingLimit ?? 1)
   const lockedKeys = new Set(lockedCells.map(keyOf))
   const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
+  const bridges = metropolisSquares(board)
   if (lockedKeys.has(keyOf(from))) return []
   const occupied = figureSquares(board)
   const mustStop = hutAndVillageSquares(board)
@@ -634,9 +684,7 @@ export function cardMoveDestinations(
     const cell = queue.shift() as Cell
     const distance = distances.get(keyOf(cell)) ?? 0
     if (distance > 0) {
-      const [x, y] = centreOf(board, cell)
-      const terrain = terrainAt(board, x, y)
-      const mayEndHere = terrain === 'water' ? water.end : true
+      const mayEndHere = isWaterForMovement(board, cell, bridges) ? water.end : true
       if (
         mayEndHere &&
         !occupied.has(keyOf(cell)) &&
@@ -666,9 +714,7 @@ export function cardMoveDestinations(
         if ((occupancy.own.get(keyOf(next)) ?? 0) >= limit) continue
       }
       if (isUnexploredCell(board, next)) continue
-      const [x, y] = centreOf(board, next)
-      const nextWater = terrainAt(board, x, y) === 'water'
-      if (nextWater && !water.cross) continue
+      if (isWaterForMovement(board, next, bridges) && !water.cross) continue
       if (distances.has(keyOf(next))) continue
       distances.set(keyOf(next), distance + 1)
       queue.push(next)

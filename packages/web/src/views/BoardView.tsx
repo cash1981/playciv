@@ -45,6 +45,7 @@ import {
   cultureTrackHeight,
   CARAVAN_ASSET_ID,
   disbandOfferAt,
+  mapTokensOf,
   figureMovementOptions,
   findBoardAsset,
   isMapCell,
@@ -61,13 +62,14 @@ import {
   terrainWarning,
   whiteFigureCivilization,
 } from '@civ/engine'
-import type { Board, BoardArea, BoardAsset, BoardPiece, Cell, MovementPlayer } from '@civ/engine'
+import type { Board, BoardArea, BoardAsset, BoardPiece, Cell, MovementPlayer, RepositionableFigure } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { useMoveReplay } from '../lib/moveReplay.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { DisplaySettings, formatZoom, useDisplaySettings } from './DisplaySettings.js'
+import { revealPanel } from '../lib/reveal.js'
 import { BOARD_PANEL_ID } from './PhaseSummary.js'
 
 /** A map square the player may pick, as the engine lists it for a Build. */
@@ -128,6 +130,15 @@ interface Props {
   readonly movementLocks?: readonly { readonly column: number; readonly row: number }[]
   /** Squares the viewer's figures may not end a move on: the outskirts of another player's Brandenburg Gate. */
   readonly movementForbidden?: readonly { readonly column: number; readonly row: number }[]
+  /**
+   * Whether the movement-range squares are drawn for a selected figure: only while the viewer is in the
+   * Movement phase (human, 2026-11-24). Defaults to on. The figure still moves only by the Movement rules.
+   */
+  readonly movementOverlay?: boolean
+  /** The figures a Build placed in the City Management that is open, each with the squares it can be put on instead. */
+  readonly repositionFigures?: readonly RepositionableFigure[]
+  /** Asked before a figure moves or explores when it is not the viewer's turn; `null` when it is. */
+  readonly outOfTurnQuestion?: string | null
   /** The player status sidebar, drawn to the right of the map (below it on a narrow screen). */
   readonly statusSidebar?: ReactNode
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
@@ -363,6 +374,9 @@ export function BoardView({
   movementTurn = null,
   movementLocks = [],
   movementForbidden = [],
+  movementOverlay = true,
+  repositionFigures = [],
+  outOfTurnQuestion = null,
   statusSidebar,
   run,
 }: Props): React.JSX.Element {
@@ -709,11 +723,14 @@ export function BoardView({
 
   const selected = pieces.find((piece) => piece.id === selectedId) ?? null
   const pendingAsset = assets.find((asset) => asset.id === pendingAssetId) ?? null
-  const selectedMovement =
+  // The viewer's own army or scout on the map moves only by the Movement rules, in any phase
+  const movementFigure =
     selected !== null && !readOnly && !picking ? movementOptionsFor(selected) : null
   // The figure is drawn on an earlier route square while a recorded move plays back: its targets would cover it
   // and a drag would start from the real square, so both wait until playback ends.
   const selectedPlaying = selected !== null && replaySteps.has(selected.id)
+  // The range is drawn in the Movement phase only: before that players are just arranging
+  const selectedMovement = movementOverlay ? movementFigure : null
   const moveSquares = selectedPlaying ? [] : (selectedMovement?.destinations ?? [])
   const draft =
     routeDraft !== null && selected !== null && routeDraft.pieceId === selected.id && selectedMovement !== null
@@ -774,6 +791,7 @@ export function BoardView({
   const confirmRoute = (): void => {
     if (routePlan?.ok !== true || selected === null) return
     const cell = routePlan.destination
+    if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
     if (
       cell.contact === true &&
       !window.confirm(
@@ -796,11 +814,59 @@ export function BoardView({
           : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${selected.label} there gains nothing. ` +
               'Disband it anyway? OK disbands it; Cancel just moves it there.',
       )
+    // A hut or village on the square: the figure's move ends there, and the token can be drawn at once
+    const token =
+      cell.contact === true || disband
+        ? undefined
+        : mapTokensOf(board).find((candidate) => candidate.cell.column === cell.column && candidate.cell.row === cell.row)
+    const relic =
+      cell.contact === true || disband || !selected.assetId.endsWith('army')
+        ? undefined
+        : board.pieces.find(
+            (piece) =>
+              piece.category === 'relic' &&
+              Math.floor((piece.x + piece.width / 2) / board.squareSize) === cell.column &&
+              Math.floor((piece.y + piece.height / 2 - mapStart) / board.squareSize) === cell.row,
+          )
+    // An army on a village (not Zulu: they draw it on the move) fights the barbarians for it instead of drawing it
+    const fightsForVillage =
+      token !== undefined &&
+      token.sheet === 'VILLAGES' &&
+      selected.assetId.endsWith('army') &&
+      viewerCivilization !== 'Zulu' &&
+      window.confirm(
+        `${selected.label} ends its move on a village on ${cell.label}. ` +
+          'Fight the barbarians for it? OK moves it there and starts the battle; if you win, you are offered the village with the army still on the square. ' +
+          'Cancel just moves there and leaves the village.',
+      )
+    const collectToken =
+      !fightsForVillage &&
+      ((token !== undefined &&
+        !(token.sheet === 'VILLAGES' && selected.assetId.endsWith('army') && viewerCivilization !== 'Zulu') &&
+        window.confirm(
+          `${selected.label} ends its move on a ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} on ${cell.label}. ` +
+            `Draw the ${token.sheet === 'VILLAGES' ? 'village' : 'hut'} now? OK takes the token into your area and the card into your hand; ` +
+            'Cancel just moves there and leaves the token.',
+        )) ||
+        // An army ending its move on a relic removes the marker and gains its one-time ability (Fame and Fortune p. 9)
+        (relic !== undefined &&
+          window.confirm(
+            `${selected.label} ends its move on the ${relic.label} relic on ${cell.label}. ` +
+              'OK removes the marker and ends the move; the Ark and the School of Confucius take effect at once, and the other abilities are buttons under Possible actions. Cancel just moves there and leaves the marker.',
+          )))
     setMoveModeId(null)
     setRouteDraft(null)
-    void run(() =>
-      api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, routePlan.route),
-    )
+    if (fightsForVillage) {
+      // The battle exists once the move is done: bring the Battle panel (the arena) into view. The engine
+      // ignores the fight on a contested square or while a battle is active, so only a started battle scrolls.
+      void run(async () => {
+        const result = await api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, false, true, routePlan.route)
+        if (result.battle != null) revealPanel('battle')
+        return result
+      })
+      return
+    }
+    void run(() => api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, collectToken, false, routePlan.route))
   }
   // Squares smaller than a comfortable touch target make taps ambiguous: offer to zoom in rather than overlap targets.
   const cellPixels = board.squareSize * zoom
@@ -809,6 +875,10 @@ export function BoardView({
     const step = ZOOM_STEPS.find((candidate) => board.squareSize * candidate >= TOUCH_TARGET_PX) ?? 1
     setDisplaySettings({ ...displaySettings, mapZoom: step })
   }
+  // A figure the viewer's Build placed this City Management: the squares it can be put on instead, without Undo
+  const reposition =
+    selected !== null && !readOnly && !picking ? repositionFigures.find((entry) => entry.pieceId === selected.id) : undefined
+  const repositionSquares = reposition?.squares ?? []
 
   /**
    * Empty map slots are unknown territory until a tile is placed there. Only
@@ -957,6 +1027,18 @@ export function BoardView({
     return pointerType !== 'mouse' && tileTapsSurface(piece)
   }
 
+  /**
+   * Puts a figure the viewer's Build placed this City Management on another square of its city, with no Undo. Tapping a blue
+   * square and dropping the figure on it both come here, so both ask the same questions first: it is not the viewer's turn, or
+   * the square carries a warning (an enemy figure stands there, which is not automated).
+   */
+  function putBuiltFigureOn(figure: BoardPiece, cell: { readonly column: number; readonly row: number; readonly label: string; readonly note?: string }): void {
+    if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
+    if (cell.note !== undefined && !window.confirm(`${cell.note} Put ${figure.label} on ${cell.label} anyway?`)) return
+    setMoveModeId(null)
+    void run(() => api.repositionBuiltFigure(gameId, figure.id, cell.column, cell.row))
+  }
+
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     // While a palette asset is armed, the board surface owns the tap—even if
     // the user taps an existing piece such as a starting tile.
@@ -1068,6 +1150,15 @@ export function BoardView({
     // tap on the board does not move it a second time.
     setMoveModeId(null)
     if (piece !== undefined && movementOptionsFor(piece) !== null) {
+      // A figure the viewer's Build placed this City Management, dropped on one of the squares it may be put on instead:
+      // the same call as tapping the blue square, with no movement spent and no Undo.
+      const placedHere = repositionFigures.find((entry) => entry.pieceId === piece.id)
+      const droppedOn = placedHere === undefined ? null : mapCellOf(board, { ...piece, x: drag.x, y: drag.y })
+      const target = droppedOn === null ? undefined : placedHere?.squares.find((cell) => cell.column === droppedOn.column && cell.row === droppedOn.row)
+      if (target !== undefined) {
+        putBuiltFigureOn(piece, target)
+        return
+      }
       // Arranged inside its own square, with no movement spent; a drop in another square springs back.
       const spot = arrangeWithinSquare(board, piece, drag.x, drag.y)
       if (spot !== undefined) void run(() => api.movePiece(gameId, piece.id, spot[0], spot[1], false))
@@ -1414,6 +1505,33 @@ export function BoardView({
                       )
                     })}
 
+                {repositionSquares.map((cell) => (
+                  <button
+                    key={`reposition-${cell.column}-${cell.row}`}
+                    type="button"
+                    className="board-move-cell board-reposition-cell"
+                    data-reposition-column={cell.column}
+                    data-reposition-row={cell.row}
+                    aria-label={`Put ${selected?.label ?? 'figure'} on ${cell.label} instead`}
+                    title={`${cell.label} · put it here instead, no undo and no movement used${cell.note === undefined ? '' : ` · ${cell.note}`}`}
+                    disabled={busy || readOnly}
+                    style={{
+                      left: cell.column * board.squareSize * zoom,
+                      top: (mapStart + cell.row * board.squareSize) * zoom,
+                      width: board.squareSize * zoom,
+                      height: board.squareSize * zoom,
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (selected === null) return
+                      putBuiltFigureOn(selected, cell)
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <span aria-hidden="true">{cell.label}</span>
+                  </button>
+                ))}
+
                 {(selectedPlaying ? [] : (selectedMovement?.explore ?? [])).map((cell) => (
                   <button
                     key={`explore-${cell.column}-${cell.row}`}
@@ -1433,6 +1551,7 @@ export function BoardView({
                     onClick={(event) => {
                       event.stopPropagation()
                       if (selected === null) return
+                      if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
                       if (
                         !window.confirm(
                           `Spend 1 movement to explore ${cell.label}? The next map tile is drawn and placed there.`,
@@ -1598,7 +1717,7 @@ export function BoardView({
             <p className="muted">Click a piece on the board.</p>
           ) : (
             <>
-              {moveModeId === selected.id && selectedMovement === null && (
+              {moveModeId === selected.id && movementFigure === null && (
                 <div className="board-placement-status" role="status" aria-live="polite">
                   <strong>Moving {selected.label}</strong>
                   <span>Tap a destination on the board.</span>
@@ -1629,6 +1748,20 @@ export function BoardView({
                   <span className="muted">Drag it or use the arrow keys to shift it inside its square, at no movement cost.</span>
                 </div>
               )}
+              {movementFigure !== null && selectedMovement === null && (
+                <div className="board-placement-status" role="status" aria-live="polite">
+                  {reposition !== undefined && (
+                    <span>
+                      Built this turn: click a blue square to put {selected.label} somewhere else around its city. No Undo, no
+                      trade and no movement is spent, until you end City Management.
+                    </span>
+                  )}
+                  <span className="muted">
+                    {selected.label} moves by the Movement rules in the Movement phase, where its range is shown. Drag it or use the
+                    arrow keys to shift it inside its square.
+                  </span>
+                </div>
+              )}
               <p style={{ margin: '0 0 0.5rem' }}>
                 <strong>{selected.label}</strong>{' '}
                 <span className="muted">
@@ -1637,7 +1770,7 @@ export function BoardView({
                 </span>
               </p>
               <div className="row" style={{ marginBottom: '0.4rem' }}>
-                {selectedMovement === null && (
+                {movementFigure === null && (
                   <button
                     className="small"
                     disabled={busy || readOnly}

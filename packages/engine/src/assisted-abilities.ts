@@ -49,6 +49,7 @@ import {
   restoreDrawnCards,
   reverseAdvanceEffect,
 } from './assisted-culture.js'
+import { relicTakenBlock } from './assisted-relics.js'
 import { resourceAvailability, returnedText, returnResource, spendActionResource } from './assisted-resources.js'
 import { startOfTurnGate, statGainAction } from './assisted-sot.js'
 import type { StatGainSpec } from './assisted-sot.js'
@@ -156,15 +157,8 @@ const hutBlock =
 const relicBlock =
   (assetId: string, label: string, kinds: readonly AssistedActionKind[]) =>
   (state: GameState, player: Playerhand): BlockedAvailability | undefined => {
-    if (state.board.pieces.some((piece) => piece.assetId === assetId)) {
-      return blocked('not-owned', `The ${label} relic marker is still on the map.`)
-    }
-    const last = [...state.board.history]
-      .reverse()
-      .find((entry) => 'piece' in entry.change && entry.change.piece.assetId === assetId)
-    if (last === undefined || last.change.kind !== 'remove' || last.playerId !== player.playerId) {
-      return blocked('not-owned', `You have not taken the ${label} relic marker off the map.`)
-    }
+    const taken = relicTakenBlock(state, player, assetId, label)
+    if (taken !== undefined) return taken
     const claimed = state.assistedActions.some(
       (record) => record.status === 'applied' && kinds.includes(record.kind),
     )

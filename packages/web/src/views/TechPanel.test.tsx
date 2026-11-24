@@ -249,6 +249,19 @@ describe('TechPanel tabs', () => {
  * rendered only on the viewer's own tab, never an opponent's, because
  * `onTechSlotChange`/`onPlacementSlotChange` are only passed when `active.own`.
  */
+describe('TechPanel research cost per player tab (Japanese discount, #368)', () => {
+  const slotCosts = (container: HTMLElement): (string | null)[] =>
+    [...container.querySelectorAll('.tech-pyramid-row')].map((row) => row.querySelector('.tech-slot.available')?.textContent ?? null)
+
+  it('shows each tab the cost of its own civilization: the viewer is Roman, an opponent Japanese', () => {
+    const container = renderPanel({ opponents: [opponent('p2', 'hiro', { civilization: 'Japanese' })] })
+    // The viewer's own tab opens first: the base costs, level 5 at the top
+    expect(slotCosts(container)).toEqual(['27', '21', '16', '11', '6'])
+    fireEvent.click(screen.getByRole('tab', { name: 'hiro' }))
+    expect(slotCosts(container)).toEqual(['24', '18', '13', '8', '3'])
+  })
+})
+
 describe('TechPanel pyramid repositioning (#168 follow-up)', () => {
   it('shows the stepper control on the own tab and calls setTechSlot with the new slot', () => {
     const setTechSlot = vi.spyOn(api, 'setTechSlot').mockResolvedValue({} as PlayerView)

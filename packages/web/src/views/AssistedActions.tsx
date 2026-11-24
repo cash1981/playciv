@@ -37,7 +37,7 @@ import {
   steamPowerFiguresAt,
   steamPowerSources,
 } from '@civ/engine'
-import type { AssistedActionKind, CombustionTarget, PendingRewardView, ResourcePaymentChoice, TechPicker, TurnPhase } from '@civ/engine'
+import type { AssistedActionKind, Item, CombustionTarget, PendingRewardView, ResourcePaymentChoice, TechPicker, TurnPhase } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
 import { startCancelPick } from '../lib/cancelPick.js'
@@ -48,6 +48,8 @@ import { ChoiceDialog } from './ChoiceDialog.js'
 import { endTurnState } from './EndTurn.js'
 import { HelpHint } from './HelpHint.js'
 import { useMapPicker } from './mapPick.js'
+import { ActionCardThumb } from './ActionCardThumb.js'
+import { TECH_TEXT } from './techText.js'
 import { ItemCard } from './ItemCard.js'
 import { paymentStillAvailable, ResourcePaymentPicker, resourcePaymentSelection } from './ResourcePaymentPicker.js'
 import { goToHandItem, goToPanel } from './PhaseSummary.js'
@@ -173,6 +175,30 @@ const isBlockedHere = (status: Status): boolean => status === 'needs-resource' |
 /** Actions whose button does not read "Use <label>". */
 const BUTTON_TEXT: Readonly<Partial<Record<AssistedActionKind, string>>> = {
   cultureAdvance: 'Advance culture',
+}
+
+/**
+ * The card an action belongs to, for its picture: a tech from the public tech list, or a
+ * Great Person from the viewer's own hand. Nothing for the other groups, which have no card.
+ */
+function cardOf(
+  candidate: NonNullable<PlayerView['you']>['availableActions'][number],
+  view: PlayerView,
+): Item | undefined {
+  if (candidate.techName !== undefined) return view.techs?.find((tech) => tech.name === candidate.techName)
+  // A Start of Turn tech action (Plastics, Ecology) has the group but no `techName`: match on its label.
+  if (candidate.group === 'Techs') return view.techs?.find((tech) => tech.name === candidate.label)
+  if (candidate.group === 'Great Persons') return view.you?.items?.find((item) => itemName(item) === candidate.label)
+  return undefined
+}
+
+/** The card's own text for its `?` button: the tech reference text, or the hand card's effect text. */
+function cardText(card: Item | undefined, view: PlayerView): string | undefined {
+  if (card === undefined) return undefined
+  if (card.kind === 'tech') return TECH_TEXT[card.name]
+  // Lorenzo de' Medici, Alan Turing and Jim Henson have their own buttons and are not playable cards:
+  // their text is the hand item's own.
+  return view.you?.playableCards?.find((playable) => playable.itemId === card.id)?.description ?? card.description ?? undefined
 }
 
 /**
@@ -1160,7 +1186,7 @@ interface PanelProps {
 
 /**
  * Whether "Your actions" is on the page: the viewer has an action for a card they
- * hold, a card choice waiting, a city on the map, or a turn to end (a player in a
+ * hold, a card choice, a conquest offer or the Chinese save waiting, a setup to do, a city on the map, or a turn to end (a player in a
  * game that is running). Never for a spectator. The game page asks too, so the
  * Actions shortcut is not a dead button.
  */
@@ -1169,6 +1195,11 @@ export function hasActionsPanel(view: PlayerView): boolean {
     endTurnState(view) !== null ||
     (view.you?.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned') ||
     (view.you?.pendingRewards?.length ?? 0) > 0 ||
+    (view.you?.conquestOffers?.length ?? 0) > 0 ||
+    (view.you?.chineseSave?.units.length ?? 0) > 0 ||
+    (view.you?.startOfTurn?.spanish ?? null) !== null ||
+    // The setup before turn 1 (#374) is the first tab of the panel
+    (view.you?.setup ?? null) !== null ||
     (view.you?.cities?.length ?? 0) > 0
   )
 }
@@ -1217,8 +1248,11 @@ export function AssistedActionGroups({
                 .map((candidate) => {
                   const link = cardLinkOf(candidate, view)
                   const title = link === undefined ? undefined : `Show ${candidate.label} in ${link.where}`
+                  const card = cardOf(candidate, view)
                   return (
-                    <li key={candidate.action}>
+                    <li key={candidate.action} className={card === undefined ? undefined : 'has-card'}>
+                      <ActionCardThumb item={card} help={cardText(card, view)} decorative={BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined} />
+                      <div className={card === undefined ? undefined : 'assisted-card-body'}>
                       {/* A button with its own text (Advance culture) names the row itself. */}
                       {BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined && (
                         link === undefined ? (
@@ -1244,6 +1278,7 @@ export function AssistedActionGroups({
                         run={run}
                         onDone={onDone === undefined ? undefined : () => onDone(candidate.action)}
                       />
+                      </div>
                     </li>
                   )
                 })}

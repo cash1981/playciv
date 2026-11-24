@@ -334,6 +334,7 @@ export function TechPanel({
             techs={active.techs}
             placements={active.placements}
             disabled={busy}
+            civilization={active.civilization}
             onTechClick={(techName, opener) => {
               const item = active.techItems.find((candidate) => candidate.name === techName)
               if (item === undefined) return

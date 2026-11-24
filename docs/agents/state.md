@@ -43,6 +43,7 @@ deployment reports do not establish present health.
 - Great Person automation: Archimedes, Shakespeare, Pasteur, Michelangelo,
   Edison, Mother Teresa, Marie Curie, Cook, Ford, Frank Lloyd Wright, Einstein, Carnegie, Jim Henson, Jacques Cousteau, Jerry Garcia, Ada Lovelace, Akira
   Kurosawa, Charles Darwin, A. P. Giannini, Frida Kahlo, Zheng He, Leonidas, Joan of Arc, Florence Nightingale, Sun Tzu, Georgy Zhukov and Gustavus Adolphus apply through the engine.
+- Setup (#374): a Setup tab first in "Your actions" until turn 1 (capital, figures, policy, American great person, starting trade, Egypt's wonder); Start of Turn is refused until it is done. French policy and the cap are #378.
 - Trade: free-text trade offers (#265); trade resets to coins at turn start for
   a player who researched, and city trade is collected once when Trade starts.
 - Cancellation (#301, #336): Twain and the culture cancellations act at once;
@@ -58,8 +59,9 @@ deployment reports do not establish present health.
   Hannibal and movement culture cards; Communism and Brandenburg Gate.
   Disbanding on an own city centre leaves a caravan or fortification (F&F), and
   a battle for a city counts its defence bonus. Battle resolution, loot and
-  removal stay manual by the human's choice. Movement is previewed as a tapped
-  route with waypoints and recorded in board history (#362; Defection automation open).
+  removal stay manual by the human's choice. Hut and village tokens (#364): a tile laid on the map gets a token on each hut or
+  village icon, turning with the tile; a figure that ends its move on one is asked whether to draw it, and Undo returns the card.
+  Movement is previewed as a tapped route with waypoints and recorded in board history (#362; Defection automation open).
 
 The matching topics in [decisions.md](decisions.md) give the rules and
 reasons; [limitations.md](limitations.md) lists known gaps.

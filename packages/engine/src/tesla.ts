@@ -3,7 +3,8 @@
  * tech pyramid to place it one level lower in the pyramid than normal."
  *
  * The human (2026-11-03): the tech must still be paid for as its own level. A level III tech costs 16 trade, so a
- * player needs 16 trade to put one in the level II row, even though it sits one row lower. The move itself is the one
+ * player needs 16 trade to put one in the level II row, even though it sits one row lower (13 for the Japanese, who
+ * research for 3 less: `researchTradeCostOf`). The move itself is the one
  * a player can already make by hand (`setTechSlot`): the row a tech is shown in, while its `level` stays as it is.
  *
  * "Adding" is read as a tech chosen in this Research phase, the same test the trade kept as coins uses
@@ -13,6 +14,7 @@
 
 import { openResearchTurnOf, withTechSlot } from './actions/player.js'
 import { withPlayerHand } from './assisted-core.js'
+import { researchTradeCostOf } from './research-cost.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import type { GameState, Playerhand } from './state.js'
@@ -21,9 +23,6 @@ import type { TechItem } from './item.js'
 export const TESLA_NAME = 'Nikola Tesla'
 
 type Row = 1 | 2 | 3 | 4 | 5
-
-/** The trade a tech of each level costs to research (the old client's tooltips): the level I row is the base. */
-export const RESEARCH_TRADE: Readonly<Record<Row, number | null>> = { 1: 6, 2: 11, 3: 16, 4: 21, 5: null }
 
 /** How many techs each row of the pyramid holds: 5 at the base, narrowing to 1 at the apex. */
 export const PYRAMID_ROW_SIZE: Readonly<Record<Row, number>> = { 1: 5, 2: 4, 3: 3, 4: 2, 5: 1 }
@@ -60,7 +59,7 @@ function refusalFor(player: Playerhand, tech: TechItem, researchTurn: number | n
     return `${tech.name} was not added to your pyramid in this Research phase.`
   }
   if (tech.slot !== undefined && tech.slot !== tech.level) return `${tech.name} is already in a different row than its level.`
-  const trade = RESEARCH_TRADE[tech.level]
+  const trade = researchTradeCostOf(tech.level, player.civilization?.name)
   if (trade !== null && player.stats.trade < trade) {
     return `${tech.name} is a level ${tech.level} tech, which needs ${trade} trade to research. You have ${player.stats.trade}.`
   }
@@ -76,7 +75,7 @@ export function teslaChoicesOf(state: GameState, player: Playerhand): readonly T
   const researchTurn = openResearchTurnOf(state, player)
   return player.techsChosen.flatMap((tech): readonly TeslaChoice[] =>
     refusalFor(player, tech, researchTurn) === undefined
-      ? [{ name: tech.name, level: tech.level as Row, trade: RESEARCH_TRADE[tech.level] ?? 0, to: (tech.level - 1) as Row }]
+      ? [{ name: tech.name, level: tech.level as Row, trade: researchTradeCostOf(tech.level, player.civilization?.name) ?? 0, to: (tech.level - 1) as Row }]
       : [],
   )
 }

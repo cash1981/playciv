@@ -38,6 +38,7 @@ import { CancellationCardControl } from './CancellationCardControl.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { ActionCardThumb } from './ActionCardThumb.js'
 import { HelpHint } from './HelpHint.js'
 import { useMapPicker } from './mapPick.js'
 import { goToHandItem } from './PhaseSummary.js'
@@ -903,8 +904,12 @@ export function PlayableCardList({
     <section className="phase-group" aria-label="Cards you can play">
       <h3 className="phase-group-title">Cards you can play</h3>
       <ul className="playable-cards">
-        {cards.map((card) => (
-          <li key={card.itemId} className="playable-card">
+        {cards.map((card) => {
+          const thumb = view.you?.items?.find((item) => item.id === card.itemId)
+          return (
+          <li key={card.itemId} className={`playable-card${thumb === undefined ? '' : ' has-card'}`}>
+            <ActionCardThumb item={thumb} decorative help={card.description} />
+            <div className="playable-card-body">
             <button
               type="button"
               className="link playable-card-name"
@@ -923,8 +928,10 @@ export function PlayableCardList({
               readOnly={readOnly}
               run={run}
             />
+            </div>
           </li>
-        ))}
+          )
+        })}
       </ul>
     </section>
   )

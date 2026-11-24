@@ -151,7 +151,7 @@ function undoByVote(state: GameState, requestId: string): GameState {
 // ---------------------------------------------------------------------------
 
 describe('the tile icon data', () => {
-  const tiles = (tileIcons as unknown as { tiles: Record<string, { row: number; column: number; resource?: string; culture?: number }[]> })
+  const tiles = (tileIcons as unknown as { tiles: Record<string, { row: number; column: number; resource?: string; culture?: number; token?: string }[]> })
     .tiles
 
   it('covers exactly the tiles that have terrain', () => {
@@ -168,7 +168,7 @@ describe('the tile icon data', () => {
         expect(square.column, tile).toBeGreaterThanOrEqual(0)
         expect(square.column, tile).toBeLessThan(TILE_SQUARES)
         if (square.resource !== undefined) expect(RESOURCE_KINDS as readonly string[], tile).toContain(square.resource)
-        const key = `${square.row},${square.column},${square.resource ?? 'culture'}`
+        const key = `${square.row},${square.column},${square.resource ?? square.token ?? 'culture'}`
         expect(seen.has(key), `${tile} lists ${key} twice`).toBe(false)
         seen.add(key)
         // At most one resource on a square: the lookup takes the first

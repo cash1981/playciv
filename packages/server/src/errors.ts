@@ -52,12 +52,15 @@ export function statusFor(error: EngineError): number {
     case 'FIGURE_MOVE_ILLEGAL':
     case 'UNKNOWN_GOVERNMENT':
     case 'INVALID_ARENA_STAT_VALUE':
+    case 'CHINESE_SAVE_INVALID':
     case 'CANNOT_BATTLE_YOURSELF':
     case 'INVALID_PLAYER_COLOR':
     case 'WITHDRAWN_PLAYER_COLOR_MISMATCH':
       return 400
     case 'BOARD_ASSET_LIMIT_REACHED':
     case 'BATTLE_ALREADY_ACTIVE':
+    case 'CHINESE_SAVE_UNAVAILABLE':
+    case 'END_BATTLE_UNDO_AZTEC_SPENT':
     case 'CULTURE_HAND_OVER':
     case 'UNIT_ALREADY_IN_BATTLE':
     case 'ARENA_POSITION_OCCUPIED':
@@ -82,9 +85,19 @@ export function statusFor(error: EngineError): number {
     // Out of uses is a conflict, like a coin purchase; everything else is a bad request
     case 'ASSISTED_ACTION_REJECTED':
       return error.status === 'used' ? 409 : 400
+    // A setup step refused for the player's choice (a bad square, an unmet need) is a bad request; the gate on Start of
+    // Turn and a reveal that cannot be taken back while setup stands are conflicts with the game as it is (issue #374)
+    case 'SETUP_REFUSED':
+      return 400
+    case 'SETUP_INCOMPLETE':
+    case 'CIV_REVEAL_SETUP_STARTED':
+      return 409
     case 'ASSISTED_ACTION_ALREADY_UNDONE':
     case 'ASSISTED_UNDO_BLOCKED':
     case 'BOARD_UNDO_ASSISTED':
+    case 'BOARD_UNDO_TOKEN_CARD_GONE':
+    case 'BOARD_UNDO_TOKEN_CULTURE_SPENT':
+    case 'BOARD_UNDO_SPANISH_BUILDING_USED':
       return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':
@@ -114,6 +127,7 @@ export function statusFor(error: EngineError): number {
     case 'TECH_ALREADY_CHOSEN':
     case 'SOCIAL_POLICY_ALREADY_CHOSEN':
     case 'SOCIAL_POLICY_FLIPSIDE_TAKEN':
+    case 'SOCIAL_POLICY_LIMIT':
     case 'CIVILIZATION_ALREADY_CHOSEN':
     case 'UNDO_ALREADY_INITIATED':
     case 'NOTHING_TO_UNDO':

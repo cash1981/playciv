@@ -39,7 +39,7 @@ const isTile = (piece: BoardPiece): boolean => piece.category === 'tile' || piec
  * its left column to the top, so the displayed square comes from:
  *   90:  (last - column, row)    180: (last - row, last - column)    270: (column, last - row)
  */
-function printedSquare(
+export function printedSquare(
   row: number,
   column: number,
   rotation: BoardPiece['rotation'],
@@ -55,6 +55,24 @@ function printedSquare(
     default:
       return [row, column]
   }
+}
+
+/**
+ * Where the printed square (row, column) ends up on a tile displayed with `rotation`
+ * degrees clockwise: the inverse of `printedSquare`.
+ */
+export function displayedSquare(
+  row: number,
+  column: number,
+  rotation: BoardPiece['rotation'],
+): readonly [row: number, column: number] {
+  for (let displayedRow = 0; displayedRow < TILE_SQUARES; displayedRow++) {
+    for (let displayedColumn = 0; displayedColumn < TILE_SQUARES; displayedColumn++) {
+      const [printedRow, printedColumn] = printedSquare(displayedRow, displayedColumn, rotation)
+      if (printedRow === row && printedColumn === column) return [displayedRow, displayedColumn]
+    }
+  }
+  return [row, column]
 }
 
 /** A square of a tile asset, by the row and column it has in the printed orientation. */

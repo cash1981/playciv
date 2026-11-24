@@ -20,6 +20,7 @@ import {
   performAssistedAction,
 } from '../src/assisted.js'
 import { ABILITY_KINDS } from '../src/assisted-abilities.js'
+import { RELIC_ACTIONS } from '../src/assisted-relics.js'
 import { ASSISTED_TECH_ACTIONS } from '../src/assisted-techs.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { AssistedActionKind, GameState } from '../src/state.js'
@@ -121,12 +122,18 @@ describe('the registry and the tech map', () => {
       'writing',
       // Batch 2: Metalworking, Atomic Theory, Bureaucracy
       'atomicTheory',
+      'aztecs:aircraft',
+      'aztecs:artillery',
+      'aztecs:infantry',
+      'aztecs:mounted',
       'bureaucracy',
       'metalworking',
       // Agriculture grows the capital into a metropolis (issue #354)
       'agriculture',
       // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
       ...ABILITY_KINDS,
+      // The relics claimed as soon as an army has taken them (assisted-relics.ts)
+      ...RELIC_ACTIONS.map((action) => action.kind),
     ].sort())
     for (const [kind] of CARDS) expect(isAssistedActionKind(kind)).toBe(true)
   })

@@ -58,6 +58,11 @@ export interface ArenaUnit {
   readonly unit: UnitItem
   /** Current attack value (user-entered, seeded from card). */
   readonly attack: number
+  /**
+   * Strength the owner's civilization adds to the printed attack at every level (the Japanese infantry's +1), set
+   * when the unit is placed. Absent when there is none, and on saves from before it existed.
+   */
+  readonly attackBonus?: number
   /** Current remaining health (user-entered, seeded from card). */
   readonly health: number
   /** The playerId of whoever dragged the card into the arena. */

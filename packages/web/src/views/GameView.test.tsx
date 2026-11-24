@@ -33,12 +33,16 @@ vi.mock('./BoardView.js', () => ({
   BoardView: ({
     viewerCivilization,
     movementPlayer,
+    movementOverlay,
+    repositionFigures,
     pickSquares,
     readOnly,
     showReadOnlyOutline,
   }: {
     viewerCivilization?: string | null
     movementPlayer?: { activeGreatPersonNames?: readonly string[] } | null
+    movementOverlay?: boolean
+    repositionFigures?: readonly unknown[]
     pickSquares?: PickSquares
     readOnly?: boolean
     showReadOnlyOutline?: boolean
@@ -52,6 +56,8 @@ vi.mock('./BoardView.js', () => ({
       data-henry-ford-active={String(movementPlayer?.activeGreatPersonNames?.includes('Henry Ford') ?? false)}
       data-readonly={String(readOnly)}
       data-show-outline={String(showReadOnlyOutline)}
+      data-movement-overlay={String(movementOverlay)}
+      data-reposition-count={String(repositionFigures?.length)}
     >
       {pickSquares?.cells[0] !== undefined && (
         <button
@@ -356,6 +362,52 @@ describe('figure movement eligibility', () => {
     await renderOrder(view)
 
     expect(screen.getByTestId('board').getAttribute('data-henry-ford-active')).toBe('false')
+  })
+})
+
+describe('movement overlay and repositioning', () => {
+  const viewIn = (phase: string | null, repositionableFigures: readonly unknown[] = []): PlayerView =>
+    orderView({
+      activeTurn: {
+        playerId: 'p1',
+        username: 'viewer',
+        turnNumber: 1,
+        phase: phase ?? 'SOT',
+        startPlayer: 'viewer',
+        waitingFor: phase === null ? [] : [{ username: 'viewer', phase }],
+      },
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        color: 'Red',
+        civilization: null,
+        items: [],
+        playableCards: [],
+        stats: { trade: 0 },
+        tradeEstimate: { total: 0, set: true },
+        cities: [],
+        repositionableFigures,
+      },
+    })
+
+  it.each([
+    ['SOT', 'false'],
+    ['TRADE', 'false'],
+    ['CM', 'false'],
+    ['MOVEMENT', 'true'],
+    ['RESEARCH', 'false'],
+    [null, 'false'],
+  ])('draws the movement range in %s: %s', async (phase, expected) => {
+    await renderOrder(viewIn(phase))
+    expect(screen.getByTestId('board').getAttribute('data-movement-overlay')).toBe(expected)
+  })
+
+  it('hands the board the figures a Build placed, and none for a player without any', async () => {
+    await renderOrder(viewIn('CM', [{ pieceId: 'army', squares: [{ column: 1, row: 1, label: 'B2' }] }]))
+    expect(screen.getByTestId('board').getAttribute('data-reposition-count')).toBe('1')
+    cleanup()
+    await renderOrder(viewIn('CM'))
+    expect(screen.getByTestId('board').getAttribute('data-reposition-count')).toBe('0')
   })
 })
 
@@ -961,6 +1013,24 @@ describe('End game wiring', () => {
   it('does not offer End game once the game has ended', async () => {
     const menu = await renderWithMenu({ ...creatorView(), active: false }, 'user')
     expect(menu()?.canEnd).toBe(false)
+  })
+
+  it('also puts an End game button in the game header, next to auto-refresh', async () => {
+    const endGame = vi.spyOn(api, 'endGame').mockResolvedValue(creatorView())
+    await renderWithMenu(creatorView(), 'user')
+
+    const button = await screen.findByRole('button', { name: 'End game' })
+    fireEvent.click(button)
+    const dialog = screen.getByRole('dialog', { name: 'End game' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End game' }))
+
+    await waitFor(() => expect(endGame).toHaveBeenCalledWith('game-1'))
+  })
+
+  it('shows no header End game button to a player who is not the creator', async () => {
+    const view = headerView(seatNo('viewer', 1), [seatNo('s3s3', 2, { gameCreator: true })], null)
+    await renderWithMenu(view, 'user')
+    expect(screen.queryByRole('button', { name: 'End game' })).toBeNull()
   })
 
   it('ends the game with the chosen winner and leaves the game', async () => {

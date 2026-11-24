@@ -200,11 +200,11 @@ describe('a direction that is not legal', () => {
     expect(capital(grown(state, 'south')).assetId).toBe('cities/redmetropolis2')
   })
 
-  it('a water square cannot be the second city square', () => {
+  it('a water square can be the second city square (Fame and Fortune p. 10: the expansion square may be water)', () => {
     // america in slot 1: its square at row 3, column 0 (E4) is water
     const state = ready({ map: mapOf({ east: 'tiles/america' }) })
-    expect(reasonOf(state, 'east')).toBe('E4 is a water square.')
-    expect(refusal(state, 'east')).toContain('E4 is a water square.')
+    expect(reasonOf(state, 'east')).toBe('')
+    expect(capital(grown(state, 'east')).assetId).toBe('cities/redmetropolis2')
   })
 
   it('squares next to a facedown tile cannot hold a metropolis', () => {

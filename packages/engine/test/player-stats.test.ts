@@ -10,10 +10,12 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece } from '../src/actions/board.js'
+import { movePiece, placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { chooseTech, revealItem, revealTech, setCoinSource, setPlayerStat } from '../src/actions/player.js'
+import { areaAt, mapTop, playerAreas, SQUARE_SIZE } from '../src/board.js'
 import { EMPTY_COIN_SOURCES } from '../src/coins.js'
+import { ownCityPieces } from '../src/city-founding.js'
 import { tradeCeilingOf } from '../src/limits.js'
 import { createGame } from '../src/create-game.js'
 import { migrateGameState } from '../src/migrate.js'
@@ -370,6 +372,71 @@ describe('cityCountOf and buildingCountOf', () => {
 
   it('is 0 for a player with no colour', () => {
     expect(cityCountOf(firstCivGame(), 'not-a-player')).toBe(0)
+  })
+
+  describe.each([
+    ['Chinese', 'cities/redcapitalwalled2'],
+    ['Indians', 'cities/redmetropolis2'],
+  ])('the %s city marker', (civ, markerAsset) => {
+    /**
+     * cash1981 reveals the civilization, as in a game revealed before setup existed: its marker lies in their own area, where
+     * it waits to be placed (a reveal no longer hands it out, setup creates it; see `setup.test.ts`).
+     */
+    function revealed(): GameState {
+      const base = fourColorGame()
+      const card = base.items.find((item) => item.kind === 'civ' && item.name === civ)
+      if (card === undefined) throw new Error(`no ${civ} civ in the deck`)
+      const handed: GameState = {
+        ...base,
+        items: base.items.filter((item) => item.id !== card.id),
+        players: base.players.map((player) =>
+          player.playerId === CASH1981 ? { ...player, items: [...player.items, { ...card, ownerId: CASH1981 }] } : player,
+        ),
+      }
+      const done = unwrap(revealItem(handed, { playerId: CASH1981, sheetName: 'CIV', itemNumber: card.itemNumber }))
+      const area = playerAreas(done.board, done.players).find((candidate) => candidate.playerId === CASH1981)
+      return unwrap(placePiece(done, { playerId: CASH1981, assetId: markerAsset, x: (area?.x ?? 0) + 20, y: (area?.y ?? 0) + 20 }))
+    }
+    const markerOf = (state: GameState) => {
+      const piece = state.board.pieces.find((candidate) => candidate.assetId === markerAsset)
+      if (piece === undefined) throw new Error('no marker')
+      return piece
+    }
+    const withCapital = (state: GameState): GameState =>
+      unwrap(placePiece(state, { playerId: CASH1981, assetId: 'cities/redcapital2', x: 0, y: mapTop(state.board) + SQUARE_SIZE }))
+
+    it('is not a city while it lies in the player area, and an ordinary capital counts one', () => {
+      const state = revealed()
+      const marker = markerOf(state)
+      expect(areaAt(playerAreas(state.board, state.players), marker.x + marker.width / 2, marker.y + marker.height / 2)?.playerId).toBe(CASH1981)
+      expect(cityCountOf(state, CASH1981)).toBe(0)
+      const capital = withCapital(state)
+      expect(cityCountOf(capital, CASH1981)).toBe(1)
+      expect(ownCityPieces(capital, findPlayer(capital, CASH1981) as never).map((piece) => piece.assetId)).toEqual(['cities/redcapital2'])
+      expect(toPlayerView(capital, CASH1981).you?.cityCount).toBe(1)
+      expect(toPlayerView(capital, KARANDRAS1).opponents.find((opponent) => opponent.playerId === CASH1981)?.cityCount).toBe(1)
+    })
+
+    it('counts once the player has placed it on the map', () => {
+      const capital = withCapital(revealed())
+      const marker = markerOf(capital)
+      const placed = unwrap(
+        movePiece(capital, {
+          playerId: CASH1981,
+          pieceId: marker.id,
+          x: 8 * SQUARE_SIZE,
+          y: mapTop(capital.board) + 8 * SQUARE_SIZE,
+          snap: false,
+        }),
+      )
+      expect(cityCountOf(placed, CASH1981)).toBe(2)
+      // And it goes back to not counting when it is dragged into the area again
+      const area = playerAreas(placed.board, placed.players).find((candidate) => candidate.playerId === CASH1981)
+      const back = unwrap(
+        movePiece(placed, { playerId: CASH1981, pieceId: marker.id, x: (area?.x ?? 0) + 20, y: (area?.y ?? 0) + 20, snap: false }),
+      )
+      expect(cityCountOf(back, CASH1981)).toBe(1)
+    })
   })
 
   it('counts building pieces by who placed them, since buildings carry no colour', () => {

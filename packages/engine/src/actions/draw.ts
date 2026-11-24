@@ -14,9 +14,12 @@ import {
   wonderAssetId,
   wondersArea,
 } from '../board.js'
+import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll, revealPublic } from '../item.js'
+import { deckWith } from '../item-number.js'
+import { pendingChineseSaveCardIds } from '../killed-units.js'
 import {
   appendInfoLog,
   appendItemLog,
@@ -38,6 +41,7 @@ import {
   hasGreatPersonMarkerLeft,
 } from '../great-person-effects.js'
 import { placeUnchecked } from './board.js'
+import { seedTileTokens } from './tile-tokens.js'
 import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
@@ -244,12 +248,18 @@ function putRejectedGreatPersons(
  * Moves the item at `index` from the deck into the player's hand and logs the
  * draw. Java set `hidden = true` in `createDraw` — items come out of
  * ItemReader hidden already, so it is only a confirmation.
+ *
+ * An exploration tile skips the hand: it is laid on the map and its card goes
+ * straight to the discard pile, where the Revealed and Discarded Items panel
+ * shows it. Tiles are never reshuffled, so the card cannot be drawn again. A
+ * vote undo of the draw line still puts the card back in the deck.
  */
 function takeFromDeck(
   state: GameState,
   player: Playerhand,
   index: number,
   tileOrigin?: readonly [x: number, y: number],
+  tileRotation?: Rotation,
 ): GameState {
   const item = state.items[index] as Item
   const drawn: Item = { ...item, ownerId: player.playerId, hidden: true }
@@ -258,13 +268,17 @@ function takeFromDeck(
     ...state,
     items: [...state.items.slice(0, index), ...state.items.slice(index + 1)],
   }
+  if (drawn.kind === 'tile') {
+    const discarded: GameState = { ...withDeck, discardedItems: [...withDeck.discardedItems, drawn] }
+    const logged = appendItemLog(discarded, 'ITEM', player.username, player.playerId, drawn)
+    return placeExploredTile(logged, player.playerId, drawn, tileOrigin, tileRotation)
+  }
   const withHand = withPlayer(withDeck, {
     ...player,
     items: [...player.items, drawn],
   })
 
-  const logged = appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
-  return drawn.kind === 'tile' ? placeExploredTile(logged, player.playerId, drawn, tileOrigin) : logged
+  return appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
 }
 
 /**
@@ -279,6 +293,7 @@ function placeExploredTile(
   playerId: string,
   tile: Item,
   origin?: readonly [x: number, y: number],
+  rotation?: Rotation,
 ): GameState {
   if (tile.kind !== 'tile') return state
   // Tile cards are named "1" to "27"; the images are tile01, tile15a, Tile26b …
@@ -286,30 +301,36 @@ function placeExploredTile(
   if (assetId === undefined) return state
 
   const [x, y] = origin ?? firstFreeSlot(state.board)
-  return placeUnchecked(state, { playerId, assetId, x, y }) ?? state
+  const placed = placeUnchecked(state, { playerId, assetId, x, y, ...(rotation === undefined ? {} : { rotation }) })
+  if (placed === undefined) return state
+  // The tile goes under everything else, so it is the first piece; its hut and village icons become tokens (issue #364)
+  const laid = placed.board.pieces[0]
+  return laid === undefined ? placed : seedTileTokens(placed, laid.id, playerId)
 }
 
 /**
  * Draws the next exploration tile and lays it at `origin` instead of the first free slot: what a
- * figure's exploration does (issue #302). Like a manual draw the card goes to the player's hand,
- * faceup on the map from then on; the deck is reshuffled from the discards when it has run out.
+ * figure's exploration does (issue #302). Like a manual draw the card goes to the discard pile,
+ * faceup on the map from then on. Tiles are not reshuffled, so an empty deck refuses the draw.
  * It has no turn check: the caller (the figure's movement) has made its own.
+ * `rotation` turns the tile as it is laid; left out, it lies unturned.
  */
 export function drawTileAt(
   state: GameState,
   playerId: string,
   origin: readonly [x: number, y: number],
+  rotation?: Rotation,
 ): DrawResult {
   const found = requirePlayer(state, playerId)
   if (!found.ok) return found
   const index = state.items.findIndex((item) => item.sheetName === 'TILES')
-  if (index >= 0) return ok(takeFromDeck(state, found.value, index, origin))
+  if (index >= 0) return ok(takeFromDeck(state, found.value, index, origin, rotation))
 
   const reshuffled = reshuffleItems(state, 'TILES')
   if (!reshuffled.ok) return reshuffled
   const retryIndex = reshuffled.value.items.findIndex((item) => item.sheetName === 'TILES')
   if (retryIndex < 0) return err({ kind: 'ITEM_NOT_FOUND', sheetName: 'TILES' })
-  return ok(takeFromDeck(reshuffled.value, found.value, retryIndex, origin))
+  return ok(takeFromDeck(reshuffled.value, found.value, retryIndex, origin, rotation))
 }
 
 /**
@@ -428,17 +449,19 @@ export function reshuffleItems(state: GameState, sheetName: SheetName): DrawResu
     return err({ kind: 'NOT_SHUFFLABLE', sheetName })
   }
 
-  const toPutBack = state.discardedItems.filter((item) => item.sheetName === sheetName)
+  // The casualties the Chinese may still save stay on the pile until they have chosen or the next battle starts
+  const pending = pendingChineseSaveCardIds(state)
+  const toPutBack = state.discardedItems.filter((item) => item.sheetName === sheetName && !pending.has(item.id))
   if (toPutBack.length === 0) {
     return err({ kind: 'NO_MORE_ITEMS', what: SHEET_LABEL[sheetName] })
   }
-  const toKeep = state.discardedItems.filter((item) => item.sheetName !== sheetName)
+  const toKeep = state.discardedItems.filter((item) => item.sheetName !== sheetName || pending.has(item.id))
 
   const [shuffled, rng] = shuffle(toPutBack, state.rng)
   const next: GameState = {
     ...state,
     rng,
-    items: [...state.items, ...shuffled],
+    ...deckWith(state, shuffled),
     discardedItems: toKeep,
   }
 
@@ -469,7 +492,14 @@ export function drawUnitsForBattle(state: GameState, input: BattlehandInput): Dr
   const unitsInHand = player.items.filter(isUnit)
 
   if (unitsInHand.length === 0) {
-    return ok(withPlayer(state, { ...player, battlehand: [] }))
+    return ok(
+      appendPublicLog(
+        withPlayer(state, { ...player, battlehand: [] }),
+        player.username,
+        player.playerId,
+        'has drawn 0 units from his battlehand',
+      ),
+    )
   }
 
   if (unitsInHand.length <= input.numberOfDraws) {

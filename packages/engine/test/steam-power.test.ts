@@ -196,6 +196,26 @@ describe('Steam Power Silk ability', () => {
   })
 })
 
+describe('Steam Power and a metropolis on water', () => {
+  it('does not offer a water square a metropolis covers: it is no longer water for movement', () => {
+    let state = coverMap(cmTurn())
+    const before = waterCells(state.board).some((cell) => cell.column === 1 && cell.row === 1)
+    expect(before).toBe(true)
+    const asset = findBoardAsset('cities/redmetropolis2')
+    if (asset === undefined) throw new Error('missing metropolis')
+    // Horizontal, on (1,1) water and (2,1) grass of tile 05
+    state = unwrap(
+      placePiece(state, {
+        playerId: CASH1981,
+        assetId: asset.id,
+        x: Math.round(2 * SQUARE_SIZE - 1 - asset.width / 2),
+        y: Math.round(mapTop(state.board) + SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    expect(waterCells(state.board).some((cell) => cell.column === 1 && cell.row === 1)).toBe(false)
+  })
+})
+
 describe('Steam Power moves the whole square', () => {
   const lockedByGalileo = (state: GameState, assetId: string): GameState => ({
     ...state,

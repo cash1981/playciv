@@ -106,7 +106,7 @@ interface PickerProps {
   /** What the server said when it refused the last build. */
   readonly message: string | null
   readonly busy: boolean
-  readonly onChoose: (choice: BuildChoice) => void
+  readonly onChoose: (choice: BuildChoice, free?: boolean) => void
   readonly onClose: () => void
 }
 
@@ -226,18 +226,32 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
                     <span>
                       Cost {choice.cost}
                       {choice.costNote !== undefined && <> ({choice.costNote})</>}
-                      {choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
+                      {choice.freeOnly !== true && choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
+                      {choice.freeOnly === true && <>, free with the Egyptian ability</>}
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    className="small"
-                    aria-label={`Choose ${choice.label}`}
-                    disabled={busy}
-                    onClick={() => onChoose(choice)}
-                  >
-                    Choose
-                  </button>
+                  {choice.freeOnly !== true && (
+                    <button
+                      type="button"
+                      className="small"
+                      aria-label={`Choose ${choice.label}`}
+                      disabled={busy}
+                      onClick={() => onChoose(choice)}
+                    >
+                      Choose
+                    </button>
+                  )}
+                  {choice.freeBuild === true && (
+                    <button
+                      type="button"
+                      className="small"
+                      aria-label={`Build ${choice.label} for free`}
+                      disabled={busy}
+                      onClick={() => onChoose(choice, true)}
+                    >
+                      Build for free
+                    </button>
+                  )}
                 </li>
               ))}
           </ul>
@@ -395,7 +409,10 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   function confirm(): void {
     if (!ready || sending) return
     const item = plan.item
-    const rushPart = rush ? { rush: true as const } : {}
+    const rushPart = {
+      ...(rush ? { rush: true as const } : {}),
+      ...(plan.free === true ? { free: true as const } : {}),
+    }
     let payload: BuildPayload
     if (item.kind === 'unit' || item.kind === 'walls') {
       payload = { cityPieceId: plan.cityPieceId, item, ...rushPart }
@@ -407,14 +424,17 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     // The key says which press this is: the same item and square (a unit and City Walls have none)
     // while the outcome is unknown reuses the request id, another is a new press.
     const where = target === null ? 'card' : `${target.column},${target.row}`
-    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}`
+    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}${plan.free === true ? ':free' : ''}`
     // The same press is already on its way (this bar was closed and opened again):
     // its outcome is not known yet, so this click says nothing and sends nothing.
     if (isPressInFlight(key)) return
     // A yes given when the picker was opened stands; a city that has acted since is asked now
     const own = view.you?.cityActions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)
-    // Engineering's second build in a city is the same action split: the options mark it and nothing is asked
-    const splitting = view.you?.buildOptions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.engineering !== undefined
+    // Engineering's second build in a city is the same action split: the options mark it and nothing is asked.
+    // The Egyptian free build is never part of that split (an action of its own), so it is asked as usual.
+    const splitting =
+      plan.free !== true &&
+      view.you?.buildOptions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.engineering !== undefined
     const acted = own?.extraAction === true || splitting ? [] : (own?.actedThisTurn ?? [])
     const again = resolveAgain(plan.cityLabel, acted, flow.confirmedAgain)
     if (again === null) return
@@ -472,7 +492,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
       <p className="build-bar-facts">
         Cost {plan.cost}
         {plan.costNote !== undefined && <> ({plan.costNote})</>}
-        {rush && <>. Pays {plan.tradeToPay} trade</>}.{' '}
+        {rush && <>. Pays {plan.tradeToPay} trade</>}
+        {plan.free === true && <>. Free with the Egyptian ability, once a turn</>}.{' '}
         {!placed ? (
           plan.item.kind === 'walls' ? (
             <>The city marker is turned over to its walled side, nothing else is placed on the map.</>

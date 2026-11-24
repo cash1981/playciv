@@ -16,13 +16,14 @@ import {
   placePiece,
   redoLastBoardChange,
   removePiece,
+  repositionBuiltFigure,
   rotatePiece,
   setCityProductionOverride,
   setWonderOwner,
   takeBackOpenBuild,
   sendToBack,
   exploreSquare,
-  travelFigure,
+  travelFigureCollecting,
   undoLastBoardChange,
 } from '@civ/engine'
 
@@ -129,17 +130,41 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
       }
       route = parsed
     }
+    const collectToken = optionalBoolean(body, 'collectToken')
+    const fightVillage = optionalBoolean(body, 'fightVillage')
 
     return applyToGame(context, c, gameId, (state) =>
-      travelFigure(state, {
+      travelFigureCollecting(state, {
         playerId: currentPlayer(c).id,
         pieceId,
         column,
         row,
         ...(route === undefined ? {} : { route }),
         ...(disband === true ? { disband } : {}),
+        ...(collectToken === true ? { collectToken } : {}),
+        ...(fightVillage === true ? { fightVillage } : {}),
         at: now(),
       }),
+    )
+  })
+
+  /**
+   * Puts a figure that the owner's Build placed this City Management on another legal square of that
+   * city, without undoing the build. Body: `{ column, row }`.
+   */
+  app.post('/api/games/:gameId/board/pieces/:pieceId/reposition', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const pieceId = c.req.param('pieceId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+
+    const column = optionalNumber(body, 'column')
+    const row = optionalNumber(body, 'row')
+    if (column === undefined || row === undefined || !Number.isInteger(column) || !Number.isInteger(row)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'column and row are required whole numbers')
+    }
+
+    return applyToGame(context, c, gameId, (state) =>
+      repositionBuiltFigure(state, { playerId: currentPlayer(c).id, pieceId, column, row, at: now() }),
     )
   })
 

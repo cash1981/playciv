@@ -24,6 +24,7 @@ import type { TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { earliestOthers } from './turnFocus.js'
 
@@ -76,16 +77,40 @@ interface Props {
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
+  /**
+   * The Setup tab is the selected one (#374): End turn then passes the turn on from setup (`api.setupPass`) and never marks a
+   * phase. On every other tab it is the unchanged End turn.
+   */
+  readonly onSetupTab?: boolean
 }
 
+/** Why End turn is held back by the setup before turn 1 (#374), or `null` (no setup, or setup lets it through). */
+export const setupGateOf = (view: PlayerView): string | null => view.you?.setup?.blocksTurn ?? null
+
+const setupGateId = 'end-turn-setup-gate'
+
 /** Renders nothing when there is no turn to end (see {@link endTurnState}). */
-export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
+export function EndTurn({ gameId, view, busy, readOnly, run, onSetupTab = false }: Props): React.JSX.Element | null {
   const state = endTurnState(view)
   const kind = state?.kind
   const doneRef = useRef<HTMLParagraphElement>(null)
   const wasOpen = useRef(false)
   const endRef = useRef<HTMLButtonElement>(null)
   const reopened = useRef(false)
+  const passedRef = useRef<HTMLParagraphElement>(null)
+  const passedNow = onSetupTab && view.you?.setup?.passed === true
+  // Starts from what the first render shows, so only a pass seen after mount can take focus (not a reload of a passed setup)
+  const wasPassed = useRef(passedNow)
+
+  // Passing on the Setup tab disables the button that had focus, and focus would fall to the page with nothing announced.
+  // Focus the status line, but only when focus was lost: a refresh that shows the pass must not steal it.
+  useEffect(() => {
+    if (passedNow && !wasPassed.current) {
+      const active = document.activeElement
+      if (active === null || active === document.body || active === endRef.current) passedRef.current?.focus()
+    }
+    wasPassed.current = passedNow
+  }, [passedNow])
 
   // The last press replaces the button with a line of text, and focus would fall to
   // the page, with nothing announced. Focus the line, but only when focus was lost:
@@ -146,23 +171,69 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
     )
   }
 
+  // The Setup tab: End turn hands the turn on from setup and marks nothing (#374). Steps stay doable and Start of Turn stays closed
+  const setup = view.you?.setup ?? null
+  if (onSetupTab && setup !== null) {
+    const passed = setup.passed
+    return (
+      <div className="assisted-endturn">
+        <button
+          ref={endRef}
+          type="button"
+          className="primary"
+          disabled={busy || readOnly || passed}
+          // Starts with the visible text (WCAG 2.5.3, Label in Name)
+          aria-label="End turn: pass the turn on without finishing setup"
+          title="End turn: pass the turn on without finishing setup"
+          onClick={() =>
+            void pressOnce(
+              `${gameId}:${view.you?.playerId ?? ''}:setup:pass`,
+              run,
+              (requestId) => api.setupPass(gameId, requestId, view.rev),
+              view,
+            )
+          }
+        >
+          End turn
+        </button>
+        {passed ? (
+          <p ref={passedRef} role="status" className="assisted-endturn-text" tabIndex={-1}>
+            You have passed the turn on. You can still finish your setup.
+          </p>
+        ) : (
+          <p className="assisted-endturn-text muted">
+            Passes the turn on to the next player without finishing setup. You can still finish it, and Start of Turn stays closed until you do.
+          </p>
+        )}
+      </div>
+    )
+  }
+
   const label = TURN_PHASE_LABEL[state.phase]
   const last = state.phase === TURN_PHASES[TURN_PHASES.length - 1]
   const stillEnded = endedLater(view, state)
+  // The setup before turn 1 (#374) is not finished: the server would refuse the press, so the button says why instead
+  const setupGate = setupGateOf(view)
   return (
     <div className="assisted-endturn">
       <button
         ref={endRef}
         type="button"
         className="primary"
-        disabled={busy || readOnly}
+        disabled={busy || readOnly || setupGate !== null}
         // Starts with the visible text (WCAG 2.5.3, Label in Name)
         aria-label={`End turn: mark ${capitalized(label)} as done`}
-        title={`End turn: mark ${capitalized(label)} as done`}
+        title={setupGate ?? `End turn: mark ${capitalized(label)} as done`}
+        aria-describedby={setupGate === null ? undefined : setupGateId}
         onClick={() => void run(() => api.markDone(gameId, state.phase, state.turnNumber))}
       >
         End turn
       </button>
+      {setupGate !== null && (
+        <p id={setupGateId} role="status" className="assisted-endturn-text assisted-warning">
+          {setupGate}
+        </p>
+      )}
       <p className="assisted-endturn-text muted">
         Turn {state.turnNumber}: marks your {label} phase done.
         {last && ' The next turn starts when every player has ended their research phase.'}

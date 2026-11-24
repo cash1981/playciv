@@ -987,7 +987,7 @@ describe('BoardView mobile placement', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Move' }))
 
     await waitFor(() =>
-      expect(travel).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false, [
+      expect(travel).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false, false, false, [
         expect.objectContaining({ column: expect.any(Number), row: expect.any(Number) }),
       ]),
     )
@@ -1120,7 +1120,7 @@ describe('BoardView mobile placement', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Route through C3' }))
     fireEvent.click(screen.getByRole('button', { name: 'Move' }))
     await waitFor(() =>
-      expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, [
+      expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, false, false, [
         { column: 1, row: 2 },
         { column: 2, row: 2 },
         { column: 2, row: 1 },
@@ -1146,7 +1146,7 @@ describe('BoardView mobile placement', () => {
     expect(travel).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /Route Red army to C2, 1 square/ }))
     await waitFor(() =>
-      expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, [{ column: 2, row: 1 }]),
+      expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, false, false, [{ column: 2, row: 1 }]),
     )
     travel.mockRestore()
     cleanup()
@@ -1216,23 +1216,24 @@ describe('BoardView mobile placement', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Route Red army to B3/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Move' }))
     expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/^Disband Red army in City B3 for a fortification marker\?/))
-    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 1, 2, disband, [{ column: 1, row: 2 }]))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 1, 2, disband, false, false, [{ column: 1, row: 2 }]))
 
     // Elsewhere nothing is asked
     confirm.mockClear()
     tile.dispatchEvent(event)
     fireEvent.click(await screen.findByRole('button', { name: /Route Red army to A2/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Move' }))
-    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 0, 1, false, [{ column: 0, row: 1 }]))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 0, 1, false, false, false, [{ column: 0, row: 1 }]))
     expect(confirm).not.toHaveBeenCalled()
     confirm.mockRestore()
     travel.mockRestore()
     cleanup()
   })
 
-  it('offers to explore the fog next to the viewer’s figure for 1 movement (issue #302)', async () => {
+  async function openMovementFixture(outOfTurnQuestion: string | null) {
     vi.spyOn(api, 'boardAssets').mockResolvedValue([])
     const explore = vi.spyOn(api, 'exploreSquare').mockResolvedValue({} as PlayerView)
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
     const army = findBoardAsset('figures/redarmy')
     if (army === undefined) throw new Error('missing army asset')
     const top = mapTop(createBoard())
@@ -1282,6 +1283,7 @@ describe('BoardView mobile placement', () => {
         busy={false}
         movementPlayer={movementPlayer}
         movementTurn={1}
+        outOfTurnQuestion={outOfTurnQuestion}
         run={async action => { await action() }}
       />,
     )
@@ -1299,12 +1301,52 @@ describe('BoardView mobile placement', () => {
     })) Object.defineProperty(event, name, { value })
     tile.dispatchEvent(event)
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const fog = await screen.findByRole('button', { name: /Explore E2 with Red army for 1 movement/ })
+    const moves = await screen.findAllByRole('button', { name: /Route Red army to/ })
+    return { explore, travel, fog, moves }
+  }
+
+  it('offers to explore the fog next to the viewer’s figure for 1 movement (issue #302)', async () => {
+    const { explore, fog } = await openMovementFixture(null)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(fog)
 
     await waitFor(() => expect(explore).toHaveBeenCalledWith('game', 'army-1', 4, 1))
     explore.mockRestore()
+    cleanup()
+  })
+
+  it('asks before moving or exploring a figure out of turn and does nothing when declined', async () => {
+    const question = 'It is not your turn. Karandras1 is up. Do it anyway?'
+    const { explore, travel, fog, moves } = await openMovementFixture(question)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    fireEvent.click(fog)
+    fireEvent.click(moves[0] as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(confirm).toHaveBeenNthCalledWith(1, question)
+    expect(confirm).toHaveBeenNthCalledWith(2, question)
+    expect(explore).not.toHaveBeenCalled()
+    expect(travel).not.toHaveBeenCalled()
+    confirm.mockRestore()
+    explore.mockRestore()
+    travel.mockRestore()
+    cleanup()
+  })
+
+  it('moves a figure out of turn once the question is confirmed', async () => {
+    const question = 'It is not your turn. Karandras1 is up. Do it anyway?'
+    const { explore, travel, moves } = await openMovementFixture(question)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    fireEvent.click(moves[0] as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+    expect(confirm).toHaveBeenCalledWith(question)
+    await waitFor(() => expect(travel).toHaveBeenCalledTimes(1))
+    confirm.mockRestore()
+    explore.mockRestore()
+    travel.mockRestore()
     cleanup()
   })
 
@@ -1400,7 +1442,157 @@ describe('BoardView mobile placement', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Move' }))
 
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('starts a battle'))
-    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, [{ column: 2, row: 1 }]))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith('game', 'army-1', 2, 1, false, false, false, [{ column: 2, row: 1 }]))
+    travel.mockRestore()
+    confirm.mockRestore()
+    cleanup()
+  })
+
+  it.each([
+    [true, 'resources/hut', 'Draw the hut now?'],
+    [false, 'resources/hut', 'Draw the hut now?'],
+    [true, 'relics/atlantis', 'relic on C2'],
+    [false, 'relics/atlantis', 'relic on C2'],
+  ])('asks before drawing the hut or taking the relic the figure ends on and sends the answer %s on %s (issue #364)', async (answer, markerId, question) => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([])
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
+    const army = findBoardAsset('figures/redarmy')
+    const hut = findBoardAsset(markerId)
+    const back = findBoardAsset('tiles/tileback')
+    if (army === undefined || hut === undefined || back === undefined) throw new Error('missing asset')
+    const top = mapTop(createBoard())
+    const made = (id: string, asset: typeof army, column: number, row: number): BoardPiece => ({
+      id,
+      assetId: asset.id,
+      path: asset.path,
+      label: asset.label,
+      category: asset.category,
+      x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
+      y: top + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+      width: asset.width,
+      height: asset.height,
+      rotation: 0,
+      placedBy: 'player-one',
+    })
+    const movementPlayer: MovementPlayer = {
+      color: 'Red',
+      civilization: null,
+      stats: { mvmt: '2' },
+      items: [],
+      socialPolicies: [],
+      techsChosen: [],
+      playerTurns: [],
+    }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [{ ...made('tile-back', back, 0, 0), x: 0, y: top }, made('army-1', army, 1, 1), made('hut-1', hut, 2, 1)] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        movementPlayer={movementPlayer}
+        movementTurn={1}
+        run={async action => { await action() }}
+      />,
+    )
+    const figure = container.querySelector('[data-piece-id="army-1"]')
+    if (!(figure instanceof HTMLElement)) throw new Error('piece missing')
+    const event = new Event('pointerdown', { bubbles: true })
+    for (const [name, value] of Object.entries({ pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+      Object.defineProperty(event, name, { value })
+    }
+    figure.dispatchEvent(event)
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(answer)
+    fireEvent.click(await screen.findByRole('button', { name: /Route Red army to C2/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining(question))
+    await waitFor(() =>
+      expect(travel).toHaveBeenCalledWith(...(answer ? (['game', 'army-1', 2, 1, false, true, false, [{ column: 2, row: 1 }]] as const) : (['game', 'army-1', 2, 1, false, false, false, [{ column: 2, row: 1 }]] as const))),
+    )
+    travel.mockRestore()
+    confirm.mockRestore()
+    cleanup()
+  })
+
+  it.each([
+    // [figure, civilization, answer, the question asked, the call, a battle after the move, Battle panel opened]
+    ['figures/redarmy', null, true, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false, false, true, [{ column: 2, row: 1 }]], true, 1],
+    // The engine ignored the fight (another player's figures, a battle already active): no scroll to an empty arena
+    ['figures/redarmy', null, true, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false, false, true, [{ column: 2, row: 1 }]], false, 0],
+    ['figures/redarmy', null, false, 'Fight the barbarians for it?', ['game', 'army-1', 2, 1, false, false, false, [{ column: 2, row: 1 }]], false, 0],
+    ['figures/redarmy', 'Zulu', true, 'Draw the village now?', ['game', 'army-1', 2, 1, false, true, false, [{ column: 2, row: 1 }]], false, 0],
+    ['figures/redarmy', 'Zulu', false, 'Draw the village now?', ['game', 'army-1', 2, 1, false, false, false, [{ column: 2, row: 1 }]], false, 0],
+  ] as const)('asks an army to fight for a village and a Zulu army to draw it: %s, %s, answer %s (case %#)', async (figureId, civilization, answer, question, call, battleAfter, opened) => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([])
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({ battle: battleAfter ? { id: 'battle-1' } : null } as unknown as PlayerView)
+    // The collapsed Battle panel's toggle, as `revealPanel` finds it
+    const toggle = document.createElement('button')
+    toggle.setAttribute('aria-controls', 'battle-content')
+    toggle.setAttribute('aria-expanded', 'false')
+    const toggled = vi.fn()
+    toggle.addEventListener('click', toggled)
+    document.body.append(toggle)
+    const figureAsset = findBoardAsset(figureId)
+    const village = findBoardAsset('resources/village')
+    const back = findBoardAsset('tiles/tileback')
+    if (figureAsset === undefined || village === undefined || back === undefined) throw new Error('missing asset')
+    const top = mapTop(createBoard())
+    const made = (id: string, asset: typeof figureAsset, column: number, row: number): BoardPiece => ({
+      id,
+      assetId: asset.id,
+      path: asset.path,
+      label: asset.label,
+      category: asset.category,
+      x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
+      y: top + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+      width: asset.width,
+      height: asset.height,
+      rotation: 0,
+      placedBy: 'player-one',
+    })
+    const movementPlayer: MovementPlayer = {
+      color: 'Red',
+      civilization: civilization === null ? null : { name: civilization },
+      stats: { mvmt: '2' },
+      items: [],
+      socialPolicies: [],
+      techsChosen: [],
+      playerTurns: [],
+    } as MovementPlayer
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [{ ...made('tile-back', back, 0, 0), x: 0, y: top }, made('army-1', figureAsset, 1, 1), made('village-1', village, 2, 1)] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        viewerCivilization={civilization}
+        movementPlayer={movementPlayer}
+        movementTurn={1}
+        run={async action => { await action() }}
+      />,
+    )
+    const figure = container.querySelector('[data-piece-id="army-1"]')
+    if (!(figure instanceof HTMLElement)) throw new Error('piece missing')
+    const event = new Event('pointerdown', { bubbles: true })
+    for (const [name, value] of Object.entries({ pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+      Object.defineProperty(event, name, { value })
+    }
+    figure.dispatchEvent(event)
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(answer)
+    fireEvent.click(await screen.findByRole('button', { name: /Route Red army to C2/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining(question))
+    await waitFor(() => expect(travel).toHaveBeenCalledWith(...call))
+    // Only the fight question for an army asks anything about the battle; nothing is ever sent as a draw together with it
+    expect(travel.mock.calls.some((args) => args[5] === true && args[6] === true)).toBe(false)
+    await waitFor(() => expect(toggled).toHaveBeenCalledTimes(opened))
+    toggle.remove()
     travel.mockRestore()
     confirm.mockRestore()
     cleanup()

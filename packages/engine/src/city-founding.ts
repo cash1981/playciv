@@ -26,11 +26,18 @@ export const cityLimitOf = (player: Playerhand): number =>
     ? MAX_CITIES_WITH_IRRIGATION
     : MAX_CITIES
 
-/** The player's city pieces on the board: a capital, a city or a metropolis is one each. */
+/**
+ * The player's city pieces on the board: a capital, a city or a metropolis is one each. A city piece counts only when its
+ * centre is on a playable map square: one lying in a player area (the walled capital and the metropolis marker of the Chinese
+ * and the Indians wait there in a game revealed before setup existed, `setCapital` places them now), in the wonders area, in a
+ * gutter or over a hole in a stepped map has no city footprint and is not a city. The piece's centre decides, as it does for
+ * `locationOf`.
+ */
 export function ownCityPieces(state: GameState, player: Playerhand): readonly BoardPiece[] {
   const colour = player.color?.toLowerCase()
+  if (colour === undefined) return []
   return state.board.pieces.filter(
-    (piece) => piece.category === 'city' && colour !== undefined && pieceColorOf(piece) === colour,
+    (piece) => piece.category === 'city' && pieceColorOf(piece) === colour && mapCellOf(state.board, piece) !== null,
   )
 }
 

@@ -27,12 +27,14 @@ import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { CoinsPanel } from './CoinsPanel.js'
+import { ChineseSavePrompt } from './ChineseSavePrompt.js'
+import { ConquestPrompt } from './ConquestPrompt.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary, handItemId } from './PhaseSummary.js'
-import { PhaseActionsPanel } from './PhaseTabs.js'
+import { PhaseActionsPanel, currentPhaseOf, notYourTurnQuestion } from './PhaseTabs.js'
 import { PlayerStatusSidebar } from './PlayerStatusSidebar.js'
 import { MapPickerContext } from './mapPick.js'
 import type { MapPicker, MapPickRequest } from './mapPick.js'
@@ -43,6 +45,7 @@ import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { focusPlayer } from './turnFocus.js'
 import { AutoRefreshSwitch } from './AutoRefresh.js'
+import { EndGameDialog } from './EndGameDialog.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { DigitInput } from './DigitInput.js'
 import { groupByOldClientBucket } from './itemBuckets.js'
@@ -287,6 +290,9 @@ export function GameView({
   const [view, setView] = useState<PlayerView | null>(null)
   const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
+  // The same actions the site menu gets, so End game can also sit in the header.
+  const [menuActions, setMenuActions] = useState<GameMenuActions | null>(null)
+  const [showEndGame, setShowEndGame] = useState(false)
   const [historical, setHistorical] = useState<GameRevisionView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -456,10 +462,11 @@ export function GameView({
     const busyNow = busy || (selectedRevision !== null && historical !== null)
     const gate = gameMenuGate(currentView, player?.role === 'admin', busyNow)
     if (gate === null) {
+      setMenuActions(null)
       onGameActions(null)
       return
     }
-    onGameActions({
+    const actions: GameMenuActions = {
       ...gate,
       // A replayed revision of an ended game was still active at that point,
       // so End game follows the live game, not the revision on screen.
@@ -507,7 +514,9 @@ export function GameView({
           }
         })()
       },
-    })
+    }
+    setMenuActions(actions)
+    onGameActions(actions)
     return () => onGameActions(null)
   }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, reload, run])
 
@@ -609,6 +618,17 @@ export function GameView({
   return (
     <MapPickerContext.Provider value={mapPicker}>
       <>
+      {showEndGame && menuActions !== null && menuActions.canEnd && (
+        <EndGameDialog
+          players={menuActions.endPlayers}
+          busy={menuActions.endDisabled}
+          onClose={() => setShowEndGame(false)}
+          onConfirm={(winner) => {
+            setShowEndGame(false)
+            menuActions.onEnd(winner)
+          }}
+        />
+      )}
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
           {/* Civ, then colour, then the name in the title: who is up (the
@@ -628,6 +648,17 @@ export function GameView({
             seconds={AUTO_REFRESH_MS / 1000}
             onToggle={() => setAutoRefresh((v) => !v)}
           />
+          {/* A shortcut to the menu's End game: players missed it in the hamburger menu. */}
+          {menuActions !== null && menuActions.canEnd && (
+            <button
+              type="button"
+              className="small danger"
+              disabled={menuActions.endDisabled}
+              onClick={() => setShowEndGame(true)}
+            >
+              End game
+            </button>
+          )}
         </div>
 
         {!ended && <PhaseSummary view={displayedView} />}
@@ -681,6 +712,9 @@ export function GameView({
         movementTurn={displayedView.activeTurn?.turnNumber ?? null}
         movementLocks={displayedView.communismLocks}
         movementForbidden={movementForbidden}
+        movementOverlay={currentPhaseOf(displayedView) === 'MOVEMENT'}
+        repositionFigures={you?.repositionableFigures ?? []}
+        outOfTurnQuestion={notYourTurnQuestion(displayedView)}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         statusSidebar={
           <PlayerStatusSidebar
@@ -726,6 +760,7 @@ export function GameView({
             run={run}
             reloadCount={reloadCount}
             autoRefresh={autoRefresh}
+            isAdmin={player?.role === 'admin'}
             authors={chatAuthors}
           />
         )}
@@ -1370,6 +1405,8 @@ interface BattlePanelProps extends PanelProps {
   readonly readOnly?: boolean
 }
 
+/** The picker's value for "Save none": nothing is sent, so the engine saves no unit. */
+
 export function BattlePanel({ gameId, busy, run, view, readOnly = false }: BattlePanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
   const battlehand = view.you?.battlehand ?? []
@@ -1666,6 +1703,13 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
 
   return (
     <CollapsiblePanel id="battle" title="Battle" defaultOpen={false}>
+      {/* The conquest offer a won battle makes and the Chinese save, here where the arena is (they are also in "Your actions", far from it) */}
+      {battle === null && (
+        <>
+          <ConquestPrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Conquest (battle)" />
+          <ChineseSavePrompt gameId={gameId} view={view} busy={busy} readOnly={noMutations} run={run} label="Chinese save (battle)" />
+        </>
+      )}
 
       {/* — Hand management — */}
       <div className="row">
@@ -1902,6 +1946,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
               <button
                 className="small danger"
                 disabled={busy || noMutations}
+                title="Ends the battle and discards the killed units' cards"
                 onClick={() => runBattleAction(() => api.endBattleArena(gameId, rev))}
               >
                 End battle
@@ -2454,7 +2499,7 @@ export function ArenaUnitCard({
         onDragEnd={onDragEnd}
       />
       {unit.killed && <span className="tag discarded">DEAD</span>}
-      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved by Florence Nightingale: it stays in the hand">SAVED</span>}
+      {unit.killed && unit.saved === true && <span className="tag revealed" title="Saved (Florence Nightingale or the Chinese): its card is not discarded">SAVED</span>}
       <button
         className="small"
         disabled={busy || readOnly}

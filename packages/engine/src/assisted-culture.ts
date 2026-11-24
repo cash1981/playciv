@@ -10,12 +10,16 @@
 
 import { movePieceUnchecked, placeUnchecked, removePiece } from './actions/board.js'
 import {
+  AZTEC_CIVILIZATION,
+  AZTEC_UNIT_CREDITS,
   PHASE_REASON,
+  aztecCreditsOf,
   blocked,
   lastLogId,
   openCityManagementTurn,
   playerOf,
   rejected,
+  withAztecCredits,
   withPlayerHand,
 } from './assisted-core.js'
 import type {
@@ -51,6 +55,7 @@ import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } fr
 import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
 import type { Item } from './item.js'
+import { deckWith } from './item-number.js'
 import { appendLog, itemNumbersText, numberedItemName } from './log.js'
 import { shuffle } from './random.js'
 import type { Result } from './result.js'
@@ -357,10 +362,36 @@ function takeGreatPersonMarker(
     return err('The Great Person marker could not be placed.')
   }
   const piece = entry.change.piece
+  // The Aztecs may build two unlocked units for free for every Great Person they keep: the credits are
+  // written to the server-only count, and to the marker so that an undo takes back exactly these
+  const aztec = player.civilization?.name === AZTEC_CIVILIZATION
   return ok({
-    state: placed,
-    marker: { assetId, pieceId: piece.id, position: { x: piece.x, y: piece.y }, historyId: entry.id },
+    state: aztec ? withAztecCredits(placed, player.playerId, aztecCreditsOf(placed, player.playerId) + AZTEC_UNIT_CREDITS) : placed,
+    marker: {
+      assetId,
+      pieceId: piece.id,
+      position: { x: piece.x, y: piece.y },
+      historyId: entry.id,
+      ...(aztec ? { aztecCredits: AZTEC_UNIT_CREDITS } : {}),
+    },
   })
+}
+
+/**
+ * The lines for the free units a Great Person gave the Aztecs. The public one only repeats the rule (two per
+ * Great Person); the new total is in the owner's private line.
+ */
+function aztecGainNote(
+  state: GameState,
+  player: Playerhand,
+  marker: GreatPersonMarker,
+): { readonly said: string; readonly privateText: string } {
+  const credits = marker.aztecCredits ?? 0
+  if (credits === 0) return { said: '', privateText: '' }
+  return {
+    said: ` and, as the Aztecs, may build ${credits} free units`,
+    privateText: `${player.username} gains ${credits} (${aztecCreditsOf(state, player.playerId)}) free units as the Aztecs`,
+  }
 }
 
 /** Where a marker is checked before an undo: still on the board, and still in its owner's area. */
@@ -536,12 +567,13 @@ export function gainGreatPerson(
   if (only === undefined) return err('No Great Person card was drawn.')
   const taken = takeGreatPersonMarker(withHand, player, only, origin.at)
   if (!taken.ok) return taken
+  const aztec = aztecGainNote(taken.value.state, player, taken.value.marker)
   return ok({
     ...base,
     state: taken.value.state,
     outcome: 'kept',
-    phrase: `took a ${markerLabelOf(taken.value.marker.assetId)} great person marker into reserve (${itemNumbersText(state.logSecret, player.username, [only])})`,
-    privateText: `${player.username} drew ${names} (${SHEET_LABEL.GREAT_PERSON}) and kept it`,
+    phrase: `took a ${markerLabelOf(taken.value.marker.assetId)} great person marker into reserve (${itemNumbersText(state.logSecret, player.username, [only])})${aztec.said}`,
+    privateText: `${player.username} drew ${names} (${SHEET_LABEL.GREAT_PERSON}) and kept it${aztec.privateText === '' ? '' : `. ${aztec.privateText}`}`,
     kept: only.id,
     marker: taken.value.marker,
   })
@@ -584,7 +616,7 @@ export function restoreDrawnCards(
       pendingRewards: player.pendingRewards.filter((reward) => reward.id !== recordId),
     }),
     discardedItems: state.discardedItems.filter((item) => !returnedIds.has(item.id)),
-    items: [...state.items, ...toDeck.map((item): Item => ({ ...item, hidden: true, ownerId: null }))],
+    ...deckWith(state, toDeck),
   }
   return ok(toDeck.length === 0 ? withCards : shuffleDeckTwice(withCards))
 }
@@ -601,12 +633,40 @@ export function removeGreatPersonMarker(
     pieceId: marker.pieceId,
     ...(at === null ? {} : { at }),
   })
-  return removed.ok ? ok(removed.value) : err('The Great Person marker could not be taken off the board.')
+  if (!removed.ok) return err('The Great Person marker could not be taken off the board.')
+  return ok(takeBackAztecCredits(removed.value, record.playerId, marker, at))
+}
+
+/**
+ * The free units the Great Person gave the Aztecs go back with it, as far as they are unused: a unit already
+ * drawn stays (its own undo returns it). Never below 0. The public text only says so; the amounts are in the
+ * owner's private line.
+ */
+function takeBackAztecCredits(state: GameState, playerId: string, marker: GreatPersonMarker, at: string | null): GameState {
+  const given = marker.aztecCredits ?? 0
+  if (given === 0) return state
+  const have = aztecCreditsOf(state, playerId)
+  const taken = Math.min(given, have)
+  const holder = playerOf(state, playerId)
+  const next = withAztecCredits(state, playerId, have - taken)
+  if (holder === undefined) return next
+  return appendLog(next, {
+    username: holder.username,
+    playerId,
+    privateLog:
+      taken === given
+        ? `${holder.username} loses ${taken} (${have - taken}) free Aztec units with that great person`
+        : `${holder.username} loses ${taken} (${have - taken}) of the ${given} free Aztec units of that great person; the rest was already used`,
+    createdAt: at,
+  })
 }
 
 /** The sentence part for a removed marker, or an empty string. */
 export const removedMarkerText = (marker: GreatPersonMarker | null | undefined): string =>
-  marker === null || marker === undefined ? '' : ` and the ${markerLabelOf(marker.assetId)} great person marker was removed`
+  marker === null || marker === undefined
+    ? ''
+    : ` and the ${markerLabelOf(marker.assetId)} great person marker was removed` +
+      ((marker.aztecCredits ?? 0) > 0 ? ', and the free units it gave the Aztecs were taken back as far as they were unused' : '')
 
 /** Whether the free advance that goes with another action (the Romans' city, the Arabs' coin, Sydney) can be taken now. */
 export type FreeAdvanceStatus =
@@ -998,6 +1058,7 @@ function withKeptCard(
   const effect = record.effect
   const extra = marker === null ? {} : { marker }
   if (effect.kind === 'cultureAdvance') return { ...record, effect: { ...effect, kept, ...extra } }
+  if (effect.kind === 'relicGreatPerson' || effect.kind === 'philosophy' || effect.kind === 'setupGreatPerson') return { ...record, effect: { ...effect, kept, ...extra } }
   if (effect.kind === 'patronage') return { ...record, effect: { ...effect, kept } }
   if (effect.kind === 'sotDraw') return { ...record, effect: { ...effect, kept: [...(effect.kept ?? []), kept] } }
   if (effect.kind === 'playCard' && effect.frida !== undefined) {
@@ -1069,7 +1130,8 @@ export const chooseReward: AssistedActionDefinition = {
     const origin = state.assistedActions.find((record) => ownsReward(record, reward.id))
     const originAdvance = origin === undefined ? undefined : advanceEffectOf(origin)
     const takesMarker =
-      reward.kind === 'greatPerson' && originAdvance !== undefined && originAdvance.rejected !== undefined
+      reward.kind === 'greatPerson' &&
+      ((originAdvance !== undefined && originAdvance.rejected !== undefined) || origin?.effect.kind === 'relicGreatPerson' || origin?.effect.kind === 'philosophy' || origin?.effect.kind === 'setupGreatPerson')
     let board = state
     let marker: GreatPersonMarker | null = null
     if (takesMarker) {
@@ -1103,6 +1165,7 @@ export const chooseReward: AssistedActionDefinition = {
       },
     )
 
+    const aztec = marker === null ? undefined : aztecGainNote(discarded, player, marker)
     const publicLine = appendLog(discarded, {
       username: player.username,
       playerId: player.playerId,
@@ -1110,7 +1173,8 @@ export const chooseReward: AssistedActionDefinition = {
         (marker === null
           ? `${player.username} kept a card (${itemNumbersText(state.logSecret, player.username, [kept])})`
           : `${player.username} took a ${markerLabelOf(marker.assetId)} great person marker into reserve (${itemNumbersText(state.logSecret, player.username, [kept])})`) +
-        (others.length === 0 ? '' : ` and discarded ${others.map(numbered).join(', ')}`),
+        (others.length === 0 ? '' : ` and discarded ${others.map(numbered).join(', ')}`) +
+        (aztec?.said ?? ''),
       privateLog: '',
       createdAt: context.at ?? null,
     })
@@ -1120,12 +1184,18 @@ export const chooseReward: AssistedActionDefinition = {
       playerId: player.playerId,
       privateLog:
         `${player.username} kept ${numbered(kept)}` +
-        (others.length === 0 ? '' : ` and discarded ${others.map(numbered).join(', ')}`),
+        (others.length === 0 ? '' : ` and discarded ${others.map(numbered).join(', ')}`) +
+        (aztec === undefined || aztec.privateText === '' ? '' : `. ${aztec.privateText}`),
       createdAt: context.at ?? null,
     })
     return ok({
       state: countLinesIn(logged, [marker?.historyId]),
-      effect: { kind: 'chooseReward', rewardId: reward.id, itemId: kept.id },
+      effect: {
+        kind: 'chooseReward',
+        rewardId: reward.id,
+        itemId: kept.id,
+        discarded: others.map((item): Item => ({ ...item, hidden: true })),
+      },
       logId,
     })
   },

@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { discardBarbarians, draw, drawBarbarians, reshuffleItems } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
+import { deckWith } from '../src/item-number.js'
 import { performAssistedAction } from '../src/assisted.js'
 import { spendResource } from '../src/assisted-resources.js'
 import { chooseTech, discardItem, revealItem, revealTech } from '../src/actions/player.js'
@@ -298,6 +299,17 @@ describe('revealedFeed', () => {
     expect(row?.discarded).toBe(true)
     expect(row?.item.ownerId).not.toBe(KARANDRAS1)
     expect(JSON.stringify(row)).not.toContain(KARANDRAS1)
+
+    // Returned to the deck again (an undone draw) it is renumbered once more; the history still shows the discard
+    const returned = {
+      ...hidden,
+      ...deckWith(hidden, [card]),
+    }
+    const returnedCard = returned.items.find((item) => item.id === discardedId)
+    expect(returnedCard?.itemNumber).not.toBe(card.itemNumber)
+    const afterReturn = revealedFeed(returned)
+    expect(afterReturn.some((entry) => entry.item.itemNumber === returnedCard?.itemNumber)).toBe(false)
+    expect(afterReturn.some((entry) => entry.item.itemNumber === discarded.itemNumber && entry.discarded)).toBe(true)
   })
 
   it('shows a resource hut spent by an assisted ability in the discard feed', () => {

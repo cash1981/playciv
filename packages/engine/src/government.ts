@@ -90,6 +90,9 @@ export function startingGovernmentFor(civilizationName: string): Government {
       return 'Communism'
     case 'Japanese':
       return 'Feudalism'
+    // The Greeks' civilization card (#368 table), as Romans, Russians and Japanese
+    case 'Greeks':
+      return 'Democracy'
     default:
       return DEFAULT_GOVERNMENT
   }
