@@ -56,7 +56,7 @@ const movementPlayer: MovementPlayer = {
 
 const SQUARES: RepositionableFigure = { pieceId: 'army-1', squares: [{ column: 2, row: 1, label: 'C2' }, { column: 0, row: 1, label: 'A2' }] }
 
-function renderBoard(props: { movementOverlay?: boolean; repositionFigures?: readonly RepositionableFigure[] }) {
+function renderBoard(props: { movementOverlay?: boolean; repositionFigures?: readonly RepositionableFigure[]; outOfTurnQuestion?: string | null }) {
   const run = async (action: () => Promise<unknown>): Promise<void> => {
     await action()
   }
@@ -121,6 +121,96 @@ describe('repositioning a built figure', () => {
 
     await waitFor(() => expect(reposition).toHaveBeenCalledWith('game', 'army-1', 2, 1))
     expect(travel).not.toHaveBeenCalled()
+  })
+
+  /** One pointer event on the army, as a mouse drag would send it. */
+  function pointer(army: HTMLElement, type: 'pointerdown' | 'pointermove' | 'pointerup', clientX: number, clientY: number): void {
+    const event = new Event(type, { bubbles: true })
+    for (const [name, value] of Object.entries({ pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, clientX, clientY })) {
+      Object.defineProperty(event, name, { value })
+    }
+    army.dispatchEvent(event)
+  }
+
+  /** Drags the army from the centre of its square by `dx` screen pixels. */
+  function dragArmyBy(container: HTMLElement, dx: number): void {
+    const army = container.querySelector('[data-piece-id="army-1"]')
+    if (!(army instanceof HTMLElement)) throw new Error('army missing')
+    const zoom = Number.parseFloat(/([\d.]+)\s*%/.exec(screen.getByTestId('zoom-readout').textContent ?? '')?.[1] ?? '100') / 100
+    const startX = (SQUARE_SIZE + SQUARE_SIZE / 2) * zoom
+    const startY = (top + SQUARE_SIZE + SQUARE_SIZE / 2) * zoom
+    pointer(army, 'pointerdown', startX, startY)
+    pointer(army, 'pointermove', startX + dx, startY)
+    pointer(army, 'pointerup', startX + dx, startY)
+  }
+
+  /** Drags the army from its square by `columns` columns, as far as the board's zoom turns that into screen pixels. */
+  function dragArmy(container: HTMLElement, columns: number): void {
+    const zoom = Number.parseFloat(/([\d.]+)\s*%/.exec(screen.getByTestId('zoom-readout').textContent ?? '')?.[1] ?? '100') / 100
+    dragArmyBy(container, columns * SQUARE_SIZE * zoom)
+  }
+
+  it('moves the figure when it is dragged onto one of the offered squares, with no travel and no Undo', async () => {
+    const reposition = vi.spyOn(api, 'repositionBuiltFigure').mockResolvedValue({} as PlayerView)
+    const move = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const travel = vi.spyOn(api, 'travelFigure').mockResolvedValue({} as PlayerView)
+    const { container } = renderBoard({ movementOverlay: false, repositionFigures: [SQUARES] })
+    dragArmy(container, 1)
+    await waitFor(() => expect(reposition).toHaveBeenCalledWith('game', 'army-1', 2, 1))
+    expect(move).not.toHaveBeenCalled()
+    expect(travel).not.toHaveBeenCalled()
+  })
+
+  it('still arranges a listed figure inside its own square', async () => {
+    const reposition = vi.spyOn(api, 'repositionBuiltFigure').mockResolvedValue({} as PlayerView)
+    const move = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const { container } = renderBoard({ movementOverlay: false, repositionFigures: [SQUARES] })
+    dragArmyBy(container, 10)
+    await waitFor(() => expect(move).toHaveBeenCalledWith('game', 'army-1', expect.any(Number), expect.any(Number), false))
+    expect(reposition).not.toHaveBeenCalled()
+  })
+
+  it('asks about the warning on the square before a drop, as the tap does, and sends nothing when the answer is no', async () => {
+    const reposition = vi.spyOn(api, 'repositionBuiltFigure').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const warned: RepositionableFigure = { pieceId: 'army-1', squares: [{ column: 2, row: 1, label: 'C2', note: 'An enemy figure stands there.' }] }
+    const { container } = renderBoard({ movementOverlay: false, repositionFigures: [warned] })
+    dragArmy(container, 1)
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('An enemy figure stands there. Put Red army on C2 anyway?'))
+    expect(reposition).not.toHaveBeenCalled()
+
+    cleanup()
+    confirm.mockReturnValue(true)
+    const again = renderBoard({ movementOverlay: false, repositionFigures: [warned] })
+    dragArmy(again.container, 1)
+    await waitFor(() => expect(reposition).toHaveBeenCalledWith('game', 'army-1', 2, 1))
+  })
+
+  it('asks the not-your-turn question before a drop, and sends nothing when the answer is no', async () => {
+    const reposition = vi.spyOn(api, 'repositionBuiltFigure').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { container } = renderBoard({ movementOverlay: false, repositionFigures: [SQUARES], outOfTurnQuestion: 'It is not your turn. Move anyway?' })
+    dragArmy(container, 1)
+    expect(confirm).toHaveBeenCalledWith('It is not your turn. Move anyway?')
+    expect(reposition).not.toHaveBeenCalled()
+  })
+
+  it('springs back when it is dropped on a square that is not offered', async () => {
+    const reposition = vi.spyOn(api, 'repositionBuiltFigure').mockResolvedValue({} as PlayerView)
+    const move = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const { container } = renderBoard({ movementOverlay: false, repositionFigures: [SQUARES] })
+    dragArmy(container, 2)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(reposition).not.toHaveBeenCalled()
+    expect(move).not.toHaveBeenCalled()
+  })
+
+  it('does not reposition a figure that is not in the list, even when dropped on an offered square', async () => {
+    const reposition = vi.spyOn(api, 'repositionBuiltFigure').mockResolvedValue({} as PlayerView)
+    const { container } = renderBoard({ movementOverlay: false, repositionFigures: [{ ...SQUARES, pieceId: 'someone-else' }] })
+    dragArmy(container, 1)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(reposition).not.toHaveBeenCalled()
   })
 
   it('offers nothing for a figure that is not in the list', async () => {

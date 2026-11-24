@@ -1975,7 +1975,8 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   Undo, which is sealed for a build's entries, cannot send the figure back. A
   public log line says "moved the army from B3 to C2" (human, 2026-11-24), besides the board history entry. Buildings, wonders, units and walls are not
   moved. The list `you.repositionableFigures` is own view only and blanked in a
-  replay; the web shows blue squares for the selected figure. The `/travel` route
+  replay; the web shows blue squares for the selected figure, and dragging the figure onto one of them
+  (human, 2026-11-24) asks the same questions (not your turn, an enemy figure on the square) and makes the same call; a drop on any other square springs back. The `/travel` route
   was not given a phase check. Tests: `build-reposition.test.ts`,
   `board-reposition-api.test.ts`, `BoardView.reposition.test.tsx`.
 

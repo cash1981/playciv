@@ -49,6 +49,7 @@ import {
   figureMovementOptions,
   findBoardAsset,
   locationOf,
+  mapCellOf,
   mapHeight,
   mapTop,
   nearestSlotOrigin,
@@ -854,6 +855,18 @@ export function BoardView({
     return pointerType !== 'mouse' && tileTapsSurface(piece)
   }
 
+  /**
+   * Puts a figure the viewer's Build placed this City Management on another square of its city, with no Undo. Tapping a blue
+   * square and dropping the figure on it both come here, so both ask the same questions first: it is not the viewer's turn, or
+   * the square carries a warning (an enemy figure stands there, which is not automated).
+   */
+  function putBuiltFigureOn(figure: BoardPiece, cell: { readonly column: number; readonly row: number; readonly label: string; readonly note?: string }): void {
+    if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
+    if (cell.note !== undefined && !window.confirm(`${cell.note} Put ${figure.label} on ${cell.label} anyway?`)) return
+    setMoveModeId(null)
+    void run(() => api.repositionBuiltFigure(gameId, figure.id, cell.column, cell.row))
+  }
+
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     // While a palette asset is armed, the board surface owns the tap—even if
     // the user taps an existing piece such as a starting tile.
@@ -963,6 +976,15 @@ export function BoardView({
     // tap on the board does not move it a second time.
     setMoveModeId(null)
     if (piece !== undefined && movementOptionsFor(piece) !== null) {
+      // A figure the viewer's Build placed this City Management, dropped on one of the squares it may be put on instead:
+      // the same call as tapping the blue square, with no movement spent and no Undo.
+      const placedHere = repositionFigures.find((entry) => entry.pieceId === piece.id)
+      const droppedOn = placedHere === undefined ? null : mapCellOf(board, { ...piece, x: drag.x, y: drag.y })
+      const target = droppedOn === null ? undefined : placedHere?.squares.find((cell) => cell.column === droppedOn.column && cell.row === droppedOn.row)
+      if (target !== undefined) {
+        putBuiltFigureOn(piece, target)
+        return
+      }
       // Arranged inside its own square, with no movement spent; a drop in another square springs back.
       const spot = arrangeWithinSquare(board, piece, drag.x, drag.y)
       if (spot !== undefined) void run(() => api.movePiece(gameId, piece.id, spot[0], spot[1], false))
@@ -1350,10 +1372,7 @@ export function BoardView({
                     onClick={(event) => {
                       event.stopPropagation()
                       if (selected === null) return
-                      if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
-                      if (cell.note !== undefined && !window.confirm(`${cell.note} Put ${selected.label} on ${cell.label} anyway?`)) return
-                      setMoveModeId(null)
-                      void run(() => api.repositionBuiltFigure(gameId, selected.id, cell.column, cell.row))
+                      putBuiltFigureOn(selected, cell)
                     }}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
