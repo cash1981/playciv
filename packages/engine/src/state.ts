@@ -860,6 +860,8 @@ export type AssistedEffect =
         readonly battleId: string
         readonly bonus?: number
         readonly saved?: readonly string[]
+        /** Florence Nightingale after the battle: the discarded cards she took back, for an undo to discard again. */
+        readonly returned?: readonly DiscardedKilledCard[]
         readonly zhukov?: boolean
       }
       /** Nikola Tesla: the tech placed one row lower and where it was, so an undo can move it back. Never projected. */
@@ -1644,6 +1646,12 @@ export interface GameState {
    * that old saves load as before. Public, but not in the view.
    */
   readonly legacyRevealsCopied: boolean
+  /**
+   * Spain's +1 travel speed is part of the typed Movement (`3`, not `2+1`). True for a game created by this code and for a save
+   * that `migrateGameState` has converted; absent in an older save, which is converted once on its next load. After that a
+   * Movement typed by hand is never rewritten. Public, but not in the view.
+   */
+  readonly spanishMovementMigrated?: boolean
   /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.

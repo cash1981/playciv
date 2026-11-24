@@ -139,26 +139,32 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
 
 /**
  * A Spanish player whose civilization was revealed before the reveal set Spain's +1 travel speed still has the default
- * Movement (`2`) and no `civSetup.mvmt` on their reveal line. They get `3` once (Spain's +1 inside the base), written the way the reveal writes it:
- * the stat, and `civSetup.mvmt` on the line so that undoing the reveal restores `2` and a second load finds the entry
- * and does nothing. Any other value is left alone (a typed `3`, `3+1`); an older `2+k` becomes `3+(k-1)`, as is any other civilization, and so is
- * a player whose reveal line already holds a `mvmt` entry: they typed `2` back on purpose. A reveal line with no
- * `civSetup` (a reveal saved before the setup was recorded) gets only the stat.
+ * Movement (`2`) and no `civSetup.mvmt` on their reveal line. They get `3` (Spain's +1 inside the base), written the way the reveal writes it:
+ * the stat, and `civSetup.mvmt` on the line so that undoing the reveal restores `2`. A reveal line with no `civSetup` (a reveal saved
+ * before the setup was recorded) gets only the stat. An older `b+k` (k at least 1) becomes `(b+1)+(k-1)`, which keeps the speed. A plain
+ * value (`3`, `4`) and any other civilization stay. The whole conversion runs once per game: `spanishMovementMigrated` marks a game that
+ * has had it (every new game does), and nothing typed afterwards is touched.
  */
 function withSpanishMovement(
   players: readonly Playerhand[],
   log: readonly GameLogEntry[],
+  alreadyMigrated: boolean,
 ): { readonly players: readonly Playerhand[]; readonly log: readonly GameLogEntry[] } {
+  // Runs once per game: `spanishMovementMigrated` is set by createGame and by this migration, so a Movement typed later is never rewritten
+  if (alreadyMigrated) return { players, log }
   let nextLog = log
   const nextPlayers = players.map((player) => {
     if (player.civilization?.name !== SPANISH) return player
     // Saves from when Spain's +1 was typed as a second term (`2+1`, or `2+2` with a typed Natural Religion): the +1 is now part
     // of the base, so `2+k` becomes `3+(k-1)` (`3` for `2+1`). The reveal line's `civSetup.mvmt.set` follows, so that undoing
     // the reveal still finds the value it set and restores `before`.
-    const legacy = /^2((?:\+\d+)+)$/.exec(player.stats.mvmt.trim())
-    if (legacy !== null) {
-      const extra = (legacy[1] ?? '').split('+').reduce((total, part) => total + (part === '' ? 0 : Number(part)), 0)
-      const migrated = extra <= 1 ? SPANISH_MVMT : `${SPANISH_MVMT}+${extra - 1}`
+    // Any typed base counts (`4+1` with Sailing gave 5; read the new way it would give 6): `b+k` is `(b+1)+(k-1)`, which keeps
+    // the speed with and without a tech and with Natural Religion. A `+0` term gave Spain nothing then and reads the same now.
+    const legacy = /^(\d+)((?:\+\d+)+)$/.exec(player.stats.mvmt.trim())
+    const extra = legacy === null ? 0 : (legacy[2] ?? '').split('+').reduce((total, part) => total + (part === '' ? 0 : Number(part)), 0)
+    if (legacy !== null && extra >= 1) {
+      const base = Number(legacy[1]) + 1
+      const migrated = extra === 1 ? `${base}` : `${base}+${extra - 1}`
       const typed = player.stats.mvmt
       const civId = player.civilization.id
       const reveal = [...nextLog]
@@ -368,8 +374,13 @@ export function migrateGameState(state: GameState): GameState {
   const spanishLog = withSpanishMovement(
     migratedPlayers,
     older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
+    older.spanishMovementMigrated === true,
   )
-  const spanishWithdrawn = withSpanishMovement((older.withdrawnPlayers ?? []).map(withPlayerDefaults), spanishLog.log)
+  const spanishWithdrawn = withSpanishMovement(
+    (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
+    spanishLog.log,
+    older.spanishMovementMigrated === true,
+  )
 
   const migrated: GameState = {
     ...older,
@@ -431,6 +442,7 @@ export function migrateGameState(state: GameState): GameState {
     legacyOrdersCopied: older.legacyOrdersCopied ?? chatOrders === true,
     // A loaded save that lacks the flag is treated as not checked (the admin tool that checked it is gone)
     legacyRevealsCopied: older.legacyRevealsCopied ?? false,
+    spanishMovementMigrated: true,
     turnStarters: older.turnStarters ?? {},
   }
   // The old baton view is gone, and every game is a chat game. Adopt one that was

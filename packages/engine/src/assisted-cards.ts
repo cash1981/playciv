@@ -1412,6 +1412,23 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${effect.name} has already dealt wounds in this battle, which cannot be taken back.`)
     }
 
+    // A card played during a battle that End battle has since closed: its saved units were left in the hand, so taking the
+    // marks back would leave killed units in the hand that End battle should have discarded
+    const closedBattle = state.endedBattle
+    if (
+      effect.battleCard !== undefined &&
+      effect.battleCard.returned === undefined &&
+      state.battle?.id !== effect.battleCard.battleId &&
+      closedBattle !== null &&
+      closedBattle.battle.id === effect.battleCard.battleId
+    ) {
+      const savedIds = new Set(effect.battleCard.saved ?? [])
+      const stillHeld = [...closedBattle.battle.arena, ...closedBattle.battle.departedUnits].some(
+        (unit) => savedIds.has(unit.id) && player.items.some((item) => item.id === unit.unit.id),
+      )
+      if (stillHeld) return blockedBy(`${effect.name} was played during a battle that has ended. Undo End battle first.`)
+    }
+
     // What the game did besides logging goes first, checked before anything changes
     const drewCard = effect.drew === undefined ? undefined : player.items.find((candidate) => candidate.id === effect.drew?.itemId)
     if (effect.drew !== undefined && drewCard === undefined) {

@@ -45,8 +45,15 @@ export function discardKilledUnits(
     if (owner === undefined) continue
     const itemIndex = owner.items.findIndex((item) => item.id === unit.unit.id)
     const battlehandIndex = owner.battlehand.findIndex((item) => item.id === unit.unit.id)
-    const card: Item | undefined = owner.items[itemIndex] ?? owner.battlehand[battlehandIndex]
-    if (card === undefined) continue
+    // The live card is the one in the hand; a battlehand entry is only a snapshot of it. A card that has left the hand
+    // (discarded or traded away by hand) is not on the pile again, and its stale snapshot goes out of the battlehand
+    const card: Item | undefined = owner.items[itemIndex]
+    if (card === undefined) {
+      if (battlehandIndex !== -1) {
+        next = withPlayer(next, { ...owner, battlehand: owner.battlehand.filter((item) => item.id !== unit.unit.id) })
+      }
+      continue
+    }
     const onPile = { ...card, inBattle: false, hidden: true } as Item
     const without: GameState = {
       ...withPlayer(next, {
@@ -109,7 +116,12 @@ export function rediscardKilledCard(state: GameState, record: DiscardedKilledCar
   const card = owner?.items.find((item) => item.id === record.cardId)
   if (owner === undefined || card === undefined) return state
   const next: GameState = {
-    ...withPlayer(state, { ...owner, items: owner.items.filter((item) => item.id !== card.id) }),
+    // Also out of the battlehand, where a draw since the return may have put a copy
+    ...withPlayer(state, {
+      ...owner,
+      items: owner.items.filter((item) => item.id !== card.id),
+      battlehand: owner.battlehand.filter((item) => item.id !== card.id),
+    }),
     discardedItems: [...state.discardedItems, { ...card, inBattle: false, hidden: true } as Item],
   }
   return markLine(next, record.logId, false)
@@ -147,4 +159,20 @@ export function restoreKilledCard(state: GameState, record: DiscardedKilledCard)
     },
   )
   return onPile === undefined ? next : markLine(next, record.logId, true)
+}
+
+/**
+ * The ids of the cards the Chinese may still save (their player fought in the battle End battle has set aside and has not
+ * saved one yet). They stay out of a reshuffle of the discard pile: another player's draw from an empty deck would
+ * otherwise shuffle them away and erase the choice. Kept here, not in `chinese-save.ts`, so the draw code can use it
+ * without a circular import.
+ */
+export function pendingChineseSaveCardIds(state: GameState): ReadonlySet<string> {
+  const ended = state.endedBattle
+  if (state.battle !== null || ended === null || ended.chineseSaved !== undefined) return new Set()
+  return new Set(
+    (ended.killedDiscarded ?? [])
+      .filter((record) => findPlayer(state, record.ownerId)?.civilization?.name === 'Chinese' && killedCardOnPile(state, record))
+      .map((record) => record.cardId),
+  )
 }

@@ -19,6 +19,7 @@ import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll, revealPublic } from '../item.js'
 import { deckWith } from '../item-number.js'
+import { pendingChineseSaveCardIds } from '../killed-units.js'
 import {
   appendInfoLog,
   appendItemLog,
@@ -448,11 +449,13 @@ export function reshuffleItems(state: GameState, sheetName: SheetName): DrawResu
     return err({ kind: 'NOT_SHUFFLABLE', sheetName })
   }
 
-  const toPutBack = state.discardedItems.filter((item) => item.sheetName === sheetName)
+  // The casualties the Chinese may still save stay on the pile until they have chosen or the next battle starts
+  const pending = pendingChineseSaveCardIds(state)
+  const toPutBack = state.discardedItems.filter((item) => item.sheetName === sheetName && !pending.has(item.id))
   if (toPutBack.length === 0) {
     return err({ kind: 'NO_MORE_ITEMS', what: SHEET_LABEL[sheetName] })
   }
-  const toKeep = state.discardedItems.filter((item) => item.sheetName !== sheetName)
+  const toKeep = state.discardedItems.filter((item) => item.sheetName !== sheetName || pending.has(item.id))
 
   const [shuffled, rng] = shuffle(toPutBack, state.rng)
   const next: GameState = {

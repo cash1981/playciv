@@ -1469,6 +1469,32 @@ describe("the Egyptians' free build", () => {
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[3]).toEqual({ cityPieceId: 'city-1', item: { kind: 'walls' }, free: true })
   })
+
+  it('asks for the second action after an Engineering first build, since a free build is an action of its own', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    const split = { firstCost: 5, fullProduction: 8 }
+    render(<Harness initial={viewOf([options({ engineering: split, choices: [{ ...WALLS, tradeToPay: 0, freeBuild: true, freeOnly: true }] })], { acted: ['Build'] })} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Build City Walls for free' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[3]).toEqual({ cityPieceId: 'city-1', item: { kind: 'walls' }, free: true })
+    expect(send.mock.calls[0]?.[4]).toBe(true)
+  })
+
+  it('reopens the picker when a paid plan becomes free-only on a refresh', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([options({ choices: [WALLS] })])} handle={handle} />)
+    fireEvent.click(buildButton())
+    choose('City Walls')
+    expect(confirm()).toBeTruthy()
+    act(() => handle.setView(viewOf([options({ choices: [{ ...WALLS, tradeToPay: 0, freeBuild: true, freeOnly: true }] })], { rev: 9 })))
+    expect(screen.queryByRole('button', { name: /^Confirm/ })).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
+    expect(screen.getByRole('button', { name: 'Build City Walls for free' })).toBeTruthy()
+  })
 })
 
 describe('replacing a building or wonder', () => {

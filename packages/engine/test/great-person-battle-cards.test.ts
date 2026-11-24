@@ -472,3 +472,36 @@ describe('the projection', () => {
     expect(JSON.stringify(view.opponents)).not.toContain(cardId)
   })
 })
+
+describe('Florence Nightingale undone after End battle', () => {
+  const killedCash = (): { readonly state: GameState; readonly cardId: string; readonly unitCard: string } => {
+    const base = fight(2, 2)
+    const unit = base.battle!.arena.find((candidate) => candidate.placedBy === CASH1981)!
+    const killed = unwrap(killArenaUnit(base, { playerId: CASH1981, arenaUnitId: unit.id }))
+    return { ...holding(killed, 'Florence Nightingale', CASH1981), unitCard: unit.unit.id }
+  }
+
+  it('is refused when she was played during the battle and End battle has left the saved unit in the hand', () => {
+    const { state, cardId, unitCard } = killedCash()
+    const ended = unwrap(endBattleAction(unwrap(play(state, CASH1981, cardId)), { playerId: CASH1981 }))
+    expect(findPlayer(ended, CASH1981)?.items.some((item) => item.id === unitCard)).toBe(true)
+    expect(() => undoByVote(ended, CASH1981, 'b1')).toThrow(/ASSISTED_UNDO_BLOCKED.*Undo End battle first/)
+    // With End battle undone first, the play can be undone as before
+    const back = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(undoByVote(back, CASH1981, 'b1').battle?.arena.some((unit) => unit.saved !== undefined)).toBe(false)
+  })
+
+  it('discards the cards again, from the hand and the battlehand, when she was played after the battle and a new battlehand was drawn', () => {
+    const { state, cardId, unitCard } = killedCash()
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(ended.discardedItems.some((item) => item.id === unitCard)).toBe(true)
+    const saved = unwrap(play(ended, CASH1981, cardId))
+    expect(findPlayer(saved, CASH1981)?.items.some((item) => item.id === unitCard)).toBe(true)
+    const drawn = unwrap(drawUnitsForBattle(saved, { playerId: CASH1981, numberOfDraws: 5 }))
+    expect(findPlayer(drawn, CASH1981)?.battlehand.some((item) => item.id === unitCard)).toBe(true)
+    const undone = undoByVote(drawn, CASH1981, 'b1')
+    expect(undone.discardedItems.filter((item) => item.id === unitCard)).toHaveLength(1)
+    expect(findPlayer(undone, CASH1981)?.items.some((item) => item.id === unitCard)).toBe(false)
+    expect(findPlayer(undone, CASH1981)?.battlehand.some((item) => item.id === unitCard)).toBe(false)
+  })
+})
