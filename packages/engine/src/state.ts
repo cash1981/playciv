@@ -31,6 +31,8 @@ import type { TradeEstimate } from './trade-estimate.js'
 import type { PlacedBuildItem, UnitBuildItem, UnitType, WallsBuildItem } from './build-item.js'
 import type { CityBuildOptions, ReplacedPiece } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
+import { repositionableFiguresOf } from './build-reposition.js'
+import type { RepositionableFigure } from './build-reposition.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
 import type { CityActionOptions, UpgradeFamilyOption } from './city-actions.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
@@ -1019,6 +1021,12 @@ export type AssistedEffect =
       readonly pieceId: string
       readonly position: { readonly x: number; readonly y: number }
       readonly historyId: string
+      /**
+       * A figure only: the board history entries of the times the owner put it on another square of the
+       * city while City Management was open (`repositionBuiltFigure`). `square` and `position` follow the
+       * figure; these entries belong to the build like `historyId`, so the board Undo leaves them alone.
+       */
+      readonly repositioned?: readonly string[]
       /**
        * A wonder is not placed but moved out of the market: where it stood there, and the
        * board history entry that made the player its owner. Absent for a building and a figure.
@@ -2233,6 +2241,11 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards' | 'set
    * with no such building.
    */
   readonly upgradeOptions: readonly UpgradeFamilyOption[]
+  /**
+   * The armies and scouts a Build placed in the City Management that is open now, with the squares each
+   * can still be put on without an undo. Own view only, like `buildOptions`; empty otherwise.
+   */
+  readonly repositionableFigures: readonly RepositionableFigure[]
 }
 
 /**
@@ -2425,6 +2438,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           buildOptions: buildOptionsOf(state, player),
           cityActions: cityActionsOf(state, player),
           upgradeOptions: upgradeOptionsOf(state, player),
+          repositionableFigures: repositionableFiguresOf(state, player),
           pendingRewards: pendingRewardViews(player),
           conquestOffers: conquestOfferViewsOf(state, player),
           chineseSave: chineseSaveViewOf(state, player),

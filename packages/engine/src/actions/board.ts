@@ -1141,6 +1141,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         ('replaced' in effect && effect.replaced?.historyId === entry.id) ||
         ('reserved' in effect && effect.reserved?.historyId === entry.id) ||
         ('walls' in effect && effect.walls.historyId === entry.id) ||
+        // a figure put on another square of the city while City Management was open
+        ('repositioned' in effect && effect.repositioned?.includes(entry.id) === true) ||
         effect.marker?.historyId === entry.id ||
         // and the caravan it used up
         effect.caravan?.historyId === entry.id ||
