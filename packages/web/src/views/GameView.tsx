@@ -32,7 +32,7 @@ import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary, handItemId } from './PhaseSummary.js'
-import { PhaseActionsPanel, notYourTurnQuestion } from './PhaseTabs.js'
+import { PhaseActionsPanel, currentPhaseOf, notYourTurnQuestion } from './PhaseTabs.js'
 import { PlayerStatusSidebar } from './PlayerStatusSidebar.js'
 import { MapPickerContext } from './mapPick.js'
 import type { MapPicker, MapPickRequest } from './mapPick.js'
@@ -710,6 +710,8 @@ export function GameView({
         movementTurn={displayedView.activeTurn?.turnNumber ?? null}
         movementLocks={displayedView.communismLocks}
         movementForbidden={movementForbidden}
+        movementOverlay={currentPhaseOf(displayedView) === 'MOVEMENT'}
+        repositionFigures={you?.repositionableFigures ?? []}
         outOfTurnQuestion={notYourTurnQuestion(displayedView)}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         statusSidebar={

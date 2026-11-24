@@ -1306,3 +1306,31 @@ export function buildOptionsOf(state: GameState, player: Playerhand, engineering
     return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared, engineering ? engineeringSecondBuild(state, player, footprint.piece.id) : undefined)]
   })
 }
+
+/**
+ * Every square a city may put an army or scout figure on now, under the placement rules of Build
+ * (outskirts, a capital's held city-states, a Navy army at a Shipyard, stacking, water, blockade),
+ * without asking about cost, supply or the phase. Used to put a figure a Build placed on another
+ * square: the caller passes a state without that figure, so it does not count against the stacking limit.
+ */
+export function figureSquaresFor(
+  state: GameState,
+  player: Playerhand,
+  cityPieceId: string,
+  kind: 'army' | 'scout',
+): readonly BuildSquare[] {
+  if (player.color === null) return []
+  const footprint = cityFootprintsOf(state, player.color.toLowerCase()).find(
+    (candidate) => candidate.piece.id === cityPieceId,
+  )
+  if (footprint === undefined) return []
+  const techs = techViewOf(player)
+  const rules = figureRulesOf(state, player, kind, techs)
+  if (rules === undefined) return []
+  const scene = sceneOf(state)
+  return figureCellsOf(scene, player, footprint, rules, techs.revealed.has(NAVY_TECH)).flatMap(({ cell, problem }) => {
+    if (problem !== undefined) return []
+    const note = enemyFigureNoteOf(footprint, rules, cell)
+    return [{ column: cell.column, row: cell.row, label: squareLabel(cell), ...(note === undefined ? {} : { note }) }]
+  })
+}

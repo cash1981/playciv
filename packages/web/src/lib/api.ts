@@ -1000,6 +1000,9 @@ export const api = {
       ...(disband ? { disband } : {}),
       ...(collectToken ? { collectToken } : {}),
     }),
+  /** A figure the viewer's Build placed this City Management goes on another legal square of the city: no Undo, no payment, no movement. */
+  repositionBuiltFigure: (gameId: string, pieceId: string, column: number, row: number) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/reposition`, { column, row }),
   /** A figure spends 1 movement to explore the fog next to it: the next map tile is laid there (issue #302). */
   exploreSquare: (gameId: string, pieceId: string, column: number, row: number) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/explore`, { column, row }),
