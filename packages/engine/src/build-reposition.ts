@@ -6,7 +6,7 @@
  * under the placement rules the Build used (`figureSquaresFor`). The build's record follows the
  * figure, so the undo vote on the build's line still removes it from where it stands, and the
  * board history entry of the move belongs to the build (`effect.repositioned`), so the board Undo
- * cannot take the figure back to the old square while the build stays.
+ * cannot take the figure back to the old square while the build stays. A public log line says where it went.
  *
  * Buildings, wonders, units and City Walls are not figures and are not moved here.
  */
@@ -16,6 +16,9 @@ import { moveFigureWithMovementUnchecked } from './actions/board.js'
 import { figureSquaresFor, squareCentre, squareLabel } from './build-options.js'
 import type { BuildSquare } from './build-options.js'
 import { openCityManagementTurn } from './assisted-core.js'
+import { countLinesIn } from './assisted-culture.js'
+import { cityProductionsOf } from './city-production.js'
+import { appendLog } from './log.js'
 import type { EngineError } from './errors.js'
 import { movementOf } from './movement.js'
 import { err, ok } from './result.js'
@@ -182,9 +185,24 @@ export function repositionBuiltFigure(state: GameState, input: RepositionBuiltFi
   if (landed === null || landed.column !== target.column || landed.row !== target.row) {
     return err(refused(`${piece.label} could not be put on ${target.label}.`))
   }
+  // A public line, so the log says where the figure went and not only where the build put it
+  const city = cityProductionsOf(state, player).find((candidate) => candidate.pieceId === effect.cityPieceId)?.label
+  const logged = countLinesIn(
+    appendLog(moved, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog:
+        `${player.username} moved the ${effect.item.kind} built in ${city ?? 'a city'} from ${effect.square.label} to ${target.label}` +
+        ' (still in City Management: nothing paid, no movement used)' +
+        (target.note === undefined ? '' : `. ${target.note}`),
+      privateLog: '',
+      createdAt: input.at ?? null,
+    }),
+    [entry.id],
+  )
   return ok({
-    ...moved,
-    assistedActions: moved.assistedActions.map((candidate) =>
+    ...logged,
+    assistedActions: logged.assistedActions.map((candidate) =>
       candidate.id !== record.id
         ? candidate
         : {

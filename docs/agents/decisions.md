@@ -1653,8 +1653,8 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   later applied action names it (a scout sent to a city, a city founded). The build's
   record follows the figure (`square`, `position`) so its undo vote still removes it,
   and the move's board history entry is listed in `effect.repositioned` so the board
-  Undo, which is sealed for a build's entries, cannot send the figure back. One
-  public history line, no new log line. Buildings, wonders, units and walls are not
+  Undo, which is sealed for a build's entries, cannot send the figure back. A
+  public log line says "moved the army built in City B2 from B3 to C2" (human, 2026-11-24), besides the board history entry. Buildings, wonders, units and walls are not
   moved. The list `you.repositionableFigures` is own view only and blanked in a
   replay; the web shows blue squares for the selected figure. The `/travel` route
   was not given a phase check. Tests: `build-reposition.test.ts`,

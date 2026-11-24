@@ -141,6 +141,11 @@ describe('repositioning a built figure', () => {
     expect(moved.board.history.at(-1)?.description).toBe(
       'cash1981 put Red army on C2 instead of B3, still in City Management (no movement used)',
     )
+    // The log says where the figure went, in the same words as the build's line named the square
+    expect(moved.log.at(-1)?.publicLog).toMatch(
+      /^cash1981 moved the army built in City B2 from B3 to C2 \(still in City Management: nothing paid, no movement used\)$/,
+    )
+    expect(built.log.at(-1)?.publicLog).toContain('on square B3')
     // The record follows the figure
     const effect = moved.assistedActions[0]?.effect
     expect(effect && 'square' in effect ? effect.square : null).toEqual({ column: 2, row: 1, label: 'C2' })
