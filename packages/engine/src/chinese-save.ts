@@ -6,14 +6,22 @@
  * Only the Chinese player is offered it (`you.chineseSave`); nobody else's view carries anything about it.
  */
 
-import type { ArenaUnit } from './battle.js'
-import { playerSideOf } from './battle-cards.js'
+import type { ArenaUnit, Battle, BattleSideId } from './battle.js'
 import { itemName } from './item.js'
 import type { DiscardedKilledCard } from './killed-units.js'
 import { killedCardOnPile } from './killed-units.js'
 import type { GameState, Playerhand } from './state.js'
 
 export const CHINESE = 'Chinese'
+
+// Not `playerSideOf` from battle-cards: that module is in an import cycle with state, which the reshuffle in draw.ts would enter
+// from the wrong end
+const sideOf = (battle: Battle, playerId: string): BattleSideId | null =>
+  battle.attacker.kind === 'player' && battle.attacker.playerId === playerId
+    ? 'attacker'
+    : battle.defender.kind === 'player' && battle.defender.playerId === playerId
+      ? 'defender'
+      : null
 
 /** One killed unit the Chinese may save: its arena unit id, and how the battle showed it. */
 export interface ChineseSaveUnitView {
@@ -42,7 +50,7 @@ export function chineseSaveCandidates(state: GameState, player: Playerhand): rea
   const ended = state.endedBattle
   if (state.battle !== null || ended === null || ended.chineseSaved !== undefined) return []
   if (player.civilization?.name !== CHINESE) return []
-  const side = playerSideOf(ended.battle, player.playerId)
+  const side = sideOf(ended.battle, player.playerId)
   if (side === null) return []
   const records = (ended.killedDiscarded ?? []).filter(
     (record) => record.ownerId === player.playerId && killedCardOnPile(state, record),
@@ -61,4 +69,16 @@ export function chineseSaveViewOf(state: GameState, player: Playerhand): Chinese
   return {
     units: candidates.map(({ unit }) => ({ arenaUnitId: unit.id, name: itemName(unit.unit), position: unit.position })),
   }
+}
+
+/**
+ * The cards of the casualties the Chinese may still save, which a reshuffle must leave on the pile: another player's draw
+ * from an exhausted deck would otherwise shuffle them into the deck and the choice would be gone. They join the next
+ * reshuffle once the save is made, or the next battle starts and the choice ends.
+ */
+export function pendingChineseSaveCardIds(state: GameState): ReadonlySet<string> {
+  if (state.endedBattle === null || state.battle !== null) return new Set()
+  return new Set(
+    state.players.flatMap((player) => chineseSaveCandidates(state, player).map((candidate) => candidate.record.cardId)),
+  )
 }

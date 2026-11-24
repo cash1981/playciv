@@ -432,7 +432,10 @@ describe('what other clients receive', () => {
     const privateLog = await inject(app, { url: `/api/games/${table.gameId}/log/private`, headers: bearer(table.starter) })
     expect(privateLog.body).toContain(`kept ${itemName(candidates[0] as Item)}`)
     const revisions = await inject(app, { url: `/api/games/${table.gameId}/revisions`, headers: bearer(table.other) })
-    expect(revisions.body).not.toContain(itemName(candidates[0] as Item))
+    // As above: a discarded card of the same name is public, so only a name of its own can be checked
+    if (!candidates.some((other) => other.id !== keptId && itemName(other) === keptName)) {
+      expect(revisions.body).not.toContain(keptName)
+    }
   })
 
   /**

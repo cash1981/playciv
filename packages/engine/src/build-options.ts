@@ -56,6 +56,7 @@ import type { Terrain } from './terrain.js'
 import { wonderCostFor, wonderDataOf } from './wonder-data.js'
 import { stackingLimitOf } from './great-person-effects.js'
 import { capitalOf } from './sot.js'
+import { pendingChineseSaveCardIds } from './chinese-save.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
@@ -995,10 +996,10 @@ export function buildItemName(item: BuildItem): string {
  * card), asked without drawing.
  */
 export function unitCardAvailable(state: GameState, sheetName: SheetName): boolean {
-  return (
-    state.items.some((item) => item.sheetName === sheetName) ||
-    (SHUFFLABLE_ITEMS.has(sheetName) && state.discardedItems.some((item) => item.sheetName === sheetName))
-  )
+  if (state.items.some((item) => item.sheetName === sheetName)) return true
+  if (!SHUFFLABLE_ITEMS.has(sheetName)) return false
+  const pending = pendingChineseSaveCardIds(state)
+  return state.discardedItems.some((item) => item.sheetName === sheetName && !pending.has(item.id))
 }
 
 /** The part of a production check every item shares: what the city has against what the item costs. */

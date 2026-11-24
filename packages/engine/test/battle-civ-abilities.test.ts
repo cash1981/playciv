@@ -8,7 +8,10 @@ import { describe, expect, it } from 'vitest'
 import { chineseSaveAction, endBattleAction, initiateBattle, killArenaUnit, placeUnitInArena, undoEndBattle } from '../src/actions/arena.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
+import { discardItem } from '../src/actions/player.js'
+import { unitCardAvailable } from '../src/build-options.js'
 import { describeError } from '../src/errors.js'
+import { itemName } from '../src/item.js'
 import { unwrap } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
@@ -265,6 +268,22 @@ describe('End battle discards the killed units', () => {
     expect(ended.endedBattle?.killedDiscarded).toBeUndefined()
   })
 
+  it('does not discard a card the player already discarded by hand, which the battlehand still lists', () => {
+    const state = kill(fight(), KARANDRAS1, 1, CASH1981)
+    const victim = unitsOf(state, CASH1981)[0]
+    const card = me(state).items.find((item) => item.id === victim?.unit.id)
+    if (victim === undefined || card === undefined) throw new Error('no unit')
+    const byHand = unwrap(
+      discardItem(state, { playerId: CASH1981, sheetName: card.sheetName, itemNumber: card.itemNumber, name: itemName(card) }),
+    )
+    // The discard left the arena unit and the battlehand entry behind
+    expect(me(byHand).battlehand.some((item) => item.id === card.id)).toBe(true)
+    const ended = unwrap(endBattleAction(byHand, { playerId: KARANDRAS1 }))
+    expect(ended.discardedItems.filter((item) => item.id === card.id)).toHaveLength(1)
+    expect(ended.log.filter((entry) => entry.logType === 'DISCARD' && entry.item?.id === card.id)).toHaveLength(1)
+    expect(ended.endedBattle?.killedDiscarded?.some((record) => record.cardId === card.id)).toBeFalsy()
+  })
+
   it('gives the cards back to the hand, locked in the battle, when End battle is undone, and their discard lines can no longer be undone by vote', () => {
     const state = kill(fight(), KARANDRAS1, 2, CASH1981)
     const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
@@ -418,6 +437,42 @@ describe('the Chinese after a battle', () => {
     expect(me(undone).items.find((item) => item.id === victim.unit.id)).toMatchObject({ inBattle: true })
     expect(lines(undone).at(-1)).toContain('the saved Chinese unit is killed again')
     expect(undone.endedBattle).toBeNull()
+  })
+})
+
+describe('the Chinese casualties and a reshuffle', () => {
+  /** Cash (Chinese) lost both units; the deck has no infantry left, so the next infantry draw reshuffles the pile. */
+  const exhausted = (): GameState => {
+    const ended = unwrap(endBattleAction(kill(withCivilization(fight(), 'Chinese'), KARANDRAS1, 2, CASH1981), { playerId: KARANDRAS1 }))
+    return { ...ended, items: ended.items.filter((item) => item.sheetName !== 'INFANTRY') }
+  }
+  const drawInfantry = (state: GameState) => draw(state, { playerId: KARANDRAS1, sheetName: 'INFANTRY', confirmedOutOfTurn: true })
+
+  it('leave the casualties waiting for the save out of the reshuffle of an exhausted deck', () => {
+    const state = exhausted()
+    expect(state.discardedItems.filter((item) => item.sheetName === 'INFANTRY')).toHaveLength(2)
+    const refused = drawInfantry(state)
+    expect(refused.ok).toBe(false)
+    expect(unitCardAvailable(state, 'INFANTRY')).toBe(false)
+    // Both cards are still on the pile for the save
+    expect(toPlayerView(state, CASH1981).you?.chineseSave?.units).toHaveLength(2)
+  })
+
+  it('let the other casualty join the reshuffle once the save is made, and the saved card is in the hand, not the deck', () => {
+    const state = exhausted()
+    const [first, second] = unitsOf(fight(), CASH1981)
+    if (first === undefined || second === undefined) throw new Error('no units')
+    const saved = unwrap(chineseSaveAction(state, { playerId: CASH1981, arenaUnitId: second.id }))
+    expect(unitCardAvailable(saved, 'INFANTRY')).toBe(true)
+    const drawn = unwrap(drawInfantry(saved))
+    expect(me(drawn, KARANDRAS1).items.some((item) => item.id === first.unit.id)).toBe(true)
+    expect(me(drawn).items.some((item) => item.id === second.unit.id)).toBe(true)
+  })
+
+  it('join the reshuffle when the next battle has ended the choice', () => {
+    const state = exhausted()
+    const next = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    expect(unitCardAvailable(next, 'INFANTRY')).toBe(true)
   })
 })
 

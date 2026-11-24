@@ -45,6 +45,7 @@ import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
+import { pendingChineseSaveCardIds } from '../chinese-save.js'
 import { turnHolder } from '../turn.js'
 import { TOKEN_SHEET_NAMES, releaseLooseToken, releaseTokenOf } from '../zheng-he.js'
 
@@ -448,11 +449,13 @@ export function reshuffleItems(state: GameState, sheetName: SheetName): DrawResu
     return err({ kind: 'NOT_SHUFFLABLE', sheetName })
   }
 
-  const toPutBack = state.discardedItems.filter((item) => item.sheetName === sheetName)
+  // The Chinese casualties still waiting for the save stay on the pile
+  const pending = pendingChineseSaveCardIds(state)
+  const toPutBack = state.discardedItems.filter((item) => item.sheetName === sheetName && !pending.has(item.id))
   if (toPutBack.length === 0) {
     return err({ kind: 'NO_MORE_ITEMS', what: SHEET_LABEL[sheetName] })
   }
-  const toKeep = state.discardedItems.filter((item) => item.sheetName !== sheetName)
+  const toKeep = state.discardedItems.filter((item) => item.sheetName !== sheetName || pending.has(item.id))
 
   const [shuffled, rng] = shuffle(toPutBack, state.rng)
   const next: GameState = {

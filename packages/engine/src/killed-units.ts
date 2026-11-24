@@ -29,8 +29,8 @@ const killedUnsaved = (battle: Battle): readonly ArenaUnit[] =>
   [...battle.arena, ...battle.departedUnits].filter((unit) => unit.killed && unit.saved !== true)
 
 /**
- * Discards the cards of the killed, unsaved units of the player sides. A card that is no longer in the hand (discarded or
- * traded away during the battle) is left alone.
+ * Discards the cards of the killed, unsaved units of the player sides. A card that is no longer in `items` (discarded or
+ * traded away during the battle) is left alone, whatever the battlehand still shows of it.
  */
 export function discardKilledUnits(
   state: GameState,
@@ -45,7 +45,9 @@ export function discardKilledUnits(
     if (owner === undefined) continue
     const itemIndex = owner.items.findIndex((item) => item.id === unit.unit.id)
     const battlehandIndex = owner.battlehand.findIndex((item) => item.id === unit.unit.id)
-    const card: Item | undefined = owner.items[itemIndex] ?? owner.battlehand[battlehandIndex]
+    // Only the card the player still holds counts: a battlehand entry can be a stale snapshot of a card that was discarded
+    // by hand, and discarding it again would put it on the pile twice
+    const card: Item | undefined = owner.items[itemIndex]
     if (card === undefined) continue
     const onPile = { ...card, inBattle: false, hidden: true } as Item
     const without: GameState = {
@@ -108,8 +110,13 @@ export function rediscardKilledCard(state: GameState, record: DiscardedKilledCar
   const owner = findPlayer(state, record.ownerId)
   const card = owner?.items.find((item) => item.id === record.cardId)
   if (owner === undefined || card === undefined) return state
+  // Also out of the battlehand: the player may have drawn a new one holding the card, which would keep it placeable
   const next: GameState = {
-    ...withPlayer(state, { ...owner, items: owner.items.filter((item) => item.id !== card.id) }),
+    ...withPlayer(state, {
+      ...owner,
+      items: owner.items.filter((item) => item.id !== card.id),
+      battlehand: owner.battlehand.filter((item) => item.id !== card.id),
+    }),
     discardedItems: [...state.discardedItems, { ...card, inBattle: false, hidden: true } as Item],
   }
   return markLine(next, record.logId, false)

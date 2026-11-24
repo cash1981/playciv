@@ -613,6 +613,7 @@ function revealCivilization(
     wonders: ownWonders,
     ...(dealt === undefined ? {} : { dealt }),
     ...(mvmt === undefined ? {} : { mvmt }),
+    ...(civ.name === SPANISH ? { spanishSpeed: true as const } : {}),
   }
   const withSetup: GameState = {
     ...next,

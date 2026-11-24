@@ -1471,6 +1471,48 @@ describe("the Egyptians' free build", () => {
   })
 })
 
+describe("the Egyptians' free build and the other rules of the picker", () => {
+  const FREE_ONLY_WALLS: BuildChoice = { ...WALLS, freeBuild: true, freeOnly: true }
+
+  it('asks for the second action of a free build even when Engineering offers a split in the city', async () => {
+    // The engine leaves a free build out of Engineering's split, so a city that has built is a second action for it
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    const split = { firstCost: 5, fullProduction: 8 }
+    render(<Harness initial={viewOf([options({ choices: [FREE_ONLY_WALLS], engineering: split })], { acted: ['Build'] })} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Build City Walls for free' }))
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[3]).toEqual({ cityPieceId: 'city-1', item: { kind: 'walls' }, free: true })
+    expect(send.mock.calls[0]?.[4]).toBe(true)
+  })
+
+  it('goes back to the picker when a paid plan can only be built for free after a refresh', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([options({ choices: [{ ...WALLS, freeBuild: true }] })])} handle={handle} />)
+    fireEvent.click(buildButton())
+    choose('City Walls')
+    expect(within(bar()).getByRole('button', { name: /^Confirm/ })).toBeTruthy()
+
+    // The city can no longer pay for the walls: a paid plan would be refused on every confirm
+    act(() => handle.setView(viewOf([options({ choices: [FREE_ONLY_WALLS] })], { rev: 9 })))
+    expect(screen.queryByRole('button', { name: /^Confirm/ })).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
+    expect(screen.getByRole('button', { name: 'Build City Walls for free' })).toBeTruthy()
+  })
+
+  it('keeps a free plan when its choice is only offered as free', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([options({ choices: [FREE_ONLY_WALLS] })])} handle={handle} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Build City Walls for free' }))
+    act(() => handle.setView(viewOf([options({ choices: [FREE_ONLY_WALLS] })], { rev: 9 })))
+    expect(within(bar()).getByRole('button', { name: /^Confirm/ })).toBeTruthy()
+  })
+})
+
 describe('replacing a building or wonder', () => {
   const GRANARY_NOTE = 'Replaces your Granary, which is taken off the board and goes back to the supply.'
   const WONDER_NOTE = 'Replaces the Pyramids, which is destroyed and cannot be built again for the rest of the game.'

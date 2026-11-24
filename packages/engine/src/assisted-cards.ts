@@ -16,7 +16,7 @@
 import { tradeCeilingOf } from './limits.js'
 import { DARWIN_NAME, KUROSAWA_NAME, payKurosawa, takeBackKurosawa } from './assisted-arts.js'
 import { cityActionsOf } from './city-actions.js'
-import { BATTLE_CARDS, applyBattleCard, battleCardBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
+import { BATTLE_CARDS, applyBattleCard, battleCardBlock, battleCardUndoBlock, undoBattleCard, zhukovDealt } from './battle-cards.js'
 import { applyGustavus, gustavusBlock, gustavusChoiceOf, undoGustavus } from './gustavus.js'
 import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, undoTesla } from './tesla.js'
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
@@ -1410,6 +1410,11 @@ export const playCard: AssistedActionDefinition = {
 
     if (effect.battleCard?.zhukov === true && zhukovDealt(state, record.id) > 0) {
       return blockedBy(`${effect.name} has already dealt wounds in this battle, which cannot be taken back.`)
+    }
+
+    if (effect.battleCard !== undefined) {
+      const stuck = battleCardUndoBlock(state, effect.battleCard)
+      if (stuck !== undefined) return blockedBy(`${effect.name} cannot be undone: ${stuck}`)
     }
 
     // What the game did besides logging goes first, checked before anything changes

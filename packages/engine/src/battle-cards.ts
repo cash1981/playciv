@@ -156,6 +156,8 @@ export interface BattleCardEffect {
   readonly saved?: readonly string[]
   /** Florence Nightingale after the battle: the discarded cards she took back into the hand, for an undo to discard again. */
   readonly returned?: readonly DiscardedKilledCard[]
+  /** Florence Nightingale played on the battle that had already ended: also set when no card was left on the pile to return. */
+  readonly after?: true
   readonly zhukov?: boolean
 }
 
@@ -198,7 +200,7 @@ export function applyBattleCard(
     const back = returned.reduce((next, record) => returnKilledCard(next, record), state)
     return {
       state: { ...back, endedBattle: { ...ended, battle: marked } },
-      effect: { battleId: target.id, saved, ...(returned.length === 0 ? {} : { returned }) },
+      effect: { battleId: target.id, saved, after: true, ...(returned.length === 0 ? {} : { returned }) },
       said: `, saving ${saved.length} killed unit${saved.length === 1 ? '' : 's'}: they go back to the hand`,
     }
   }
@@ -239,6 +241,27 @@ function withoutCard(battle: Battle, effect: BattleCardEffect, actionId: string)
     cardBonuses: (battle.cardBonuses ?? []).filter((bonus) => bonus.actionId !== actionId),
     zhukov: (battle.zhukov ?? []).filter((entry) => entry.actionId !== actionId),
   }
+}
+
+/**
+ * Why a battle card play cannot be taken back now, or undefined. Nightingale played during a battle kept her saved
+ * units' cards in the hand; once End battle has discarded the rest, her undo could not bring those cards back to the pile
+ * with the others, so End battle is undone first (which puts the battle, and her mark, back).
+ */
+export function battleCardUndoBlock(state: GameState, effect: BattleCardEffect): string | undefined {
+  const ended = state.endedBattle
+  // `returned` marks a play after the battle in records made before `after` existed
+  if (
+    effect.after !== true &&
+    effect.returned === undefined &&
+    (effect.saved?.length ?? 0) > 0 &&
+    state.battle?.id !== effect.battleId &&
+    ended !== null &&
+    ended.battle.id === effect.battleId
+  ) {
+    return 'The battle has ended with the units this card saved. Undo End battle first.'
+  }
+  return undefined
 }
 
 /**

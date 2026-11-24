@@ -45,7 +45,8 @@ function savedBefore(mvmt: string, civ = 'Spanish'): GameState {
   const state = revealed(civ)
   const holder = findPlayer(state, CASH1981) as Playerhand
   const line = revealLine(state)
-  const { mvmt: _mvmt, ...setup } = line.civSetup ?? { unitIds: [], discardedCivIds: [], pieceIds: [], wonders: [] }
+  // An old save has neither the entry nor the mark that a reveal made today writes
+  const { mvmt: _mvmt, spanishSpeed: _settled, ...setup } = line.civSetup ?? { unitIds: [], discardedCivIds: [], pieceIds: [], wonders: [] }
   return {
     ...withPlayer(state, { ...holder, stats: { ...holder.stats, mvmt } }),
     log: state.log.map((entry) => (entry.id === line.id ? { ...entry, civSetup: setup } : entry)),
@@ -123,6 +124,97 @@ describe('migrating the travel speed of a Spanish player', () => {
     const migrated = migrateGameState(savedWithOldBonus('2+2'))
     expect(mvmtOf(migrated)).toBe('3+1')
     expect(revealLine(migrated).civSetup?.mvmt).toEqual({ before: '2', set: '3+1' })
+  })
+
+  it('turns an old `4+1` (Sailing typed, and Spain) into `5`, so the speed with Sailing stays 5, not 6', () => {
+    const saved = savedBefore('4+1')
+    const migrated = migrateGameState(saved)
+    expect(mvmtOf(migrated)).toBe('5')
+    expect(revealLine(migrated).civSetup).toMatchObject({ mvmt: { before: '2', set: '5' }, spanishSpeed: true })
+    expect(mvmtOf(undoReveal(migrated))).toBe('2')
+    const sailing = (state: GameState): GameState => {
+      const holder = findPlayer(state, CASH1981) as Playerhand
+      return withPlayer(state, { ...holder, techsChosen: [...holder.techsChosen, { name: 'Sailing', hidden: false } as Playerhand['techsChosen'][number]] })
+    }
+    const army = (state: GameState) => {
+      const next = unwrap(placePiece(state, { playerId: CASH1981, assetId: 'figures/redarmy', x: 200, y: 300 }))
+      const piece = next.board.pieces.find((candidate) => candidate.assetId === 'figures/redarmy')
+      if (piece === undefined) throw new Error('no piece')
+      return travelSpeedOf(findPlayer(next, CASH1981) as Playerhand, piece, 1)
+    }
+    // Before the Spanish +1 was part of the base, `4+1` read as base 4 plus a bonus of 1
+    expect(army(sailing(migrated))).toBe(5)
+    expect(migrateGameState(migrated)).toEqual(migrated)
+  })
+
+  it('leaves `3+1` alone, which is Natural Religion on Spain in a save from the review of this change', () => {
+    const migrated = migrateGameState(savedBefore('3+1'))
+    expect(mvmtOf(migrated)).toBe('3+1')
+  })
+
+  it('leaves `4+1` alone on a reveal line without civSetup, which cannot carry the mark', () => {
+    const saved = savedBefore('4+1')
+    const line = revealLine(saved)
+    const { civSetup: _setup, ...bare } = line
+    const old: GameState = { ...saved, log: saved.log.map((entry) => (entry.id === line.id ? bare : entry)) }
+    expect(mvmtOf(migrateGameState(old))).toBe('4+1')
+  })
+
+  it('does not rewrite a value typed after the reveal of a new game: `2+1`, `2`, `2+2` and `4+1` stay on every load', () => {
+    const fresh = revealed('Spanish')
+    expect(revealLine(fresh).civSetup?.spanishSpeed).toBe(true)
+    // Only the mark protects the value when the reveal wrote no entry (a typed value kept at the reveal)
+    const { mvmt: _mvmt, ...markOnly } = revealLine(fresh).civSetup ?? { unitIds: [], discardedCivIds: [], pieceIds: [], wonders: [] }
+    const onlyMarked: GameState = {
+      ...fresh,
+      log: fresh.log.map((entry) => (entry.id === revealLine(fresh).id ? { ...entry, civSetup: markOnly } : entry)),
+    }
+    expect(revealLine(onlyMarked).civSetup?.mvmt).toBeUndefined()
+    expect(revealLine(onlyMarked).civSetup?.spanishSpeed).toBe(true)
+    for (const base of [fresh, onlyMarked]) {
+      const holder = findPlayer(base, CASH1981) as Playerhand
+      for (const typed of ['2+1', '2', '2+2', '4+1']) {
+        const edited = withPlayer(base, { ...holder, stats: { ...holder.stats, mvmt: typed } })
+        expect(mvmtOf(migrateGameState(edited))).toBe(typed)
+      }
+    }
+  })
+
+  it.each([
+    ['2+2', '3+1'],
+    ['4+1', '5'],
+  ])('converts `%s` typed after an old reveal that wrote `2+1`, and the undo of the reveal still restores 2', (typed, expected) => {
+    const saved = savedBefore(typed)
+    const line = revealLine(saved)
+    const old: GameState = {
+      ...saved,
+      log: saved.log.map((entry) =>
+        entry.id === line.id && entry.civSetup !== undefined ? { ...entry, civSetup: { ...entry.civSetup, mvmt: { before: '2', set: '2+1' } } } : entry,
+      ),
+    }
+    const migrated = migrateGameState(old)
+    expect(mvmtOf(migrated)).toBe(expected)
+    expect(revealLine(migrated).civSetup).toMatchObject({ mvmt: { before: '2', set: expected }, spanishSpeed: true })
+    expect(mvmtOf(undoReveal(migrated))).toBe('2')
+    expect(migrateGameState(migrated)).toEqual(migrated)
+  })
+
+  it('marks a Spanish reveal that kept a typed value, so that value is not read as an old save later', () => {
+    const base = firstCivGame()
+    const card = base.items.find((item) => item.kind === 'civ' && item.name === 'Spanish')
+    if (card === undefined) throw new Error('no Spanish civ in the deck')
+    const handed: GameState = {
+      ...base,
+      items: base.items.filter((item) => item.id !== card.id),
+      players: base.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, items: [...player.items, { ...card, ownerId: CASH1981 }], stats: { ...player.stats, mvmt: '2+1' } }
+          : player,
+      ),
+    }
+    const state = unwrap(revealItem(handed, { playerId: CASH1981, sheetName: 'CIV', itemNumber: card.itemNumber }))
+    expect(mvmtOf(state)).toBe('2+1')
+    expect(migrateGameState(state)).toEqual(state)
   })
 
   it('never touches another civilization, whatever its Movement', () => {

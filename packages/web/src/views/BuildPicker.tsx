@@ -430,8 +430,11 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     if (isPressInFlight(key)) return
     // A yes given when the picker was opened stands; a city that has acted since is asked now
     const own = view.you?.cityActions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)
-    // Engineering's second build in a city is the same action split: the options mark it and nothing is asked
-    const splitting = view.you?.buildOptions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.engineering !== undefined
+    // Engineering's second build in a city is the same action split: the options mark it and nothing is asked. A free
+    // (Egyptian) build is not part of the split, which the engine leaves out for it, so it is asked like any other
+    const splitting =
+      plan.free !== true &&
+      view.you?.buildOptions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.engineering !== undefined
     const acted = own?.extraAction === true || splitting ? [] : (own?.actedThisTurn ?? [])
     const again = resolveAgain(plan.cityLabel, acted, flow.confirmedAgain)
     if (again === null) return

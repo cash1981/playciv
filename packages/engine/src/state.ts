@@ -860,6 +860,8 @@ export type AssistedEffect =
         readonly battleId: string
         readonly bonus?: number
         readonly saved?: readonly string[]
+        readonly returned?: readonly DiscardedKilledCard[]
+        readonly after?: true
         readonly zhukov?: boolean
       }
       /** Nikola Tesla: the tech placed one row lower and where it was, so an undo can move it back. Never projected. */
@@ -1517,6 +1519,11 @@ export interface CivRevealSetup {
   }
   /** The civilization's travel speed bonus (Spain) written into `stats.mvmt`: what it was and what the reveal set it to. */
   readonly mvmt?: { readonly before: string; readonly set: string }
+  /**
+   * Spanish reveals only: Spain's +1 travel speed is settled for this reveal (set, or left to what the player typed).
+   * `migrateGameState` converts a save's old way of typing it once, and leaves a speed typed after this mark alone.
+   */
+  readonly spanishSpeed?: true
 }
 
 export interface GameState {

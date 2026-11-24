@@ -382,6 +382,59 @@ describe('Florence Nightingale after End battle', () => {
     expect(findPlayer(back, CASH1981)!.battlehand.find((item) => item.id === cardOf)).toMatchObject({ inBattle: true })
   })
 
+  it('refuses to undo a card played during the battle once End battle has run, until End battle is undone', () => {
+    const killed = killOne(fight(2, 2), CASH1981)
+    const { state, cardId } = holding(killed, 'Florence Nightingale', CASH1981)
+    const saved = unwrap(play(state, CASH1981, cardId))
+    const over = unwrap(endBattleAction(saved, { playerId: KARANDRAS1 }))
+    const entry = over.log.find((candidate) => candidate.assistedActionId === 'b1')
+    if (entry === undefined) throw new Error('no log line for the action')
+    const tryUndo = (from: GameState) => {
+      let next = unwrap(initiateUndo(from, { logId: entry.id, playerId: CASH1981 }))
+      for (const voter of [KARANDRAS1, ITCHI]) next = unwrap(vote(next, { logId: entry.id, playerId: voter, vote: true, at: AT }))
+      return vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT })
+    }
+    const refused = unwrapErr(tryUndo(over))
+    expect(refused).toMatchObject({ kind: 'ASSISTED_UNDO_BLOCKED' })
+    expect(JSON.stringify(refused)).toContain('Undo End battle first')
+    // Nothing changed: the card stays played, and the saved unit's card stays in the hand
+    expect(findPlayer(over, CASH1981)!.items.some((item) => item.id === saved.battle!.arena.find((u) => u.saved === true)?.unit.id)).toBe(true)
+
+    // With End battle undone the battle is back, and the card can be taken back with it
+    const back = unwrap(undoEndBattle(over, { playerId: KARANDRAS1 }))
+    const undone = unwrap(tryUndo(back))
+    expect(undone.battle?.arena.some((unit) => unit.saved === true)).toBe(false)
+  })
+
+  it('allows the undo of a card played after End battle even when no killed card was left on the pile to return', () => {
+    const { state, cardId } = ended()
+    // The discarded cards are gone from the pile (reshuffled into a deck since), so she has nothing to take back
+    const emptied: GameState = { ...state, discardedItems: state.discardedItems.filter((item) => item.sheetName !== 'INFANTRY') }
+    const after = unwrap(play(emptied, CASH1981, cardId))
+    const effect = after.assistedActions.at(-1)?.effect
+    expect(effect?.kind === 'playCard' ? effect.battleCard : undefined).toMatchObject({ after: true })
+    expect(effect?.kind === 'playCard' ? effect.battleCard?.returned : 'x').toBeUndefined()
+    const undone = undoByVote(after, CASH1981, 'b1')
+    expect(undone.endedBattle!.battle.arena.some((unit) => unit.saved !== undefined)).toBe(false)
+  })
+
+  it('discards the card again, and takes it out of a battlehand drawn since, when the play after the battle is undone', () => {
+    const { state, cardId } = ended()
+    const after = unwrap(play(state, CASH1981, cardId))
+    const cardOf = after.endedBattle!.battle.arena.find((unit) => unit.placedBy === CASH1981 && unit.saved === true)!.unit.id
+    // The player draws a new battlehand, and the returned card is in it
+    const drawn = unwrap(drawUnitsForBattle(after, { playerId: CASH1981, numberOfDraws: 5 }))
+    expect(findPlayer(drawn, CASH1981)!.battlehand.some((item) => item.id === cardOf)).toBe(true)
+    const undone = undoByVote(drawn, CASH1981, 'b1')
+    expect(undone.discardedItems.some((item) => item.id === cardOf)).toBe(true)
+    expect(findPlayer(undone, CASH1981)!.items.some((item) => item.id === cardOf)).toBe(false)
+    expect(findPlayer(undone, CASH1981)!.battlehand.some((item) => item.id === cardOf)).toBe(false)
+    // So the discarded unit cannot be placed in the next battle
+    const next = unwrap(initiateBattle(undone, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const placed = placeUnitInArena(next, { playerId: CASH1981, unitId: cardOf, side: 'attacker', position: 0, attack: 1, health: 3 })
+    expect(placed.ok).toBe(false)
+  })
+
   it('is refused by a player who was not in the battle, without a killed unit, and once a new battle has started', () => {
     const outsider = holding(killOne(fight(2, 2), CASH1981), 'Florence Nightingale', ITCHI).state
     const left = unwrap(endBattleAction(outsider, { playerId: KARANDRAS1 }))
