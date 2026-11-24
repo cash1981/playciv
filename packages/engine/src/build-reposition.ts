@@ -62,11 +62,15 @@ function figureBuildOf(state: GameState, playerId: string, pieceId: string): Pla
   })
 }
 
-/** Another applied action of the turn that names the piece (a scout sent to a city, a city founded): it would be left behind. */
+/**
+ * Another applied action of the turn that names the piece (a scout sent to a city, a city founded): it would be left
+ * behind. The choices the player submitted count too: Devote to the Arts and Harvest keep the scouts they gather from
+ * there, not in their effect.
+ */
 function laterUseOf(state: GameState, record: AssistedActionRecord, pieceId: string): AssistedActionRecord | undefined {
   const index = state.assistedActions.findIndex((candidate) => candidate.id === record.id)
   return state.assistedActions.find(
-    (candidate, at) => at !== index && candidate.status === 'applied' && JSON.stringify(candidate.effect).includes(pieceId),
+    (candidate, at) => at !== index && candidate.status === 'applied' && JSON.stringify([candidate.effect, candidate.selectedInputs]).includes(pieceId),
   )
 }
 

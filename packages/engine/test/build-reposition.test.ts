@@ -253,4 +253,28 @@ describe('repositioning a built figure', () => {
     }
     expect(describeError(unwrapErr(reposition(used, C2)))).toMatch(/was used after it was built/)
   })
+
+  it('is refused when a scout was harvested from, whose id only the submitted choices hold', () => {
+    // A second city far away and no capital marker: the scout on C3 is offered to it, with the Incense under it
+    const built = buildFigure(put(ready(12), CASH1981, 'cities/redcity2', 6, 5), 'scout', { column: 2, row: 2 })
+    const scout = figureOf(built, 'scout')
+    const far = built.board.pieces.filter((piece) => piece.category === 'city')[1]
+    if (far === undefined) throw new Error('no second city')
+    const harvested = unwrap(
+      performAssistedAction(built, {
+        playerId: CASH1981,
+        action: 'harvest',
+        requestId: 'req-h',
+        at: AT,
+        payload: { cityPieceId: far.id, resource: 'incense', scoutPieceId: scout.id },
+      }),
+    )
+    // The effect of a harvest names no scout: only the payload that was submitted does
+    expect(JSON.stringify(harvested.assistedActions.at(-1)?.effect)).not.toContain(scout.id)
+    const refusedMove = repositionBuiltFigure(harvested, { playerId: CASH1981, pieceId: scout.id, ...A1, at: AT })
+    expect(describeError(unwrapErr(refusedMove))).toMatch(/was used after it was built \(harvest\)/)
+    expect(toPlayerView(harvested, CASH1981).you?.repositionableFigures).toEqual([])
+    // Undo the harvest and the scout can be put elsewhere again
+    expect(repositionableFiguresOf(built, me(built)).map((entry) => entry.pieceId)).toEqual([scout.id])
+  })
 })

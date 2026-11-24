@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "players": [],
+  "games": [],
+  "activity": {},
+  "chat": [],
+  "revisions": [],
+  "gameMail": {},
+  "broadcasts": [],
+  "broadcastRecipients": [],
+  "highscore": {
+    "players": {
+      "winners": [],
+      "twoWinners": [],
+      "threeWinners": [],
+      "fourWinners": [],
+      "fiveWinners": [],
+      "totalNumberOfGames": 0,
+      "twoPlayerGamesTotal": 0,
+      "threePlayerGamesTotal": 0,
+      "fourPlayerGamesTotal": 0,
+      "fivePlayerGamesTotal": 0,
+      "totalNumberOfPlayers": 0
+    },
+    "civs": {
+      "winners": [],
+      "twoWinners": [],
+      "threeWinners": [],
+      "fourWinners": [],
+      "fiveWinners": [],
+      "totalNumberOfGames": 0,
+      "twoPlayerGamesTotal": 0,
+      "threePlayerGamesTotal": 0,
+      "fourPlayerGamesTotal": 0,
+      "fivePlayerGamesTotal": 0
+    },
+    "ratings": []
+  }
+}
