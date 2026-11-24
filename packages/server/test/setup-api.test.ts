@@ -451,3 +451,54 @@ describe('the American great person through /actions', () => {
     expect((await draw(t.starter, t.gameId, { requestId: 'gp-2' })).status).toBe(409)
   })
 })
+
+describe('the social policy cap (#378)', () => {
+  interface SlotsView extends View {
+    readonly you: (NonNullable<View['you']> & { readonly socialPolicySlots: { readonly maximum: number; readonly held: number; readonly free: number } | null }) | null
+  }
+  const slotsView = async (gameId: string, token: string): Promise<SlotsView> => (await view(gameId, token)) as SlotsView
+  const choose = (t: Awaited<ReturnType<typeof table>>, name: string | undefined) =>
+    post(t.starter, `/api/games/${t.gameId}/socialpolicy/choose`, { name })
+
+  it('refuses a second policy at the starting maximum of one, answers 400 SOCIAL_POLICY_LIMIT and shows the counts to the owner only', async () => {
+    const t = await table('slots-cap')
+    const game = await repo.findGame(t.gameId)
+    const [first, second] = game?.socialPolicies.filter((policy) => policy.flipside !== game.socialPolicies[0]?.name) ?? []
+    expect((await slotsView(t.gameId, t.starter)).you?.socialPolicySlots).toEqual({ maximum: 1, held: 0, free: 1 })
+    expect((await choose(t, first?.name)).status).toBe(200)
+
+    const refused = await choose(t, second?.name)
+    expect(refused.status).toBe(400)
+    const body = await refused.json<{ error: string; message: string }>()
+    expect(body.error).toBe('SOCIAL_POLICY_LIMIT')
+    expect(body.message).toContain('one per built city')
+
+    const own = await slotsView(t.gameId, t.starter)
+    expect(own.you?.socialPolicySlots).toEqual({ maximum: 1, held: 1, free: 0 })
+    expect(JSON.stringify(own.you?.socialPolicySlots)).not.toContain(first?.name ?? 'no name')
+
+    // Remove, then choose: the switch works
+    expect((await post(t.starter, `/api/games/${t.gameId}/socialpolicy/remove`, { name: first?.name })).status).toBe(200)
+    expect((await choose(t, second?.name)).status).toBe(200)
+
+    // The other seat sees counts only: the public number, and no slots on the starter's entry
+    const theirs = await slotsView(t.gameId, t.other)
+    const starterEntry = theirs.opponents.find((opponent) => opponent['playerId'] === t.starterId)
+    expect(starterEntry).toBeDefined()
+    expect(starterEntry).not.toHaveProperty('socialPolicySlots')
+    expect(starterEntry?.['numberOfSocialPolicies']).toBe(1)
+    expect(theirs.you?.socialPolicySlots?.held).toBe(0)
+  })
+
+  it('is blank in a replayed revision', async () => {
+    const t = await table('slots-replay')
+    const game = await repo.findGame(t.gameId)
+    expect((await choose(t, game?.socialPolicies[0]?.name)).status).toBe(200)
+    const live = await slotsView(t.gameId, t.starter)
+    expect(live.you?.socialPolicySlots).not.toBeNull()
+    const past = await inject(app, { url: `/api/games/${t.gameId}/revisions/${live.rev}`, headers: bearer(t.starter) })
+    expect(past.status).toBe(200)
+    const replay = await past.json<{ view: SlotsView }>()
+    expect(replay.view.you?.socialPolicySlots).toBeNull()
+  })
+})

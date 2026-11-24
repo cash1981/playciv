@@ -284,6 +284,13 @@ describe('founding a city', () => {
     expect(second.log.at(-1)?.publicLog).toBe('cash1981 founded a city on B2 with a scout, and may now adopt another social policy')
   })
 
+  it('adds the policy note for the French with one policy and one city: their maximum is one higher (issue #378)', () => {
+    const state = withScout({ policies: ['Pacifism'] })
+    const french = { ...state, players: state.players.map((player) => (player.playerId === CASH1981 ? { ...player, civilization: { ...player.civilization, name: 'French' } as NonNullable<typeof player.civilization> } : player)) }
+    const result = unwrap(found(french, scoutOf(french).id))
+    expect(result.log.at(-1)?.publicLog).toBe('cash1981 founded a city on B2 with a scout, and may now adopt another social policy')
+  })
+
   it('needs Start of Turn to be open', () => {
     const state = unwrap(markPhasesDone(withScout(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
     expect(assistedAvailability(state, CASH1981, 'foundCity').status).toBe('wrong-phase')

@@ -14,7 +14,7 @@ import {
   undoLastBoardChange,
 } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { chooseSocialPolicy, revealItem, revealSocialPolicy } from '../src/actions/player.js'
+import { chooseSocialPolicy, removeSocialPolicy, revealItem, revealSocialPolicy } from '../src/actions/player.js'
 import { markPhasesDone, unmarkPhaseDone } from '../src/actions/turn.js'
 import { canInitiateUndo, initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction } from '../src/assisted.js'
@@ -117,6 +117,14 @@ const firstPolicy = (state: GameState): string => {
   return policy.name
 }
 const withPolicy = (state: GameState, name = firstPolicy(state)): GameState => unwrap(chooseSocialPolicy(state, { playerId: CASH1981, name }))
+
+/** A second policy that is neither the first one nor its flipside (the French start with two). */
+const secondPolicy = (state: GameState): string => {
+  const first = state.socialPolicies.find((policy) => policy.name === firstPolicy(state))
+  const other = state.socialPolicies.find((policy) => policy.name !== first?.name && policy.name !== first?.flipside)
+  if (other === undefined) throw new Error('no second policy')
+  return other.name
+}
 
 /** The error kind of a refused result. */
 const kindOf = (result: Result<unknown, EngineError>): string => unwrapErr(result).kind
@@ -461,6 +469,39 @@ describe('step 3: the social policy', () => {
     const first = chosen.socialPolicies.find((policy) => policy.name === firstPolicy(chosen))
     if (first?.flipside === null || first?.flipside === undefined) throw new Error('first policy has no flipside')
     expect(kindOf(chooseSocialPolicy(chosen, { playerId: CASH1981, name: first.flipside }))).toBe('SOCIAL_POLICY_FLIPSIDE_TAKEN')
+  })
+})
+
+describe('step 3: the social policy of the French (issue #378)', () => {
+  it('needs two starting policies, and a Germans player one', () => {
+    const state = revealed('French')
+    expect(stepOf(state, 'policy')).toMatchObject({ status: 'todo' })
+    const one = withPolicy(state)
+    expect(stepOf(one, 'policy')).toMatchObject({ status: 'todo' })
+    expect(stepOf(one, 'policy').reason).toContain('1 of 2')
+    expect(setupGateOf(withFigures(withCapital(one)), me(one))).toContain('social policy')
+    const two = withPolicy(one, secondPolicy(one))
+    expect(stepOf(two, 'policy')).toMatchObject({ status: 'done' })
+    expect(setupGateOf(withFigures(withCapital(two)), me(two))).toContain('starting trade')
+    expect(setupGateOf(withFigures(withCapital(two)), me(two))).not.toContain('social policy')
+  })
+
+  it('refuses a third starting policy: the French start with two', () => {
+    const one = withPolicy(revealed('French'))
+    const two = withPolicy(one, secondPolicy(one))
+    const third = two.socialPolicies.find((policy) => !me(two).socialPolicies.some((held) => held.name === policy.name || held.name === policy.flipside))
+    if (third === undefined) throw new Error('no third policy')
+    expect(kindOf(chooseSocialPolicy(two, { playerId: CASH1981, name: third.name }))).toBe('SOCIAL_POLICY_LIMIT')
+  })
+
+  it('does not reopen a setup that was finished with one policy', () => {
+    // An older game: the French finished with one policy (here one is returned after finishing)
+    const finished = finishedGame('French')
+    const french = unwrap(removeSocialPolicy(finished, { playerId: CASH1981, name: firstPolicy(finished) }))
+    expect(me(french).socialPolicies).toHaveLength(1)
+    expect(me(french).setup).toMatchObject({ finished: true })
+    expect(setupGateOf(french, me(french))).toBeUndefined()
+    expect(toPlayerView(french, CASH1981).you?.setup).toBeNull()
   })
 })
 
@@ -940,6 +981,7 @@ function finishedGame(civ = 'Germans'): GameState {
     state = unwrap(performAssistedAction(state, { playerId: CASH1981, action: 'setupGreatPerson', requestId: 'gp-finish', at: AT }))
   } else {
     state = withPolicy(state)
+    if (civ === 'French') state = withPolicy(state, secondPolicy(state))
   }
   if (civ === 'Egyptians') {
     const square = stepOf(state, 'wonder').squares[0]

@@ -1610,7 +1610,8 @@ Human, 2026-11-24 (the answers in issue #374). One-time per player, steps in any
 - **Figures:** one colour army and one scout from the supply on legal squares in the capital's outskirts (on the map, not water,
   no city, within the stacking limit counting all of the player's figures, no foreign figure for a scout); Russians move their
   white army and Spanish their white scout from the area (placed at the reveal as before).
-- **Social policy:** unchanged `chooseSocialPolicy`; done at one policy. The French extra policy and any cap are #378.
+- **Social policy:** `chooseSocialPolicy`; done at one policy, two for the French (`startingSocialPolicies`; see "Social policy slots"). A French player
+  who finished setup with one policy is not reopened (`setup.finished` stays); one still in setup needs the second.
 - **Great person (Americans):** an assisted action like Philosophy, `phase: 'ANY'`: a random draw of 1, or 2 with a revealed
   Organized Religion, kept through `chooseReward`, the other discarded public; the marker goes to the player's area. It needs
   a policy and none hidden (the draw count must not leak a hidden policy). Undo is the normal vote, never solo, so a random
@@ -1651,6 +1652,29 @@ Human, 2026-11-24 (the answers in issue #374). One-time per player, steps in any
   idempotent when the step is not done. Setup pieces are sealed against the board Undo (`isAssistedBoardChange`). Undoing the
   civ reveal is refused after setup progress (`CIV_REVEAL_SETUP_STARTED`, 409; undo the steps first).
 - **Hidden information:** `you.setup` is the viewer's own; opponents and spectators get only the public `SETUP` log lines.
+
+### Social policy slots (#378)
+
+Human, 2026-11-24: keep the flow (the player is scrolled to the Social policy panel and chooses there); add the French extra
+policy, the pick after a new city and a limit. Rule: Wisdom and Warfare rulebook p. 10, "Social Policies". Engine:
+`social-policy-slots.ts` (`socialPolicySlots`, `startingSocialPolicies`), `chooseSocialPolicy`.
+
+- **Derived, never stored:** `maximum = max(1, own city pieces) + (French ? 1 : 0)` (`ownCityPieces`: capital, city and
+  metropolis pieces of the player's colour on the map; a conquered city counts like any other city piece), `held` = policies
+  held, `free = max(0, maximum - held)`. The `max(1, ...)` lets the starting policy be chosen before the capital is placed. A
+  manual city, a conquest, a nuke or an undo of the city moves the maximum with no bookkeeping.
+- **Enforced on choosing only:** `chooseSocialPolicy` answers `SOCIAL_POLICY_LIMIT` (400) when `free` is 0, after the
+  already-held and flipside checks. Removing is unchanged, so a switch (Bureaucracy, culture cards) is remove then choose.
+  Anarchy keeps the policies (rulings 389-390): they still count.
+- **Over the cap is shown, not enforced:** when a city is lost `held` can exceed `maximum`. The rulebook has the player return
+  a policy of their choice; the game does not force it, the panel says "remove one" and choosing is blocked until they do.
+- **View:** `you.socialPolicySlots` `{ maximum, held, free }` is the viewer's own and counts only (no policy name); `null` in a
+  replayed revision. Opponents keep `numberOfSocialPolicies` and get nothing new.
+- **Web:** a status line above the picker says how many more may be adopted or why none; Choose is disabled with that
+  reason at `free === 0`. The page scrolls to the panel (`goToPanel('social-policy', true)`) when the maximum rises above the
+  value last seen in this session and a slot is free (taking a policy back does not move the page), not on the first render
+  and not for a replay. The found-city log line says "may now
+  adopt another social policy" when `free > 0`.
 
 ## Reopening a phase (2026-10-23)
 

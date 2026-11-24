@@ -44,6 +44,8 @@ export type EngineError =
       readonly name: string
       readonly flipside: string
     }
+  /** Issue #378: the player holds as many social policies as they may (one per built city, one more for the French) */
+  | { readonly kind: 'SOCIAL_POLICY_LIMIT'; readonly maximum: number; readonly held: number }
   /** Java: 304 Not Modified "Item already revealed" */
   | { readonly kind: 'ITEM_ALREADY_REVEALED'; readonly name: string }
   /** Java: 400 "Civilization already chosen" */
@@ -229,6 +231,8 @@ export function describeError(error: EngineError): string {
       return `Player tried to add same social policy as they had: ${error.name}`
     case 'SOCIAL_POLICY_FLIPSIDE_TAKEN':
       return `Player tried to add a social policy on same flipside: ${error.flipside}`
+    case 'SOCIAL_POLICY_LIMIT':
+      return `You may hold ${error.maximum} social ${error.maximum === 1 ? 'policy' : 'policies'} (one per built city, one more for the French) and hold ${error.held}: remove one to choose another`
     case 'ITEM_ALREADY_REVEALED':
       return 'Item already revealed'
     case 'CIVILIZATION_ALREADY_CHOSEN':

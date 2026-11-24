@@ -127,6 +127,7 @@ export function statusFor(error: EngineError): number {
     case 'TECH_ALREADY_CHOSEN':
     case 'SOCIAL_POLICY_ALREADY_CHOSEN':
     case 'SOCIAL_POLICY_FLIPSIDE_TAKEN':
+    case 'SOCIAL_POLICY_LIMIT':
     case 'CIVILIZATION_ALREADY_CHOSEN':
     case 'UNDO_ALREADY_INITIATED':
     case 'NOTHING_TO_UNDO':

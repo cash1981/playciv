@@ -8,10 +8,17 @@ import type { SocialPolicyItem } from '@civ/engine'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { itemImageUrl } from './ItemCard.js'
+import { goToPanel } from './PhaseSummary.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
+
+vi.mock('./PhaseSummary.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./PhaseSummary.js')>()),
+  goToPanel: vi.fn(),
+}))
 
 beforeEach(() => localStorage.setItem('civ.panel.social-policy', 'true'))
 afterEach(() => {
+  vi.mocked(goToPanel).mockClear()
   cleanup()
   localStorage.removeItem('civ.panel.social-policy')
   vi.restoreAllMocks()
@@ -345,5 +352,92 @@ describe('SocialPolicyPanel read-only', () => {
     expect((screen.getByRole('button', { name: 'Choose' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Reveal' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Remove' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+/** The own view with the slots of issue #378; `null` is a replayed revision. */
+type Slots = { readonly maximum: number; readonly held: number; readonly free: number } | null
+const slotsView = (slots: Slots, civilization = 'Rome'): PlayerView =>
+  ({
+    you: { playerId: 'me', username: 'cash1981', color: 'Red', civilization: { name: civilization }, socialPolicies: [], socialPolicySlots: slots },
+    opponents: [],
+  }) as unknown as PlayerView
+
+const panelWith = (viewed: PlayerView) => (
+  <SocialPolicyPanel gameId="game-1" busy={false} run={run} view={viewed} reloadCount={0} />
+)
+
+describe('SocialPolicyPanel slots (issue #378)', () => {
+  const choose = () => screen.getByRole('button', { name: 'Choose' }) as HTMLButtonElement
+  const pick = async () => {
+    await screen.findByRole('option', { name: 'Rationalism' })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Choose a social policy' }), { target: { value: 'Rationalism' } })
+  }
+  const slotsStatus = () => screen.queryAllByRole('status').map((node) => node.textContent ?? '').find((text) => text.startsWith('You ')) ?? ''
+
+  beforeEach(() => {
+    vi.spyOn(api, 'socialPolicies').mockResolvedValue([...CATALOGUE])
+  })
+
+  it('says how many more policies may be adopted and lets Choose through', async () => {
+    render(panelWith(slotsView({ maximum: 2, held: 1, free: 1 })))
+    await pick()
+    expect(slotsStatus()).toBe('You may adopt 1 more social policy')
+    expect(choose().disabled).toBe(false)
+  })
+
+  it('uses the plural for several free slots', () => {
+    render(panelWith(slotsView({ maximum: 3, held: 0, free: 3 })))
+    expect(slotsStatus()).toBe('You may adopt 3 more social policies')
+  })
+
+  it('disables Choose with the reason at the maximum, and names the French extra policy', async () => {
+    const { unmount } = render(panelWith(slotsView({ maximum: 1, held: 1, free: 0 })))
+    await pick()
+    expect(slotsStatus()).toBe('You hold the most social policies you may (1): one per built city')
+    expect(choose().disabled).toBe(true)
+    expect(choose().title).toBe('You hold the most social policies you may (1): one per built city')
+    unmount()
+    render(panelWith(slotsView({ maximum: 3, held: 3, free: 0 }, 'French')))
+    expect(slotsStatus()).toBe('You hold the most social policies you may (3): one per built city, one more for the French')
+  })
+
+  it('tells the player to remove one when over the maximum', async () => {
+    render(panelWith(slotsView({ maximum: 1, held: 2, free: 0 })))
+    await pick()
+    expect(slotsStatus()).toBe('You hold 2, more than the 1 you may: remove one')
+    expect(choose().disabled).toBe(true)
+  })
+
+  it('shows no line and does not block Choose without slots (a replayed revision or a spectator)', async () => {
+    render(panelWith(slotsView(null)))
+    await pick()
+    expect(slotsStatus()).toBe('')
+    expect(choose().disabled).toBe(false)
+  })
+
+  it('scrolls to the panel once when a slot is gained, not on the first render and not when it drops', () => {
+    const { rerender } = render(panelWith(slotsView({ maximum: 1, held: 0, free: 1 })))
+    expect(goToPanel).not.toHaveBeenCalled()
+    rerender(panelWith(slotsView({ maximum: 1, held: 1, free: 0 })))
+    expect(goToPanel).not.toHaveBeenCalled()
+    rerender(panelWith(slotsView({ maximum: 2, held: 1, free: 1 })))
+    expect(goToPanel).toHaveBeenCalledExactlyOnceWith('social-policy', true)
+    // The same value again, and a replayed revision (null), change nothing
+    rerender(panelWith(slotsView({ maximum: 2, held: 1, free: 1 })))
+    rerender(panelWith(slotsView(null)))
+    rerender(panelWith(slotsView({ maximum: 2, held: 1, free: 1 })))
+    expect(goToPanel).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not scroll when a policy is taken back at the maximum (a switch or an undo), only when the maximum rises', () => {
+    const { rerender } = render(panelWith(slotsView({ maximum: 1, held: 1, free: 0 })))
+    rerender(panelWith(slotsView({ maximum: 1, held: 0, free: 1 })))
+    expect(goToPanel).not.toHaveBeenCalled()
+  })
+
+  it('does not scroll when the first view with slots already has a free one', () => {
+    render(panelWith(slotsView({ maximum: 2, held: 0, free: 2 })))
+    expect(goToPanel).not.toHaveBeenCalled()
   })
 })

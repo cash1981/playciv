@@ -32,6 +32,7 @@ import { mapCellOf } from './blockade.js'
 import { findBoardAsset, mapTop, remainingBoardAssetCount } from './board.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
+import { socialPolicySlots } from './social-policy-slots.js'
 import { cityLimitOf, foundCityCheck, foundingFiguresOf, ownCityPieces } from './city-founding.js'
 import { cityProductionsOf } from './city-production.js'
 import { err, ok } from './result.js'
@@ -184,9 +185,8 @@ export const foundCity: AssistedActionDefinition = {
           (stayed.length === 0 ? '' : `${explored.length === 0 ? ', but' : '; and'} the ${stayed.length === 1 ? 'hut' : 'huts'} at ${joinList(stayed)} ${stayed.length === 1 ? 'stays' : 'stay'} on the map (no hut card could be drawn)`)
 
     // The new city counts towards the number of social policies a civilization may adopt
-    const cities = ownCityPieces(working, player).length
     const holder = playerOf(working, player.playerId) ?? player
-    const policyNote = holder.socialPolicies.length < cities ? ', and may now adopt another social policy' : ''
+    const policyNote = socialPolicySlots(working, holder).free > 0 ? ', and may now adopt another social policy' : ''
     const withFigure = figure.assetId.endsWith('army') ? 'an army' : 'a scout'
     const lineIds = [figureEntry.id, cityEntry.id, destroyed?.historyId, ...huts.map((hut) => hut.historyId)]
     const founded = appendLog(working, {

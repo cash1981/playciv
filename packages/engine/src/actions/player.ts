@@ -59,6 +59,7 @@ import { RESOURCE_KINDS } from '../tile-icons.js'
 import { applyTechRevealAbilities, undoTechRevealAbilities } from '../tech-reveal-abilities.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
+import { socialPolicySlots } from '../social-policy-slots.js'
 import type { CivRevealSetup, GameState, Playerhand, PlayerStats } from '../state.js'
 import {
   DEFAULT_PLAYER_STATS,
@@ -964,6 +965,12 @@ export function chooseSocialPolicy(
       name: policy.name,
       flipside: policy.flipside,
     })
+  }
+
+  // Issue #378: one policy per built city, one more for the French. Removing one first (a switch) frees the slot.
+  const slots = socialPolicySlots(state, player)
+  if (slots.free === 0) {
+    return err({ kind: 'SOCIAL_POLICY_LIMIT', maximum: slots.maximum, held: slots.held })
   }
 
   const itemNumber = state.itemCounter + 1

@@ -19,6 +19,8 @@ import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
 import { ownCityPieces } from './city-founding.js'
+import { socialPolicySlots } from './social-policy-slots.js'
+import type { SocialPolicySlots } from './social-policy-slots.js'
 import { cityDefenceOf } from './city-defence.js'
 import { stackingLimitOf } from './great-person-effects.js'
 import { brandenburgZonesOf } from './brandenburg.js'
@@ -2194,6 +2196,11 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards' | 'set
   readonly chineseSave: ChineseSaveView | null
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
+  /**
+   * How many social policies the viewer may hold and holds (issue #378): counts only, no policy name. Own view only, like
+   * `setup`; `null` for a replayed revision. The opponents' view keeps `numberOfSocialPolicies`.
+   */
+  readonly socialPolicySlots: SocialPolicySlots | null
   readonly buildingCount: number
   /** The viewer's cities, as `OpaquePlayerhand.cities` gives them for everybody. */
   readonly cities: readonly CityProduction[]
@@ -2428,6 +2435,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           stackingLimit: stackingLimitOf(state, player),
           cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
           cityCount: cityCountOf(state, viewerId),
+          socialPolicySlots: socialPolicySlots(state, player),
           buildingCount: buildingCountOf(state, viewerId),
           cities: cityProductionsOf(state, player),
           tradeEstimate: tradeEstimateOf(state, player),

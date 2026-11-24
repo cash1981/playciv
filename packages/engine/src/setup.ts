@@ -4,7 +4,7 @@
  * 1. Capital: one of the four central squares of the starting tile (the Chinese walled capital, the Indian metropolis on
  *    two central squares, a plain capital for everyone else), movable until setup is over.
  * 2. Figures: a colour army and scout in the capital's outskirts, and the Russian white army or the Spanish white scout.
- * 3. Social policy: the existing `chooseSocialPolicy`; this file only reports it.
+ * 3. Social policy: the existing `chooseSocialPolicy` (one; two for the French); this file only reports it.
  * 4. Great person (Americans): the assisted action `setupGreatPerson`, drawn like Philosophy's, kept through `chooseReward`.
  * 5. Starting trade: the trade icons in the capital's outskirts, counted as the Trade phase counts them.
  * 6. Government: forced by the civilization, an automatic row.
@@ -50,6 +50,7 @@ import { occupancyOf } from './movement.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import { capitalOf } from './sot.js'
+import { startingSocialPolicies } from './social-policy-slots.js'
 import type { AssistedActionRecord, GameState, PlayerSetup, Playerhand, SetupPlacement } from './state.js'
 import { tradeAroundCitiesOf } from './trade-collection.js'
 
@@ -452,7 +453,7 @@ function stepDone(state: GameState, player: Playerhand, setup: PlayerSetup, id: 
     case 'figures':
       return figuresOf(player).every((figure) => figureOnMap(state, player, figure))
     case 'policy':
-      return player.socialPolicies.length >= 1
+      return player.socialPolicies.length >= startingSocialPolicies(player)
     case 'greatPerson': {
       const record = greatPersonRecordOf(state, player.playerId)
       return record !== undefined && !rewardPending(player, record)
@@ -554,13 +555,21 @@ export function setupViewOf(state: GameState, player: Playerhand): SetupView | n
     items,
   })
 
-  // 3. Social policy
+  // 3. Social policy (one; the French also have their extra one)
   const policies = player.socialPolicies.length
+  const startingPolicies = startingSocialPolicies(player)
+  const policiesDone = policies >= startingPolicies
   steps.push({
     id: 'policy',
     label: 'Social policy',
-    status: policies >= 1 ? 'done' : 'todo',
-    reason: policies >= 1 ? 'You have a social policy.' : 'Choose your starting social policy in the Social policy panel.',
+    status: policiesDone ? 'done' : 'todo',
+    reason: policiesDone
+      ? startingPolicies === 1
+        ? 'You have a social policy.'
+        : `You have your ${startingPolicies} social policies.`
+      : startingPolicies === 1
+        ? 'Choose your starting social policy in the Social policy panel.'
+        : `Choose your starting social policies in the Social policy panel (${policies} of ${startingPolicies}; the French have one more).`,
     squares: [],
     canUndo: false,
     undoReason: null,
