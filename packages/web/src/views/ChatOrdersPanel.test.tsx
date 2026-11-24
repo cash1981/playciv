@@ -1118,6 +1118,28 @@ describe('header helpers', () => {
     expect(turnTitle(active, 'admin')).toBe('Turn 1 · Your turn — start of turn phase')
   })
 
+  it('says the holder is choosing a civilization or doing setup in the setup stage, and the phase otherwise', () => {
+    const active = {
+      playerId: 'id-bob',
+      username: 'Bob',
+      turnNumber: 1,
+      phase: 'SOT' as const,
+      startPlayer: 'Alice',
+      stage: 'setup' as const,
+      waitingFor: [
+        { username: 'Alice', phase: 'SOT' as const },
+        { username: 'Bob', phase: 'SOT' as const },
+      ],
+    }
+    expect(turnTitle(active, 'Alice')).toBe("Turn 1 · Bob's turn — choosing civilization / setup")
+    expect(turnTitle(active, 'Bob')).toBe('Turn 1 · Your turn — choosing civilization / setup')
+    expect(turnTitle(active)).not.toContain('start of turn phase')
+    // Without the stage the same waiting list reads as before
+    const { stage: _stage, ...plain } = active
+    void _stage
+    expect(turnTitle(plain, 'Alice')).toBe("Turn 1 · Bob's turn — start of turn phase")
+  })
+
   it('says so when everyone is done, and when nobody is up', () => {
     const finished = { playerId: 'p', username: 'Alice', turnNumber: 5, phase: 'SOT', startPlayer: 'Cy', waitingFor: [] }
     expect(turnTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5 · everyone is done')

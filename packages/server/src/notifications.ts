@@ -186,10 +186,11 @@ export interface Notifications {
   /**
    * Java `PlayerAction.endTurn` → `sendYourTurn`, now without a baton (issue
    * #215): the new turn holder, when marking a phase done changed who it is.
-   * Nothing when the holder is the same. Throttled like the other in-game mail
-   * (held until the player opens the game or 24 hours pass).
+   * Nothing when the holder is the same, or is the `actorId` the caller names
+   * (the setup steps do; `turns/done` does not). Throttled like the other in-game mail (held until the player
+   * opens the game or 24 hours pass).
    */
-  turnHolderChanged(before: GameState, after: GameState): Promise<void>
+  turnHolderChanged(before: GameState, after: GameState, actorId?: string): Promise<void>
   /**
    * New mechanic (no Java counterpart) — the player who now holds the battle
    * turn, straight after someone ends it. Held like other game mail until the
@@ -504,18 +505,24 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       )
     },
 
-    async turnHolderChanged(before: GameState, after: GameState): Promise<void> {
+    async turnHolderChanged(before: GameState, after: GameState, actorId?: string): Promise<void> {
       const holder = turnHolder(after)
       if (holder === undefined || holder.playerId === turnHolder(before)?.playerId) return
+      // Nobody is mailed about their own button press
+      if (actorId !== undefined && holder.playerId === actorId) return
       const status = activeTurnStatus(after)
       if (status === null) return
-      await notify(
-        holder.playerId,
-        'It is your turn',
-        `It is your turn: ${TURN_PHASE_LABEL[status.phase]}, turn ${status.turnNumber} in ${after.name}.\n\n` +
-          `Go to ${gameLink(after.id)} to play`,
-        after.id,
-      )
+      const link = `Go to ${gameLink(after.id)} to play`
+      // The setup stage (issue #374): somebody passed the turn on, and this player still has to choose a civilization and
+      // do their setup, or (everybody passed) finish the setup they have open. Public facts only, no card.
+      let text = `It is your turn: ${TURN_PHASE_LABEL[status.phase]}, turn ${status.turnNumber} in ${after.name}.\n\n${link}`
+      if (status.stage === 'setup') {
+        text =
+          `It is your turn to choose your civilization and do your setup, turn ${status.turnNumber} in ${after.name}.\n\n${link}`
+      } else if (holder.civilization !== null && holder.setup?.required === true && holder.setup.finished !== true) {
+        text = `It is your turn to finish your setup, turn ${status.turnNumber} in ${after.name}.\n\n${link}`
+      }
+      await notify(holder.playerId, 'It is your turn', text, after.id)
     },
 
     async battleTurnChanged(after: GameState, endedByPlayerId: string): Promise<void> {

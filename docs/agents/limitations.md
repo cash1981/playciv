@@ -13,6 +13,8 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   Turn, has no setup (no tab, no gate); the player places the capital by hand. Existing Greek players keep Despotism. The
   starting trade counts printed trade icons only (no techs, policies or governments). The American great person needs a
   revealed policy before the draw. Setup checks a capital square with the founding rules, which cannot refuse on a fresh start tile.
+  A player passes the turn on only with End turn on the Setup tab (the Order tab's End turn stays held back while a step is
+  missing), and the holder only follows a pass: before any pass the holder is the start player as before.
 - **Civilization abilities not automated (#368):** the French extra policy and policy cap (#378, no cap exists); Japanese
   infantry +1 strength and the tech discount of 3 trade (#368); Mongol loot (not modelled); Russian sacrifice (no
   enemy-army-city model); Zulu metropolis hut

@@ -244,7 +244,7 @@ export function PhaseActionsPanel({
       >
         <p className="phase-turn-line">{turnTitle(view.activeTurn ?? null, view.you.username)}</p>
 
-        <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+        <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} onSetupTab={tab === 'SETUP'} />
 
         <PendingRewardSection
           gameId={gameId}

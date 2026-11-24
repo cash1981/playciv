@@ -350,15 +350,34 @@ export function SetupPanel({ gameId, view, busy, readOnly, run }: Props): React.
     </>
   )
 
+  const finish = (): void => {
+    setSending(true)
+    const seen = latest.current.view
+    void pressOnce(`${gameId}:${playerId}:setup:finish`, run, (requestId) => api.setupFinish(gameId, requestId, seen.rev), seen).then(() => setSending(false))
+  }
+
   return (
     <section className="setup-panel" aria-label="Setup">
       {setup.blocksTurn === null ? (
-        <p className="setup-summary muted">Setup is complete. It closes when you end Start of Turn; until then you can still move or take back a step.</p>
+        <p className="setup-summary muted">Setup is complete. Press Finish setup to close it; until then you can still move or take back a step.</p>
       ) : (
         <p role="status" className="assisted-warning setup-summary">
           {setup.blocksTurn}
         </p>
       )}
+      <div className="assisted-action">
+        <button
+          type="button"
+          className="primary"
+          disabled={disabled || setup.blocksTurn !== null}
+          // Starts with the visible text (WCAG 2.5.3, Label in Name)
+          aria-label="Finish setup: close the Setup tab and go on to Start of Turn"
+          title={setup.blocksTurn ?? 'Finish setup: close the Setup tab and go on to Start of Turn'}
+          onClick={finish}
+        >
+          Finish setup
+        </button>
+      </div>
       {notice !== null && (
         <p role="status" className="assisted-warning setup-notice">
           {notice}

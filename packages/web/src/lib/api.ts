@@ -104,7 +104,8 @@ export type {
 }
 
 /**
- * One request to `POST /api/games/:id/setup` (#374): a capital, a figure, the starting trade or Egypt's wonder, or its undo.
+ * One request to `POST /api/games/:id/setup` (#374): a capital, a figure, the starting trade or Egypt's wonder, or its undo;
+ * or `finish` (the Finish setup button) and `pass` (End turn on the Setup tab).
  * The shape is the one the server's strict parser takes; whether the square is legal is the engine's decision.
  * `direction` is only for the Indian metropolis (the neighbouring central square it also covers lies that way).
  */
@@ -113,6 +114,8 @@ export type SetupRequestBody =
   | { readonly step: 'figure'; readonly figure: SetupFigure; readonly column: number; readonly row: number }
   | { readonly step: 'trade' }
   | { readonly step: 'wonder'; readonly column: number; readonly row: number }
+  | { readonly step: 'finish' }
+  | { readonly step: 'pass' }
   | { readonly undo: true; readonly step: 'capital' | 'trade' | 'wonder' }
   | { readonly undo: true; readonly step: 'figure'; readonly figure: SetupFigure }
 
@@ -897,6 +900,12 @@ export const api = {
    */
   setup: (gameId: string, body: SetupRequestBody, requestId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/setup`, { ...body, requestId, rev }),
+  /** The Finish setup button (#374): setup is over for the viewer, and the Setup tab goes. Refused while a step is missing. */
+  setupFinish: (gameId: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/setup`, { step: 'finish', requestId, rev }),
+  /** End turn on the Setup tab (#374): passes the turn on without finishing setup; no phase is marked. Idempotent. */
+  setupPass: (gameId: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/setup`, { step: 'pass', requestId, rev }),
   /**
    * The card choice after a culture advance: the same route as `performAction`,
    * with the reward and the card to keep. The request id is kept like any other.

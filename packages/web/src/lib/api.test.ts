@@ -207,6 +207,16 @@ describe('api timeline and admin calls (issue #215)', () => {
     expect(lastCall(undone).body).toEqual({ undo: true, step: 'figure', figure: 'army', requestId: 'req-4', rev: 10 })
   })
 
+  it('sends Finish setup and the pass with the step, request id and revision only', async () => {
+    const finish = respondWith(200, '{}')
+    await api.setupFinish('g1', 'req-5', 11)
+    expect(lastCall(finish)).toEqual({ path: '/api/games/g1/setup', body: { step: 'finish', requestId: 'req-5', rev: 11 } })
+
+    const pass = respondWith(200, '{}')
+    await api.setupPass('g1', 'req-6', 12)
+    expect(lastCall(pass)).toEqual({ path: '/api/games/g1/setup', body: { step: 'pass', requestId: 'req-6', rev: 12 } })
+  })
+
   it('sends the turn only when it is given', async () => {
     const fetchMock = respondWith(200, '{}')
     await api.postOrder('g1', 'TRADE', 'Buy iron')

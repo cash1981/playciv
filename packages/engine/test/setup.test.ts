@@ -13,6 +13,7 @@ import {
   placePiece,
   undoLastBoardChange,
 } from '../src/actions/board.js'
+import { draw } from '../src/actions/draw.js'
 import { chooseSocialPolicy, revealItem, revealSocialPolicy } from '../src/actions/player.js'
 import { markPhasesDone, unmarkPhaseDone } from '../src/actions/turn.js'
 import { canInitiateUndo, initiateUndo, vote } from '../src/actions/undo.js'
@@ -20,13 +21,15 @@ import { performAssistedAction } from '../src/assisted.js'
 import { cityFootprintsOf } from '../src/blockade.js'
 import { SQUARE_SIZE, mapTop, areaAt, playerAreas } from '../src/board.js'
 import { createGame } from '../src/create-game.js'
-import { createPlayerTurn } from '../src/turn.js'
+import { createPlayerTurn, turnHolder, turnStatus } from '../src/turn.js'
 import { migrateGameState } from '../src/migrate.js'
 import type { Result } from '../src/result.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { EngineError } from '../src/errors.js'
 import {
   countSetupTrade,
+  finishSetupStep,
+  passSetup,
   placeSetupFigure,
   placeSetupWonder,
   setCapital,
@@ -35,7 +38,7 @@ import {
 } from '../src/setup.js'
 import type { SetupStepId } from '../src/setup.js'
 import type { GameState, Playerhand } from '../src/state.js'
-import { findPlayer, toPlayerView } from '../src/state.js'
+import { activeTurnStatus, findPlayer, toPlayerView } from '../src/state.js'
 import { capitalOf } from '../src/sot.js'
 import { tradeAroundCitiesOf } from '../src/trade-collection.js'
 import { tradeCeilingOf } from '../src/limits.js'
@@ -946,3 +949,304 @@ function finishedGame(civ = 'Germans'): GameState {
   state = unwrap(countSetupTrade(state, { playerId: CASH1981, at: AT }))
   return unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT', at: AT }))
 }
+
+/** cash1981 has done every step but has not marked Start of Turn done. */
+function completedGame(civ = 'Germans'): GameState {
+  let state = withFigures(withCapital(revealed(civ)))
+  state = withPolicy(state)
+  return unwrap(countSetupTrade(state, { playerId: CASH1981, at: AT }))
+}
+
+describe('Finish setup', () => {
+  const finish = (state: GameState, playerId = CASH1981) => finishSetupStep(state, { playerId, at: AT })
+  const setupLines = (state: GameState) => state.log.filter((entry) => entry.logType === 'SETUP' && entry.publicLog === 'cash1981 finished setup')
+
+  it('is refused while a step is missing, with the gate reason, and changes nothing', () => {
+    const state = withCapital(revealed('Germans'))
+    const refused = unwrapErr(finish(state))
+    expect(refused).toEqual({ kind: 'SETUP_REFUSED', step: 'finish', reason: setupGateOf(state, me(state)) })
+    expect(JSON.stringify(refused)).toContain('still to do: figures, social policy, starting trade')
+    expect(me(state).setup?.finished).toBe(false)
+  })
+
+  it('finishes once every step is done: logs once, takes the tab away and marks no phase', () => {
+    const state = completedGame()
+    expect(setupView(state)?.blocksTurn).toBeNull()
+    const done = unwrap(finish(state))
+    expect(me(done).setup).toMatchObject({ required: true, finished: true })
+    expect(setupLines(done)).toHaveLength(1)
+    expect(setupView(done)).toBeNull()
+    expect(me(done).playerTurns.find((turn) => turn.turnNumber === 1)?.done.SOT ?? false).toBe(false)
+    // A repeat changes and logs nothing
+    expect(unwrap(finish(done))).toBe(done)
+    // Start of Turn done is allowed now and does not write the line a second time
+    const marked = unwrap(markPhasesDone(done, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT', at: AT }))
+    expect(setupLines(marked)).toHaveLength(1)
+    expect(me(marked).playerTurns.find((turn) => turn.turnNumber === 1)?.done.SOT).toBe(true)
+  })
+
+  it('and Start of Turn done without it still finishes setup once', () => {
+    const marked = unwrap(markPhasesDone(completedGame(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT', at: AT }))
+    expect(setupLines(marked)).toHaveLength(1)
+  })
+
+  it('is refused without a civilization or without a setup', () => {
+    expect(kindOf(finish(fourColours()))).toBe('SETUP_REFUSED')
+    const legacy = revealed('Germans')
+    const { setup: _setup, ...without } = me(legacy)
+    void _setup
+    const saved = { ...legacy, players: legacy.players.map((player) => (player.playerId === CASH1981 ? without : player)) }
+    expect(kindOf(finish(saved))).toBe('SETUP_REFUSED')
+  })
+
+  it('keeps the steps open to a player who finished: setup is over for them', () => {
+    const done = unwrap(finish(completedGame()))
+    expect(kindOf(countSetupTrade(done, { playerId: CASH1981 }))).toBe('SETUP_REFUSED')
+  })
+})
+
+describe('passing the turn on in setup', () => {
+  const pass = (state: GameState, playerId = CASH1981) => passSetup(state, { playerId, at: AT })
+  const passLines = (state: GameState) => state.log.filter((entry) => entry.logType === 'SETUP' && entry.publicLog.endsWith('passed the turn on in setup'))
+
+  it('works right after the reveal, marks no phase, logs one public line and changes nothing else', () => {
+    const state = revealed('Germans')
+    const passed = unwrap(pass(state))
+    expect(me(passed).setup).toEqual({ ...me(state).setup, passed: true })
+    expect(passLines(passed).map((entry) => entry.publicLog)).toEqual(['cash1981 passed the turn on in setup'])
+    expect(passLines(passed)[0]?.privateLog).toBe('')
+    expect(me(passed).playerTurns).toEqual(me(state).playerTurns)
+    expect(passed.board).toBe(state.board)
+    expect(setupView(passed)).toMatchObject({ passed: true })
+    expect(setupView(state)).toMatchObject({ passed: false })
+    expect(setupGateOf(passed, me(passed))).toBe(setupGateOf(state, me(state)))
+  })
+
+  it('is idempotent: the same state, no second line', () => {
+    const passed = unwrap(pass(revealed('Germans')))
+    const again = unwrap(pass(passed))
+    expect(again).toBe(passed)
+    expect(passLines(again)).toHaveLength(1)
+  })
+
+  it('leaves every step doable, and Start of Turn still refused until setup is finished', () => {
+    const passed = unwrap(pass(revealed('Germans')))
+    const worked = withPolicy(withFigures(withCapital(passed)))
+    expect(me(worked).setup?.passed).toBe(true)
+    expect(kindOf(markPhasesDone(worked, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT', at: AT }))).toBe('SETUP_INCOMPLETE')
+    const finished = unwrap(finishSetupStep(unwrap(countSetupTrade(worked, { playerId: CASH1981, at: AT })), { playerId: CASH1981, at: AT }))
+    expect(me(finished).setup).toMatchObject({ finished: true, passed: true })
+  })
+
+  it('is refused without a civilization, without a setup and after setup is over', () => {
+    expect(kindOf(pass(fourColours()))).toBe('SETUP_REFUSED')
+    expect(JSON.stringify(unwrapErr(pass(fourColours())))).toContain('Reveal your civilization first')
+    const legacy = revealed('Germans')
+    const { setup: _setup, ...without } = me(legacy)
+    void _setup
+    const saved = { ...legacy, players: legacy.players.map((player) => (player.playerId === CASH1981 ? without : player)) }
+    expect(JSON.stringify(unwrapErr(pass(saved)))).toContain('You have no setup to do')
+    const over = unwrap(finishSetupStep(completedGame(), { playerId: CASH1981, at: AT }))
+    expect(JSON.stringify(unwrapErr(pass(over)))).toContain('Setup is over')
+    expect(kindOf(pass(revealed('Germans'), 'nobody'))).toBe('NO_ACCESS')
+  })
+
+  it('names no card to the others and gives them no setup', () => {
+    const passed = unwrap(pass(revealed('Americans')))
+    const theirs = toPlayerView(passed, KARANDRAS1)
+    expect(JSON.stringify(theirs.opponents)).not.toContain('passed')
+    expect(JSON.stringify(theirs.opponents)).not.toContain('blocksTurn')
+    expect(theirs.you?.setup).toBeNull()
+    expect(theirs.log.filter((entry) => entry.logType === 'SETUP').map((entry) => entry.publicLog)).toEqual(['cash1981 passed the turn on in setup'])
+    expect(toPlayerView(passed, CASH1981).you?.setup?.passed).toBe(true)
+  })
+})
+
+describe('who holds the turn while setup is passed on', () => {
+  const holderOf = (state: GameState) => turnHolder(state)?.username
+  const pass = (state: GameState, playerId: string) => unwrap(passSetup(state, { playerId, at: AT }))
+  const reveal = (state: GameState, playerId: string, civ = 'Germans') => revealed(civ, state, playerId)
+  const sotDone = (state: GameState, playerId: string) => unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'SOT', at: AT }))
+
+  it('changes nothing before somebody passes, even with players who have no civilization', () => {
+    const state = revealed('Germans')
+    expect(holderOf(state)).toBe('cash1981')
+    expect(activeTurnStatus(state)?.stage).toBeUndefined()
+  })
+
+  it('goes to the next player without a civilization once the first one passed, and says it is the setup stage', () => {
+    const state = pass(revealed('Germans'), CASH1981)
+    expect(holderOf(state)).toBe('Karandras1')
+    const status = activeTurnStatus(state)
+    expect(status).toMatchObject({ username: 'Karandras1', stage: 'setup', phase: 'SOT' })
+    expect(Object.keys(status ?? {})).toContain('stage')
+  })
+
+  it('walks the seats clockwise as each one reveals and passes, and ends on the first with an open setup', () => {
+    let state = pass(revealed('Germans'), CASH1981)
+    state = pass(reveal(state, KARANDRAS1, 'Chinese'), KARANDRAS1)
+    expect(holderOf(state)).toBe('Itchi')
+    // Itchi has revealed but not passed: the stage still waits for them
+    state = reveal(state, ITCHI, 'Romans')
+    expect(holderOf(state)).toBe('Itchi')
+    expect(activeTurnStatus(state)?.stage).toBe('setup')
+    state = pass(state, ITCHI)
+    expect(holderOf(state)).toBe('Chul')
+    state = pass(reveal(state, CHUL, 'Russians'), CHUL)
+    // Everybody has passed: the normal rule lands on the first player, whose setup is open
+    expect(holderOf(state)).toBe('cash1981')
+    expect(activeTurnStatus(state)?.stage).toBeUndefined()
+    expect(activeTurnStatus(state)?.phase).toBe('SOT')
+  })
+
+  it('starts from the start player and wraps around the table', () => {
+    let state = pass(revealed('Germans', fourColours(), ITCHI), ITCHI)
+    expect(turnHolder(state, 3)?.username).toBe('Chul')
+    // Seat 3 starts, the stage wraps past seat 4 to seat 1
+    state = pass(reveal(state, CHUL, 'Japanese'), CHUL)
+    expect(turnHolder(state, 3)?.username).toBe('cash1981')
+  })
+
+  it('skips a player who finished setup, and one who marked Start of Turn done', () => {
+    // cash1981 finishes without passing, Karandras1 passes, Itchi has no civilization yet
+    let state = unwrap(finishSetupStep(completedGame(), { playerId: CASH1981, at: AT }))
+    state = pass(reveal(state, KARANDRAS1, 'Chinese'), KARANDRAS1)
+    expect(holderOf(state)).toBe('Itchi')
+    // Itchi marks Start of Turn done (no setup record to gate): the stage moves on to Chul
+    state = sotDone(state, ITCHI)
+    expect(holderOf(state)).toBe('Chul')
+    expect(activeTurnStatus(state)?.stage).toBe('setup')
+  })
+
+  it('falls back to the normal rule when nobody is left who needs a civilization or an unpassed setup', () => {
+    // Two players have revealed and passed; the others have marked Start of Turn done
+    let state = pass(revealed('Germans'), CASH1981)
+    state = pass(reveal(state, KARANDRAS1, 'Chinese'), KARANDRAS1)
+    state = sotDone(sotDone(state, ITCHI), CHUL)
+    // Nobody waits for a civilization: the earliest open phase is Start of Turn, first open from the start player
+    expect(holderOf(state)).toBe('cash1981')
+    expect(activeTurnStatus(state)?.stage).toBeUndefined()
+  })
+
+  it('stays on when the passer finishes setup afterwards: the next player still chooses a civilization', () => {
+    let state = pass(revealed('Germans'), CASH1981)
+    expect(holderOf(state)).toBe('Karandras1')
+    state = unwrap(finishSetupStep(unwrap(countSetupTrade(withPolicy(withFigures(withCapital(state))), { playerId: CASH1981, at: AT })), { playerId: CASH1981, at: AT }))
+    expect(me(state).setup).toMatchObject({ finished: true, passed: true })
+    expect(holderOf(state)).toBe('Karandras1')
+    expect(activeTurnStatus(state)).toMatchObject({ username: 'Karandras1', stage: 'setup' })
+    // The next player also passes: the normal rule applies, and cash1981 (setup finished, Start of Turn open) is first again
+    state = pass(reveal(state, KARANDRAS1, 'Chinese'), KARANDRAS1)
+    state = sotDone(sotDone(state, ITCHI), CHUL)
+    expect(holderOf(state)).toBe('cash1981')
+    expect(activeTurnStatus(state)?.stage).toBeUndefined()
+    // Start of Turn done by cash1981 moves it to the player whose setup is open
+    state = sotDone(state, CASH1981)
+    expect(holderOf(state)).toBe('Karandras1')
+  })
+
+  it('ends when every passer has marked Start of Turn done', () => {
+    let state = pass(revealed('Germans'), CASH1981)
+    state = unwrap(finishSetupStep(unwrap(countSetupTrade(withPolicy(withFigures(withCapital(state))), { playerId: CASH1981, at: AT })), { playerId: CASH1981, at: AT }))
+    state = sotDone(state, CASH1981)
+    expect(activeTurnStatus(state)?.stage).toBeUndefined()
+    expect(holderOf(state)).toBe('Karandras1')
+  })
+
+  it('gives the passer the out-of-turn draw refusal and the stage holder none (the same holder drives the warning)', () => {
+    const state = pass(revealed('Germans'), CASH1981)
+    expect(unwrapErr(draw(state, { playerId: CASH1981, sheetName: 'CIV' })).kind).toBe('NOT_YOUR_TURN')
+    expect(draw(state, { playerId: KARANDRAS1, sheetName: 'CIV' }).ok).toBe(true)
+  })
+
+  it('drops the pass with the civilization reveal: undoing it returns the holder to that player', () => {
+    // cash1981 and Karandras1 pass; the turn goes to Itchi
+    let state = pass(revealed('Germans'), CASH1981)
+    state = pass(reveal(state, KARANDRAS1, 'Chinese'), KARANDRAS1)
+    expect(holderOf(state)).toBe('Itchi')
+    const entry = state.log.find((candidate) => candidate.logType === 'REVEAL' && candidate.item?.kind === 'civ' && candidate.playerId === CASH1981)
+    if (entry === undefined) throw new Error('no reveal line')
+    state = unwrap(initiateUndo(state, { logId: entry.id, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI, CHUL]) state = unwrap(vote(state, { logId: entry.id, playerId, vote: true }))
+    expect(me(state).civilization).toBeNull()
+    expect(me(state).setup).toBeUndefined()
+    // Karandras1's pass keeps the stage on, and cash1981 has no civilization again
+    expect(holderOf(state)).toBe('cash1981')
+    expect(activeTurnStatus(state)?.stage).toBe('setup')
+  })
+
+  it('does not come back in turn 2 from a stale pass, and picks no seat without a civilization there', () => {
+    // cash1981 passed in turn 1; Karandras1 never revealed a civilization. Every player's turn 1 is over (set directly)
+    const passed = pass(revealed('Germans'), CASH1981)
+    const over: GameState = {
+      ...passed,
+      players: passed.players.map((player) => ({
+        ...player,
+        playerTurns: [{ ...createPlayerTurn(player.username, 1), done: { SOT: true, TRADE: true, CM: true, MOVEMENT: true, RESEARCH: true } }],
+      })),
+    }
+    const second = turnStatus(over)
+    expect(second.currentTurn).toBe(2)
+    expect(me(over).setup?.passed).toBe(true)
+    const status = activeTurnStatus(over)
+    expect(status?.turnNumber).toBe(2)
+    expect(status?.stage).toBeUndefined()
+    // The holder is the normal one: the same as with the stale flag stripped
+    const stripped: GameState = {
+      ...over,
+      players: over.players.map((player) => (player.setup === undefined ? player : { ...player, setup: { ...player.setup, passed: false } })),
+    }
+    expect(holderOf(over)).toBe(holderOf(stripped))
+    expect(activeTurnStatus(over)?.username).toBe(activeTurnStatus(stripped)?.username)
+  })
+
+  it('is off once the passer has marked Start of Turn done, in turn 1 and after', () => {
+    let state = unwrap(passSetup(completedGame(), { playerId: CASH1981, at: AT }))
+    expect(activeTurnStatus(state)?.stage).toBe('setup')
+    state = sotDone(unwrap(finishSetupStep(state, { playerId: CASH1981, at: AT })), CASH1981)
+    // Karandras1 has no civilization, but nobody waits for one any more
+    expect(activeTurnStatus(state)?.stage).toBeUndefined()
+    expect(holderOf(state)).toBe('Karandras1')
+    // Reopening Start of Turn puts the pass back in play, as setup itself reopens with it
+    const reopened = unwrap(unmarkPhaseDone(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT' }))
+    expect(activeTurnStatus(reopened)?.stage).toBe('setup')
+    // Turn 2: everybody has ended turn 1
+    for (const playerId of [CASH1981, KARANDRAS1, ITCHI, CHUL]) {
+      state = unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'RESEARCH', at: AT }))
+    }
+    const status = activeTurnStatus(state)
+    expect(status?.turnNumber).toBe(2)
+    expect(status?.stage).toBeUndefined()
+  })
+
+  it('works with two and with three players', () => {
+    const two = createGame({
+      name: 'Two',
+      numOfPlayers: 2,
+      seed: 'two',
+      players: [
+        { playerId: CASH1981, username: 'cash1981', color: 'Red', gameCreator: true, yourTurn: true },
+        { playerId: KARANDRAS1, username: 'Karandras1', color: 'Blue' },
+      ],
+    })
+    let state = pass(revealed('Germans', two), CASH1981)
+    expect(holderOf(state)).toBe('Karandras1')
+    state = pass(reveal(state, KARANDRAS1, 'Chinese'), KARANDRAS1)
+    expect(holderOf(state)).toBe('cash1981')
+
+    const three = createGame({
+      name: 'Three',
+      numOfPlayers: 3,
+      seed: 'three',
+      players: [
+        { playerId: CASH1981, username: 'cash1981', color: 'Red', gameCreator: true, yourTurn: true },
+        { playerId: KARANDRAS1, username: 'Karandras1', color: 'Blue' },
+        { playerId: ITCHI, username: 'Itchi', color: 'Green' },
+      ],
+    })
+    state = pass(revealed('Germans', three), CASH1981)
+    expect(holderOf(state)).toBe('Karandras1')
+    state = pass(reveal(state, KARANDRAS1, 'Chinese'), KARANDRAS1)
+    expect(holderOf(state)).toBe('Itchi')
+  })
+})

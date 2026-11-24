@@ -350,17 +350,40 @@ export function startPlayerName(state: GameState, turnNumber: number): string | 
 }
 
 /**
- * Who "has the turn". There is no baton: it is the
+ * Whether the setup stage (issue #374) is on: it exists only in the first turn (as `setupStillOpen` in `actions/player.ts`
+ * opens setup), and some player passed the turn on from the Setup tab and has never marked Start of Turn done. Finishing
+ * their setup afterwards does not end it: the pass was made so the next player can choose a civilization. `passed` is never
+ * cleared, so the later turns and a passer who has since marked Start of Turn done must not count.
+ */
+const setupStageOn = (state: GameState, seats: readonly Playerhand[], currentTurn: number): boolean =>
+  currentTurn <= Math.max(1, state.chatOrdersStartTurn) &&
+  seats.some((player) => player.setup?.passed === true && !player.playerTurns.some((turn) => turn.done?.SOT === true))
+
+/** Whether the setup stage still waits for the player: no civilization yet, or a required setup neither finished nor passed. */
+const setupStageWaitsFor = (player: Playerhand): boolean =>
+  player.civilization === null ||
+  (player.setup?.required === true && player.setup.finished !== true && player.setup.passed !== true)
+
+/**
+ * Who "has the turn", and whether the setup stage picked them. There is no baton: it is the
  * first player, in seat order starting from the start player, who has not
  * marked the earliest open phase done. The earliest open phase is the first one
  * some active player has not marked done in the current turn.
+ *
+ * Setup stage (issue #374): while some player who passed the turn on from the Setup tab has not marked Start of Turn done,
+ * the holder is the first player in the same order who has not marked Start of Turn done and still has to choose a
+ * civilization or do a setup nobody has passed on yet. With no such player the rule above applies: the earliest open
+ * phase's holder, who may be someone whose setup is finished. Before any pass nothing here differs from the rule above.
  *
  * The seat it starts from is the start player of the current turn (see
  * `startPlayerName`), or `startPlayerNumber` when a caller passes one.
  *
  * `undefined` when there are no active players.
  */
-export function turnHolder(state: GameState, startPlayerNumber?: number): Playerhand | undefined {
+export function turnHolderStage(
+  state: GameState,
+  startPlayerNumber?: number,
+): { readonly holder: Playerhand; readonly stage: 'setup' | null } | undefined {
   const seats = bySeat(state.players)
   const { currentTurn } = turnStatus(state)
   const earliest = TURN_PHASES.find((phase) =>
@@ -374,7 +397,18 @@ export function turnHolder(state: GameState, startPlayerNumber?: number): Player
   const found = seats.findIndex((player) => player.playernumber >= startNumber)
   const from = found === -1 ? 0 : found
   const ordered = [...seats.slice(from), ...seats.slice(0, from)]
-  return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
+
+  if (setupStageOn(state, seats, currentTurn)) {
+    const waiting = ordered.find((player) => !isDone(turnOf(player, currentTurn), 'SOT') && setupStageWaitsFor(player))
+    if (waiting !== undefined) return { holder: waiting, stage: 'setup' }
+  }
+  const holder = ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
+  return holder === undefined ? undefined : { holder, stage: null }
+}
+
+/** Who "has the turn": see `turnHolderStage`. */
+export function turnHolder(state: GameState, startPlayerNumber?: number): Playerhand | undefined {
+  return turnHolderStage(state, startPlayerNumber)?.holder
 }
 
 /**

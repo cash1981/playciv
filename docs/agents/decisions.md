@@ -1585,8 +1585,8 @@ Source: `assisted.ts` (`build`), `assisted-city.ts`, `assisted-resources.ts`,
 
 Human, 2026-11-24 (the answers in issue #374). One-time per player, steps in any order, shown as a **Setup tab first in
 "Your actions"** (not a `TurnPhase`, not part of Start of Turn). Engine: `setup.ts` (`setupViewOf`, `setCapital`,
-`placeSetupFigure`, `countSetupTrade`, `placeSetupWonder`, `undoSetupStep`, `finishSetup`) and `assisted-setup.ts`
-(`setupGreatPerson`). Route `POST /api/games/:id/setup` (steps capital, figure, trade, wonder; `undo`).
+`placeSetupFigure`, `countSetupTrade`, `placeSetupWonder`, `undoSetupStep`, `finishSetupStep`, `passSetup`, `finishSetup`) and
+`assisted-setup.ts` (`setupGreatPerson`). Route `POST /api/games/:id/setup` (steps capital, figure, trade, wonder, finish, pass; `undo`).
 
 - **Who:** `Playerhand.setup` is written when a civilization is revealed while the player's turn-1 Start of Turn is not
   done (current turn is the first, no done Start of Turn). A reveal later, and every save from before setup existed, has no
@@ -1616,8 +1616,29 @@ Human, 2026-11-24 (the answers in issue #374). One-time per player, steps in any
   capital's outskirts.
 - **Gate:** `markPhasesDone` refuses Start of Turn done, also through `upToPhase`, with `SETUP_INCOMPLETE` (409) until the steps
   are done (capital, figures, policy, trade, plus the great person for Americans and the wonder for Egyptians), per player; a
-  pass records `finished`, so removing the capital by hand later does not close it again. Reopening is unchanged. The web
-  disables both End turn buttons with `you.setup.blocksTurn`.
+  pass records `finished`, so removing the capital by hand later does not close it again. Reopening is unchanged. The End turn
+  buttons on the other tabs and the Order tab are disabled with `you.setup.blocksTurn` while a step is missing; a complete but
+  unfinished setup lets them through, and that press finishes setup implicitly.
+- **Finish setup:** a primary button in the Setup tab (`POST /setup` `{ step: 'finish' }`, `finishSetupStep`), enabled when
+  `blocksTurn === null`. It sets `finished` and logs "<name> finished setup" once (`finishSetup` is a no-op when already
+  finished, so a later Start of Turn does not log again); the Setup tab goes. Refused with `SETUP_REFUSED` (400, the gate's
+  reason) while a step is missing; a repeat answers the same state. Start of Turn done still needs setup finished or complete.
+- **Passing the turn on:** civilizations are chosen in turn order, so a player can hand the turn on before finishing. **End
+  turn on the Setup tab** calls `{ step: 'pass' }` (`passSetup`) and never marks a phase: it sets `PlayerSetup.passed` and logs
+  "<name> passed the turn on in setup" (no card named). It needs a civilization and an open setup, not a finished step;
+  idempotent (no second line); steps stay doable and nothing is blocked or lifted. `you.setup.passed` is the viewer's own.
+- **Holder follows passes:** `turnHolder` (`turnHolderStage` in `turn.ts`) has a setup stage that exists only in the first turn
+  (as `setupStillOpen` opens setup) and applies while some player has `passed` and has never marked Start of Turn done (`passed`
+  is not cleared, so later turns and a passer who has marked it do not count); finishing their setup afterwards does not end it (the pass was made so
+  the next player can choose a civilization). The holder is then the first player from the start player clockwise who has not
+  marked Start of Turn done and has no civilization yet or a required setup that is neither finished nor passed;
+  `activeTurnStatus.stage` is `'setup'` and the header says "choosing civilization / setup". With no such player the normal
+  rule applies: the earliest open phase's holder, who may be someone whose setup is finished. Before any pass nothing differs.
+  The same holder drives the out-of-turn draw warning (`requireTurn` in `actions/draw.ts`: after a pass the passer gets
+  `NOT_YOUR_TURN` on a draw, the stage holder does not) and the 72-hour turn reminders (`turn-reminders.ts`).
+  `turnHolderChanged` mails the stage holder "choose your civilization and do your setup" and a holder with an own unfinished
+  setup "finish your setup"; both `finish` and `pass` call it (best effort, as `turns/done` does). The setup steps pass the
+  actor's id, so they never mail the player who pressed the button (`actorId`); `turns/done` does not, as before.
 - **Undo:** each of capital, figure, trade and wonder has a solo undo (one player alone, refused while a later step needs it),
   idempotent when the step is not done. Setup pieces are sealed against the board Undo (`isAssistedBoardChange`). Undoing the
   civ reveal is refused after setup progress (`CIV_REVEAL_SETUP_STARTED`, 409; undo the steps first).

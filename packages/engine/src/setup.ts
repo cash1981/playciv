@@ -135,8 +135,10 @@ export interface SetupStepView {
 
 export interface SetupView {
   readonly steps: readonly SetupStepView[]
-  /** Why Start of Turn cannot be marked done yet, for the End turn buttons; `null` when setup allows it. */
+  /** Why setup cannot be finished yet (the Finish setup button and Start of Turn); `null` when no step is missing. */
   readonly blocksTurn: string | null
+  /** The player passed the turn on from the Setup tab; the steps stay doable and setup can still be finished. */
+  readonly passed: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -660,7 +662,7 @@ export function setupViewOf(state: GameState, player: Playerhand): SetupView | n
     }
   }
 
-  return { steps, blocksTurn: setupGateOf(state, player) ?? null }
+  return { steps, blocksTurn: setupGateOf(state, player) ?? null, passed: setup.passed === true }
 }
 
 // ---------------------------------------------------------------------------
@@ -681,7 +683,7 @@ function held(state: GameState, playerId: string, step: string): Result<Held, En
   if (player.civilization === null) return err(refuse(step, 'Reveal your civilization first.'))
   const setup = player.setup
   if (setup === undefined || !setup.required) return err(refuse(step, 'You have no setup to do.'))
-  if (setup.finished) return err(refuse(step, 'Setup is over: Start of Turn has been marked done.'))
+  if (setup.finished) return err(refuse(step, 'Setup is over: you finished it or marked Start of Turn done.'))
   return ok({ player, setup })
 }
 
@@ -1108,8 +1110,9 @@ export function undoSetupStep(state: GameState, input: UndoSetupInput): ActionRe
 }
 
 /**
- * The gate lets Start of Turn through: record that setup is finished, so a later manual board edit cannot close it again.
- * Nothing changes for a player with no open setup.
+ * Setup is finished: record it, so a later manual board edit cannot close it again, and log it once. Called by the Finish
+ * setup button (`finishSetupStep`) and when the gate lets Start of Turn through. Nothing changes for a player with no open
+ * setup, so the second caller does not log again.
  */
 export function finishSetup(state: GameState, playerId: string, at: string | undefined): GameState {
   const player = playerOf(state, playerId)
@@ -1125,6 +1128,43 @@ export function finishSetup(state: GameState, playerId: string, at: string | und
   })
 }
 
+/**
+ * The Finish setup button: setup is over for the player and the Setup tab goes. Refused while a step is missing (with the
+ * gate's reason), without a civilization or without a setup. A repeat after it went through changes nothing.
+ */
+export function finishSetupStep(state: GameState, input: SetupAtInput): ActionResult {
+  const player = playerOf(state, input.playerId)
+  if (player?.setup?.required === true && player.setup.finished && player.civilization !== null) return ok(state)
+  const access = held(state, input.playerId, 'finish')
+  if (!access.ok) return access
+  const reason = setupGateOf(state, access.value.player)
+  if (reason !== undefined) return err(refuse('finish', reason))
+  return ok(finishSetup(state, input.playerId, input.at))
+}
+
+/**
+ * Passes the turn on from the Setup tab: records `passed` and nothing else (no phase is marked, no step is lifted or blocked)
+ * so the next player can choose their civilization. Needs a civilization and an open setup, not a completed step. A repeat
+ * changes and logs nothing. The public line names no card.
+ */
+export function passSetup(state: GameState, input: SetupAtInput): ActionResult {
+  const access = held(state, input.playerId, 'pass')
+  if (!access.ok) return access
+  const { player, setup } = access.value
+  if (setup.passed === true) return ok(state)
+  const stored = withPlayerHand(state, { ...player, setup: { ...setup, passed: true } })
+  return ok(
+    appendLog(stored, {
+      username: player.username,
+      playerId: player.playerId,
+      logType: 'SETUP',
+      publicLog: `${player.username} passed the turn on in setup`,
+      privateLog: '',
+      createdAt: input.at ?? null,
+    }),
+  )
+}
+
 // ---------------------------------------------------------------------------
 // The great person (Americans): its rules; the assisted action itself is in `assisted-setup.ts`
 // ---------------------------------------------------------------------------
@@ -1134,7 +1174,7 @@ export function greatPersonBlock(state: GameState, player: Playerhand): BlockedA
   if (player.civilization?.name !== AMERICANS) return blocked('not-owned', 'Only the Americans draw a great person in setup.')
   const setup = player.setup
   if (setup === undefined || !setup.required) return blocked('unavailable', 'You have no setup to do.')
-  if (setup.finished) return blocked('unavailable', 'Setup is over: Start of Turn has been marked done.')
+  if (setup.finished) return blocked('unavailable', 'Setup is over: you finished it or marked Start of Turn done.')
   if (greatPersonRecordOf(state, player.playerId) !== undefined) return blocked('used', 'You have already drawn your setup great person.')
   // The draw counts a revealed Organized Religion (two cards), and a hidden policy must not be guessed from the count
   if (player.socialPolicies.length === 0) return blocked('unavailable', 'Choose your social policy first: Organized Religion would draw a second great person card.')

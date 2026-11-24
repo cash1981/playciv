@@ -219,6 +219,41 @@ describe('the rows of the checklist', () => {
   })
 })
 
+describe('Finish setup', () => {
+  it('is a primary button, disabled with the reason while a step is missing, and sends nothing', () => {
+    const finish = vi.spyOn(api, 'setupFinish').mockResolvedValue({} as PlayerView)
+    renderPanel(viewWith(chineseSteps()))
+
+    const button_ = button(/^Finish setup/)
+    expect(button_.className).toContain('primary')
+    expect(button_.disabled).toBe(true)
+    expect(button_.getAttribute('title')).toBe(GATE)
+    expect(button_.getAttribute('aria-label')?.startsWith(button_.textContent ?? '')).toBe(true)
+    fireEvent.click(button_)
+    expect(finish).not.toHaveBeenCalled()
+  })
+
+  it('is enabled once no step is missing and sends the finish request with the revision it saw', async () => {
+    const finish = vi.spyOn(api, 'setupFinish').mockResolvedValue({} as PlayerView)
+    renderPanel(viewWith([stepOf('government', 'Government', { status: 'auto', reason: 'x' })], null))
+
+    const button_ = button(/^Finish setup/)
+    expect(button_.disabled).toBe(false)
+    fireEvent.click(button_)
+
+    await waitFor(() => expect(finish).toHaveBeenCalledTimes(1))
+    const [gameId, requestId, rev] = finish.mock.calls[0] ?? []
+    expect(gameId).toBe('g1')
+    expect(typeof requestId).toBe('string')
+    expect(rev).toBe(6)
+  })
+
+  it('is disabled while the page is busy or a replay', () => {
+    renderPanel(viewWith([stepOf('government', 'Government', { status: 'auto', reason: 'x' })], null), boardPicker(), { busy: true })
+    expect(button(/^Finish setup/).disabled).toBe(true)
+  })
+})
+
 describe('placing the capital on the map', () => {
   it('opens the map pick with the squares the engine lists and sends the square that is picked', async () => {
     const setup = vi.spyOn(api, 'setup').mockResolvedValue({} as PlayerView)

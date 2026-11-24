@@ -41,7 +41,7 @@ import type { WaitingFor } from './turn.js'
 import {
   gameHasStarted,
   startPlayerName,
-  turnHolder,
+  turnHolderStage,
   turnStatus,
 } from './turn.js'
 import type { Undo } from './undo.js'
@@ -271,8 +271,16 @@ export interface SetupPlacement {
 export interface PlayerSetup {
   /** Set when the civilization is revealed. Start of Turn cannot be marked done until setup is finished. */
   readonly required: boolean
-  /** Set when the gate let Start of Turn through, so a later manual board edit cannot close it again. */
+  /**
+   * Set when setup is finished (the Finish setup button or the gate letting Start of Turn through), so a later manual board
+   * edit cannot close it again.
+   */
   readonly finished: boolean
+  /**
+   * Set when the player passed the turn on from the Setup tab without finishing (issue #374): the next player may choose
+   * their civilization, and this player's steps stay doable. Public through the log line only.
+   */
+  readonly passed?: boolean
   /** The trade the starting count added to `stats.trade`, so a solo undo takes back exactly it. Absent until counted. */
   readonly trade?: number
   /** The pieces setup placed, in the order it placed them. */
@@ -1728,6 +1736,11 @@ export interface ActiveTurnStatus {
   readonly waitingFor: readonly WaitingFor[]
   /** The username of whoever started this turn, `null` when there is nobody. Public. */
   readonly startPlayer: string | null
+  /**
+   * `'setup'` while the holder was picked by the setup stage (issue #374): a player passed the turn on in setup and this
+   * one still has to choose their civilization or do their setup. Absent otherwise.
+   */
+  readonly stage?: 'setup'
 }
 
 /**
@@ -1737,8 +1750,9 @@ export interface ActiveTurnStatus {
  */
 export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
   if (!gameHasStarted(state)) return null
-  const holder = turnHolder(state)
-  if (holder === undefined) return null
+  const picked = turnHolderStage(state)
+  if (picked === undefined) return null
+  const holder = picked.holder
   const status = turnStatus(state)
   const phase = status.players.find((player) => player.playerId === holder.playerId)?.phase
   return {
@@ -1750,6 +1764,7 @@ export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
     phase: phase ?? 'SOT',
     waitingFor: status.waitingFor,
     startPlayer: startPlayerName(state, status.currentTurn),
+    ...(picked.stage === 'setup' ? { stage: 'setup' as const } : {}),
   }
 }
 

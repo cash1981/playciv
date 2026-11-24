@@ -31,6 +31,7 @@ import {
   WONDER_ASSET_IDS,
   chooseSocialPolicy,
   countSetupTrade,
+  finishSetupStep,
   chooseTech,
   discardBarbarians,
   discardItem,
@@ -47,6 +48,7 @@ import {
   markPhasesDone,
   placeGreatPersonInPyramid,
   placeSetupFigure,
+  passSetup,
   placeSetupWonder,
   postOrder,
   performAssistedAction,
@@ -198,7 +200,7 @@ function parseStartBuildingProgramPayload(body: Record<string, unknown>): StartB
 }
 
 const SETUP_FIELDS = ['step', 'undo', 'figure', 'column', 'row', 'direction', 'requestId', 'rev'] as const
-const SETUP_STEPS = ['capital', 'figure', 'trade', 'wonder'] as const
+const SETUP_STEPS = ['capital', 'figure', 'trade', 'wonder', 'finish', 'pass'] as const
 
 /** One setup request, checked for its shape only: whether the square, the figure and the step are legal is the engine's decision. */
 type SetupRequest =
@@ -206,6 +208,8 @@ type SetupRequest =
   | { readonly step: 'figure'; readonly figure: SetupFigure; readonly column: number; readonly row: number }
   | { readonly step: 'trade' }
   | { readonly step: 'wonder'; readonly column: number; readonly row: number }
+  | { readonly step: 'finish' }
+  | { readonly step: 'pass' }
   | { readonly undo: true; readonly step: 'capital' | 'trade' | 'wonder' }
   | { readonly undo: true; readonly step: 'figure'; readonly figure: SetupFigure }
 
@@ -213,7 +217,8 @@ type SetupRequest =
  * The `/setup` body, or a sentence saying what is wrong with it. Exactly the fields of the step and nothing else:
  * `capital` takes `column` and `row` (and for the Indians `direction`), `figure` a `figure` (`army`, `scout` or `white`)
  * and `column` and `row`, `trade` nothing, `wonder` `column` and `row`; `undo: true` takes the step back and, for
- * `figure`, names which. `requestId` and `rev` are the envelope, as the neighbouring routes take them.
+ * `figure`, names which. `finish` (the Finish setup button) and `pass` (End turn on the Setup tab) take nothing. `requestId`
+ * and `rev` are the envelope, as the neighbouring routes take them.
  */
 function parseSetupBody(body: Record<string, unknown>): SetupRequest | string {
   const stray = Object.keys(body).filter((key) => !(SETUP_FIELDS as readonly string[]).includes(key))
@@ -236,13 +241,14 @@ function parseSetupBody(body: Record<string, unknown>): SetupRequest | string {
       if (figure === undefined) return `undoing a figure needs figure: one of ${SETUP_FIGURES.join(', ')}`
       return { undo: true, step, figure }
     }
+    if (step === 'finish' || step === 'pass') return `${step} cannot be undone`
     if (figure !== undefined) return 'figure only belongs to the figure step'
     return { undo: true, step }
   }
 
-  if (step === 'trade') {
-    if (square.length > 0 || figure !== undefined || direction !== undefined) return 'trade takes no square, figure or direction'
-    return { step }
+  if (step === 'trade' || step === 'finish' || step === 'pass') {
+    if (square.length > 0 || figure !== undefined || direction !== undefined) return `${step} takes no square, figure or direction`
+    return step === 'trade' ? { step: 'trade' } : step === 'finish' ? { step: 'finish' } : { step: 'pass' }
   }
   const { column, row } = body
   if (!whole(column) || !whole(row)) return `column and row are required: whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
@@ -1199,10 +1205,30 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
             return countSetupTrade(state, { playerId, at })
           case 'wonder':
             return placeSetupWonder(state, { playerId, at, column: parsed.column, row: parsed.row })
+          case 'finish':
+            return finishSetupStep(state, { playerId, at })
+          case 'pass':
+            return passSetup(state, { playerId, at })
         }
       },
       clientRev,
-      { description: `${actor.username} did setup: ${'undo' in parsed ? 'undo ' : ''}${parsed.step}`, skipSaveWhenUnchanged: true, allowIdempotentRetry: true },
+      {
+        description: `${actor.username} did setup: ${'undo' in parsed ? 'undo ' : ''}${parsed.step}`,
+        skipSaveWhenUnchanged: true,
+        allowIdempotentRetry: true,
+        // Passing the turn on or finishing setup can change who holds the turn: tell the new holder (best effort, like turns/done)
+        ...(!('undo' in parsed) && (parsed.step === 'finish' || parsed.step === 'pass')
+          ? {
+              after: async ({ before, after }: { readonly before: GameState; readonly after: GameState }) => {
+                try {
+                  await context.notifications.turnHolderChanged(before, after, playerId)
+                } catch (error) {
+                  console.error('Mailing the new turn holder after setup failed', error)
+                }
+              },
+            }
+          : {}),
+      },
     )
   })
 

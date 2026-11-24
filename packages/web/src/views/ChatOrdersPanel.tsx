@@ -171,7 +171,7 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
 }
 
 /**
- * `Turn 4 · Alice's turn — city management phase`, or `Turn 4 · Your turn — ...`
+ * `Turn 4 · Alice's turn — city management phase` (`choosing civilization / setup` in the setup stage), or `Turn 4 · Your turn — ...`
  * when the player in focus (see `focusPlayer`) is the viewer, with that
  * player's own phase. The full list of who is missing what is the status strip
  * below the title.
@@ -182,6 +182,8 @@ export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerUsername?: 
   const focus = focusPlayer(activeTurn)
   if (focus === null) return `${turn} · everyone is done`
   const who = focus.username === viewerUsername ? 'Your turn' : `${focus.username}'s turn`
+  // The setup stage (#374): the holder is choosing a civilization or doing setup, which is before any phase
+  if (activeTurn.stage === 'setup' && focus.username === activeTurn.username) return `${turn} · ${who} — choosing civilization / setup`
   return `${turn} · ${who} — ${TURN_PHASE_LABEL[focus.phase]} phase`
 }
 

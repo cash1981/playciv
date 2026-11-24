@@ -587,8 +587,9 @@ describe('currentPhaseOf and phaseStatusText', () => {
 describe('the Setup tab (#374)', () => {
   type Setup = NonNullable<NonNullable<PlayerView['you']>['setup']>
   const GATE = 'Finish your setup before Start of Turn can be marked done: still to do: capital. Open the Setup tab.'
-  const setupOf = (blocksTurn: string | null = GATE, steps: Setup['steps'] = []): Setup => ({
+  const setupOf = (blocksTurn: string | null = GATE, steps: Setup['steps'] = [], passed = false): Setup => ({
     blocksTurn,
+    passed,
     steps: [
       { id: 'capital', label: 'Capital', status: 'todo', reason: 'Place your capital.', squares: [], canUndo: false, undoReason: null, items: [] },
       { id: 'government', label: 'Government', status: 'auto', reason: 'Romans start with Despotism.', squares: [], canUndo: false, undoReason: null, items: [] },
@@ -709,6 +710,129 @@ describe('the Setup tab (#374)', () => {
     const endTurn = screen.getByRole('button', { name: /^End turn/ }) as HTMLButtonElement
     expect(endTurn.disabled).toBe(true)
     expect(screen.getAllByText(GATE).length).toBeGreaterThan(0)
+  })
+
+  describe('End turn and Finish setup on the Setup tab', () => {
+    const passedView = (passed: boolean, blocksTurn: string | null = GATE): PlayerView => withSetup('SOT', setupOf(blocksTurn, [], passed))
+
+    it('passes the turn on from the Setup tab: End turn calls setupPass with the revision it saw and never marks a phase', async () => {
+      const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+      const setupPass = vi.spyOn(api, 'setupPass').mockResolvedValue({} as PlayerView)
+      renderPanel(passedView(false))
+
+      const endTurn = screen.getByRole('button', { name: 'End turn: pass the turn on without finishing setup' }) as HTMLButtonElement
+      // Held back on the other tabs by the setup, but not here: passing needs no completed step
+      expect(endTurn.disabled).toBe(false)
+      expect(endTurn.textContent).toBe('End turn')
+      expect(endTurn.getAttribute('aria-label')?.startsWith(endTurn.textContent ?? '')).toBe(true)
+      fireEvent.click(endTurn)
+
+      await waitFor(() => expect(setupPass).toHaveBeenCalledTimes(1))
+      expect(setupPass.mock.calls[0]?.[0]).toBe('g1')
+      expect(typeof setupPass.mock.calls[0]?.[1]).toBe('string')
+      expect(setupPass.mock.calls[0]?.[2]).toBe(4)
+      expect(markDone).not.toHaveBeenCalled()
+    })
+
+    it('says the turn has been passed on and disables End turn, while Finish setup stays', () => {
+      renderPanel(passedView(true, null))
+
+      expect(screen.getByRole('status').textContent).toBe('You have passed the turn on. You can still finish your setup.')
+      expect((screen.getByRole('button', { name: /^End turn/ }) as HTMLButtonElement).disabled).toBe(true)
+      expect((screen.getByRole('button', { name: /^Finish setup/ }) as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it('leaves End turn on every other tab as it was: it marks the phase and is held back by the setup', () => {
+      const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+      const setupPass = vi.spyOn(api, 'setupPass').mockResolvedValue({} as PlayerView)
+      renderPanel(passedView(false))
+      fireEvent.click(tab(/^Trade/))
+
+      const endTurn = screen.getByRole('button', { name: 'End turn: mark Start of turn as done' }) as HTMLButtonElement
+      expect(endTurn.disabled).toBe(true)
+      expect(endTurn.getAttribute('title')).toBe(GATE)
+      fireEvent.click(endTurn)
+      expect(markDone).not.toHaveBeenCalled()
+      expect(setupPass).not.toHaveBeenCalled()
+    })
+
+    it('marks Start of Turn done from another tab once setup is complete, and back on the Setup tab it passes again', async () => {
+      const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+      renderPanel(passedView(false, null))
+      fireEvent.click(tab(/^Trade/))
+      fireEvent.click(screen.getByRole('button', { name: 'End turn: mark Start of turn as done' }))
+      await waitFor(() => expect(markDone).toHaveBeenCalledTimes(1))
+      fireEvent.click(tab(/^Setup/))
+      expect(screen.getByRole('button', { name: 'End turn: pass the turn on without finishing setup' })).toBeTruthy()
+    })
+
+    it('has a primary Finish setup button, disabled with the reason while a step is missing', () => {
+      const setupFinish = vi.spyOn(api, 'setupFinish').mockResolvedValue({} as PlayerView)
+      renderPanel(passedView(false))
+
+      const finish = screen.getByRole('button', { name: /^Finish setup/ }) as HTMLButtonElement
+      expect(finish.className).toContain('primary')
+      expect(finish.disabled).toBe(true)
+      expect(finish.getAttribute('title')).toBe(GATE)
+      expect(finish.getAttribute('aria-label')?.startsWith(finish.textContent ?? '')).toBe(true)
+      fireEvent.click(finish)
+      expect(setupFinish).not.toHaveBeenCalled()
+    })
+
+    it('sends Finish setup once no step is missing', async () => {
+      const setupFinish = vi.spyOn(api, 'setupFinish').mockResolvedValue({} as PlayerView)
+      renderPanel(passedView(false, null))
+
+      const finish = screen.getByRole('button', { name: /^Finish setup/ }) as HTMLButtonElement
+      expect(finish.disabled).toBe(false)
+      fireEvent.click(finish)
+      await waitFor(() => expect(setupFinish).toHaveBeenCalledTimes(1))
+      expect(setupFinish.mock.calls[0]?.[0]).toBe('g1')
+      expect(setupFinish.mock.calls[0]?.[2]).toBe(4)
+    })
+
+    it('moves focus to the passed line when the pressed End turn button is disabled by the pass, and not when focus is elsewhere', () => {
+      const { rerender } = renderPanel(passedView(false))
+      const endTurn = screen.getByRole('button', { name: /^End turn/ })
+      endTurn.focus()
+      expect(document.activeElement).toBe(endTurn)
+
+      rerender(<PhaseActionsPanel gameId="g1" view={passedView(true)} busy={false} readOnly={false} run={run} />)
+      expect(document.activeElement).toBe(screen.getByText(/^You have passed the turn on/))
+
+      // A pass seen while the viewer is working elsewhere does not take focus
+      cleanup()
+      const second = renderPanel(passedView(false, null))
+      const finish = screen.getByRole('button', { name: /^Finish setup/ })
+      finish.focus()
+      second.rerender(<PhaseActionsPanel gameId="g1" view={passedView(true, null)} busy={false} readOnly={false} run={run} />)
+      expect(document.activeElement).toBe(finish)
+    })
+
+    it('does not take focus on the first render of a setup that was already passed (a reload)', () => {
+      renderPanel(passedView(true, null))
+      expect(screen.getByRole('status').textContent).toContain('You have passed the turn on')
+      expect(document.activeElement).toBe(document.body)
+    })
+
+    it('falls back to the viewer’s phase when setup finishes while the Setup tab is selected', () => {
+      const { rerender } = renderPanel(passedView(true, null))
+      expect(selected()).toMatch(/^Setup/)
+      rerender(<PhaseActionsPanel gameId="g1" view={withSetup('SOT', null)} busy={false} readOnly={false} run={run} />)
+      expect(selected()).toBe('Start of turn (now)')
+      expect(screen.queryByRole('region', { name: 'Setup' })).toBeNull()
+      // End turn is the ordinary one again
+      expect(screen.getByRole('button', { name: 'End turn: mark Start of turn as done' })).toBeTruthy()
+    })
+
+    it('cannot be pressed on a replay (read only)', () => {
+      const setupPass = vi.spyOn(api, 'setupPass').mockResolvedValue({} as PlayerView)
+      renderPanel(passedView(false), { readOnly: true })
+      const endTurn = screen.getByRole('button', { name: /^End turn/ }) as HTMLButtonElement
+      expect(endTurn.disabled).toBe(true)
+      fireEvent.click(endTurn)
+      expect(setupPass).not.toHaveBeenCalled()
+    })
   })
 
   it('names no card before a great person is projected to the viewer, and only in the choice above the tabs after', () => {

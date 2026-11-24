@@ -44,7 +44,8 @@ interface Step {
 }
 interface View {
   readonly rev: number
-  readonly you: { readonly setup: { readonly steps: readonly Step[]; readonly blocksTurn: string | null } | null } | null
+  readonly you: { readonly setup: { readonly steps: readonly Step[]; readonly blocksTurn: string | null; readonly passed: boolean } | null } | null
+  readonly activeTurn: { readonly username: string; readonly stage?: string } | null
   readonly opponents: readonly Record<string, unknown>[]
   readonly board: { readonly pieces: readonly { readonly id: string; readonly assetId: string; readonly category: string }[] }
   readonly log: readonly { readonly publicLog: string; readonly logType: string | null }[]
@@ -303,6 +304,98 @@ describe('the gate on turns/done', () => {
     // The other player has no setup, so the gate does not apply to them
     const other = await post(t.other, `/api/games/${t.gameId}/turns/done`, { phase: 'SOT', turnNumber: 1 })
     expect(other.status).toBe(200)
+  })
+})
+
+/** Every step of the starter's setup but the last click: capital, both figures, the trade and the policy. */
+async function completeSetup(t: Awaited<ReturnType<typeof table>>): Promise<void> {
+  let v = await view(t.gameId, t.starter)
+  v = await (await post(t.starter, setupUrl(t.gameId), { ...firstCapital(v), rev: v.rev })).json<View>()
+  for (const figure of ['army', 'scout']) {
+    const square = stepOf(v, 'figures').items.find((item) => item.id === figure)?.squares[0]
+    if (square === undefined) throw new Error(`no ${figure} square`)
+    v = await (await post(t.starter, setupUrl(t.gameId), { step: 'figure', figure, column: square.column, row: square.row })).json<View>()
+  }
+  await post(t.starter, setupUrl(t.gameId), { step: 'trade' })
+  const policy = (await repo.findGame(t.gameId))?.socialPolicies[0]?.name
+  expect((await post(t.starter, `/api/games/${t.gameId}/socialpolicy/choose`, { name: policy })).status).toBe(200)
+}
+
+describe('Finish setup and passing the turn on (#374)', () => {
+  it('refuses Finish setup while a step is missing, with the gate reason, and writes no line', async () => {
+    const t = await table('set-finish-refused')
+    const v = await view(t.gameId, t.starter)
+    const refused = await post(t.starter, setupUrl(t.gameId), { step: 'finish', rev: v.rev })
+    expect(refused.status).toBe(400)
+    const body = await refused.json<{ error: string; message: string }>()
+    expect(body.error).toBe('SETUP_REFUSED')
+    expect(body.message).toContain(v.you?.setup?.blocksTurn ?? 'no reason')
+    const after = await view(t.gameId, t.starter)
+    expect(after.rev).toBe(v.rev)
+    expect(after.log.some((entry) => entry.publicLog.includes('finished setup'))).toBe(false)
+  })
+
+  it('finishes once the steps are done: one line, the tab gone, and a repeat changes nothing', async () => {
+    const t = await table('set-finish')
+    await completeSetup(t)
+    const before = await view(t.gameId, t.starter)
+    expect(before.you?.setup?.blocksTurn).toBeNull()
+    const finished = await post(t.starter, setupUrl(t.gameId), { step: 'finish', rev: before.rev, requestId: 'fin-1' })
+    expect(finished.status).toBe(200)
+    const v = await finished.json<View>()
+    expect(v.you?.setup).toBeNull()
+    expect(v.log.filter((entry) => entry.publicLog.endsWith('finished setup'))).toHaveLength(1)
+    const again = await post(t.starter, setupUrl(t.gameId), { step: 'finish', rev: v.rev, requestId: 'fin-1' })
+    expect(again.status).toBe(200)
+    expect((await again.json<View>()).rev).toBe(v.rev)
+    // Start of Turn done follows and writes no second line
+    expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'SOT', turnNumber: 1 })).status).toBe(200)
+    const end = await view(t.gameId, t.starter)
+    expect(end.log.filter((entry) => entry.publicLog.endsWith('finished setup'))).toHaveLength(1)
+  })
+
+  it('passes the turn on: public line, steps still doable, idempotent, the other player sees the setup stage', async () => {
+    const t = await table('set-pass')
+    const v = await view(t.gameId, t.starter)
+    const passed = await post(t.starter, setupUrl(t.gameId), { step: 'pass', rev: v.rev, requestId: 'pass-1' })
+    expect(passed.status).toBe(200)
+    const own = await passed.json<View>()
+    expect(own.you?.setup?.passed).toBe(true)
+    expect(own.log.filter((entry) => entry.publicLog.endsWith('passed the turn on in setup'))).toHaveLength(1)
+    // Steps stay doable
+    expect((await post(t.starter, setupUrl(t.gameId), firstCapital(own))).status).toBe(200)
+    // A repeat is the same revision and no second line
+    const latest = await view(t.gameId, t.starter)
+    const again = await post(t.starter, setupUrl(t.gameId), { step: 'pass', rev: latest.rev })
+    expect((await again.json<View>()).rev).toBe(latest.rev)
+    expect(latest.log.filter((entry) => entry.publicLog.endsWith('passed the turn on in setup'))).toHaveLength(1)
+
+    // The other player: holder in the setup stage, the pass only as a public line, nothing of the setup record
+    const theirs = await view(t.gameId, t.other)
+    expect(theirs.activeTurn).toMatchObject({ stage: 'setup' })
+    expect(theirs.you?.setup).toBeNull()
+    expect(theirs.log.some((entry) => entry.publicLog.endsWith('passed the turn on in setup'))).toBe(true)
+    expect(JSON.stringify(theirs.opponents)).not.toContain('passed')
+    // Start of Turn is still closed to the starter
+    expect((await post(t.starter, `/api/games/${t.gameId}/turns/done`, { phase: 'SOT', turnNumber: 1 })).status).toBe(409)
+  })
+
+  it('refuses a pass without a setup, and takes no fields beyond the step', async () => {
+    const t = await table('set-pass-refused')
+    const none = await post(t.other, setupUrl(t.gameId), { step: 'pass' })
+    expect(none.status).toBe(400)
+    expect(await none.json()).toMatchObject({ error: 'SETUP_REFUSED' })
+    for (const body of [
+      { step: 'pass', column: 1, row: 1 },
+      { step: 'finish', figure: 'army' },
+      { step: 'finish', undo: true },
+      { step: 'pass', undo: true },
+      { step: 'pass', direction: 'east' },
+    ]) {
+      const response = await post(t.starter, setupUrl(t.gameId), body)
+      expect(response.status, JSON.stringify(body)).toBe(400)
+      expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
+    }
   })
 })
 
