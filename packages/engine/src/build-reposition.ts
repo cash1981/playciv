@@ -17,7 +17,6 @@ import { figureSquaresFor, squareCentre, squareLabel } from './build-options.js'
 import type { BuildSquare } from './build-options.js'
 import { openCityManagementTurn } from './assisted-core.js'
 import { countLinesIn } from './assisted-culture.js'
-import { cityProductionsOf } from './city-production.js'
 import { appendLog } from './log.js'
 import type { EngineError } from './errors.js'
 import { movementOf } from './movement.js'
@@ -186,14 +185,12 @@ export function repositionBuiltFigure(state: GameState, input: RepositionBuiltFi
     return err(refused(`${piece.label} could not be put on ${target.label}.`))
   }
   // A public line, so the log says where the figure went and not only where the build put it
-  const city = cityProductionsOf(state, player).find((candidate) => candidate.pieceId === effect.cityPieceId)?.label
   const logged = countLinesIn(
     appendLog(moved, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} moved the ${effect.item.kind} built in ${city ?? 'a city'} from ${effect.square.label} to ${target.label}` +
-        ' (still in City Management: nothing paid, no movement used)' +
+        `${player.username} moved the ${effect.item.kind} from ${effect.square.label} to ${target.label}` +
         (target.note === undefined ? '' : `. ${target.note}`),
       privateLog: '',
       createdAt: input.at ?? null,

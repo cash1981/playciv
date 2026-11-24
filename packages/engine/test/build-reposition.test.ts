@@ -143,7 +143,7 @@ describe('repositioning a built figure', () => {
     )
     // The log says where the figure went, in the same words as the build's line named the square
     expect(moved.log.at(-1)?.publicLog).toMatch(
-      /^cash1981 moved the army built in City B2 from B3 to C2 \(still in City Management: nothing paid, no movement used\)$/,
+      /^cash1981 moved the army from B3 to C2$/,
     )
     expect(built.log.at(-1)?.publicLog).toContain('on square B3')
     // The record follows the figure
