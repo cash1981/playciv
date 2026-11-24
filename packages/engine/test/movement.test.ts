@@ -379,6 +379,69 @@ describe('reachable squares', () => {
 const waterGame = (): GameState =>
   place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 0, 3)
 
+describe('a metropolis on a water square (Fame and Fortune p. 10)', () => {
+  /** Tile 05: row 1 is water, water, grass, forest. A horizontal metropolis lies on (1,1) water and (2,1) grass. */
+  const withMetropolis = (on: boolean): GameState => {
+    let state = place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 3, 1)
+    if (!on) return state
+    const asset = findBoardAsset('cities/redmetropolis2')
+    if (asset === undefined) throw new Error('missing metropolis')
+    state = unwrap(
+      placePiece(state, {
+        playerId: CASH1981,
+        assetId: asset.id,
+        x: Math.round(2 * SQUARE_SIZE - 1 - asset.width / 2),
+        y: Math.round(mapTop(state.board) + SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2),
+      }),
+    )
+    return state
+  }
+  const reach = (state: GameState, column: number, row: number): number | undefined => {
+    const army = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+    if (army === undefined) throw new Error('army missing')
+    const options = figureMovementOptions(state.board, playerOf(state), army, 1)
+    if (options === null) throw new Error('expected movement options')
+    return options.destinations.find((cell) => cell.column === column && cell.row === row)?.distance
+  }
+
+  it('is land for movement: an army may end its move on the water square the metropolis covers', () => {
+    const water = (state: GameState): string | null => terrainAt(state.board, 1.5 * SQUARE_SIZE, mapTop(state.board) + 1.5 * SQUARE_SIZE)
+    expect(water(withMetropolis(false))).toBe('water')
+    expect(reach(withMetropolis(false), 1, 1)).toBeUndefined()
+    expect(reach(withMetropolis(true), 1, 1)).toBe(2)
+  })
+})
+
+describe('a vertical metropolis on a water square (Fame and Fortune p. 10)', () => {
+  /** Tile 05 column 0 is water, water, water, grass: a vertical metropolis lies on (0,2) water and (0,3) grass. */
+  const withVertical = (on: boolean): GameState => {
+    let state = place(placeTile(game(), 'tiles/tile05'), 'figures/redarmy', 1, 3)
+    if (!on) return state
+    const asset = findBoardAsset('cities/redmetropolis2')
+    if (asset === undefined) throw new Error('missing metropolis')
+    state = unwrap(
+      placePiece(state, {
+        playerId: CASH1981,
+        assetId: asset.id,
+        rotation: 90,
+        x: Math.round(SQUARE_SIZE / 2 - asset.width / 2),
+        y: Math.round(mapTop(state.board) + 3 * SQUARE_SIZE - 1 - asset.height / 2),
+      }),
+    )
+    return state
+  }
+
+  it('is land for travel on both of its squares (the water square is reachable and the figure may end on it)', () => {
+    for (const [on, expected] of [[false, undefined], [true, 2]] as const) {
+      const state = withVertical(on)
+      const army = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+      if (army === undefined) throw new Error('army missing')
+      const travel = figureMovementOptions(state.board, playerOf(state), army, 1)?.destinations.find((cell) => cell.column === 0 && cell.row === 2)
+      expect(travel?.distance).toBe(expected)
+    }
+  })
+})
+
 describe('Flight', () => {
   const distanceTo = (state: GameState, column: number, row: number): number | undefined => {
     const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)

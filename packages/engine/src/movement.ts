@@ -14,7 +14,7 @@
  * reset step.
  */
 
-import { mapCellOf, pieceColorOf } from './blockade.js'
+import { cityCenterCells, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import type { Board, BoardPiece, PieceMovement } from './board.js'
 import { columnLabel, isMapCell, mapTop, whiteFigureCivilization } from './board.js'
@@ -228,6 +228,25 @@ const centreOf = (board: Board, cell: Cell): readonly [number, number] => [
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
+/**
+ * The squares a metropolis covers. Its expansion square may be water, and "the square is no longer considered to be water for
+ * purposes of movement" (Fame and Fortune p. 10: a makeshift bridge), so these squares are land for every move.
+ */
+export function metropolisSquares(board: Board): ReadonlySet<string> {
+  const squares = new Set<string>()
+  for (const piece of board.pieces) {
+    if (piece.category !== 'city' || !piece.assetId.includes('metropolis')) continue
+    for (const cell of cityCenterCells(board, piece) ?? []) squares.add(keyOf(cell))
+  }
+  return squares
+}
+
+/** Whether a square is water for movement: water terrain, unless a metropolis stands on it. */
+const isWaterForMovement = (board: Board, cell: Cell, bridges: ReadonlySet<string>): boolean => {
+  const [x, y] = centreOf(board, cell)
+  return terrainAt(board, x, y) === 'water' && !bridges.has(keyOf(cell))
+}
+
 /** The map squares holding a piece that matches `wanted`. */
 function pieceSquares(board: Board, wanted: (piece: BoardPiece) => boolean): ReadonlySet<string> {
   const squares = new Set<string>()
@@ -328,6 +347,7 @@ export function figureMovementOptions(
   const water = waterRulesOf(player)
   const flight = hasRevealedTech(player, 'Flight')
   const occupancy = occupancyOf(board, player)
+  const bridges = metropolisSquares(board)
   const limit = Math.max(1, player.stackingLimit ?? 1)
   // Stacking limit is absolute (rule 50): a square already at it cannot be crossed or ended on.
   // An army may end its move on another player's figures: the move ends there and a battle starts, which
@@ -345,9 +365,7 @@ export function figureMovementOptions(
     const cell = queue.shift() as Cell
     const distance = distances.get(keyOf(cell)) ?? 0
     if (distance > 0) {
-      const [x, y] = centreOf(board, cell)
-      const terrain = terrainAt(board, x, y)
-      const waterHere = terrain === 'water'
+      const waterHere = isWaterForMovement(board, cell, bridges)
       // A figure that may only cross water (Navigation, England) still stops in it next to fog, to open the tile there, but only
       // with movement left to explore with (1); the next move takes it out to land: the explored square if it is land, else the
       // nearest legal square.
@@ -391,8 +409,7 @@ export function figureMovementOptions(
       if (!hasRoom(keyOf(next))) continue
       // Fog is not walked onto: it is explored first, from the square next to it.
       if (isUnexploredCell(board, next)) continue
-      const [x, y] = centreOf(board, next)
-      if (terrainAt(board, x, y) === 'water' && !water.cross) continue
+      if (isWaterForMovement(board, next, bridges) && !water.cross) continue
       if (distances.has(keyOf(next))) continue
       distances.set(keyOf(next), distance + 1)
       queue.push(next)
@@ -463,6 +480,7 @@ export function cardMoveDestinations(
   const limit = Math.max(1, crossing?.stackingLimit ?? 1)
   const lockedKeys = new Set(lockedCells.map(keyOf))
   const forbiddenKeys = new Set(forbiddenCells.map(keyOf))
+  const bridges = metropolisSquares(board)
   if (lockedKeys.has(keyOf(from))) return []
   const occupied = figureSquares(board)
   const mustStop = hutAndVillageSquares(board)
@@ -474,9 +492,7 @@ export function cardMoveDestinations(
     const cell = queue.shift() as Cell
     const distance = distances.get(keyOf(cell)) ?? 0
     if (distance > 0) {
-      const [x, y] = centreOf(board, cell)
-      const terrain = terrainAt(board, x, y)
-      const mayEndHere = terrain === 'water' ? water.end : true
+      const mayEndHere = isWaterForMovement(board, cell, bridges) ? water.end : true
       if (
         mayEndHere &&
         !occupied.has(keyOf(cell)) &&
@@ -506,9 +522,7 @@ export function cardMoveDestinations(
         if ((occupancy.own.get(keyOf(next)) ?? 0) >= limit) continue
       }
       if (isUnexploredCell(board, next)) continue
-      const [x, y] = centreOf(board, next)
-      const nextWater = terrainAt(board, x, y) === 'water'
-      if (nextWater && !water.cross) continue
+      if (isWaterForMovement(board, next, bridges) && !water.cross) continue
       if (distances.has(keyOf(next))) continue
       distances.set(keyOf(next), distance + 1)
       queue.push(next)

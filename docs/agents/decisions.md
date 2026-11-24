@@ -1330,8 +1330,10 @@ Riding, Mysticism, Writing, Civil Service, Mass Media and Monarchy. Democracy an
   the capital's square stays the anchor centre and the city keeps its name ("Metropolis D4"); north and south turn it 90
   degrees. "Once per game" is derived, not counted: the capital marker is gone afterwards (`capitalOf` falls back to the
   metropolis, which only a capital grows into), so the button reads "Your capital is already a metropolis." Legality is
-  `metropolis.ts` (`metropolisGrowthsOf`), from the rulings 116 to 128 and the founding rules: the new square is land and all
-  eight squares around it are on the map and revealed; no village, no hut (the Zulu may, ruling 108) and no city-state in the
+  `metropolis.ts` (`metropolisGrowthsOf`), from the rulings 116 to 128 and the founding rules: the new square may be water (Fame and Fortune p. 10, human
+  2026-11-24): the metropolis is then land for movement (`metropolisSquares` in `movement.ts`, "a makeshift bridge", for every
+  player and for travel and the movement cards), and Steam Power no longer offers it as a water square. All eight squares around
+  the new square are on the map and revealed; no village, no hut (the Zulu may, ruling 108) and no city-state in the
   new outskirts or on the new square, and no other city centre within three squares of it (ruling 118); no enemy figure on the
   new square (ruling 120), while enemy figures in the outskirts do not matter (121). An unclaimed relic in the new outskirts
   stops growth (human, 2026-11-16). A city-state beside a legally founded capital is impossible; the defensive check on the
