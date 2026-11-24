@@ -344,7 +344,7 @@ Source: `packages/engine/src/board.ts`, `actions/board.ts`, `terrain.ts`,
   when a kept card has left the hand or a discard has left the pile.
 - Nikola Tesla (human, 2026-11-03, #301) is played in Research on a tech of level II, III or IV that was added in
   this Research phase (`researchTurns`), and shows it one pyramid row lower. The tech still costs the trade of its
-  own level (II 11, III 16, IV 21): a level III tech needs 16 trade to sit in the level II row. The move is the
+  own level (II 11, III 16, IV 21; 3 less for the Japanese, see "Japanese research discount"): a level III tech needs 16 trade to sit in the level II row. The move is the
   manual one (`setTechSlot`, via `withTechSlot`): `level` stays, the row changes. Added here, not stated by the
   human: the row below must have a free place (5, 4, 3, 2, 1 techs from level I to V, with Newton's placed Great
   Person counting) and a tech already moved by hand is not offered. The public line says only that a tech was placed
@@ -1478,6 +1478,23 @@ Source: `web/src/views/ActionCardThumb.tsx`, `AssistedActions.tsx`,
   Spain's 1 out of the typed base (a tech replaces only what is under it: Sailing gives Spain 5) and `travelSpeedOf` adds it
   back; a typed `+` term (`3+1`) is the army's Natural Religion speed, as for every civilization. Anarchy turns
   Natural Religion off, not Spain's +1.
+- **Japanese strength:** "infantry units have +1 in strength" (human, 2026-11-24). Strength is the wounds a unit deals
+  (`ArenaUnit.attack`, "Strength and Health" in Wisdom and Warfare). `placeUnitInArena` adds 1 to the attack the client
+  sends for a Japanese player's infantry card, as attacker or defender, and keeps it on the unit as `attackBonus` (absent
+  on every other unit and in older saves). The bonus is per unit and is fixed at placement, so it is not part of
+  `combat-bonus.ts`. `rotateArenaUnit` reseeds the attack as printed + `attackBonus` + level, and `arenaUnitTier` (the
+  card label and the heal ceiling) counts it in the attack only. Metalworking's +3 is added on top. A barbarian unit a
+  Japanese player controls is not their army and gets none. A hand edit of the attack wins until the next rotation. The
+  placement line says `(2/3) (+1 Japanese strength)`. Tests:
+  `japanese-strength.test.ts`.
+- **Japanese research discount:** "Require 3 less trade to research new techs of any level" (human, 2026-11-24: display
+  only, all levels, Space Flight too). `researchTradeCostOf(level, civilizationName)` (`research-cost.ts`) is the one cost
+  table: 6, 11, 16, 21 and 27 for level V (shown for everyone now, the slot was blank), 3 less for the Japanese, `null`
+  outside levels 1-5. The Tech tree shows it on the empty slots (tooltip "(Japanese: 3 less)") and Nikola Tesla checks the
+  player's trade against it (a Japanese player needs 13 for a level III tech). Research spends no trade in the engine, so
+  nothing is charged. Out, by the unofficial rulings (91-93, 233, 398): Rationalism's costs (6 and 11, learning),
+  Notre-Dame's second research, Porcelain Tower. The Japanese dial already ends at 25 (`tradeCeilingOf`). Tests:
+  `research-cost.test.ts`, `great-person-tesla.test.ts`, `TechTree.test.tsx`.
 - **Indians:** besides the resource wildcard below, the capital is a metropolis (`cities/<colour>metropolis2`, two
   squares), placed in setup (#374).
 - **Americans:** the free great person is drawn in setup (#374, "Setup phase" below).

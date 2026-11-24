@@ -17,8 +17,9 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   missing), and the holder only follows a pass: before any pass the holder is the start player as before.
 - **Social policy cap (#378):** a lost city does not force a policy to be returned: the panel shows a prompt and blocks
   choosing until the player removes one. The cap counts city pieces on the map, so a city piece placed by hand counts.
-- **Civilization abilities not automated (#368):** Japanese
-  infantry +1 strength and the tech discount of 3 trade (#368); Mongol loot (not modelled); Russian sacrifice (no
+- **Japanese research discount (#368):** research spends no trade in the engine, so the discount of 3 is shown (Tech tree,
+  Tesla's check) and not charged. Rationalism's learning gets no discount (unofficial rulings 93, 398). Notre-Dame's second research and Porcelain Tower are not modelled.
+- **Civilization abilities not automated (#368):** Mongol loot (not modelled); Russian sacrifice (no
   enemy-army-city model); Zulu metropolis hut
   exploring; the German free resource is a log line only. Arab culture covers resource spends only: taking a token off
   the board by hand is not a spend. The Chinese board Undo of a hut collection is refused once the culture it gave is

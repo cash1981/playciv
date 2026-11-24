@@ -30,6 +30,7 @@ import { tradeCeilingOf } from '../limits.js'
 import { earnTechCoin, returnTechCoin } from '../tech-coins.js'
 import { discardKilledUnits, killedCardOnPile, restoreKilledCard, returnKilledCard } from '../killed-units.js'
 import { chineseSaveCandidates } from '../chinese-save.js'
+import { civilizationAttackBonus } from '../civ-strength.js'
 import type { TechCoinGrant } from '../tech-coins.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -262,11 +263,12 @@ const TRUMPS: Readonly<Partial<Record<UnitItem['kind'], UnitItem['kind']>>> = {
  * printed values plus one per rotate press (see `rotateArenaUnit`). Unlike
  * `ArenaUnit.attack/health` this ignores damage and hand edits, so the card
  * label can keep saying what the unit is while the fields show how it fares.
- * Aircraft print no level ladder, so they stay at the printed values.
+ * Aircraft print no level ladder, so they stay at the printed values. A civilization's strength
+ * (`ArenaUnit.attackBonus`, the Japanese infantry's +1) is part of the attack.
  */
 export function arenaUnitTier(unit: ArenaUnit): { readonly attack: number; readonly health: number } {
   const bonus = unit.unit.kind === 'aircraft' ? 0 : rotationLevel(unit.rotation)
-  return { attack: unit.unit.attack + bonus, health: unit.unit.health + bonus }
+  return { attack: unit.unit.attack + (unit.attackBonus ?? 0) + bonus, health: unit.unit.health + bonus }
 }
 
 /**
@@ -616,12 +618,16 @@ export function placeUnitInArena(
   const [arenaUnitId, rng2] = nextId(nextState.rng)
   nextState = { ...nextState, rng: rng2 }
 
+  // A civilization's strength (the Japanese infantry's +1) is added to the printed attack the client sends. A
+  // barbarian unit is not the controller's army.
+  const attackBonus = isBarbController ? 0 : civilizationAttackBonus(player, sourceUnit)
   const arenaUnit: ArenaUnit = {
     id: arenaUnitId,
     side: input.side,
     position: input.position,
     unit: sourceUnit,
-    attack: input.attack,
+    attack: input.attack + attackBonus,
+    ...(attackBonus > 0 ? { attackBonus } : {}),
     health: input.health,
     placedBy: input.playerId,
     rotation: 0,
@@ -926,7 +932,7 @@ export function rotateArenaUnit(
   // cosmetic-only for them, same as before issue #68.
   const hasLevels = unit.unit.kind !== 'aircraft'
   const bonus = hasLevels ? rotationLevel(rotation) : 0
-  const attack = hasLevels ? unit.unit.attack + bonus : unit.attack
+  const attack = hasLevels ? unit.unit.attack + (unit.attackBonus ?? 0) + bonus : unit.attack
   const health = hasLevels ? unit.unit.health + bonus : unit.health
   const reseeded: ArenaUnit = { ...unit, rotation, attack, health }
   // The new tier starts undamaged, but the unit still faces whoever it was
@@ -1054,7 +1060,7 @@ function announcePlacements(state: GameState, playerId: string): GameState {
       next,
       owner.username,
       owner.playerId,
-      `places ${revealAll(u.unit)} ${itemNumberText(state.logSecret, owner.username, u.unit)} (${u.attack}/${u.health}) into the arena`,
+      `places ${revealAll(u.unit)} ${itemNumberText(state.logSecret, owner.username, u.unit)} (${u.attack}/${u.health})${u.attackBonus === undefined ? '' : ` (+${u.attackBonus} Japanese strength)`} into the arena`,
     )
   }
   const markAnnounced = (u: ArenaUnit): ArenaUnit =>

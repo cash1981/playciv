@@ -6,8 +6,8 @@
  * the base with 5 slots, narrowing to level 5 at the apex with 1 slot. A
  * researched slot shows the card art (issue #168), with the name kept as
  * `title`/text underneath as a fallback; an empty slot shows the trade cost
- * for that level. The component only lays out whatever list of techs it is
- * given — it does not know or care whether those are the viewer's own or a
+ * for that level (`researchTradeCostOf`, 3 less for the Japanese). The component only lays out
+ * whatever list of techs it is given — it does not know or care whether those are the viewer's own or a
  * public set, so it deliberately does not import the engine `Item` type or
  * `itemImage()`. The file name is built inline instead, following the same
  * rule as `itemImage()`'s `tech` case in `item.ts`.
@@ -24,6 +24,8 @@
  * browsing the level tabs. The stepper buttons stop the click from bubbling
  * so moving a tech does not also open its detail view.
  */
+
+import { researchTradeCostOf } from '@civ/engine'
 
 type Level = 1 | 2 | 3 | 4 | 5
 
@@ -62,6 +64,8 @@ interface Props {
   readonly techs: readonly TechTreeTech[]
   readonly placements?: readonly TechTreePlacement[]
   readonly disabled?: boolean
+  /** The civilization of the pyramid's owner: the Japanese research for 3 less trade. */
+  readonly civilization?: string | null | undefined
   /** Present only on the viewer's own pyramid. */
   readonly onTechSlotChange?: (techName: string, slot: Level) => void
   readonly onPlacementSlotChange?: (name: string, slot: Level) => void
@@ -72,13 +76,6 @@ interface Props {
 /** Java's TechController hard-coded these: 5, 4, 3, 2, 1 slots per level. */
 const SLOTS_PER_LEVEL: Record<Level, number> = { 1: 5, 2: 4, 3: 3, 4: 2, 5: 1 }
 
-/**
- * Trade cost shown on an empty slot, from the old client's tooltips
- * ("11 trade needed to learn level 2 tech", and so on). Level 5 had no
- * tooltip in the old client, so it is left blank.
- */
-const TRADE_COST: Record<Level, number | null> = { 1: 6, 2: 11, 3: 16, 4: 21, 5: null }
-
 // Level 1 is the base of the pyramid (rendered last, more slots); level 5 is
 // the apex (rendered first, fewer slots). "Lower"/"higher" in the stepper
 // labels below refer to the row number, matching this order.
@@ -88,6 +85,7 @@ export function TechTree({
   techs,
   placements = [],
   disabled,
+  civilization,
   onTechSlotChange,
   onPlacementSlotChange,
   onTechClick,
@@ -99,7 +97,8 @@ export function TechTree({
         const researched = techs.filter((tech) => (tech.slot ?? tech.level) === level)
         const placed = placements.filter((placement) => placement.slot === level)
         const emptyCount = Math.max(slots - researched.length - placed.length, 0)
-        const cost = TRADE_COST[level]
+        const cost = researchTradeCostOf(level, civilization)
+        const discounted = cost !== null && cost !== researchTradeCostOf(level)
 
         return (
           <div className="tech-pyramid-row" key={level}>
@@ -222,7 +221,11 @@ export function TechTree({
               <div
                 key={`empty-${level}-${index}`}
                 className="tech-slot available"
-                title={cost === null ? undefined : `${cost} trade needed to learn a level ${level} tech`}
+                title={
+                  cost === null
+                    ? undefined
+                    : `${cost} trade needed to learn a level ${level} tech${discounted ? ' (Japanese: 3 less)' : ''}`
+                }
               >
                 {cost ?? ''}
               </div>
