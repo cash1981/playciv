@@ -90,6 +90,10 @@ Source: `packages/engine/src/actions/game.ts` (`revealedFeed`),
 - Full keyframes bound delta chains. Unrecorded non-note changes seal the prior
   chain; compaction validates reconstruction, and cleanup retains a standalone
   final keyframe before removing older dependencies.
+- The historical full-snapshot backlog has been converted, and new saves use
+  deltas directly. The admin interface no longer exposes the compaction tool;
+  retain server-side conversion and legacy read support for any remaining
+  historical revisions.
 - `migrateGameState` must preserve an already-current state exactly, including
   JSON key order. Stored deltas depend on this invariant.
 - Retain the historical board-change `clear` variant for replay/undo even
