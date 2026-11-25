@@ -774,6 +774,18 @@ const governmentPayloadOf = (payload: AssistedPayload | undefined): GovernmentPa
 
 const SWITCH_KEY = 'government:switch'
 
+/** Anarchy put on the player this turn by a Citizens are Revolting card, which lasts until their next turn's change (human, #352). */
+const anarchyFromCardThisTurn = (state: GameState, player: Playerhand): boolean =>
+  player.government === 'Anarchy' &&
+  state.assistedActions.some(
+    (record) =>
+      record.status === 'applied' &&
+      record.turnNumber === turnStatus(state).currentTurn &&
+      record.effect.kind === 'playCard' &&
+      record.effect.anarchy?.targetId === player.playerId,
+  )
+const ANARCHY_CARD_REASON = 'A Citizens are Revolting card put you in Anarchy this turn. You can change government in your next Start of Turn.'
+
 const switchGovernment: AssistedActionDefinition = {
   kind: 'switchGovernment',
   techName: null,
@@ -789,6 +801,7 @@ const switchGovernment: AssistedActionDefinition = {
     if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
     const open = startOfTurnGate(state, player, { usageKey: SWITCH_KEY, label: 'Changing government', strict: true })
     if ('blocked' in open) return open.blocked
+    if (anarchyFromCardThisTurn(state, player)) return blocked('unavailable', ANARCHY_CARD_REASON)
     const options = governmentOptionsOf(state, player)
     if (options.length === 0 && !canEnterAnarchy(state, player)) {
       return blocked('unavailable', 'You know no other government to change to.')
@@ -802,6 +815,7 @@ const switchGovernment: AssistedActionDefinition = {
     if (payload === undefined) return fail('Choose the government.')
     const open = startOfTurnGate(state, player, { usageKey: SWITCH_KEY, label: 'Changing government', strict: true })
     if ('blocked' in open) return err(rejected('switchGovernment', open.blocked))
+    if (anarchyFromCardThisTurn(state, player)) return fail(ANARCHY_CARD_REASON)
     const target = payload.government
     if (target === player.government) return fail(`Your government is ${target} already.`)
 

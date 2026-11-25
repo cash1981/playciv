@@ -318,6 +318,8 @@ export interface PlayableCard {
   readonly tesla?: readonly TeslaChoice[] | null
   /** The squares Jacques Cousteau can put a free Harbor on, null for every other card. */
   readonly harbors?: readonly HarborChoice[] | null
+  /** The cities that can produce the extra hammers of We Love the ... Day!, null for every other card. */
+  readonly cities?: readonly { readonly cityPieceId: string; readonly cityLabel: string }[] | null
   /** The culture cards in the viewer's own hand that Frida Kahlo may discard, null for every other card. Own view only. */
   readonly cultureHand?: readonly { readonly itemId: string; readonly name: string }[] | null
   /** Resources the card can substitute for Uranium (Marie Curie), empty for every other card. */

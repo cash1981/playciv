@@ -773,8 +773,20 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   cancel it, except the automated cards below and in "Great Person automation":
   Khalid ibn al-Walid moves the start player marker to the player (board undo
   refuses that move alone), Marco Polo gains trade up to the ceiling, St. Francis
-  3 culture per unbuilt army, Orville Wright draws an aircraft card. A Great
-  Person whose figures are all blockaded cannot be played.
+  3 culture per unbuilt army, Orville Wright draws an aircraft card.
+  Culture events that are applied (#352, slice 1; cancel = the log's Cancel, which rewinds): We Love the Despot, Queen and
+  President Day give a chosen own city 4, 6 or 8 extra hammers this turn (derived from the card record into the city's boost,
+  like the tech boosts, so an undo removes them; payload `hammerCityId`), and Supply Drop played in Start of Turn gains 7
+  trade up to the ceiling (in City Management it stays the extra city action). Tests: `culture-hammers-trade.test.ts`.
+  The Citizens are Revolting! and II! (human, 2026-11-25) replace the named player's government with Anarchy at once: the
+  old card's abilities and the social policies stop (every Anarchy check already reads `government`; a target that has
+  not done its Start of Turn loses Feudalism, Pacifism and the like), what it already did this turn stands, and the capital
+  takes no city action (`earlierCityActions`, so also after a player's own change to Anarchy; Engineering's second build
+  skips the check, its first build having come before the card). It lasts the whole turn: the target cannot change
+  government in that turn's Start of Turn (`anarchyFromCardThisTurn`); in their next one any known government is direct.
+  A cancel rewinds the card like any culture event; an undo restores the government and the coin counters.
+  Tests: `culture-anarchy.test.ts`.
+  A Great Person whose figures are all blockaded cannot be played.
 - **Start of Turn gate:** needs Start of Turn as the open phase and a usage key
   once per turn.
 - **Social policies** (none under Anarchy): Expansionism 1 trade per city plus 1

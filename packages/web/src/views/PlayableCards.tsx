@@ -89,6 +89,7 @@ export function PlayCardControl({
   const [coinSource, setCoinSource] = useState('')
   const [substitute, setSubstitute] = useState('')
   const [teslaTech, setTeslaTech] = useState('')
+  const [cityId, setCityId] = useState('')
   const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
   const [convertAmount, setConvertAmount] = useState('')
   const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
@@ -128,6 +129,8 @@ export function PlayCardControl({
   const tesla = card.tesla ?? null
   const chosenTesla =
     tesla === null ? '' : (tesla.find((choice) => choice.name === teslaTech)?.name ?? (tesla.length === 1 ? (tesla[0]?.name ?? '') : ''))
+  const cityChoices = card.cities ?? null
+  const chosenCity = cityChoices === null ? '' : (cityChoices.find((choice) => choice.cityPieceId === cityId) ?? (cityChoices.length === 1 ? cityChoices[0] : undefined))?.cityPieceId ?? ''
   const harborChoices = card.harbors ?? null
   // A live refresh can take a square away: only the ticked squares still on offer count
   const chosenHarborKeys =
@@ -243,6 +246,7 @@ export function PlayCardControl({
     (!needsSubstitute || substitute !== '') &&
     convertValid &&
     (tesla === null || chosenTesla !== '') &&
+    (cityChoices === null || chosenCity !== '') &&
     harborsValid
   const valid = baseValid && unitedNations.every((id) => agreed.includes(id))
   const disabled = busy || readOnly
@@ -283,7 +287,7 @@ export function PlayCardControl({
       return
     }
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${[...consents].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${chosenTesla}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${[...consents].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${chosenTesla}:${chosenCity}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -306,6 +310,7 @@ export function PlayCardControl({
           ...(cultureHand === null ? {} : { discard: cultureHand.filter((held) => chosenDiscards.includes(held.itemId)).map((held) => held.itemId) }),
           ...(gustavus === null ? {} : { units: chosenUnits }),
           ...(tesla === null ? {} : { tech: chosenTesla }),
+          ...(cityChoices === null ? {} : { hammerCityId: chosenCity }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
           ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
@@ -726,6 +731,24 @@ export function PlayCardControl({
                 ))}
               </select>
             </label>
+          )}
+          {cityChoices !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Which city produces the extra hammers?</legend>
+              {cityChoices.length === 0 && <p className="muted">You have no city on the map.</p>}
+              {cityChoices.map((choice) => (
+                <label key={choice.cityPieceId} className="play-card-target">
+                  <input
+                    type="radio"
+                    name={`${formId}-city`}
+                    checked={chosenCity === choice.cityPieceId}
+                    disabled={disabled}
+                    onChange={() => setCityId(choice.cityPieceId)}
+                  />{' '}
+                  {choice.cityLabel}
+                </label>
+              ))}
+            </fieldset>
           )}
           {tesla !== null && (
             <fieldset className="play-card-targets">

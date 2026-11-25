@@ -343,15 +343,14 @@ function productionBoostsOf(
   cityPieceId: string,
 ): readonly { readonly tech: string; readonly amount: number }[] {
   const turn = turnStatus(state).currentTurn
-  return state.assistedActions.flatMap((record) =>
-    record.status === 'applied' &&
-    record.playerId === player.playerId &&
-    record.turnNumber === turn &&
-    record.effect.kind === 'productionBoost' &&
-    record.effect.cityPieceId === cityPieceId
-      ? [{ tech: record.effect.tech, amount: record.effect.amount }]
-      : [],
-  )
+  return state.assistedActions.flatMap((record) => {
+    if (record.status !== 'applied' || record.playerId !== player.playerId || record.turnNumber !== turn) return []
+    const effect = record.effect
+    if (effect.kind === 'productionBoost' && effect.cityPieceId === cityPieceId) return [{ tech: effect.tech, amount: effect.amount }]
+    // A culture event: We Love the ... Day!
+    if (effect.kind === 'playCard' && effect.hammers?.cityPieceId === cityPieceId) return [{ tech: effect.name, amount: effect.hammers.amount }]
+    return []
+  })
 }
 
 /**
