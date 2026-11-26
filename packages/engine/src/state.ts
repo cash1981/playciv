@@ -38,7 +38,7 @@ import type { RepositionableFigure } from './build-reposition.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
 import type { CityActionOptions, UpgradeFamilyOption } from './city-actions.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
-import type { CoinSources } from './coins.js'
+import type { CoinSourceKey, CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES, coinSourcesOf } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 import type { WaitingFor } from './turn.js'
@@ -902,6 +902,14 @@ export type AssistedEffect =
           readonly movement: PieceMovement | null
           readonly historyId: string
         }[]
+      }
+      /** Counterfeiters, Depression, Bank Scandal: the coin each target discarded and from which counter, so an undo gives it back. */
+      readonly coinDiscard?: readonly { readonly targetId: string; readonly source: CoinSourceKey }[]
+      /** Drought, Deforestation, Flooding: the token put on the map, so an undo takes off exactly this one. */
+      readonly disaster?: {
+        readonly pieceId: string
+        readonly historyId: string
+        readonly square: { readonly column: number; readonly row: number; readonly label: string }
       }
       /** Galileo Galilei: the edge source and destination, and each figure's before/after position. */
       readonly galileo?: {

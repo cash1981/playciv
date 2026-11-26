@@ -249,6 +249,10 @@ export interface PlayCardPayload {
   readonly substitute?: string
   /** We Love the Despot, Queen and President Day: the city piece that produces the extra hammers. Not `cityPieceId`: other payloads are told apart by that key. */
   readonly hammerCityId?: string
+  /** Counterfeiters, Depression and Bank Scandal: for each target with coin tokens on more than one counter, the counter that loses a coin. */
+  readonly coinPicks?: readonly { readonly targetId: string; readonly source: string }[]
+  /** Drought, Deforestation and Flooding: the map square for the disaster token. */
+  readonly disasterSquare?: CardSquare
   /** The map square whose figures move (Galileo and the movement culture cards). */
   readonly from?: CardSquare
   /** The empty square they move to. */

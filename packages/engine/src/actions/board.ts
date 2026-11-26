@@ -230,6 +230,8 @@ export function placeUnchecked(
     readonly placedBy?: string | null
     /** The map tile a hut or village was put on (issue #364): `BoardPiece.tileId`. */
     readonly tileId?: string
+    /** Puts the piece at this place of the stack instead of on top, so it lies under the pieces from there on (a disaster token under a figure). */
+    readonly index?: number
   },
 ): GameState | undefined {
   const asset = findBoardAsset(input.assetId)
@@ -278,12 +280,18 @@ export function placeUnchecked(
 
   // Map tiles go under everything else, or they would cover the pieces on them
   const onTop = asset.category !== 'tile' && asset.category !== 'civtile'
-  const pieces = onTop ? [...state.board.pieces, piece] : [piece, ...state.board.pieces]
+  const slot = input.index
+  const pieces =
+    slot !== undefined
+      ? [...state.board.pieces.slice(0, slot), piece, ...state.board.pieces.slice(slot)]
+      : onTop
+        ? [...state.board.pieces, piece]
+        : [piece, ...state.board.pieces]
 
   return record(input, {
     state: withId,
     pieces,
-    change: { kind: 'place', piece, onTop },
+    change: { kind: 'place', piece, onTop, ...(slot === undefined ? {} : { index: slot }) },
     description: `placed ${piece.label} at ${locationOf(state.board, areas, piece)}`,
   })
 }

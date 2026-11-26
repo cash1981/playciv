@@ -393,8 +393,11 @@ export const faceOf = (piece: BoardPiece): PieceFace => ({
  * every time a piece is brought to the front.
  */
 export type BoardChange =
-  /** `onTop` is false for map tiles, which slide underneath everything else. */
-  | { readonly kind: 'place'; readonly piece: BoardPiece; readonly onTop: boolean }
+  /**
+   * `onTop` is false for map tiles, which slide underneath everything else. `index` is set when the piece
+   * was put at a place in the stack of its own, under a piece already there (a disaster token under a figure).
+   */
+  | { readonly kind: 'place'; readonly piece: BoardPiece; readonly onTop: boolean; readonly index?: number }
   | { readonly kind: 'remove'; readonly piece: BoardPiece; readonly index: number }
   | {
       readonly kind: 'move'
@@ -1326,6 +1329,7 @@ export function applyChange(
 ): readonly BoardPiece[] {
   switch (change.kind) {
     case 'place':
+      if (change.index !== undefined) return insertAt(pieces, change.index, change.piece)
       return change.onTop ? [...pieces, change.piece] : [change.piece, ...pieces]
     case 'remove':
       return withoutPiece(pieces, change.piece.id)

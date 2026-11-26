@@ -18,10 +18,14 @@ import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 import { startPlayerOf } from '../src/turn.js'
 
-import { player, startOfTurn, tradeTurn, withCardInHand } from './assisted-fixture.js'
+import { player, startOfTurn as plainStartOfTurn, tradeTurn as plainTradeTurn, withCardInHand, withSheetCoins } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1 } from './fixture.js'
 
 const AT = '2026-10-23T10:00:00.000Z'
+
+// Counterfeiters, Depression and Bank Scandal take a coin token, so these scenes give every player one on the Sheet
+const startOfTurn = (): GameState => withSheetCoins(plainStartOfTurn())
+const tradeTurn = (): GameState => withSheetCoins(plainTradeTurn())
 
 const play = (
   state: GameState,
@@ -199,7 +203,7 @@ describe('playing a card', () => {
 
     expect(player(played).items.some((item) => item.id === itemId)).toBe(false)
     expect(played.discardedItems.some((item) => item.id === itemId)).toBe(true)
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Counterfeiters item number #168 (start of turn), targeting Karandras1')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Counterfeiters item number #168 (start of turn), targeting Karandras1, so Karandras1 discards a coin from Sheet (0 left)')
     expect(played.log.at(-1)?.assistedActionId).toBe('req-1')
     expect(played.assistedActions).toHaveLength(1)
     expect(played.assistedActions[0]).toMatchObject({
@@ -211,8 +215,8 @@ describe('playing a card', () => {
     })
   })
 
-  it('applies nothing to the target or to the player', () => {
-    const { state, itemId } = withCardInHand(startOfTurn(), 'Counterfeiters')
+  it('applies nothing to the target or to the player for a card that is only logged', () => {
+    const { state, itemId } = withCardInHand(startOfTurn(), 'Sabotage')
     const played = unwrap(play(state, 'req-1', itemId, { targets: [KARANDRAS1] }))
     expect(player(played, KARANDRAS1)).toEqual(player(state, KARANDRAS1))
     expect(player(played).stats).toEqual(player(state).stats)
@@ -222,17 +226,17 @@ describe('playing a card', () => {
   it('names two players for Depression, and every other player for Bank Scandal', () => {
     const depression = withCardInHand(startOfTurn(), 'Depression')
     const two = unwrap(play(depression.state, 'req-1', depression.itemId, { targets: [KARANDRAS1, ITCHI] }))
-    expect(two.log.at(-1)?.publicLog).toBe('cash1981 played Depression item number #274 (start of turn), targeting Karandras1 and Itchi')
+    expect(two.log.at(-1)?.publicLog).toBe('cash1981 played Depression item number #274 (start of turn), targeting Karandras1 and Itchi, so Karandras1 discards a coin from Sheet (0 left) and Itchi discards a coin from Sheet (0 left)')
 
     const scandal = withCardInHand(startOfTurn(), 'Bank Scandal')
     const all = unwrap(play(scandal.state, 'req-1', scandal.itemId))
-    expect(all.log.at(-1)?.publicLog).toBe('cash1981 played Bank Scandal item number #130 (start of turn), targeting every other player')
+    expect(all.log.at(-1)?.publicLog).toBe('cash1981 played Bank Scandal item number #130 (start of turn), targeting every other player, so Karandras1 discards a coin from Sheet (0 left), Itchi discards a coin from Sheet (0 left) and Chul discards a coin from Sheet (0 left)')
   })
 
   it('names nobody for a card that names no player', () => {
-    const { state, itemId } = withCardInHand(startOfTurn(), 'Drought')
+    const { state, itemId } = withCardInHand(startOfTurn(), 'Barbarian Encampment')
     const played = unwrap(play(state, 'req-1', itemId))
-    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Drought item number #180 (start of turn)')
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Barbarian Encampment item number #233 (start of turn)')
   })
 
   it('plays a gift as a resource and names who gets the coin', () => {
@@ -336,8 +340,8 @@ describe('what is refused', () => {
   })
 
   it('refuses a player for a card that names none', () => {
-    const { state, itemId } = withCardInHand(startOfTurn(), 'Drought')
-    expect(refusal(play(state, 'req-1', itemId, { targets: [KARANDRAS1] }))).toBe('Drought names no player.')
+    const { state, itemId } = withCardInHand(startOfTurn(), 'Barbarian Encampment')
+    expect(refusal(play(state, 'req-1', itemId, { targets: [KARANDRAS1] }))).toBe('Barbarian Encampment names no player.')
   })
 
   it('refuses a missing or wrong resource, and a resource for a card that is not played as one', () => {
@@ -346,9 +350,9 @@ describe('what is refused', () => {
     expect(refusal(play(gift.state, 'req-2', gift.itemId, { resource: 'Uranium' }))).toBe(
       'Choose a resource: Iron, Wheat, Spy, Silk.',
     )
-    const drought = withCardInHand(startOfTurn(), 'Drought')
+    const drought = withCardInHand(startOfTurn(), 'Barbarian Encampment')
     expect(refusal(play(drought.state, 'req-3', drought.itemId, { resource: 'Iron' }))).toBe(
-      'Drought is not played as a resource.',
+      'Barbarian Encampment is not played as a resource.',
     )
   })
 
@@ -361,7 +365,7 @@ describe('what is refused', () => {
   it('refuses a request id that another player already used', () => {
     const { state, itemId } = withCardInHand(startOfTurn(), 'Counterfeiters')
     const played = unwrap(play(state, 'req-1', itemId, { targets: [KARANDRAS1] }))
-    const other = withCardInHand(played, 'Drought', KARANDRAS1)
+    const other = withCardInHand(played, 'Barbarian Encampment', KARANDRAS1)
     expect(refusal(play(other.state, 'req-1', other.itemId, { playerId: KARANDRAS1 }))).toBe(
       'This request id was already used.',
     )
@@ -385,7 +389,7 @@ describe('undoing a played card with the vote', () => {
     expect(undone.discardedItems.some((item) => item.id === itemId)).toBe(false)
     expect(undone.assistedActions[0]?.status).toBe('undone')
     expect(undone.log.at(-1)?.publicLog).toBe(
-      "System: cash1981's Counterfeiters was undone: the card is back in their hand",
+      "System: cash1981's Counterfeiters was undone: the card is back in their hand, and the discarded coin was given back",
     )
     // The line about the play stays
     expect(undone.log.some((entry) => entry.publicLog.includes('played Counterfeiters'))).toBe(true)
@@ -434,7 +438,7 @@ describe('what other players can see', () => {
     expect(json).not.toContain('"discarded"')
     const listed = toPlayerView(played, KARANDRAS1).assistedActions?.find((record) => record.id === 'req-1')
     expect(listed?.label).toBe('Counterfeiters')
-    expect(listed?.text).toBe('cash1981 played Counterfeiters item number #168 (start of turn), targeting Karandras1')
+    expect(listed?.text).toBe('cash1981 played Counterfeiters item number #168 (start of turn), targeting Karandras1, so Karandras1 discards a coin from Sheet (0 left)')
     // The owner's log has the played card too, with the same number
     const own = played.log.find((entry) => entry.assistedActionId === 'req-1')
     expect(own?.privateLog).toBe(own?.publicLog)

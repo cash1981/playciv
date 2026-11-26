@@ -49,8 +49,8 @@ const extraKeys = (record: Record<string, unknown>, allowed: readonly string[]):
   Object.keys(record).filter((key) => !allowed.includes(key))
 
 function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string {
-  const extra = extraKeys(args, ['itemId', 'targets', 'consents', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'discard', 'units', 'from', 'to', 'figureId', 'figureIds', 'tech', 'hammerCityId'])
-  if (extra.length > 0) return `playCard takes only itemId, targets, consents, resource, coinSource, substitute, convert, harbors, discard, units, from, to, figureId, figureIds, tech and hammerCityId, not ${extra.join(', ')}`
+  const extra = extraKeys(args, ['itemId', 'targets', 'consents', 'resource', 'coinSource', 'substitute', 'convert', 'harbors', 'discard', 'units', 'from', 'to', 'figureId', 'figureIds', 'tech', 'hammerCityId', 'coinPicks', 'disasterSquare'])
+  if (extra.length > 0) return `playCard takes only itemId, targets, consents, resource, coinSource, substitute, convert, harbors, discard, units, from, to, figureId, figureIds, tech, hammerCityId, coinPicks and disasterSquare, not ${extra.join(', ')}`
   if (!isId(args['itemId'])) return 'itemId is required: 1 to 64 characters, letters, digits and . _ : -'
   const targets = args['targets'] === undefined ? [] : args['targets']
   if (!Array.isArray(targets) || targets.length > MAX_TARGETS || !targets.every(isId)) {
@@ -110,6 +110,26 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     }
     harbors = parsed
   }
+  const picksValue = args['coinPicks']
+  let coinPicks: readonly { readonly targetId: string; readonly source: string }[] | undefined
+  if (picksValue !== undefined) {
+    const bad = `coinPicks must be a list of at most ${MAX_TARGETS} entries, each with targetId and source`
+    if (!Array.isArray(picksValue) || picksValue.length > MAX_TARGETS) return bad
+    const parsed: { targetId: string; source: string }[] = []
+    for (const entry of picksValue) {
+      const record = typeof entry === 'object' && entry !== null && !Array.isArray(entry) ? asRecord(entry) : undefined
+      if (
+        record === undefined ||
+        extraKeys(record, ['targetId', 'source']).length > 0 ||
+        !isId(record['targetId']) ||
+        typeof record['source'] !== 'string' || record['source'].length === 0 || record['source'].length > 30
+      ) {
+        return bad
+      }
+      parsed.push({ targetId: record['targetId'], source: record['source'] })
+    }
+    coinPicks = parsed
+  }
   const discard = args['discard']
   if (discard !== undefined && (!Array.isArray(discard) || discard.length > 20 || !discard.every(isId))) {
     return 'discard must be a list of at most 20 card ids'
@@ -153,6 +173,8 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   if (typeof from === 'string') return from
   const to = square(args['to'], 'to')
   if (typeof to === 'string') return to
+  const disasterSquare = square(args['disasterSquare'], 'disasterSquare')
+  if (typeof disasterSquare === 'string') return disasterSquare
   return {
     itemId: args['itemId'],
     targets,
@@ -166,6 +188,8 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
     ...(units === undefined ? {} : { units: units as readonly string[] }),
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
+    ...(coinPicks === undefined ? {} : { coinPicks }),
+    ...(disasterSquare === undefined ? {} : { disasterSquare }),
     ...(tech === undefined ? {} : { tech }),
     ...(hammerCityId === undefined ? {} : { hammerCityId }),
     ...(figureId === undefined ? {} : { figureId }),

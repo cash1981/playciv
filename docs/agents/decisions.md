@@ -788,6 +788,32 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   attack, else it is worked out from the policy as it stands).
   Tests: `culture-anarchy.test.ts`.
   A Great Person whose figures are all blockaded cannot be played.
+- **Coin discard events** (#352; `culture-coins.ts`): Counterfeiters (one player),
+  Depression (1 to 2) and Bank Scandal (every other player) take one coin from each
+  target that holds a coin token, from the counter the player of the card picks
+  (`coinPicks`; automatic when only one counter holds tokens), as Mysticism does.
+  Only the `INVESTABLE_COIN_SOURCES` counters count: printed coins, Great People,
+  Panama Canal and the investment markers are never touched. A target with no coin
+  token is skipped; a card with no target holding one is not offered and is refused.
+  The coins are stored on the `playCard` record (`coinDiscard`), so the undo vote and a
+  cancel card give each back to its counter. The United Nations consent is asked as
+  for every culture event, of all named players, also one that holds no token.
+- **Disaster events** (#352; `culture-disasters.ts`): Drought (desert token),
+  Deforestation (grassland token, forest squares only) and Flooding (water token)
+  put one token on a map square the player picks on the board (`disasterSquare`; the
+  legal squares are `PlayableCard.squares`, rechecked on submit). Rulings 258-271 of the
+  human's unofficial rulings: a non-mountain square; Drought and Deforestation are
+  refused only by a building, a wonder or a relic token still on the map (a Great
+  Person marker, hut, village, city, City-state, figure and disaster tokens do not
+  block them); Flooding is refused by a figure, hut, village, relic token, Great
+  Person marker or any disaster token (ruling 271*; the variant 271** that allows a
+  disaster token is not implemented), and buildings, wonders, cities and City-states are
+  not in the ruling's list so they do not block it. Resource tokens never block. The
+  token goes below the lowest piece already on the square in `board.pieces` (the
+  `place` change carries an `index`), so it survives that piece being killed or
+  removed (ruling 259), and above older disaster tokens. Undo removes exactly that
+  token; a cancel card rewinds it. Protection of outskirts squares (ruling 240) is not
+  checked, see limitations.
 - **Start of Turn gate:** needs Start of Turn as the open phase and a usage key
   once per turn.
 - **Social policies** (none under Anarchy): Expansionism 1 trade per city plus 1

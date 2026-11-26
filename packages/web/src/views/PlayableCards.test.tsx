@@ -1385,3 +1385,117 @@ describe('timingLabel', () => {
     expect(timingLabel(['ANY'])).toBe('Any time')
   })
 })
+
+describe('the coin discard cards', () => {
+  const pottery = { key: 'pottery', label: 'Pottery (I)', coins: 2 }
+  const sheet = { key: 'sheet', label: 'Sheet', coins: 3 }
+  const counterfeiters = (coinTargets: NonNullable<PlayableCard['coinTargets']>) => card({ coinTargets })
+
+  it('asks the player of the card for the counter when the target holds tokens on several, and sends the pick', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const played = counterfeiters([{ ...BOB, counters: [pottery, sheet] }])
+    renderControl(viewWith([played]), played)
+    fireEvent.click(playButton())
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob' }))
+    // No counter is chosen yet, so the card cannot be confirmed
+    expect(confirmButton().disabled).toBe(true)
+    expect(screen.getByRole('radio', { name: 'Pottery (I) (2)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('radio', { name: 'Sheet (3)' }))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: ['bob'], coinPicks: [{ targetId: 'bob', source: 'sheet' }] })
+  })
+
+  it('needs no choice for a target with one counter, and does not ask for a target with no coin token', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const depression = card({
+      name: 'Depression',
+      targets: { kind: 'players', min: 1, max: 2 },
+      coinTargets: [{ ...BOB, counters: [pottery] }],
+    })
+    renderControl(viewWith([depression]), depression)
+    fireEvent.click(playButton('Depression'))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Carol' }))
+    expect(screen.queryAllByRole('radio')).toHaveLength(0)
+    expect(screen.getByText('Bob discards a coin from Pottery (I) (2)')).toBeTruthy()
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: ['bob', 'carol'], coinPicks: [{ targetId: 'bob', source: 'pottery' }] })
+  })
+
+  it('cannot confirm when none of the chosen players holds a coin token', () => {
+    const depression = card({ name: 'Depression', targets: { kind: 'players', min: 1, max: 2 }, coinTargets: [{ ...BOB, counters: [pottery] }] })
+    renderControl(viewWith([depression]), depression)
+    fireEvent.click(playButton('Depression'))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Carol' }))
+    expect(confirmButton().disabled).toBe(true)
+  })
+
+  it('names every other player for Bank Scandal and asks a counter for each who holds several', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const scandal = card({
+      name: 'Bank Scandal',
+      targets: { kind: 'allOthers' },
+      coinTargets: [
+        { ...BOB, counters: [pottery, sheet] },
+        { ...CAROL, counters: [sheet] },
+      ],
+    })
+    renderControl(viewWith([scandal]), scandal)
+    fireEvent.click(playButton('Bank Scandal'))
+    expect(confirmButton().disabled).toBe(true)
+    fireEvent.click(screen.getByRole('radio', { name: 'Pottery (I) (2)' }))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({
+      itemId: 'c1',
+      targets: [],
+      coinPicks: [
+        { targetId: 'bob', source: 'pottery' },
+        { targetId: 'carol', source: 'sheet' },
+      ],
+    })
+  })
+})
+
+describe('the disaster cards', () => {
+  const squares = [
+    { column: 1, row: 1, label: 'B2' },
+    { column: 2, row: 1, label: 'C2' },
+  ]
+  const drought = card({ name: 'Drought', targets: { kind: 'none' }, prompt: '', squares })
+
+  it('opens the map picker with the legal squares when Play is pressed, and sends the chosen square on confirm', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const begin = vi.fn().mockResolvedValue({ column: 2, row: 1, label: 'C2' })
+    const mapPicker: MapPicker = { begin, cancel: vi.fn() }
+    render(
+      <MapPickerContext.Provider value={mapPicker}>
+        <PlayCardControl card={drought} gameId="g1" view={viewWith([drought])} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Drought'))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    expect(begin.mock.calls[0]?.[0]).toMatchObject({ title: 'the Drought token square', cells: squares })
+    await waitFor(() => expect(confirmButton().disabled).toBe(false))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], disasterSquare: { column: 2, row: 1 } })
+  })
+
+  it('cannot be confirmed without a square, and a cancelled pick sends nothing', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const begin = vi.fn().mockResolvedValue(null)
+    render(
+      <MapPickerContext.Provider value={{ begin, cancel: vi.fn() }}>
+        <PlayCardControl card={drought} gameId="g1" view={viewWith([drought])} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Drought'))
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('No square chosen')).toBeTruthy()
+    expect(confirmButton().disabled).toBe(true)
+    expect(send).not.toHaveBeenCalled()
+  })
+})

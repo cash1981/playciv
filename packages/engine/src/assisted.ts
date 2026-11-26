@@ -2174,7 +2174,7 @@ export function reverseAssistedAction(
     (effect.kind === 'foundCity' && effect.huts !== undefined && effect.huts.length > 0) ||
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
-      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
+      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined || effect.disaster !== undefined)) ||
     effect.kind === 'gianniniBuild' ||
     (effect.kind === 'atomicTheory' && effect.mode === 'nuke') ||
     effect.kind === 'agriculture' ||
