@@ -796,11 +796,20 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   Panama Canal and the investment markers are never touched. A target with no coin
   token is skipped; a card with no target holding one is not offered and is refused.
   The coins are stored on the `playCard` record (`coinDiscard`), so the undo vote and a
-  cancel card give each back to its counter. The United Nations consent is asked as
+  cancel card give each back to its counter. When the coin comes off the Sheet and the
+  target has a coin marker (`markers/coin1`) in their player area, the topmost one is
+  removed too (a board entry the board Undo cannot take alone, the Sheet lowered once);
+  undo puts the same piece back at its old place in the stack. The United Nations consent is asked as
   for every culture event, of all named players, also one that holds no token.
+- **Coin marker and Sheet** (`coin-marker.ts`): a coin marker put in a player's area adds 1
+  to that player's Sheet counter, removing it or moving it out takes 1 off (never below 0),
+  moving it to another player's area moves the coin, and moving it inside an area changes
+  nothing. The applied change is stored on the history entry (`BoardHistoryEntry.sheet`), so
+  the board Undo and Redo give back or retake exactly that. The manual Sheet editing on the
+  Coins tab is unchanged. Markers already in an area in saved games are not migrated.
 - **Disaster events** (#352; `culture-disasters.ts`): Drought (desert token),
   Deforestation (grassland token, forest squares only) and Flooding (water token)
-  put one token on a map square the player picks on the board (`disasterSquare`; the
+  put one token on a map square the player picks on the board, then confirms in a popup (`disasterSquare`; the
   legal squares are `PlayableCard.squares`, rechecked on submit). Rulings 258-271 of the
   human's unofficial rulings: a non-mountain square; Drought and Deforestation are
   refused only by a building, a wonder or a relic token still on the map (a Great

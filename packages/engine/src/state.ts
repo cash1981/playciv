@@ -904,7 +904,12 @@ export type AssistedEffect =
         }[]
       }
       /** Counterfeiters, Depression, Bank Scandal: the coin each target discarded and from which counter, so an undo gives it back. */
-      readonly coinDiscard?: readonly { readonly targetId: string; readonly source: CoinSourceKey }[]
+      readonly coinDiscard?: readonly {
+        readonly targetId: string
+        readonly source: CoinSourceKey
+        /** The coin marker taken off the target's area with the Sheet coin: the piece, its place in the stack and the board entry. */
+        readonly piece?: { readonly piece: BoardPiece; readonly index: number; readonly historyId: string }
+      }[]
       /** Drought, Deforestation, Flooding: the token put on the map, so an undo takes off exactly this one. */
       readonly disaster?: {
         readonly pieceId: string

@@ -1261,6 +1261,7 @@ function automate(
         name,
         targets.map((target) => playerOf(state, target.playerId) ?? target),
         payload?.coinPicks,
+        { playerId: player.playerId, ...(at === undefined ? {} : { at }) },
       )
       if (!applied.ok) return err(applied.error)
       return ok({ state: applied.value.state, extra: { coinDiscard: applied.value.discarded }, said: applied.value.said })
@@ -1462,6 +1463,7 @@ export const playCard: AssistedActionDefinition = {
       state: countLinesIn(arab.state, [
         ...(automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId),
         automated.value?.extra.disaster?.historyId,
+        ...(automated.value?.extra.coinDiscard ?? []).map((taken) => taken.piece?.historyId),
       ]),
       effect: {
         kind: 'playCard',
@@ -1710,7 +1712,7 @@ export const playCard: AssistedActionDefinition = {
       current = removed.value
     }
     if (effect.coinDiscard !== undefined) {
-      const given = restoreCoinDiscard(current, effect.coinDiscard)
+      const given = restoreCoinDiscard(current, effect.coinDiscard, { playerId: player.playerId, ...(at === null || at === undefined ? {} : { at }) })
       if (!given.ok) return blockedBy(given.error)
       current = given.value
     }

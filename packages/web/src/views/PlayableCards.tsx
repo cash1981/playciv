@@ -38,6 +38,7 @@ import { CancellationCardControl } from './CancellationCardControl.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { ChoiceDialog } from './ChoiceDialog.js'
 import { ActionCardThumb } from './ActionCardThumb.js'
 import { HelpHint } from './HelpHint.js'
 import { useMapPicker } from './mapPick.js'
@@ -105,6 +106,8 @@ export function PlayCardControl({
   // Drought, Deforestation, Flooding: the square chosen for the disaster token
   const [disasterCell, setDisasterCell] = useState<{ readonly column: number; readonly row: number } | null>(null)
   const [disasterHint, setDisasterHint] = useState<string | null>(null)
+  // The square just clicked on the map, waiting for the player to confirm it in a popup
+  const [disasterAsk, setDisasterAsk] = useState<{ readonly column: number; readonly row: number; readonly label: string } | null>(null)
   const mapPicker = useMapPicker()
   const formId = useId()
   if (view.you === null) return null
@@ -289,12 +292,16 @@ export function PlayCardControl({
       cells: disasterSquares,
       describeCell: (cell) => `Place the ${card.name} token on ${cell.label}`,
     })
-    if (picked !== null) setDisasterCell({ column: picked.column, row: picked.row })
+    if (picked !== null) {
+      setDisasterCell({ column: picked.column, row: picked.row })
+      setDisasterAsk({ column: picked.column, row: picked.row, label: picked.label })
+    }
   }
 
   const resetMove = (): void => {
     setCoinPickBy({})
     setDisasterCell(null)
+    setDisasterAsk(null)
     setDisasterHint(null)
     setMoveFrom(null)
     setMoveTo(null)
@@ -567,6 +574,25 @@ export function PlayCardControl({
         {!ready && <HelpHint label={card.name}>{card.reason}</HelpHint>}
       </div>
 
+      {disasterAsk !== null && (
+        <ChoiceDialog
+          title={`Place the ${card.name} token on ${disasterAsk.label}?`}
+          okLabel="Confirm"
+          okDisabled={disabled || !valid}
+          onOk={() => {
+            setDisasterAsk(null)
+            sendPlay()
+          }}
+          onCancel={() => {
+            setDisasterAsk(null)
+            setDisasterCell(null)
+          }}
+        >
+          <p>
+            {card.name} puts a disaster token on {disasterAsk.label}. The card is played and discarded.
+          </p>
+        </ChoiceDialog>
+      )}
       {ready && open && (
         <form
           id={formId}
@@ -762,7 +788,6 @@ export function PlayCardControl({
                   </fieldset>
                 ),
               )}
-              <p className="muted">A player with no coin token is skipped. Printed coins, Great People coins, the Panama Canal and invested markers are never taken.</p>
             </fieldset>
           )}
           {disasterSquares !== null && (
@@ -781,7 +806,6 @@ export function PlayCardControl({
               </div>
               {disasterSquares.length === 0 && <p className="muted">No square on the map can take this token now.</p>}
               {disasterHint !== null && <p role="status" className="muted">{disasterHint}</p>}
-              <p className="muted">The token goes under any figure, marker or city already on the square.</p>
             </fieldset>
           )}
           {needsResource && (

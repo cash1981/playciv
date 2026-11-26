@@ -1401,6 +1401,8 @@ describe('the coin discard cards', () => {
     expect(confirmButton().disabled).toBe(true)
     expect(screen.getByRole('radio', { name: 'Pottery (I) (2)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('radio', { name: 'Sheet (3)' }))
+    // The form keeps to the choice: no explanatory tail about skipped players or printed coins
+    expect(screen.queryByText(/never taken|is skipped/)).toBeNull()
     fireEvent.click(confirmButton())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: ['bob'], coinPicks: [{ targetId: 'bob', source: 'sheet' }] })
@@ -1466,7 +1468,7 @@ describe('the disaster cards', () => {
   ]
   const drought = card({ name: 'Drought', targets: { kind: 'none' }, prompt: '', squares })
 
-  it('opens the map picker with the legal squares when Play is pressed, and sends the chosen square on confirm', async () => {
+  it('opens the map picker when Play is pressed, then asks in a popup and sends the square on Confirm', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const begin = vi.fn().mockResolvedValue({ column: 2, row: 1, label: 'C2' })
     const mapPicker: MapPicker = { begin, cancel: vi.fn() }
@@ -1478,10 +1480,30 @@ describe('the disaster cards', () => {
     fireEvent.click(playButton('Drought'))
     await waitFor(() => expect(begin).toHaveBeenCalledTimes(1))
     expect(begin.mock.calls[0]?.[0]).toMatchObject({ title: 'the Drought token square', cells: squares })
-    await waitFor(() => expect(confirmButton().disabled).toBe(false))
-    fireEvent.click(confirmButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Place the Drought token on C2?' })
+    // Nothing is sent by the pick itself
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [], disasterSquare: { column: 2, row: 1 } })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('clears the pick when the popup is cancelled, and sends nothing', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const begin = vi.fn().mockResolvedValue({ column: 1, row: 1, label: 'B2' })
+    render(
+      <MapPickerContext.Provider value={{ begin, cancel: vi.fn() }}>
+        <PlayCardControl card={drought} gameId="g1" view={viewWith([drought])} busy={false} run={run} />
+      </MapPickerContext.Provider>,
+    )
+    fireEvent.click(playButton('Drought'))
+    const dialog = await screen.findByRole('dialog', { name: 'Place the Drought token on B2?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByText('No square chosen')).toBeTruthy()
+    expect(confirmButton().disabled).toBe(true)
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('cannot be confirmed without a square, and a cancelled pick sends nothing', async () => {

@@ -11,6 +11,9 @@
 
 import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
 import type { CoinSourceKey } from './coins.js'
+import { putPieceBackKeepingSheet, removePieceKeepingSheet } from './actions/board.js'
+import type { BoardPiece } from './board.js'
+import { COIN_MARKER_ASSET_ID, areaOwnerAt } from './coin-marker.js'
 import { INVESTABLE_COIN_SOURCES } from './sot.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
@@ -43,6 +46,8 @@ export interface CoinPick {
 export interface CoinDiscard {
   readonly targetId: string
   readonly source: CoinSourceKey
+  /** A coin marker in the target's area that went with the Sheet coin: the piece, its place in the stack and the board entry. */
+  readonly piece?: { readonly piece: BoardPiece; readonly index: number; readonly historyId: string }
 }
 
 /** The counters of the player that hold a coin token, in the order of the status board. */
@@ -78,6 +83,7 @@ export function applyCoinDiscard(
   cardName: string,
   named: readonly Playerhand[],
   picks: readonly CoinPick[] | undefined,
+  by: { readonly playerId: string; readonly at?: string },
 ): Result<AppliedCoinDiscard, string> {
   const holders = coinTargetsOf(state, named)
   if (holders.length === 0) {
@@ -126,7 +132,19 @@ export function applyCoinDiscard(
       },
     }
     working = withPlayer(working, lowered)
-    discarded.push({ targetId: holder.playerId, source: counter.key })
+    // The Sheet coin is a marker in the target's area too: it goes with the coin, and the Sheet is lowered once, above
+    let taken: CoinDiscard['piece']
+    if (counter.key === 'sheet') {
+      const marker = [...working.board.pieces]
+        .reverse()
+        .find((piece) => piece.assetId === COIN_MARKER_ASSET_ID && areaOwnerAt(working, piece, piece.x, piece.y) === holder.playerId)
+      const removed = marker === undefined ? undefined : removePieceKeepingSheet(working, { playerId: by.playerId, pieceId: marker.id, ...(by.at === undefined ? {} : { at: by.at }) })
+      if (marker !== undefined && removed !== undefined) {
+        working = removed.state
+        taken = { piece: marker, index: removed.index, historyId: removed.historyId }
+      }
+    }
+    discarded.push({ targetId: holder.playerId, source: counter.key, ...(taken === undefined ? {} : { piece: taken }) })
     parts.push(`${holder.username} discards a coin from ${counter.label} (${totalCoins(coinSourcesOf(working, lowered))} left)`)
   }
   const skipped = named.filter((player) => !holders.some((holder) => holder.playerId === player.playerId))
@@ -140,9 +158,16 @@ export function applyCoinDiscard(
 }
 
 /** Gives every coin back to the counter it came from. `Err` when a player has left the game. */
-export function restoreCoinDiscard(state: GameState, discarded: readonly CoinDiscard[]): Result<GameState, string> {
+export function restoreCoinDiscard(
+  state: GameState,
+  discarded: readonly CoinDiscard[],
+  by: { readonly playerId: string; readonly at?: string },
+): Result<GameState, string> {
   let working = state
-  for (const entry of discarded) {
+  for (const entry of [...discarded].reverse()) {
+    if (entry.piece !== undefined) {
+      working = putPieceBackKeepingSheet(working, { playerId: by.playerId, piece: entry.piece.piece, index: entry.piece.index, ...(by.at === undefined ? {} : { at: by.at }) })
+    }
     const target = working.players.find((candidate) => candidate.playerId === entry.targetId)
     if (target === undefined) return err('A player who discarded a coin is no longer in the game.')
     working = withPlayer(working, {

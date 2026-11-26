@@ -479,6 +479,8 @@ export interface BoardHistoryEntry {
   /** Ready to show in a list: "cash1981 moved Red army from E4 to H8". */
   readonly description: string
   readonly change: BoardChange
+  /** The Sheet coins this change added or took (a coin marker in a player's area, `coin-marker.ts`), for the board Undo and Redo. */
+  readonly sheet?: readonly { readonly playerId: string; readonly delta: number }[]
   /**
    * How many game-log entries existed once this change was made. Stepping back
    * through history uses it to trim the log to what was known at the time.

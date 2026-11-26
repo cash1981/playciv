@@ -16,6 +16,11 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 
+import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { playerAreas } from '../src/board.js'
+import type { BoardPiece } from '../src/board.js'
+import { COIN_MARKER_ASSET_ID } from '../src/coin-marker.js'
+
 import { player, withCardInHand } from './assisted-fixture.js'
 import { CASH1981 as A, KARANDRAS1 as B, ITCHI as C, CHUL as D, firstCivGame } from './fixture.js'
 
@@ -256,5 +261,75 @@ describe('the board is untouched by a coin card', () => {
     const { state, itemId } = withCardInHand(base, 'Counterfeiters')
     const played = unwrap(play(state, itemId, { targets: [B] }))
     expect(played.board).toEqual(state.board)
+  })
+})
+
+describe('the coin marker in the target area goes with the Sheet coin', () => {
+  const coinsOf = (state: GameState, playerId: string): readonly BoardPiece[] => {
+    const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === playerId)
+    if (area === undefined) throw new Error('no area')
+    return state.board.pieces.filter(
+      (piece) => piece.assetId === COIN_MARKER_ASSET_ID && piece.x >= area.x && piece.x < area.x + area.width && piece.y >= area.y,
+    )
+  }
+  /** Karandras1 holds a Sheet coin of 1 and a coin marker in the area (which the sync counts: the Sheet is 2). */
+  const scene = (extra: Counters = {}) => {
+    const base = withCounters(firstCivGame(), B, { sheet: 1, ...extra })
+    const area = playerAreas(base.board, base.players).find((candidate) => candidate.playerId === B)
+    if (area === undefined) throw new Error('no area')
+    return unwrap(placePiece(base, { playerId: B, assetId: COIN_MARKER_ASSET_ID, x: area.x + 40, y: area.y + 90 }))
+  }
+
+  it('removes the marker and takes the Sheet coin once, not twice', () => {
+    const { state, itemId } = withCardInHand(scene(), 'Counterfeiters')
+    expect(held(state, B, 'sheet')).toBe(2)
+    expect(coinsOf(state, B)).toHaveLength(1)
+    const played = unwrap(play(state, itemId, { targets: [B] }))
+    expect(held(played, B, 'sheet')).toBe(1)
+    expect(coinsOf(played, B)).toHaveLength(0)
+    expect(played.assistedActions[0]?.effect).toMatchObject({ coinDiscard: [{ targetId: B, source: 'sheet', piece: { piece: { assetId: COIN_MARKER_ASSET_ID } } }] })
+  })
+
+  it('is undone by the vote: the same marker is back at its old place and the coin comes back once', () => {
+    const { state, itemId } = withCardInHand(scene(), 'Counterfeiters')
+    const before = coinsOf(state, B)[0]
+    const played = unwrap(play(state, itemId, { targets: [B] }))
+    // The board Undo cannot take that removal alone
+    expect(unwrapErr(undoLastBoardChange(played, A)).kind).toBe('BOARD_UNDO_ASSISTED')
+    const undone = undoByVote(played)
+    expect(held(undone, B, 'sheet')).toBe(2)
+    expect(coinsOf(undone, B)).toEqual(before === undefined ? [] : [before])
+    expect(undone.board.pieces.map((piece) => piece.id)).toEqual(state.board.pieces.map((piece) => piece.id))
+  })
+
+  it('leaves the marker when the coin is taken from another counter, and when the target has no marker', () => {
+    const { state, itemId } = withCardInHand(scene({ pottery: 1 }), 'Counterfeiters')
+    const played = unwrap(play(state, itemId, { targets: [B], coinPicks: [{ targetId: B, source: 'pottery' }] }))
+    expect(coinsOf(played, B)).toHaveLength(1)
+    expect(held(played, B, 'sheet')).toBe(2)
+    const bare = withCardInHand(withCounters(firstCivGame(), B, { sheet: 1 }), 'Counterfeiters')
+    const done = unwrap(play(bare.state, bare.itemId, { targets: [B] }))
+    expect(held(done, B, 'sheet')).toBe(0)
+    expect(done.board.history).toEqual(bare.state.board.history)
+  })
+
+  it('takes one marker from each target for Bank Scandal, and a cancel card rewinds them', () => {
+    const withC = (state: GameState): GameState => {
+      const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === C)
+      if (area === undefined) throw new Error('no area')
+      return unwrap(placePiece(state, { playerId: C, assetId: COIN_MARKER_ASSET_ID, x: area.x + 40, y: area.y + 90 }))
+    }
+    const joust = withCardInHand(withC(scene()), 'Jousting Tourney', D)
+    const card = withCardInHand(joust.state, 'Bank Scandal')
+    const baseline = card.state
+    const played = unwrap(play(baseline, card.itemId, { requestId: 'target' }))
+    expect(coinsOf(played, B)).toHaveLength(0)
+    expect(coinsOf(played, C)).toHaveLength(0)
+    const logId = played.assistedActions.find((record) => record.id === 'target')?.logId ?? ''
+    const cancelled = unwrap(applyCancellation(played, { playerId: D, requestId: 'cancel', command: { logId, itemId: joust.itemId } }, baseline))
+    expect(coinsOf(cancelled, B)).toHaveLength(1)
+    expect(coinsOf(cancelled, C)).toHaveLength(1)
+    expect(held(cancelled, B, 'sheet')).toBe(2)
+    expect(held(cancelled, C, 'sheet')).toBe(1)
   })
 })
