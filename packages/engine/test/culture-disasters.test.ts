@@ -225,9 +225,25 @@ describe('Drought', () => {
     // The history replays to the same stack, and the step before the token has the figure alone
     expect(piecesAtStep(played.board.history, played.board.history.length)).toEqual(played.board.pieces)
     expect(piecesAtStep(played.board.history, played.board.history.length - 1).some((piece) => piece.category === 'disaster')).toBe(false)
-    // A board Undo of the last change takes the token off again
-    const undone = unwrap(undoLastBoardChange(played, A))
-    expect(undone.board.pieces).toEqual(placed.state.board.pieces)
+    // The plain board Undo cannot take the token off alone: only the vote does, with the card
+    expect(unwrapErr(undoLastBoardChange(played, A)).kind).toBe('BOARD_UNDO_ASSISTED')
+    expect(tokens(played)).toHaveLength(1)
+    expect(undoByVote(played).board.pieces).toEqual(placed.state.board.pieces)
+  })
+
+  it('goes above a disaster token that was placed by hand above a city, so the new token decides the terrain', () => {
+    const city = put(scene(), 'cities/redcity2', GRASS)
+    const hand = put(city.state, 'disasters/water', GRASS)
+    // The hand-placed token lies above the city, so the lowest piece on the square is below it
+    expect(indexOfPiece(hand.state, hand.piece.id)).toBeGreaterThan(indexOfPiece(hand.state, city.piece.id))
+    const { state, itemId } = withCard(hand.state, 'Drought')
+    expect(terrainOfSpot(state, GRASS)).toBe('water')
+    const played = unwrap(play(state, itemId, cellOf(state, GRASS)))
+    const added = tokens(played).find((piece) => piece.id !== hand.piece.id)
+    if (added === undefined) throw new Error('no token')
+    expect(indexOfPiece(played, added.id)).toBeGreaterThan(indexOfPiece(played, hand.piece.id))
+    expect(terrainOfSpot(played, GRASS)).toBe('desert')
+    expect(undoByVote(played).board.pieces).toEqual(state.board.pieces)
   })
 
   it('puts the token under the lowest marker when several stand on the square, above an older token', () => {

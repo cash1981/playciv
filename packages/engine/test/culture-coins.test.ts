@@ -90,6 +90,12 @@ describe('Counterfeiters', () => {
     expect(player(state).items.some((item) => item.id === itemId)).toBe(true)
   })
 
+  it('refuses a coin pick that is not an object instead of throwing', () => {
+    const { state, itemId } = withCardInHand(withCounters(firstCivGame(), B, { pottery: 1 }), 'Counterfeiters')
+    const result = play(state, itemId, { targets: [B], coinPicks: [null as unknown as { targetId: string; source: string }] })
+    expect(reason(result)).toContain('Choose the coin token each player discards')
+  })
+
   it('cannot be played, and is not offered, when the target holds no coin token', () => {
     const { state, itemId } = withCardInHand(withCounters(firstCivGame(), C, { sheet: 2 }), 'Counterfeiters')
     // Only Itchi holds a token: the card is offered, and refuses the others

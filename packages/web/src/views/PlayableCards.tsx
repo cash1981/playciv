@@ -293,6 +293,7 @@ export function PlayCardControl({
   }
 
   const resetMove = (): void => {
+    setCoinPickBy({})
     setDisasterCell(null)
     setDisasterHint(null)
     setMoveFrom(null)

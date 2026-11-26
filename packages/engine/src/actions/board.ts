@@ -1174,6 +1174,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'playCard' && effect.cardMove?.moves.some((move) => move.historyId === entry.id) === true) {
       return true
     }
+    // A disaster token was placed as part of playing the card: only the vote takes it off, with the card
+    if (effect.kind === 'playCard' && effect.disaster?.historyId === entry.id) return true
     // Cousteau's Harbors were built as part of playing the card: the board Undo must not take one alone
     if (effect.kind === 'playCard' && effect.harbors?.some((harbor) => harbor.historyId === entry.id) === true) {
       return true

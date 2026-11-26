@@ -16,8 +16,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   A player passes the turn on only with End turn on the Setup tab (the Order tab's End turn stays held back while a step is
   missing), and the holder only follows a pass: before any pass the holder is the start player as before.
 - **Disaster cards (#352):** Drought, Deforestation and Flooding do not check ruling 240 (protection of a square in the
-  outskirts of a city from disasters). The token is put below the lowest piece on its square when the card is played,
-  so an older disaster token that a manual move left above a figure is not overtaken.
+  outskirts of a city from disasters).
 - **Social policy cap (#378):** a lost city does not force a policy to be returned: the panel shows a prompt and blocks
   choosing until the player removes one. The cap counts city pieces on the map, so a city piece placed by hand counts.
 - **Japanese research discount (#368):** research spends no trade in the engine, so the discount of 3 is shown (Tech tree,

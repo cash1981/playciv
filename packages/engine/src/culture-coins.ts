@@ -88,7 +88,9 @@ export function applyCoinDiscard(
     )
   }
   const chosen = picks ?? []
-  if (!Array.isArray(chosen)) return err('Choose the coin token each player discards.')
+  if (!Array.isArray(chosen) || chosen.some((pick) => typeof pick !== 'object' || pick === null)) {
+    return err('Choose the coin token each player discards.')
+  }
   const seen = new Set<string>()
   for (const pick of chosen) {
     const holder = holders.find((candidate) => candidate.playerId === pick.targetId)

@@ -158,15 +158,19 @@ export function applyDisaster(
   const asset = findBoardAsset(spec.assetId)
   if (asset === undefined) return err(`The ${name} token has no artwork to put on the board.`)
 
-  // Under the lowest piece on the square, so it is still there when a figure is killed; on top when none stands there
-  const under = (scene.get(keyOf(cell)) ?? []).filter((entry) => !isDisaster(entry.piece)).map((entry) => entry.index)
+  // Under the lowest piece on the square, so it is still there when a figure is killed, but above every disaster token
+  // already there (the newest decides the terrain, also when a hand-placed token lies above a city); on top when nothing stands there
+  const here = scene.get(keyOf(cell)) ?? []
+  const covers = here.filter((entry) => !isDisaster(entry.piece)).map((entry) => entry.index)
+  const disasters = here.filter((entry) => isDisaster(entry.piece)).map((entry) => entry.index)
+  const index = covers.length === 0 ? undefined : Math.max(Math.min(...covers), ...disasters.map((at) => at + 1))
   const centre = squareCentre(state.board, cell)
   const placed = placeUnchecked(state, {
     playerId,
     assetId: spec.assetId,
     x: centre.x - asset.width / 2,
     y: centre.y - asset.height / 2,
-    ...(under.length === 0 ? {} : { index: Math.min(...under) }),
+    ...(index === undefined ? {} : { index }),
     ...(at === undefined ? {} : { at }),
   })
   const entry = placed?.board.history.at(-1)
