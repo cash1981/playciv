@@ -740,7 +740,7 @@ function embedSources(
 
   const askedCards = payload.playCards ?? []
   const askedBoosts = payload.boosts ?? []
-  if (new Set(askedCards).size !== askedCards.length || new Set(askedBoosts).size !== askedBoosts.length) {
+  if (new Set(askedCards).size !== askedCards.length || new Set(askedBoosts.map((asked) => asked.tech)).size !== askedBoosts.length) {
     return err(failed('Choose each card and each tech boost once.'))
   }
   // The ids of the records are made from the build's (`:c1`, `:b1`), kept inside the 64 characters a request id may have. One that
@@ -757,11 +757,19 @@ function embedSources(
     cards.push(card)
   }
   const boosts: HammerBoost[] = []
-  for (const tech of askedBoosts) {
+  for (const { tech } of askedBoosts) {
     const boost = city.hammerSources.boosts.find((candidate) => candidate.tech === tech)
     if (boost === undefined) return err(failed(`${tech} cannot give production now: it needs to be revealed, unused this turn and a Wheat to pay.`))
     boosts.push(boost)
   }
+  // Which Wheat pays a boost is the player's choice, in the shape the boost's own button takes; one that does not parse is refused here, with nothing played
+  for (const asked of askedBoosts) {
+    if (asked.payments === undefined) continue
+    const checked = parseResourcePayments(asked.payments, ['Wheat'])
+    if (!checked.ok) return err(failed(`${asked.tech}: ${checked.error}`))
+  }
+  const usedWheat = askedBoosts.flatMap((asked) => asked.payments ?? []).map((choice) => choice.id)
+  if (new Set(usedWheat).size !== usedWheat.length) return err(failed('The same token or card cannot pay two boosts.'))
   if (boosts.length > city.hammerSources.wheat) return err(failed(`You have the Wheat for ${city.hammerSources.wheat} tech ${city.hammerSources.wheat === 1 ? 'boost' : 'boosts'}, not ${boosts.length}.`))
   const verdict = judgeSelection(choice.cost, city.production, cards, boosts, player.stats.trade, player.civilization?.name)
   if (!verdict.ok) return err(failed(`${choice.label}: ${verdict.reason}`))
@@ -769,7 +777,7 @@ function embedSources(
   const stamp = context.at === undefined ? {} : { at: context.at }
   const wanted = [
     ...cards.map((card, index) => ({ id: `${base}:c${index + 1}`, action: 'playCard' as AssistedActionKind, payload: { itemId: card.itemId, targets: [], hammerCityId: city.cityPieceId } as AssistedPayload })),
-    ...boosts.map((boost, index) => ({ id: `${base}:b${index + 1}`, action: boost.kind, payload: { cityPieceId: city.cityPieceId } as AssistedPayload })),
+    ...boosts.map((boost, index) => ({ id: `${base}:b${index + 1}`, action: boost.kind, payload: { cityPieceId: city.cityPieceId, ...(askedBoosts[index]?.payments === undefined ? {} : { payments: askedBoosts[index]?.payments }) } as AssistedPayload })),
   ]
   let current = state
   const ids: string[] = []

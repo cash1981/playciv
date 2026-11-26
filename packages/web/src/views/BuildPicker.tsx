@@ -19,6 +19,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
+import type { ResourcePaymentChoice } from '@civ/engine'
+
 import type { BuildChoice, BuildPayOption, BuildPayload, CityBuildOptions, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
@@ -27,6 +29,7 @@ import { resolveAgain } from './CityGather.js'
 import type { BuildFlow, BuildPlan } from './buildFlow.js'
 import type { Run } from './GameView.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
+import { paymentStillAvailable, ResourcePaymentPicker, resourcePaymentSelection } from './ResourcePaymentPicker.js'
 import './BuildPicker.css'
 
 export const BUILD_PICKER_ID = 'build-picker'
@@ -179,6 +182,13 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
           : (city.boost > 0 ? `, including ${city.boost} from a tech ability this turn` : '') +
             (city.caravan ? `${city.boost > 0 ? ' and' : ', including'} 2 from the caravan, which this build uses up.` : '.')}
       </p>
+
+      {ready && city.engineeringAvailable === true && (
+        <p className="build-picker-production build-picker-engineering">
+          Engineering splits this city&rsquo;s production over two builds. Play We Love cards and use tech boosts first (Your cards and
+          the tech buttons), then build: neither build takes them along.
+        </p>
+      )}
 
       {ready && (city.hammerSources.cards.length > 0 || city.hammerSources.boosts.length > 0) && (
         <p className="build-picker-production build-picker-sources">
@@ -410,6 +420,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   const [sending, setSending] = useState(false)
   // The square a build was sent on by the tap, so Confirm can come back for it if that did not go through
   const [autoSent, setAutoSent] = useState<string | null>(null)
+  // The Wheat the player chose for the boosts of the chosen way to pay; null leaves it to the automatic choice
+  const [pickedWheat, setPickedWheat] = useState<readonly ResourcePaymentChoice[] | null>(null)
   // A new plan mounts a new bar: put focus on it once, without scrolling. The page
   // is scrolled by the board (BoardView), which brings its panel into view under
   // this sticky bar, so the two never pull the page in different directions.
@@ -422,6 +434,14 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   const pay = chosenPayOf(plan)
   const sources = plan.free !== true && usesSources(pay)
   const rush = plan.tradeToPay > 0
+  // One Wheat for each boost: the same private options the boost's own button lists. Asked only when more than one thing can pay.
+  const wheatSource = sources
+    ? view.you?.buildOptions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.hammerSources.boosts.find((boost) => boost.tech === pay.boosts[0]?.tech)?.payment
+    : undefined
+  const wheatPayment = wheatSource === undefined || pay.boosts.length === 0 ? undefined : { cost: pay.boosts.map(() => 'Wheat'), options: wheatSource.options }
+  const askWheat = wheatPayment !== undefined && wheatPayment.options.length > 1
+  const chosenWheat = askWheat && pickedWheat !== null && paymentStillAvailable(wheatPayment, pickedWheat) ? pickedWheat : null
+  const wheatSelection = askWheat ? resourcePaymentSelection(wheatPayment, chosenWheat ?? []) : []
   const placed = plan.placement === 'square'
   // A unit and City Walls have no square to wait for: Confirm is ready at once.
   const ready = !placed || target !== null
@@ -441,7 +461,9 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
       ...(rush ? { rush: true as const } : {}),
       ...(plan.free === true ? { free: true as const } : {}),
       ...(sources && pay.cards.length > 0 ? { playCards: pay.cards.map((card) => card.itemId) } : {}),
-      ...(sources && pay.boosts.length > 0 ? { boosts: pay.boosts.map((boost) => boost.tech) } : {}),
+      ...(sources && pay.boosts.length > 0
+        ? { boosts: pay.boosts.map((boost, index) => ({ tech: boost.tech, ...(chosenWheat === null || chosenWheat[index] === undefined ? {} : { payments: [chosenWheat[index]] }) })) }
+        : {}),
     }
     let payload: BuildPayload
     if (item.kind === 'unit' || item.kind === 'walls') {
@@ -454,7 +476,7 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     // The key says which press this is: the same item and square (a unit and City Walls have none)
     // while the outcome is unknown reuses the request id, another is a new press.
     const where = target === null ? 'card' : `${target.column},${target.row}`
-    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}${plan.free === true ? ':free' : ''}${sources ? `:${pay.id}` : ''}`
+    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}${plan.free === true ? ':free' : ''}${sources ? `:${pay.id}` : ''}${chosenWheat === null ? '' : `:${JSON.stringify(chosenWheat)}`}`
     // The same press is already on its way (this bar was closed and opened again):
     // its outcome is not known yet, so this click says nothing and sends nothing.
     if (isPressInFlight(key)) return
@@ -557,12 +579,21 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
                 name="build-pay"
                 checked={option.id === pay.id}
                 disabled={busy || sending}
-                onChange={() => flow.choosePay(option.id)}
+                onChange={() => {
+                  setPickedWheat(null)
+                  flow.choosePay(option.id)
+                }}
               />{' '}
               {payOptionText(option)}
             </label>
           ))}
         </fieldset>
+      )}
+      {askWheat && wheatPayment !== undefined && (
+        <div className="build-bar-wheat">
+          Which Wheat pays {pay.boosts.length === 1 ? pay.boosts[0]?.tech : 'the boosts'}?{' '}
+          <ResourcePaymentPicker payment={wheatPayment} selected={wheatSelection} onChange={setPickedWheat} />
+        </div>
       )}
       {/* What the engine says about the chosen square: an army put where an enemy figure stands is not automated, or what the item replaces. A live region, so it is read out when the square is picked. */}
       {target?.note !== undefined && (

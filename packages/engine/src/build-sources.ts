@@ -11,6 +11,7 @@
 
 import { openCityManagementTurn, techBlock, waitingCardIds } from './assisted-core.js'
 import { resourcePaymentOptions } from './assisted-resources.js'
+import type { ResourcePaymentOption } from './assisted-resources.js'
 import { itemName } from './item.js'
 import { PRODUCTION_BOOSTS, WE_LOVE_HAMMERS } from './hammer-data.js'
 import { rushTradeCost } from './build-options.js'
@@ -28,6 +29,11 @@ export interface HammerBoost {
   readonly tech: string
   readonly kind: AssistedActionKind
   readonly hammers: number
+  /**
+   * What can pay the Wheat of this boost: the same private options the boost's own button lists (a hut or village in the hand, a token in the
+   * player area, a culture card that can be played as Wheat). The viewer's own view only.
+   */
+  readonly payment: { readonly cost: readonly (string | null)[]; readonly options: readonly ResourcePaymentOption[] }
 }
 
 /** What the player could use for production now. The viewer's own view only: it names cards in the hand. */
@@ -51,13 +57,14 @@ export function hammerSourcesOf(state: GameState, player: Playerhand): HammerSou
     const hammers = WE_LOVE_HAMMERS.get(name)
     return hammers === undefined ? [] : [{ itemId: item.id, name, hammers }]
   })
-  const wheat = resourcePaymentOptions(state, player.playerId, ['Wheat']).length
+  const wheatOptions = resourcePaymentOptions(state, player.playerId, ['Wheat'])
+  const wheat = wheatOptions.length
   const boosts =
     wheat === 0
       ? []
       : PRODUCTION_BOOSTS.flatMap((spec): readonly HammerBoost[] =>
           techBlock(player, spec.techName) === undefined && !turn.usedActions.includes(`card:${spec.techName}`)
-            ? [{ tech: spec.techName, kind: spec.kind, hammers: spec.amount }]
+            ? [{ tech: spec.techName, kind: spec.kind, hammers: spec.amount, payment: { cost: ['Wheat'], options: wheatOptions } }]
             : [],
         )
   return cards.length === 0 && boosts.length === 0 ? NO_SOURCES : { cards, boosts, wheat }

@@ -21,7 +21,7 @@
  */
 
 import { CARAVAN_PRODUCTION, cityLabelOf } from './disband.js'
-import { PHASE_REASON, egyptFreeBuildOpen, engineeringSecondBuild, openCityManagementTurn } from './assisted-core.js'
+import { ENGINEERING_KEY, PHASE_REASON, egyptFreeBuildOpen, engineeringSecondBuild, openCityManagementTurn, techBlock } from './assisted-core.js'
 import type { EngineeringSecondBuild } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
@@ -46,6 +46,7 @@ import {
   remainingBoardAssetCount,
 } from './board.js'
 import type { Board, BoardPiece } from './board.js'
+import type { ResourcePaymentChoice } from './assisted-resources.js'
 import { NO_SOURCES, hammerSourcesOf, payOptionsFor } from './build-sources.js'
 import type { BuildPayOption, HammerSources } from './build-sources.js'
 import { cityProductionsOf } from './city-production.js'
@@ -80,8 +81,18 @@ interface BuildPayloadBase {
    * action record, so another player can still cancel it. Only what the build needs is accepted; not with `free` and not for Engineering's second build.
    */
   readonly playCards?: readonly string[]
-  /** Tech production boosts (Animal Husbandry, Construction, Banking, Plastics, by tech name) used as part of this build, each for a Wheat; as `playCards`. */
-  readonly boosts?: readonly string[]
+  /**
+   * Tech production boosts (Animal Husbandry, Construction, Banking, Plastics) used as part of this build, each for a Wheat; as `playCards`.
+   * `payments` is the optional choice of which Wheat pays (a hut, a token or a culture card), the shape the boost's own button takes; left out, the
+   * Wheat is picked the automatic way.
+   */
+  readonly boosts?: readonly BuildBoost[]
+}
+
+/** One tech boost a build uses, by tech name, and the one payment the player chose for its Wheat, if any. */
+export interface BuildBoost {
+  readonly tech: string
+  readonly payments?: readonly ResourcePaymentChoice[]
 }
 
 /**
@@ -172,6 +183,8 @@ export interface CityBuildOptions {
    * build (`firstCost` off the `fullProduction` it had), `caravan` and `boost` are 0 and false, as the first build used them.
    */
   readonly engineering?: { readonly firstCost: number; readonly fullProduction: number }
+  /** Engineering is revealed and unused this turn, so the player may split a city's production over two builds. The cards and boosts are then played first with their own buttons: neither build takes them. */
+  readonly engineeringAvailable?: true
   /** The We Love cards in the hand and the tech boosts that could make up production for a build in this city now; empty for Engineering's second build, which takes none. The viewer's own view only. */
   readonly hammerSources: HammerSources
   /** Empty unless `status` is `ready`. */
@@ -1106,6 +1119,7 @@ function optionsForCity(
   shared: SharedSupply,
   split: EngineeringSecondBuild | undefined,
   allSources: HammerSources,
+  engineeringAvailable: boolean,
 ): CityBuildOptions {
   // Engineering's second build takes none: the first build's production is shared, and a card is played with the first build
   const sources = split === undefined ? allSources : NO_SOURCES
@@ -1122,6 +1136,7 @@ function optionsForCity(
     caravan: production.caravan,
     boost: production.boost,
     hammerSources: sources,
+    ...(engineeringAvailable ? { engineeringAvailable: true as const } : {}),
   }
   if (!open) {
     return { ...base, status: 'wrong-phase', reason: PHASE_REASON, choices: [], unavailable: [] }
@@ -1371,9 +1386,10 @@ export function buildOptionsOf(state: GameState, player: Playerhand, engineering
   const scene = sceneOf(state)
   const shared = sharedSupplyOf(state, player.color.toLowerCase())
   const sources = open ? hammerSourcesOf(state, player) : NO_SOURCES
+  const engineeringAvailable = open && techBlock(player, 'Engineering') === undefined && openCityManagementTurn(state, player)?.usedActions.includes(ENGINEERING_KEY) !== true
   return footprints.flatMap((footprint) => {
     const city = productions.find((candidate) => candidate.pieceId === footprint.piece.id)
-    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared, engineering ? engineeringSecondBuild(state, player, footprint.piece.id) : undefined, sources)]
+    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared, engineering ? engineeringSecondBuild(state, player, footprint.piece.id) : undefined, sources, engineeringAvailable)]
   })
 }
 

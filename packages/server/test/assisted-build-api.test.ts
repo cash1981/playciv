@@ -495,8 +495,16 @@ describe('the payload', () => {
     await refused('OddCardId', (body) => ({ ...body, playCards: ['a card'] }))
     await refused('TooManyCards', (body) => ({ ...body, playCards: ['1', '2', '3', '4', '5', '6', '7'] }))
     await refused('StringBoosts', (body) => ({ ...body, boosts: 'Banking' }))
-    await refused('UnknownBoost', (body) => ({ ...body, boosts: ['Pottery'] }))
-    await refused('TooManyBoosts', (body) => ({ ...body, boosts: ['Animal Husbandry', 'Construction', 'Banking', 'Plastics', 'Banking'] }))
+    await refused('BareBoostName', (body) => ({ ...body, boosts: ['Banking'] }))
+    await refused('UnknownBoost', (body) => ({ ...body, boosts: [{ tech: 'Pottery' }] }))
+    await refused('ExtraBoostField', (body) => ({ ...body, boosts: [{ tech: 'Banking', cost: 1 }] }))
+    await refused('TooManyBoosts', (body) => ({ ...body, boosts: ['Animal Husbandry', 'Construction', 'Banking', 'Plastics', 'Banking'].map((tech) => ({ tech })) }))
+    const wheat = { resource: 'Wheat', kind: 'hut', id: 'hut-1' }
+    await refused('PaymentsNotAList', (body) => ({ ...body, boosts: [{ tech: 'Banking', payments: wheat }] }))
+    await refused('TwoPayments', (body) => ({ ...body, boosts: [{ tech: 'Banking', payments: [wheat, wheat] }] }))
+    await refused('PaymentNotWheat', (body) => ({ ...body, boosts: [{ tech: 'Banking', payments: [{ ...wheat, resource: 'Iron' }] }] }))
+    await refused('BadPaymentKind', (body) => ({ ...body, boosts: [{ tech: 'Banking', payments: [{ ...wheat, kind: 'bag' }] }] }))
+    await refused('BadPaymentId', (body) => ({ ...body, boosts: [{ tech: 'Banking', payments: [{ ...wheat, id: 'a b' }] }] }))
   })
 
   it('plays the We Love card of the hand with the build, as a record of its own', async () => {
@@ -529,10 +537,39 @@ describe('the payload', () => {
     expect(JSON.stringify((await view(table.gameId, table.other)).you)).not.toContain(card.id)
   })
 
+  it('pays a tech boost with the Wheat the player chose, through the route', async () => {
+    const table = await buildTable('Wheat', { techs: ['Printing Press', 'Animal Husbandry'], trade: 0 })
+    const saved = await stored(table)
+    const huts = saved.items.filter((item) => item.kind === 'hut' && item.name === 'Wheat').slice(0, 2)
+    if (huts.length < 2) throw new Error('not enough Wheat huts in the deck')
+    const ids = new Set(huts.map((hut) => hut.id))
+    await repo.saveGame({
+      ...saved,
+      items: saved.items.filter((item) => !ids.has(item.id)),
+      players: saved.players.map((player) =>
+        player.playerId === table.starterId ? { ...player, items: [...player.items, ...huts.map((hut) => ({ ...hut, hidden: true, ownerId: table.starterId }))] } : player,
+      ),
+    })
+    const mine = await view(table.gameId, table.starter)
+    const options = (mine.you?.buildOptions?.[0] as unknown as { hammerSources: { boosts: { tech: string; payment: { options: { choice: { id: string } }[] } }[] } }).hammerSources
+    expect(options.boosts[0]?.payment.options.map((option) => option.choice.id).sort()).toEqual([...ids].sort())
+    // The second Wheat, not the one the automatic choice would take first
+    const [, second] = huts
+    const response = await post(table.starter, `/api/games/${table.gameId}/actions`, {
+      ...buildBody(table, 'req-1', mine.rev, UNIVERSITY),
+      boosts: [{ tech: 'Animal Husbandry', payments: [{ resource: 'Wheat', kind: 'hut', id: second?.id }] }],
+    })
+    expect(response.status).toBe(200)
+    const after = await stored(table)
+    const held = after.players.find((player) => player.playerId === table.starterId)?.items.map((item) => item.id) ?? []
+    expect(held).toContain(huts[0]?.id)
+    expect(held).not.toContain(second?.id)
+  })
+
   it('the build fields belong to build only, and the reward fields to chooseReward only', async () => {
     const table = await buildTable('Stray', { techs: ['Writing'] })
     const rev = (await view(table.gameId, table.starter)).rev
-    for (const extra of [{ cityPieceId: table.cityId }, { item: { kind: 'building', assetId: LIBRARY } }, { target: C2 }, { rush: true }, { free: true }, { playCards: ['c1'] }, { boosts: ['Banking'] }]) {
+    for (const extra of [{ cityPieceId: table.cityId }, { item: { kind: 'building', assetId: LIBRARY } }, { target: C2 }, { rush: true }, { free: true }, { playCards: ['c1'] }, { boosts: [{ tech: 'Banking' }] }]) {
       const response = await post(table.starter, `/api/games/${table.gameId}/actions`, {
         action: 'cultureAdvance', requestId: 'req-1', rev, ...extra,
       })

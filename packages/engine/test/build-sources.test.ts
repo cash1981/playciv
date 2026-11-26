@@ -14,7 +14,7 @@ import { performAssistedAction, reverseAssistedAction, takeBackOpenBuild } from 
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { buildOptionsOf } from '../src/build-options.js'
-import type { BuildChoice, CityBuildOptions } from '../src/build-options.js'
+import type { BuildBoost, BuildChoice, CityBuildOptions } from '../src/build-options.js'
 import { payOptionsFor } from '../src/build-sources.js'
 import type { HammerSources } from '../src/build-sources.js'
 import { applyCancellation } from '../src/cancellation.js'
@@ -25,7 +25,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
-import { player as playerOf, withCardInHand, withHutInHand } from './assisted-fixture.js'
+import { player as playerOf, withCardInHand, withHutInHand, withPieceInArea } from './assisted-fixture.js'
 import { CASH1981 as A, CHUL, ITCHI, KARANDRAS1 as B, firstCivGame } from './fixture.js'
 
 const AT = '2026-11-27T10:00:00.000Z'
@@ -94,7 +94,7 @@ const squareOf = (_state: GameState): { column: number; row: number } => ({ colu
 
 const tryBuild = (
   state: GameState,
-  extra: { playCards?: readonly string[]; boosts?: readonly string[]; rush?: boolean; free?: boolean } = {},
+  extra: { playCards?: readonly string[]; boosts?: readonly BuildBoost[]; rush?: boolean; free?: boolean } = {},
   requestId = 'b1',
 ) =>
   performAssistedAction(state, {
@@ -121,7 +121,7 @@ function undoByVote(state: GameState, requestId: string) {
 describe('the ways to pay', () => {
   const sources = (cards: readonly [string, number][], boosts: readonly [string, number][] = [], wheat = boosts.length): HammerSources => ({
     cards: cards.map(([name, hammers], index) => ({ itemId: `card-${index}`, name, hammers })),
-    boosts: boosts.map(([tech, hammers]) => ({ tech, kind: 'animalHusbandry' as const, hammers })),
+    boosts: boosts.map(([tech, hammers]) => ({ tech, kind: 'animalHusbandry' as const, hammers, payment: { cost: ['Wheat'], options: [] } })),
     wheat,
   })
 
@@ -322,7 +322,7 @@ describe('building with a tech boost', () => {
     const state = boosted(3)
     expect(cityOptions(state).hammerSources.boosts.map((boost) => boost.tech)).toEqual(['Animal Husbandry'])
     expect(optionIds(state)).toEqual(['Animal Husbandry'])
-    const done = unwrap(tryBuild(state, { boosts: ['Animal Husbandry'] }))
+    const done = unwrap(tryBuild(state, { boosts: [{ tech: 'Animal Husbandry' }] }))
     expect(libraries(done)).toBe(1)
     expect(done.assistedActions.map((record) => [record.id, record.kind])).toEqual([['b1:b1', 'animalHusbandry'], ['b1', 'build']])
     expect(done.assistedActions[0]?.usageKey).toBe('card:Animal Husbandry')
@@ -333,22 +333,22 @@ describe('building with a tech boost', () => {
   })
 
   it('offers no boost once it has been used this turn, or without a Wheat', () => {
-    const used = unwrap(tryBuild(boosted(3), { boosts: ['Animal Husbandry'] }))
+    const used = unwrap(tryBuild(boosted(3), { boosts: [{ tech: 'Animal Husbandry' }] }))
     expect(cityOptions(used).hammerSources.boosts).toEqual([])
     // A second Wheat does not bring it back: it is once per turn
     expect(cityOptions(withHutInHand(used, 'Wheat').state).hammerSources.boosts).toEqual([])
     expect(cityOptions(ready(['Writing', 'Animal Husbandry'], 3)).hammerSources.boosts).toEqual([])
     // Without a Wheat the item is not offered at all, and the build says why
-    expect(reason(tryBuild(ready(['Writing', 'Animal Husbandry'], 3), { boosts: ['Animal Husbandry'] }))).toContain('cannot be built')
+    expect(reason(tryBuild(ready(['Writing', 'Animal Husbandry'], 3), { boosts: [{ tech: 'Animal Husbandry' }] }))).toContain('cannot be built')
     // A tech that is not revealed gives nothing
-    expect(reason(tryBuild(boosted(3), { boosts: ['Banking'] }))).toContain('Banking cannot give production now')
+    expect(reason(tryBuild(boosted(3), { boosts: [{ tech: 'Banking' }] }))).toContain('Banking cannot give production now')
   })
 
   it('combines a card and a boost when both are needed', () => {
     const { state, ids } = withCards(boosted(0), DESPOT)
     // 5 needed: the Despot's 4 and the boost's 3 together, neither alone
     expect(optionIds(state)).toEqual([`${DESPOT} + Animal Husbandry`])
-    const done = unwrap(tryBuild(state, { playCards: ids[DESPOT] ?? [], boosts: ['Animal Husbandry'] }))
+    const done = unwrap(tryBuild(state, { playCards: ids[DESPOT] ?? [], boosts: [{ tech: 'Animal Husbandry' }] }))
     expect(done.assistedActions.map((record) => record.id)).toEqual(['b1:c1', 'b1:b1', 'b1'])
   })
 })
@@ -357,7 +357,7 @@ describe('taking it back', () => {
   it('returns the cards, the Wheat and the trade with the vote on the build, and the board is as before', () => {
     const base = withHutInHand(withCards(ready(['Writing', 'Animal Husbandry'], 0, 3), DESPOT).state, 'Wheat').state
     const dealt = playerOf(base, A).items.find((item) => itemName(item) === DESPOT)?.id ?? ''
-    const done = unwrap(tryBuild(base, { playCards: [dealt], boosts: ['Animal Husbandry'] }))
+    const done = unwrap(tryBuild(base, { playCards: [dealt], boosts: [{ tech: 'Animal Husbandry' }] }))
     expect(libraries(done)).toBe(1)
     const undone = unwrap(undoByVote(done, 'b1'))
     expect(libraries(undone)).toBe(0)
@@ -456,5 +456,80 @@ describe('an opponent cancels the card played with a build', () => {
     expect(libraries(cancelled)).toBe(0)
     expect(status(cancelled, 'b1:c1')).toBe('cancelled')
     expect(trade(cancelled)).toBe(0)
+  })
+})
+
+describe('which Wheat pays a boost', () => {
+  /** A hut, a Wheat token in the player area and a Gift from Afar card, all of which can pay the one Wheat. */
+  function threeWheats() {
+    const hut = withHutInHand(ready(['Writing', 'Animal Husbandry'], 3, 0), 'Wheat')
+    const token = withPieceInArea(hut.state, 'resources/wheat')
+    const gift = withCardInHand(token.state, 'A Gift from Afar')
+    return { state: gift.state, hutId: hut.hutId, pieceId: token.piece.id, cardId: gift.itemId }
+  }
+  const optionsFor = (state: GameState) => cityOptions(state).hammerSources.boosts[0]?.payment.options.map((option) => option.choice.kind).sort()
+  const choice = (kind: 'hut' | 'piece' | 'card', id: string) => ({ resource: 'Wheat', kind, id })
+
+  it('lists every Wheat that can pay, as the boost button does', () => {
+    const { state } = threeWheats()
+    expect(optionsFor(state)).toEqual(['card', 'hut', 'piece'])
+  })
+
+  it.each(['hut', 'piece', 'card'] as const)('spends the %s the player chose, and the undo returns that one', (kind) => {
+    const { state, hutId, pieceId, cardId } = threeWheats()
+    const id = kind === 'hut' ? hutId : kind === 'piece' ? pieceId : cardId
+    const done = unwrap(tryBuild(state, { boosts: [{ tech: 'Animal Husbandry', payments: [choice(kind, id)] }] }))
+    expect(libraries(done)).toBe(1)
+    const inPlay = {
+      hut: playerOf(done, A).items.some((item) => item.id === hutId),
+      piece: done.board.pieces.some((piece) => piece.id === pieceId),
+      card: playerOf(done, A).items.some((item) => item.id === cardId),
+    }
+    // Only the chosen one is gone
+    expect(inPlay).toEqual({ hut: kind !== 'hut', piece: kind !== 'piece', card: kind !== 'card' })
+    const undone = unwrap(undoByVote(done, 'b1'))
+    expect(libraries(undone)).toBe(0)
+    expect(playerOf(undone, A).items.some((item) => item.id === hutId)).toBe(true)
+    expect(playerOf(undone, A).items.some((item) => item.id === cardId)).toBe(true)
+    expect(undone.board.pieces.some((piece) => piece.assetId === 'resources/wheat')).toBe(true)
+    expect(playerOf(undone, A).playerTurns.some((turn) => turn.usedActions.includes('card:Animal Husbandry'))).toBe(false)
+  })
+
+  it('takes the automatic Wheat when none is chosen: a token before a card', () => {
+    const { state, cardId } = threeWheats()
+    const done = unwrap(tryBuild(state, { boosts: [{ tech: 'Animal Husbandry' }] }))
+    expect(playerOf(done, A).items.some((item) => item.id === cardId)).toBe(true)
+  })
+
+  it('refuses a payment that is not a Wheat of the player, a malformed one, and one token for two boosts, with nothing played', () => {
+    const { state, hutId } = threeWheats()
+    const before = JSON.stringify(state)
+    expect(reason(tryBuild(state, { boosts: [{ tech: 'Animal Husbandry', payments: [choice('hut', 'nope')] }] }))).not.toBe('')
+    expect(reason(tryBuild(state, { boosts: [{ tech: 'Animal Husbandry', payments: [choice('hut', hutId), choice('hut', hutId)] }] }))).toContain('payments')
+    expect(reason(tryBuild(state, { boosts: [{ tech: 'Animal Husbandry', payments: [{ resource: 'Iron', kind: 'hut', id: hutId }] }] }))).toContain('must pay Wheat')
+    expect(JSON.stringify(state)).toBe(before)
+    expect(libraries(state)).toBe(0)
+  })
+})
+
+describe('the Engineering flag of the build options', () => {
+  it('is set while Engineering is revealed and unused, and not without the tech', () => {
+    expect(cityOptions(ready(['Engineering', 'Writing', 'Currency'], 12)).engineeringAvailable).toBe(true)
+    expect(cityOptions(ready(['Writing', 'Currency'], 12)).engineeringAvailable).toBeUndefined()
+  })
+
+  it('is gone once the split has been used this turn', () => {
+    const first = unwrap(tryBuild(ready(['Engineering', 'Writing', 'Currency'], 12), {}))
+    const second = unwrap(
+      performAssistedAction(first, {
+        playerId: A,
+        action: 'build',
+        requestId: 'b2',
+        at: AT,
+        payload: { cityPieceId: cityOf(first).id, item: { kind: 'building', assetId: 'buildings/market' }, target: { column: 2, row: 1 } },
+      }),
+    )
+    expect(cityOptions(first).engineeringAvailable).toBe(true)
+    expect(cityOptions(second).engineeringAvailable).toBeUndefined()
   })
 })

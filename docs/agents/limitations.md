@@ -17,8 +17,7 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   missing), and the holder only follows a pass: before any pass the holder is the start player as before.
 - **Build with cards and boosts (#352):** Engineering's second build cannot be funded through the picker: it offers no cards or boosts (the production is the first build's leftover), and a card sent with the first build is only accepted when that build needs it. The plain Play button on a We Love card, or a boost button, still adds hammers for the second build before it is made. the ways to pay offer up to 12 options per item, ordered by the number of cards, the trade and the hammers, so a
   rarely useful set (a stronger card for the same trade) can be cut off. Cancelling one embedded card rewinds the other cards of the same
-  build too (they return to the hand). The Wheat of a boost is paid the automatic way (a token before a culture card); the picker does not
-  let the player pick the token. A Great Person's hammers and Leonardo's Workshop are still counted only through a hand-set production.
+  build too (they return to the hand). A Great Person's hammers and Leonardo's Workshop are still counted only through a hand-set production.
 - **Disaster cards (#352):** Drought, Deforestation and Flooding do not check ruling 240 (protection of a square in the
   outskirts of a city from disasters).
 - **Social policy cap (#378):** a lost city does not force a policy to be returned: the panel shows a prompt and blocks

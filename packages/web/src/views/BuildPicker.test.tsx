@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBoard } from '@civ/engine'
+import type { ResourcePaymentOption } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
 import type { BuildChoice, CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js'
@@ -1693,7 +1694,7 @@ describe('paying with cards and boosts', () => {
   it('lists the cards and boosts that could be used, in the header of the picker', () => {
     render(
       <Harness
-        initial={viewOf([city(library([plain(9), withDespot]), [DESPOT, QUEEN], [{ tech: 'Animal Husbandry', kind: 'animalHusbandry', hammers: 3 }])])}
+        initial={viewOf([city(library([plain(9), withDespot]), [DESPOT, QUEEN], [{ tech: 'Animal Husbandry', kind: 'animalHusbandry', hammers: 3, payment: { cost: ['Wheat'], options: [] } }])])}
       />,
     )
     fireEvent.click(buildButton())
@@ -1759,7 +1760,7 @@ describe('paying with cards and boosts', () => {
 
   it('sends a tech boost by name', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
-    const boost = { tech: 'Animal Husbandry', kind: 'animalHusbandry' as const, hammers: 3 }
+    const boost = { tech: 'Animal Husbandry', kind: 'animalHusbandry' as const, hammers: 3, payment: { cost: ['Wheat'], options: [] } }
     render(<Harness initial={viewOf([city(library([withBoost]), [], [boost])])} />)
     fireEvent.click(buildButton())
     choose('Library')
@@ -1772,7 +1773,7 @@ describe('paying with cards and boosts', () => {
       item: { kind: 'building', assetId: 'buildings/library' },
       target: { column: 3, row: 4 },
       rush: true,
-      boosts: ['Animal Husbandry'],
+      boosts: [{ tech: 'Animal Husbandry' }],
     })
   })
 
@@ -1797,5 +1798,75 @@ describe('paying with cards and boosts', () => {
     choose('Library')
     expect(within(bar()).queryAllByRole('radio')).toHaveLength(0)
     expect(bar().textContent).toContain('Plays together with the build: We Love the Despot Day! (+4 hammers)')
+  })
+
+  describe('which Wheat pays a boost', () => {
+    const hut = { choice: { resource: 'Wheat', kind: 'hut' as const, id: 'hut-1' }, label: 'Wheat (hand)' }
+    const token = { choice: { resource: 'Wheat', kind: 'piece' as const, id: 'piece-1' }, label: 'Wheat (player area)' }
+    const gift = { choice: { resource: 'Wheat', kind: 'card' as const, id: 'card-1' }, label: 'A Gift from Afar (as Wheat)' }
+    const boostWith = (options: readonly ResourcePaymentOption[]) => ({
+      tech: 'Animal Husbandry',
+      kind: 'animalHusbandry' as const,
+      hammers: 3,
+      payment: { cost: ['Wheat'], options },
+    })
+    const open = (options: readonly ResourcePaymentOption[]) => {
+      render(<Harness initial={viewOf([city(library([withBoost]), [], [boostWith(options)])])} />)
+      fireEvent.click(buildButton())
+      choose('Library')
+    }
+
+    it('asks which Wheat when more than one can pay, with the choices the boost button lists', () => {
+      open([hut, token, gift])
+      const select = within(bar()).getByRole('combobox', { name: 'Resource 1' })
+      expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual(['Wheat (hand)', 'Wheat (player area)', 'A Gift from Afar (as Wheat)'])
+    })
+
+    it('asks nothing when there is one Wheat, and nothing when no boost is used', () => {
+      open([hut])
+      expect(within(bar()).queryByRole('combobox', { name: 'Resource 1' })).toBeNull()
+      cleanup()
+      render(<Harness initial={viewOf([city(library([plain(9), withDespot]), [DESPOT])])} />)
+      fireEvent.click(buildButton())
+      choose('Library')
+      expect(within(bar()).queryByRole('combobox')).toBeNull()
+    })
+
+    it('sends the automatic Wheat when the choice is left alone, and the chosen one when it is changed', async () => {
+      const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+      open([hut, token, gift])
+      fireEvent.click(overlays()[0] as HTMLElement)
+      fireEvent.click(confirm())
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+      expect(send.mock.calls[0]?.[3]).toMatchObject({ boosts: [{ tech: 'Animal Husbandry' }] })
+      expect(JSON.stringify(send.mock.calls[0]?.[3])).not.toContain('payments')
+    })
+
+    it('sends the Wheat the player chose, and a different choice is a different press', async () => {
+      const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+      open([hut, token, gift])
+      fireEvent.click(overlays()[0] as HTMLElement)
+      fireEvent.change(within(bar()).getByRole('combobox', { name: 'Resource 1' }), { target: { value: JSON.stringify(['card', 'card-1', 'Wheat']) } })
+      fireEvent.click(confirm())
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+      expect(send.mock.calls[0]?.[3]).toMatchObject({
+        boosts: [{ tech: 'Animal Husbandry', payments: [{ resource: 'Wheat', kind: 'card', id: 'card-1' }] }],
+      })
+    })
+  })
+})
+
+describe('Engineering in the picker', () => {
+  it('tells the player to play the cards and boosts first when Engineering is available', () => {
+    render(<Harness initial={viewOf([options({ engineeringAvailable: true })])} />)
+    fireEvent.click(buildButton())
+    const picker = screen.getByRole('region', { name: 'Build in Capital D5' })
+    expect(picker.textContent).toContain('Engineering splits this city’s production over two builds. Play We Love cards and use tech boosts first')
+  })
+
+  it('says nothing about it without Engineering', () => {
+    render(<Harness initial={viewOf([options()])} />)
+    fireEvent.click(buildButton())
+    expect(screen.getByRole('region', { name: 'Build in Capital D5' }).textContent).not.toContain('Engineering')
   })
 })

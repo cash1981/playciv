@@ -6,6 +6,7 @@
 import type {
   AssistedPayload,
   BuildItem,
+  BuildBoost,
   BuildPayload,
   DevoteToTheArtsPayload,
   GameState,
@@ -22,6 +23,7 @@ import {
   ALL_WONDERS,
   BUILDABLE_BUILDING_IDS,
   PRODUCTION_BOOSTS,
+  parseResourcePayments,
   BUILDING_UPGRADES,
   CULTURE_CARD,
   MAX_DEVOTE_CULTURE,
@@ -170,16 +172,34 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   if (playCards !== undefined && (!Array.isArray(playCards) || playCards.length > MAX_BUILD_CARDS || !playCards.every((id) => typeof id === 'string' && REQUEST_ID.test(id)))) {
     return `playCards must be a list of at most ${MAX_BUILD_CARDS} card ids`
   }
+  // Each boost is { tech, payments? }: payments is the optional choice of which Wheat pays, the shape the boost's own button takes
   const boosts = body['boosts']
   const boostNames: readonly string[] = PRODUCTION_BOOSTS.map((boost) => boost.techName)
-  if (boosts !== undefined && (!Array.isArray(boosts) || boosts.length > boostNames.length || !boosts.every((name) => typeof name === 'string' && boostNames.includes(name)))) {
-    return `boosts must be a list of tech names from ${boostNames.join(', ')}`
+  const badBoosts = `boosts must be a list of { tech, payments? } with tech one of ${boostNames.join(', ')}`
+  let parsedBoosts: readonly BuildBoost[] | undefined
+  if (boosts !== undefined) {
+    if (!Array.isArray(boosts) || boosts.length > boostNames.length) return badBoosts
+    const list: BuildBoost[] = []
+    for (const entry of boosts) {
+      const record = typeof entry === 'object' && entry !== null && !Array.isArray(entry) ? asRecord(entry) : undefined
+      if (record === undefined || Object.keys(record).some((key) => key !== 'tech' && key !== 'payments')) return badBoosts
+      const tech = record['tech']
+      if (typeof tech !== 'string' || !boostNames.includes(tech)) return badBoosts
+      if (record['payments'] === undefined) {
+        list.push({ tech })
+        continue
+      }
+      const checked = parseResourcePayments(record['payments'], ['Wheat'])
+      if (!checked.ok) return `boosts: ${checked.error}`
+      list.push({ tech, payments: checked.value })
+    }
+    parsedBoosts = list
   }
   const optionalRush = {
     ...(rush === undefined ? {} : { rush }),
     ...(free === undefined ? {} : { free }),
     ...(playCards === undefined || playCards.length === 0 ? {} : { playCards: playCards as readonly string[] }),
-    ...(boosts === undefined || boosts.length === 0 ? {} : { boosts: boosts as readonly string[] }),
+    ...(parsedBoosts === undefined || parsedBoosts.length === 0 ? {} : { boosts: parsedBoosts }),
   }
 
   if (parsed.kind === 'unit') {
