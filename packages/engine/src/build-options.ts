@@ -183,7 +183,7 @@ export interface CityBuildOptions {
    * build (`firstCost` off the `fullProduction` it had), `caravan` and `boost` are 0 and false, as the first build used them.
    */
   readonly engineering?: { readonly firstCost: number; readonly fullProduction: number }
-  /** Engineering is revealed and unused this turn, so the player may split a city's production over two builds. The cards and boosts are then played first with their own buttons: neither build takes them. */
+  /** Engineering is revealed and unused this turn, so the player may split a city's production over two builds. The first build may use the cards and boosts it needs; for the second they are played first with their own buttons. */
   readonly engineeringAvailable?: true
   /** The We Love cards in the hand and the tech boosts that could make up production for a build in this city now; empty for Engineering's second build, which takes none. The viewer's own view only. */
   readonly hammerSources: HammerSources

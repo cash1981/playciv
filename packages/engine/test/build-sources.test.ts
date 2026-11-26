@@ -206,6 +206,33 @@ describe('what Build offers', () => {
     expect(JSON.stringify(state.log.map((entry) => entry.publicLog))).not.toContain(QUEEN)
     expect(toPlayerView(state, A).you?.buildOptions?.[0]?.hammerSources.cards).toHaveLength(1)
   })
+
+  it('gives another player with a city of their own options with none of A\'s cards in them', () => {
+    const base = put(ready(['Writing'], 0, 0), 'cities/bluecity2', 6, 6)
+    const opened = unwrap(markPhasesDone(base, { playerId: B, turnNumber: 1, upToPhase: 'TRADE' }))
+    const { state, ids } = withCards(opened, QUEEN)
+    const theirs = toPlayerView(state, B).you?.buildOptions
+    // B has a city and its own options, which hold no card of A's
+    expect(theirs).toHaveLength(1)
+    expect(theirs?.[0]?.hammerSources).toEqual({ cards: [], boosts: [], wheat: 0 })
+    expect(JSON.stringify(theirs)).not.toContain(ids[QUEEN]?.[0] ?? 'missing')
+    expect(JSON.stringify(theirs)).not.toContain(QUEEN)
+    expect(toPlayerView(state, A).you?.buildOptions?.[0]?.hammerSources.cards.map((card) => card.itemId)).toEqual(ids[QUEEN])
+  })
+
+  it('keeps the Wheat that could pay a boost (hut, token, card) out of everybody else\'s view, and in the own', () => {
+    const hut = withHutInHand(ready(['Writing', 'Animal Husbandry'], 3, 0), 'Wheat')
+    const token = withPieceInArea(hut.state, 'resources/wheat')
+    const gift = withCardInHand(token.state, 'A Gift from Afar')
+    const mine = JSON.stringify(toPlayerView(gift.state, A).you?.buildOptions)
+    for (const id of [hut.hutId, token.piece.id, gift.itemId]) expect(mine).toContain(id)
+    expect(mine).toContain('A Gift from Afar')
+    for (const viewer of [B, ITCHI, CHUL]) {
+      const theirs = JSON.stringify(toPlayerView(gift.state, viewer))
+      for (const id of [hut.hutId, gift.itemId]) expect(theirs).not.toContain(id)
+      expect(theirs).not.toContain('(as Wheat)')
+    }
+  })
 })
 
 describe('building with a card', () => {
@@ -380,6 +407,20 @@ describe('taking it back', () => {
     expect(libraries(back)).toBe(0)
     expect(inHand(back, ids[QUEEN]?.[0] ?? '')).toBe(true)
     expect(status(back, 'b1:c1')).toBe('undone')
+  })
+
+  it('refuses a build whose own request id is the id a derived record would get, for a card and for a boost', () => {
+    const asCard = 'a'.repeat(60) + ':c1'
+    const withCard = withCards(ready(['Writing'], 0, 0), QUEEN)
+    const beforeCard = JSON.stringify(withCard.state)
+    expect(reason(tryBuild(withCard.state, { playCards: withCard.ids[QUEEN] ?? [] }, asCard))).toContain('already used for another action')
+    expect(JSON.stringify(withCard.state)).toBe(beforeCard)
+    const asBoost = 'a'.repeat(60) + ':b1'
+    const withBoost = withHutInHand(ready(['Writing', 'Animal Husbandry'], 3, 0), 'Wheat').state
+    expect(reason(tryBuild(withBoost, { boosts: [{ tech: 'Animal Husbandry' }] }, asBoost))).toContain('already used for another action')
+    expect(libraries(withBoost)).toBe(0)
+    // No record is written twice under one id
+    expect(new Set(withCard.state.assistedActions.map((record) => record.id)).size).toBe(withCard.state.assistedActions.length)
   })
 
   it('refuses a build whose derived request id already names another record, before anything is played', () => {

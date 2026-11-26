@@ -1861,7 +1861,7 @@ describe('Engineering in the picker', () => {
     render(<Harness initial={viewOf([options({ engineeringAvailable: true })])} />)
     fireEvent.click(buildButton())
     const picker = screen.getByRole('region', { name: 'Build in Capital D5' })
-    expect(picker.textContent).toContain('Engineering splits this city’s production over two builds. Play We Love cards and use tech boosts first')
+    expect(picker.textContent).toContain('Engineering splits this city’s production over two builds. The first build uses only the cards and boosts it needs; for the second, play We Love cards and use tech boosts first')
   })
 
   it('says nothing about it without Engineering', () => {

@@ -1914,8 +1914,8 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   are unchanged. Not with a free (Egyptian) build and not for Engineering's second build, whose production is the first's
   leftover: the picker offers no ways to pay there, and a card is only counted as needed for the build it is sent with, so the second
   build cannot be funded through the picker (see limitations: the Play button still adds hammers for it).
-  The picker says so for a city when Engineering is revealed and unused (`engineeringAvailable`): play the cards and boosts first
-  with their own buttons, then build. Which Wheat pays an embedded boost is the player's choice: each `boosts` entry may carry
+  The picker says so for a city when Engineering is revealed and unused (`engineeringAvailable`): the first build uses only the
+  cards and boosts it needs, and for the second the cards and boosts are played first with their own buttons, then the build. Which Wheat pays an embedded boost is the player's choice: each `boosts` entry may carry
   `payments` (the boost button's shape, exactly one Wheat: a hut or village in the hand, a token in the player area or a culture card
   played as Wheat), the picker lists the same options as the button (`HammerBoost.payment`) when more than one can pay, and without a
   choice the automatic Wheat is spent. The boost's own record keeps what was spent, so the undo returns that one. The cards and boosts listed are the viewer's own; spectators and opponents see nothing, and

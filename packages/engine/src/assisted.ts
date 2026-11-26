@@ -747,7 +747,7 @@ function embedSources(
   // already names a record is not ours: it would be taken for a retry and an unrelated record embedded, so the build is refused
   const base = context.requestId.slice(0, 60)
   const derived = [...askedCards.map((_, index) => `${base}:c${index + 1}`), ...askedBoosts.map((_, index) => `${base}:b${index + 1}`)]
-  if (derived.some((id) => state.assistedActions.some((record) => record.id === id))) {
+  if (derived.some((id) => id === context.requestId || state.assistedActions.some((record) => record.id === id))) {
     return err(failed('That request id is already used for another action. Send the build again with a new request id.'))
   }
   const cards: HammerCard[] = []

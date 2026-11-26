@@ -185,8 +185,8 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
 
       {ready && city.engineeringAvailable === true && (
         <p className="build-picker-production build-picker-engineering">
-          Engineering splits this city&rsquo;s production over two builds. Play We Love cards and use tech boosts first (Your cards and
-          the tech buttons), then build: neither build takes them along.
+          Engineering splits this city&rsquo;s production over two builds. The first build uses only the cards and boosts it needs; for
+          the second, play We Love cards and use tech boosts first (Your cards and the tech buttons), then build.
         </p>
       )}
 
