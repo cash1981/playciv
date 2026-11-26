@@ -24,6 +24,8 @@ import {
   sendToBack,
   exploreSquare,
   travelFigureCollecting,
+  exploreGroup,
+  travelGroup,
   undoLastBoardChange,
 } from '@civ/engine'
 
@@ -145,6 +147,69 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
         ...(fightVillage === true ? { fightVillage } : {}),
         at: now(),
       }),
+    )
+  })
+
+  /**
+   * Moves figures standing on one square along one route (all or nothing), each charged as a single travel would
+   * be. Body: `{ pieceIds, column, row, route }`.
+   */
+  app.post('/api/games/:gameId/board/travel-group', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const column = optionalNumber(body, 'column')
+    const row = optionalNumber(body, 'row')
+    if (column === undefined || row === undefined || !Number.isInteger(column) || !Number.isInteger(row)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'column and row are required whole numbers')
+    }
+    const rawIds = body['pieceIds']
+    if (!Array.isArray(rawIds) || rawIds.length < 2 || !rawIds.every((id): id is string => typeof id === 'string')) {
+      return sendError(c, 400, 'BAD_REQUEST', 'pieceIds must list at least two figures')
+    }
+    const rawRoute = body['route']
+    const squares = Array.isArray(rawRoute) ? rawRoute.map(asRecord) : undefined
+    const route = squares?.map((square) => ({ column: optionalNumber(square, 'column'), row: optionalNumber(square, 'row') }))
+    if (
+      route === undefined ||
+      !route.every(
+        (square): square is { column: number; row: number } => Number.isInteger(square.column) && Number.isInteger(square.row),
+      )
+    ) {
+      return sendError(c, 400, 'BAD_REQUEST', 'route must be a list of squares with whole number column and row')
+    }
+    const disband = optionalBoolean(body, 'disband')
+    const collectToken = optionalBoolean(body, 'collectToken')
+    const fightVillage = optionalBoolean(body, 'fightVillage')
+    return applyToGame(context, c, gameId, (state) =>
+      travelGroup(state, {
+        playerId: currentPlayer(c).id,
+        pieceIds: rawIds,
+        column,
+        row,
+        route,
+        ...(disband === true ? { disband } : {}),
+        ...(collectToken === true ? { collectToken } : {}),
+        ...(fightVillage === true ? { fightVillage } : {}),
+        at: now(),
+      }),
+    )
+  })
+
+  /** The same figures uncover the fog next to their square together: one tile, 1 movement each. Body: `{ pieceIds, column, row }`. */
+  app.post('/api/games/:gameId/board/explore-group', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const column = optionalNumber(body, 'column')
+    const row = optionalNumber(body, 'row')
+    if (column === undefined || row === undefined || !Number.isInteger(column) || !Number.isInteger(row)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'column and row are required whole numbers')
+    }
+    const rawIds = body['pieceIds']
+    if (!Array.isArray(rawIds) || rawIds.length < 2 || !rawIds.every((id): id is string => typeof id === 'string')) {
+      return sendError(c, 400, 'BAD_REQUEST', 'pieceIds must list at least two figures')
+    }
+    return applyToGame(context, c, gameId, (state) =>
+      exploreGroup(state, { playerId: currentPlayer(c).id, pieceIds: rawIds, column, row, at: now() }),
     )
   })
 

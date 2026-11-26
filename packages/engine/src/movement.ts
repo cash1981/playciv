@@ -612,6 +612,102 @@ function shortestLeg(
   return undefined
 }
 
+/**
+ * What a group of the player's figures on one square can do together, for the preview: the squares every one of them
+ * can reach (the farthest of their distances), the least movement left and the lowest speed. A square that ends the
+ * move of any one of them ends the group's move. `null` when the figures are not all the player's own, not on one
+ * square, or fewer than two.
+ */
+export function groupMovementOptions(
+  board: Board,
+  player: MovementPlayer,
+  pieces: readonly BoardPiece[],
+  turnNumber: number,
+  lockedCells: readonly Cell[] = [],
+  forbiddenCells: readonly Cell[] = [],
+): FigureMovementOptions | null {
+  if (pieces.length < 2) return null
+  const all = pieces.map((piece) => figureMovementOptions(board, player, piece, turnNumber, lockedCells, forbiddenCells))
+  const cells = pieces.map((piece) => mapCellOf(board, piece))
+  const start = cells[0]
+  if (
+    all.some((options) => options === null) ||
+    start === null ||
+    start === undefined ||
+    cells.some((cell) => cell === null || cell?.column !== start.column || cell.row !== start.row)
+  ) {
+    return null
+  }
+  const options = all as readonly FigureMovementOptions[]
+  // The figures arrive one after another, so the whole group must fit under the stacking limit
+  const room = groupRoom(board, player, pieces.length)
+  const destinations = (options[0] as FigureMovementOptions).destinations.flatMap((destination) => {
+    if (!room(destination)) return []
+    const matches = options.map((other) =>
+      other.destinations.find((candidate) => candidate.column === destination.column && candidate.row === destination.row),
+    )
+    if (matches.some((match) => match === undefined)) return []
+    const distance = Math.max(...matches.map((match) => match?.distance ?? 0))
+    // The group ends its move wherever any one of its figures would (a hut, a village, another player's figures)
+    const ends = matches.some((match) => match?.ends === true)
+    const contact = matches.some((match) => match?.contact === true)
+    return [{ ...destination, distance, ...(ends ? { ends: true } : {}), ...(contact ? { contact: true } : {}) }]
+  })
+  const exploring = (options[0] as FigureMovementOptions).explore.filter((cell) =>
+    options.every((other) => other.explore.some((candidate) => candidate.column === cell.column && candidate.row === cell.row)),
+  )
+  return {
+    speed: Math.min(...options.map((entry) => entry.speed)),
+    used: Math.max(...options.map((entry) => entry.used)),
+    remaining: Math.min(...options.map((entry) => entry.remaining)),
+    locked: options.some((entry) => entry.locked),
+    ...(options.some((entry) => entry.squareLocked === true) ? { squareLocked: true } : {}),
+    destinations: options.some((entry) => entry.locked || entry.squareLocked === true) ? [] : destinations,
+    explore: exploring,
+  }
+}
+
+/** Whether `count` more of the player's figures fit on a square under the stacking limit (rule 50). */
+function groupRoom(board: Board, player: MovementPlayer, count: number): (cell: Cell) => boolean {
+  const occupancy = occupancyOf(board, player)
+  const limit = Math.max(1, player.stackingLimit ?? 1)
+  return (cell) => (occupancy.own.get(keyOf(cell)) ?? 0) + count <= limit
+}
+
+/**
+ * A route every figure of the group can follow, for the preview. Each figure in turn is tried as the one the route is
+ * planned for, and the first plan the others accept is used. The reason of the first failure is given when none is.
+ */
+export function planGroupRoute(
+  board: Board,
+  player: MovementPlayer,
+  pieces: readonly BoardPiece[],
+  turnNumber: number,
+  via: readonly Cell[],
+  to: Cell,
+  lockedCells: readonly Cell[] = [],
+  forbiddenCells: readonly Cell[] = [],
+): RouteResult {
+  let failure: RouteResult = { ok: false, reason: 'No figure to move.' }
+  for (const lead of pieces) {
+    const planned = planRoute(board, player, lead, turnNumber, via, to, lockedCells, forbiddenCells)
+    if (!planned.ok) {
+      if (!failure.ok && failure.reason === 'No figure to move.') failure = planned
+      continue
+    }
+    if (!groupRoom(board, player, pieces.length)(planned.destination)) {
+      return { ok: false, reason: `${planned.destination.label} has no room for all ${pieces.length} figures under the stacking limit.` }
+    }
+    const refused = pieces
+      .filter((piece) => piece.id !== lead.id)
+      .map((piece) => checkRoute(board, player, piece, turnNumber, planned.route, lockedCells, forbiddenCells))
+      .find((checked) => !checked.ok)
+    if (refused === undefined) return planned
+    failure = refused
+  }
+  return failure
+}
+
 /** The map cells holding at least one figure of `owner`. */
 export function figureSources(board: Board, owner: FigureOwner): readonly Cell[] {
   const sources = new Map<string, Cell>()
@@ -621,6 +717,46 @@ export function figureSources(board: Board, owner: FigureOwner): readonly Cell[]
     if (cell !== null) sources.set(keyOf(cell), cell)
   }
   return [...sources.values()].sort((a, b) => a.row - b.row || a.column - b.column)
+}
+
+/**
+ * Where, relative to a square's centre and for the usual 94 px square, up to six figures stand so that each can
+ * be seen and tapped on its own: the middle first, then beside it, then below and above.
+ */
+const FIGURE_SLOTS: readonly (readonly [dx: number, dy: number])[] = [
+  [0, 0],
+  [33, 0],
+  [-33, 0],
+  [17, 22],
+  [-17, 22],
+  [0, -22],
+]
+
+/**
+ * The top-left corner for a figure arriving on `cell`: the first free spot of `FIGURE_SLOTS`, so a figure that
+ * arrives on another's square does not hide it. A spot is taken when a figure (any colour) has its centre within
+ * 12 px of it, so a stack arranged by hand keeps its places. With all six taken the figure is centred.
+ */
+export function figureSpotIn(
+  board: Board,
+  cell: Cell,
+  figure: { readonly id: string; readonly width: number; readonly height: number },
+): readonly [x: number, y: number] {
+  const scale = board.squareSize / 94
+  const centreX = (cell.column + 0.5) * board.squareSize
+  const centreY = mapTop(board) + (cell.row + 0.5) * board.squareSize
+  const standing = board.pieces.filter((piece) => {
+    if (piece.category !== 'figure' || piece.id === figure.id) return false
+    const at = mapCellOf(board, piece)
+    return at !== null && keyOf(at) === keyOf(cell)
+  })
+  const taken = (dx: number, dy: number): boolean =>
+    standing.some(
+      (piece) =>
+        Math.hypot(piece.x + piece.width / 2 - (centreX + dx * scale), piece.y + piece.height / 2 - (centreY + dy * scale)) < 12 * scale,
+    )
+  const [dx, dy] = FIGURE_SLOTS.find(([slotX, slotY]) => !taken(slotX, slotY)) ?? [0, 0]
+  return [Math.round(centreX + dx * scale - figure.width / 2), Math.round(centreY + dy * scale - figure.height / 2)]
 }
 
 /** The owner's figures whose centre is in `cell`. */

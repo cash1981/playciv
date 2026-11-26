@@ -1207,6 +1207,11 @@ ul.list.vote-needed {
   opacity: 0.6;
 }
 
+.board-piece.board-piece-grouped {
+  outline: 2px dashed var(--accent);
+  outline-offset: 1px;
+}
+
 .board-piece.selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

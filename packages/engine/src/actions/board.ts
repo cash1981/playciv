@@ -69,6 +69,7 @@ import {
   destinationTo,
   figureBelongsTo,
   figureMovementOptions,
+  figureSpotIn,
   movementOf,
 } from '../movement.js'
 import type { MovementDestination } from '../movement.js'
@@ -145,6 +146,69 @@ function record(
       // A fresh change invalidates whatever undo the redo stack was offering
       // to bring back — the same way a text editor's redo dies once you type.
       redo: [],
+    },
+  }
+}
+
+/** The square's name as the board shows it: column letter, then the row counted from 1. */
+export const squareName = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
+
+/**
+ * What a travelling figure did, after the actor's name: "moved Army D3 → E3 → E4 (2 squares)" when the way is
+ * known, "moved Army from D3 to E4 (2 squares)" when only the end points are (no route is ever invented).
+ */
+export function travelSentence(
+  label: string,
+  from: string,
+  destination: MovementDestination,
+  route: readonly Cell[] | undefined,
+): string {
+  const squares = `${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'}`
+  const path =
+    route === undefined || route.length === 0
+      ? `from ${from} to ${destination.label}`
+      : [from, ...route.map(squareName)].join(' → ')
+  return (
+    `moved ${label} ${path} (${squares})` +
+    (destination.contact === true ? ', onto another player\'s figures: settle the battle and loot by hand' : '')
+  )
+}
+
+/**
+ * Marks every board entry made since the history had `fromLength` entries as one group, so a single Undo or Redo
+ * takes the whole group move back or brings it again. The group's id is that of its first entry.
+ */
+export function tagBoardGroup(state: GameState, fromLength: number): GameState {
+  const first = state.board.history[fromLength]
+  if (first === undefined) return state
+  return {
+    ...state,
+    board: {
+      ...state.board,
+      history: state.board.history.map((entry, index) => (index >= fromLength ? { ...entry, group: first.id } : entry)),
+    },
+  }
+}
+
+/**
+ * Adds a public log line for the board change just recorded, made in the name of `actorId`. The line is counted
+ * into that history entry's `logLength`, so stepping back through the history keeps it with the move.
+ */
+export function announceBoardChange(state: GameState, actorId: string, text: string, at: string | undefined): GameState {
+  const actor = findPlayer(state, actorId)
+  const last = state.board.history.at(-1)
+  if (actor === undefined || last === undefined) return state
+  const logged = appendLog(state, {
+    username: actor.username,
+    playerId: actor.playerId,
+    publicLog: `${actor.username} ${text}`,
+    createdAt: at ?? null,
+  })
+  return {
+    ...logged,
+    board: {
+      ...logged.board,
+      history: [...logged.board.history.slice(0, -1), { ...last, logLength: logged.log.length }],
     },
   }
 }
@@ -423,6 +487,9 @@ export function movePieceUnchecked(
 export interface TravelFigureInput {
   readonly playerId: string
   readonly pieceId: string
+  /** False when the caller writes the public log line itself (a group move names all its figures in one). */
+  readonly announce?: boolean
+
   /** The destination map square, zero based from the map's top-left corner. */
   readonly column: number
   readonly row: number
@@ -582,11 +649,8 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
     })
   }
 
-  const x = input.column * state.board.squareSize + (state.board.squareSize - piece.width) / 2
-  const y =
-    mapTop(state.board) +
-    input.row * state.board.squareSize +
-    (state.board.squareSize - piece.height) / 2
+  // The first free spot on the square, so a figure that arrives on another's square does not hide it
+  const [x, y] = figureSpotIn(state.board, { column: input.column, row: input.row }, piece)
   const used = (saved?.used ?? 0) + destination.distance
   // Movement is a pool: the figure may move again while it has speed left. It is locked once the pool is
   // spent, or at once when the move ended on a hut, a village or another player's figures.
@@ -601,18 +665,22 @@ export function travelFigure(state: GameState, input: TravelFigureInput): Action
     movementFrom: piece.movement ?? null,
     movementTo: movement,
     ...(route === undefined ? {} : { route }),
-    description:
-      `moved ${piece.label} from ${locationOf(state.board, areas, piece)} to ${destination.label}` +
-      ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})` +
-      (route !== undefined && route.length > 1
-        ? ` via ${route.slice(0, -1).map((cell) => `${columnLabel(cell.column)}${cell.row + 1}`).join(' ')}`
-        : '') +
-      (destination.contact === true ? ', onto another player\'s figures: settle the battle and loot by hand' : ''),
+    description: travelSentence(piece.label, locationOf(state.board, areas, piece), destination, route),
     ...(input.at === undefined ? {} : { at: input.at }),
   })
   if (moved === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
-  if (offer === undefined) return ok(moved)
-  const disbanded = disbandUnchecked(moved, input, piece.id, destination, offer)
+  // Everyone sees where the figure went, square by square, in the public log as well as the board history
+  const announced =
+    input.announce === false
+      ? moved
+      : announceBoardChange(
+          moved,
+          input.playerId,
+          travelSentence(piece.label, locationOf(state.board, areas, piece), destination, route),
+          input.at,
+        )
+  if (offer === undefined) return ok(announced)
+  const disbanded = disbandUnchecked(announced, input, piece.id, destination, offer)
   return disbanded === undefined
     ? err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
     : ok(disbanded)
@@ -1276,7 +1344,7 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
  * The entry moves onto `redo` rather than being dropped, so a single Redo can
  * bring it straight back.
  */
-export function undoLastBoardChange(state: GameState, playerId: string): ActionResult {
+function undoOneBoardChange(state: GameState, playerId: string): ActionResult {
   const denied = requireAccess(state, playerId)
   if (denied !== undefined) return err(denied)
 
@@ -1328,14 +1396,41 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
     )
   }
 
-  return ok(
-    withBoard(state, {
-      ...state.board,
-      pieces: revertChange(state.board.pieces, last.change),
-      history: state.board.history.slice(0, -1),
-      redo: [...state.board.redo, last],
-    }),
-  )
+  const undone = withBoard(state, {
+    ...state.board,
+    pieces: revertChange(state.board.pieces, last.change),
+    history: state.board.history.slice(0, -1),
+    redo: [...state.board.redo, last],
+  })
+  return ok(announceTravelUndone(state, undone, last))
+}
+
+/** The figure and the squares of a recorded travel move, or `undefined` for any other board change (a shift inside a square included). */
+function travelOf(
+  state: GameState,
+  entry: BoardHistoryEntry,
+): { readonly piece: BoardPiece; readonly from: string; readonly to: string } | undefined {
+  const change = entry.change
+  if (change.kind !== 'move' || change.movement?.to?.reason !== 'travel') return undefined
+  const piece = findPiece(state.board, change.pieceId)
+  if (piece === undefined) return undefined
+  const areas = areasFor(state)
+  const at = (point: { readonly x: number; readonly y: number }): string => locationOf(state.board, areas, { ...piece, ...point })
+  const from = at(change.from)
+  const to = at(change.to)
+  return from === to ? undefined : { piece, from, to }
+}
+
+/** The public line that says an Undo took a travel move back, so the log does not keep claiming the figure stands on the square it left. */
+function announceTravelUndone(before: GameState, after: GameState, entry: BoardHistoryEntry): GameState {
+  const travel = travelOf(before, entry)
+  const actor = findPlayer(after, entry.playerId)
+  if (travel === undefined || actor === undefined) return after
+  return appendLog(after, {
+    username: actor.username,
+    playerId: actor.playerId,
+    publicLog: `${actor.username} took back the move of ${travel.piece.label}: it is on ${travel.from} again`,
+  })
 }
 
 /**
@@ -1346,26 +1441,66 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
  * change clears this stack (see `record`), so a redo is only ever offered
  * right after an undo, before anyone has acted since.
  */
-export function redoLastBoardChange(state: GameState, playerId: string): ActionResult {
+function redoOneBoardChange(state: GameState, playerId: string): ActionResult {
   const denied = requireAccess(state, playerId)
   if (denied !== undefined) return err(denied)
 
   const last = state.board.redo.at(-1)
   if (last === undefined) return err({ kind: 'NOTHING_TO_REDO_ON_BOARD' })
 
+  const redone = withBoard(state, {
+    ...state.board,
+    pieces: applyChange(state.board.pieces, last.change),
+    // Re-appended at the tail of history, so its logLength is refreshed to
+    // now rather than kept from when it first happened — a non-board action
+    // (a card draw, say) may have grown the log while it sat on the redo
+    // stack, and a stale, smaller value here would break the invariant that
+    // logLength never decreases along history, which replay relies on.
+    history: [...state.board.history, { ...last, logLength: state.log.length }],
+    redo: state.board.redo.slice(0, -1),
+  })
+  const travel = travelOf(state, last)
   return ok(
-    withBoard(state, {
-      ...state.board,
-      pieces: applyChange(state.board.pieces, last.change),
-      // Re-appended at the tail of history, so its logLength is refreshed to
-      // now rather than kept from when it first happened — a non-board action
-      // (a card draw, say) may have grown the log while it sat on the redo
-      // stack, and a stale, smaller value here would break the invariant that
-      // logLength never decreases along history, which replay relies on.
-      history: [...state.board.history, { ...last, logLength: state.log.length }],
-      redo: state.board.redo.slice(0, -1),
-    }),
+    travel === undefined
+      ? redone
+      : announceBoardChange(redone, last.playerId, `moved ${travel.piece.label} to ${travel.to} again, after the Undo`, undefined),
   )
+}
+
+/**
+ * Takes back the board's last change, and with it the rest of its group when it belongs to a group move (see
+ * `tagBoardGroup`). All or nothing: a step that is refused refuses the whole Undo.
+ */
+export function undoLastBoardChange(state: GameState, playerId: string): ActionResult {
+  const group = state.board.history.at(-1)?.group
+  const first = undoOneBoardChange(state, playerId)
+  if (!first.ok || group === undefined) return first
+  let current = first.value
+  // A step that offers no Redo (a collected token, a Spanish building) empties the stack: it then does so for the
+  // whole group, or a Redo would bring back only some of the figures.
+  let noRedo = current.board.redo.length < state.board.redo.length + 1
+  while (current.board.history.at(-1)?.group === group) {
+    const before = current.board.redo.length
+    const next = undoOneBoardChange(current, playerId)
+    if (!next.ok) return next
+    if (next.value.board.redo.length < before + 1) noRedo = true
+    current = next.value
+  }
+  return ok(noRedo ? { ...current, board: { ...current.board, redo: [] } } : current)
+}
+
+/** Brings back the most recently undone change, and the rest of its group (see `undoLastBoardChange`). */
+export function redoLastBoardChange(state: GameState, playerId: string): ActionResult {
+  const group = state.board.redo.at(-1)?.group
+  const first = redoOneBoardChange(state, playerId)
+  if (!first.ok || group === undefined) return first
+  let current = first.value
+  while (current.board.redo.at(-1)?.group === group) {
+    const next = redoOneBoardChange(current, playerId)
+    if (!next.ok) return next
+    current = next.value
+  }
+  return ok(current)
 }
 
 /** Helper for the server: the players an area layout is built from. */

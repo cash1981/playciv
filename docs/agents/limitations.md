@@ -123,6 +123,10 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
 - Display settings (#342) are per browser: two tabs in one browser do not sync, and
   the tab that saves last overwrites all three values. Auto zoom still uses the
   old fitting steps.
+- Group travel (#362): which figures drop out as the selection shrinks follows the order on the square after the tapped one; tap
+  another figure to start from it. A group's Undo also takes back a token or relic it collected in the same move, which a Redo does
+  not give again (as for one figure). The cost of a group exploration (1 movement for each figure) is the human's decision, not
+  from the rulebook.
 - Movement routes (#362): Defection, Mass Defection and Wholesale Defection are not automated against a route. Open
   questions for the human before that: where an interruption cuts the move (before or on the square entered), what happens
   with several reactions or a cancelled one, whether the route is revealed to reacting players, and how a hidden card in

@@ -1001,6 +1001,30 @@ export const api = {
       ...(fightVillage ? { fightVillage } : {}),
       ...(route === undefined ? {} : { route }),
     }),
+  /**
+   * Figures standing on one square travel together along one route, all or nothing (the slowest sets the pace). The
+   * flags are those of a single travel: the group disbands, draws the hut or village it ends on, or fights for the village.
+   */
+  travelGroup: (
+    gameId: string,
+    pieceIds: readonly string[],
+    column: number,
+    row: number,
+    route: readonly { readonly column: number; readonly row: number }[],
+    options: { readonly disband?: boolean; readonly collectToken?: boolean; readonly fightVillage?: boolean } = {},
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/board/travel-group`, {
+      pieceIds,
+      column,
+      row,
+      route,
+      ...(options.disband ? { disband: true } : {}),
+      ...(options.collectToken ? { collectToken: true } : {}),
+      ...(options.fightVillage ? { fightVillage: true } : {}),
+    }),
+  /** The same figures explore the fog next to their square together: one tile, 1 movement each. */
+  exploreGroup: (gameId: string, pieceIds: readonly string[], column: number, row: number) =>
+    post<PlayerView>(`/api/games/${gameId}/board/explore-group`, { pieceIds, column, row }),
   /** A figure the viewer's Build placed this City Management goes on another legal square of the city: no Undo, no payment, no movement. */
   repositionBuiltFigure: (gameId: string, pieceId: string, column: number, row: number) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/reposition`, { column, row }),

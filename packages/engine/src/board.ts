@@ -486,6 +486,11 @@ export interface BoardHistoryEntry {
    * through history uses it to trim the log to what was known at the time.
    */
   readonly logLength: number
+  /**
+   * Set on every entry a group move or group exploration made (the id of the group's first entry): one Undo takes
+   * them all back, one Redo brings them all back.
+   */
+  readonly group?: string
 }
 
 /**

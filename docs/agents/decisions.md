@@ -922,7 +922,7 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   while Natural Religion is active); Henry Ford +1 while faceup; Captain James Cook doubles it
   for the turn (`card:Captain James Cook` marker, freed by undo). Spain's bonus
   is part of the base the reveal writes (`3`), not a typed term; while Natural Religion is active any `+` term
-  is read as its bonus, so a scout that still has a typed `+1` loses a point. Group movement is out of scope.
+  is read as its bonus, so a scout that still has a typed `+1` loses a point.
 - **Pool** (human): each travel adds to `movement.used`; the figure may move again
   while speed is left. It locks when the pool is spent or the move ends on a hut,
   village or another player's figures (`MovementDestination.ends`). Board Undo
@@ -933,10 +933,38 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   charges the route's own length, so a detour costs more than the shortest way; the route must end on the requested square.
   `planRoute` plans the preview: a shortest leg per waypoint, later targets reserved. It is greedy, so a first leg can
   take squares a later leg needs. The server re-validates against the current board, which is what rejects a stale
-  preview. The route is stored on the `move` board change (`route`) and shown as ` via …` in the log when longer than one square, and one Undo
-  takes the whole move back. `/travel` without a route keeps the old behaviour (shortest distance charged, no route
+  preview. The route is stored on the `move` board change (`route`) and spelled out in the board history and the **public log** as
+  `cash1981 moved Army D3 → E3 → E4 (2 squares)` (`from D3 to E4` when no route is known; a shift inside a square is not logged;
+  exploring logs `explored E5 with Army on E4 (1 movement)`; an Undo or Redo of a travel move adds its own public line, so the log never
+  claims a figure stands where it does not). The log is public: positions are on the board anyway. A group move has one line naming every
+  figure (see Stacks). One Undo takes the whole move back. `/travel` without a route keeps the old behaviour (shortest distance charged, no route
   recorded): the way taken is unknown and is never reconstructed, for moves before #362 either. Tests: `movement.test.ts`
   (routes), `board-api.test.ts`, `BoardView.test.tsx`.
+  **Explore ahead** (#362): fog the figure is not next to, but could reach (destination not ending the move, 1 movement to spare), is marked
+  Explore too. Tapping it previews the walk to the nearest square beside it; "Move and explore" sends the travel, reloads, then the
+  ordinary explore, so a refused exploration leaves the figure moved with its Undo. The walk never stops on a square that ends a move
+  (hut, village, other players' figures) or on a relic, so no token, relic or village question is asked on it; the disband offer
+  on an own city centre is not made either (move there first to disband).
+- **Stacks** (human, 2026-11-26): a figure that arrives on a square (travel, Build, reposition) takes the first free spot of
+  `FIGURE_SLOTS` (`figureSpotIn`: middle, right, left, then below and above), so figures on one square can be seen and tapped
+  one by one; a spot is taken when a figure's centre is within 12 px of it. Figures already standing, and a stack arranged by hand,
+  do not move. **Group travel** (`actions/travel-group.ts`: `travelGroup`, `exploreGroup`; `POST /board/travel-group`, `/board/explore-group`;
+  `groupMovementOptions`, `planGroupRoute`): the viewer's figures on one square with movement left go along one route, each checked
+  and charged by `travelFigureCollecting` as if alone (its own speed, so the slowest sets the range). All or nothing. The group stops
+  where any one of its figures would end its move, and then everything works as for one figure: a hut or village is drawn once, a
+  relic taken (only the army that takes it ends its move: a relic is not a square the others must stop on), the fight for a village started and a battle on another player's figures settled by hand, all by the group's army
+  (its first figure when it has none, and that figure moves last); a scout that may not end somewhere keeps a mixed group off that
+  square. The group needs room for all its figures under the stacking limit on the square it ends on (the preview leaves out squares
+  without it). The group may disband on an own city centre: every figure does, the army first, so a mixed group leaves a fortification
+  (the orchestrator's tie-break, not yet confirmed by the human: a city holds one marker and the first figure sets it). One public line names every figure
+  (`moved Red army and Red scout together B2 → C2 → C3 (2 squares)`, with the battle note on another player's figures), written before what the move
+  itself logs (a token drawn, a relic taken). **Exploring as a group** (human, 2026-11-26): one tile is
+  drawn and every figure of the group spends 1 movement ("Move and explore" and the Explore squares work for a group). Every board
+  entry a group action made carries one `group` id, so one Undo takes it all back and one Redo brings it again (a step that is
+  refused, such as an assisted relic claim, refuses the whole Undo; a step that offers no Redo, a collected token or a Spanish building,
+  leaves no Redo for the whole group). The web (Movement phase only) selects every figure of the stack
+  at once; tapping the selected figure again, or the "Moving n of m" button, takes one off (the figure tapped always stays), down to
+  one and then back to all. Tests: `movement.test.ts` (stacks, group), `explore.test.ts`, `board-api.test.ts`, `BoardView.test.tsx`.
 - **Route playback** (#362, `web/src/lib/moveReplay.ts`): when a newer board arrives (auto refresh, Forward, or Live after a
   replay) the figure steps through the squares of each recorded route, one square per 320 ms, before it rests on its real
   position. Display only: the board is never changed. Plays the newest 4 route moves of what arrived, also for the
