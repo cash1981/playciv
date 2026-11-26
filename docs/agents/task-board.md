@@ -18,6 +18,15 @@ Status: `claimed` · `in progress` · `in review` · `blocked`.
 - **Claimed paths:** `packages/engine/src/` (actions/arena.ts, actions/player.ts, assisted.ts, assisted-core.ts, assisted-sot.ts, build-options.ts, city-actions.ts, city-gather.ts, sot.ts, assisted-cards.ts, assisted-resources.ts, assisted-city.ts, city-founding.ts, battle-cards.ts, culture-track.ts, social-policy-slots.ts, errors.ts, migrate.ts, movement.ts, state.ts, tech-reveal-abilities.ts), `packages/engine/test/`, `packages/server/src/` (errors.ts, routes/arena.ts, routes/play.ts), `packages/server/test/`, `packages/web/src/views/` (GameView.tsx, BuildPicker.tsx, buildFlow.ts, CityCard.tsx, SotPanel.tsx) and their tests, `packages/web/src/lib/api.ts`, `docs/agents/decisions.md`, `docs/agents/limitations.md`
 - **Notes:** PR #373 Copilot review (issue #368)
 
+### remove-admin-revision-compaction
+
+- **Owner:** Copilot (GPT-6 Luna)
+- **Branch:** `feat/remove-admin-revision-compaction`
+- **Brief:** `docs/agents/tasks/remove-admin-revision-compaction.md`
+- **Status:** done
+- **Claimed paths:** `packages/web/src/views/AdminView.tsx`, `packages/web/src/views/AdminView.test.tsx`, `packages/web/src/lib/api.ts`, `docs/agents/decisions.md`
+- **Notes:** PR #373 merged on 2026-11-24, so its `api.ts` claim is no longer active. Independent Sol review approved with no findings or nits; typecheck, tests and build passed. No browser check was performed.
+
 ## Format
 
 ```markdown
