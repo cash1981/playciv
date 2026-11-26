@@ -1080,6 +1080,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** The request ids of the We Love cards and tech boosts played as part of this build, oldest first: each is an action record of its own, which an undo of the build takes back newest first. */
+      readonly embedded?: readonly string[]
       /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
       readonly free?: true
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
@@ -1121,6 +1123,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** The request ids of the We Love cards and tech boosts played as part of this build, oldest first: each is an action record of its own, which an undo of the build takes back newest first. */
+      readonly embedded?: readonly string[]
     }
   | {
       readonly kind: 'build'
@@ -1146,6 +1150,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** The request ids of the We Love cards and tech boosts played as part of this build, oldest first: each is an action record of its own, which an undo of the build takes back newest first. */
+      readonly embedded?: readonly string[]
       /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
       readonly free?: true
     }

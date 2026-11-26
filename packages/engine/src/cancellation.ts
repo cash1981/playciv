@@ -202,9 +202,11 @@ function reactionFrom(state: GameState, baseline: GameState, playerId: string, c
 function validBaseline(current: GameState, baseline: GameState, record: AssistedActionRecord): boolean {
   // An action may write several log lines. Its primary log is NOT the revision boundary.
   const at = current.assistedActions.findIndex((r) => r.id === record.id)
+  // The cards and boosts played with a build (`build.embedded`) and the build share the revision before them: that one saved game is
+  // the baseline of each, so it may hold fewer actions than come before this record, never more
   return baseline.id === current.id &&
     baseline.rev === record.beforeRevision &&
-    baseline.assistedActions.length === at &&
+    baseline.assistedActions.length <= at &&
     baseline.assistedActions.every((r, i) => r.id === current.assistedActions[i]?.id) &&
     baseline.log.length <= current.log.findIndex((l) => l.id === record.logId) &&
     baseline.log.every((l, i) => l.id === current.log[i]?.id)

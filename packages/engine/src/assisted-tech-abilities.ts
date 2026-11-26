@@ -15,6 +15,8 @@
  */
 
 import { anyGreatPersonMarkerLeft } from './great-person-effects.js'
+import { PRODUCTION_BOOSTS } from './hammer-data.js'
+import type { BoostSpec } from './hammer-data.js'
 import {
   gainGreatPerson,
   markerUndoBlock,
@@ -386,19 +388,7 @@ export function enableWonder(
 // Production boosts: Animal Husbandry, Construction, Banking, Plastics
 // ---------------------------------------------------------------------------
 
-interface BoostSpec {
-  readonly kind: AssistedActionKind
-  readonly techName: string
-  readonly amount: number
-}
-
-/** The four production boosts: one Wheat, one city produces this much extra this turn (the tech cards). */
-export const PRODUCTION_BOOSTS: readonly BoostSpec[] = [
-  { kind: 'animalHusbandry', techName: 'Animal Husbandry', amount: 3 },
-  { kind: 'construction', techName: 'Construction', amount: 5 },
-  { kind: 'banking', techName: 'Banking', amount: 7 },
-  { kind: 'plastics', techName: 'Plastics', amount: 10 },
-]
+export { PRODUCTION_BOOSTS }
 
 function productionBoost(spec: BoostSpec): AssistedActionDefinition {
   return techAbility<'productionBoost', { readonly pieceId: string; readonly label: string }>({

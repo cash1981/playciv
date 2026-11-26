@@ -33,6 +33,7 @@ import { capitalOf, investableCoinsOf, isImmuneToAnarchy, statsAfterGovernmentCh
 import { coinSourcesOf, findCoinSource, socialPolicyCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { COIN_DISCARD_CARDS, applyCoinDiscard, coinTargetsOf, restoreCoinDiscard } from './culture-coins.js'
 import { DISASTER_CARDS, applyDisaster, disasterSquaresOf } from './culture-disasters.js'
+import { WE_LOVE_HAMMERS } from './hammer-data.js'
 import { createPlayerTurn } from './turn.js'
 import { unitedNationsHolders } from './united-nations.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
@@ -384,13 +385,6 @@ function harborChoicesOf(state: GameState, player: Playerhand): readonly HarborC
   }
   return choices
 }
-
-/** The extra hammers one city produces this turn (#352): the culture event's own number. */
-const WE_LOVE_HAMMERS: ReadonlyMap<string, number> = new Map([
-  ['We Love the Despot Day!', 4],
-  ['We Love the Queen Day!', 6],
-  ['We Love the President Day!', 8],
-])
 
 /** Supply Drop's Start of Turn half: 7 trade. */
 const SUPPLY_DROP_TRADE = 7
