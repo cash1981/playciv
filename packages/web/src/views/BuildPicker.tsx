@@ -247,7 +247,7 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
                     <span>
                       Cost {choice.cost}
                       {choice.costNote !== undefined && <> ({choice.costNote})</>}
-                      {choice.freeOnly !== true && choice.payOptions.length <= 1 && choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
+                      {choice.freeOnly !== true && choice.payOptions.length <= 1 && choice.tradeToPay > 0 && !(choice.payOptions[0] !== undefined && usesSources(choice.payOptions[0])) && <>, pays {choice.tradeToPay} trade</>}
                       {choice.freeOnly !== true && choice.payOptions.length > 1 && <>, {choice.payOptions.length} ways to pay</>}
                       {choice.freeOnly !== true && choice.payOptions.length === 1 && choice.payOptions[0] !== undefined && usesSources(choice.payOptions[0]) && (
                         <>, {payOptionText(choice.payOptions[0]).replace(/^./, (letter) => letter.toLowerCase())}</>

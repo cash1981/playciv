@@ -101,6 +101,23 @@ describe('a coin marker and the Sheet counter', () => {
     const removed = unwrap(removePiece(lowered, { playerId: A, pieceId: piece.id }))
     // Nothing could be taken (the counter was 0), so the undo gives nothing back either
     expect(sheetOf(unwrap(undoLastBoardChange(removed, A)), A)).toBe(0)
+    // ... and a Redo takes nothing either: Undo then Redo returns the exact Sheet
+    const redone = unwrap(redoLastBoardChange(unwrap(undoLastBoardChange(removed, A)), A))
+    expect(sheetOf(redone, A)).toBe(0)
+    // A placement undone when the Sheet had been lowered by hand: the Undo is clamped at 0, and the Redo then adds nothing
+    const placedThenLowered = unwrap(setCoinSource(state, { editorPlayerId: A, targetPlayerId: A, source: 'sheet', value: 0 }))
+    const undoneClamped = unwrap(undoLastBoardChange(placedThenLowered, A))
+    expect(sheetOf(undoneClamped, A)).toBe(0)
+    expect(sheetOf(unwrap(redoLastBoardChange(undoneClamped, A)), A)).toBe(0)
+    // Lowered to 1 of 2 by hand: the removal takes the one that is there, and Undo then Redo ends where it began
+    const two = unwrap(setCoinSource(putCoin(base, areaPoint(base, A)).state, { editorPlayerId: A, targetPlayerId: A, source: 'sheet', value: 0 }))
+    const placed = putCoin(two, areaPoint(base, A))
+    expect(sheetOf(placed.state, A)).toBe(1)
+    const gone = unwrap(removePiece(placed.state, { playerId: A, pieceId: placed.piece.id }))
+    expect(sheetOf(gone, A)).toBe(0)
+    const back = unwrap(undoLastBoardChange(gone, A))
+    expect(sheetOf(back, A)).toBe(1)
+    expect(sheetOf(unwrap(redoLastBoardChange(back, A)), A)).toBe(0)
   })
 
   it('leaves the manual Sheet editing alone', () => {

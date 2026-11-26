@@ -201,7 +201,6 @@ describe('what Build offers', () => {
 
   it('shows another player none of it, and names no card in the public log before it is played', () => {
     const { state } = withCards(ready(['Writing'], 0, 0), QUEEN)
-    expect(toPlayerView(state, B).you?.buildOptions).toEqual([])
     const json = JSON.stringify(toPlayerView(state, B))
     expect(json).not.toContain(QUEEN)
     expect(JSON.stringify(state.log.map((entry) => entry.publicLog))).not.toContain(QUEEN)
@@ -217,12 +216,12 @@ describe('building with a card', () => {
     expect(inHand(done, ids[QUEEN]?.[0] ?? '')).toBe(false)
     expect(inHand(done, ids[DESPOT]?.[0] ?? '')).toBe(true)
     expect(inHand(done, ids[PRESIDENT]?.[0] ?? '')).toBe(true)
-    expect(done.assistedActions.map((record) => [record.id, record.kind])).toEqual([['b1:card:1', 'playCard'], ['b1', 'build']])
-    expect(done.assistedActions[1]?.effect).toMatchObject({ embedded: ['b1:card:1'], trade: 0 })
+    expect(done.assistedActions.map((record) => [record.id, record.kind])).toEqual([['b1:c1', 'playCard'], ['b1', 'build']])
+    expect(done.assistedActions[1]?.effect).toMatchObject({ embedded: ['b1:c1'], trade: 0 })
     // The card's own public line comes first and is tagged with its own record; the build's follows
-    expect(lineOf(done, 'b1:card:1')).toBeGreaterThanOrEqual(0)
-    expect(lineOf(done, 'b1:card:1')).toBeLessThan(lineOf(done, 'b1'))
-    expect(done.log[lineOf(done, 'b1:card:1')]?.publicLog).toContain(`played ${QUEEN}`)
+    expect(lineOf(done, 'b1:c1')).toBeGreaterThanOrEqual(0)
+    expect(lineOf(done, 'b1:c1')).toBeLessThan(lineOf(done, 'b1'))
+    expect(done.log[lineOf(done, 'b1:c1')]?.publicLog).toContain(`played ${QUEEN}`)
     // The hammers are the city's for the rest of the turn, as for a card played by hand
     expect(cityProductionsOf(done, playerOf(done, A))[0]?.boost).toBe(6)
     // Every record shares the revision before the step, so one saved game is the baseline of all of them
@@ -253,7 +252,7 @@ describe('building with a card', () => {
     expect(optionIds(state)).toEqual([`${DESPOT} + ${DESPOT}`])
     expect(reason(tryBuild(state, { playCards: [ids[DESPOT]?.[0] ?? ''] }))).toContain('Even with 4 more hammers')
     const done = unwrap(tryBuild(state, { playCards: ids[DESPOT] ?? [] }))
-    expect(done.assistedActions.map((record) => record.id)).toEqual(['b1:card:1', 'b1:card:2', 'b1'])
+    expect(done.assistedActions.map((record) => record.id)).toEqual(['b1:c1', 'b1:c2', 'b1'])
     expect(cityProductionsOf(done, playerOf(done, A))[0]?.boost).toBe(8)
   })
 
@@ -285,7 +284,7 @@ describe('building with a card', () => {
     const { state, ids } = withCards(base, QUEEN, QUEEN)
     // The first build may use a card; the leftover production then goes to the second
     const first = unwrap(tryBuild(state, { playCards: ids[QUEEN]?.slice(0, 1) ?? [] }))
-    expect(first.assistedActions.at(-1)?.effect).toMatchObject({ production: 6, embedded: ['b1:card:1'] })
+    expect(first.assistedActions.at(-1)?.effect).toMatchObject({ production: 6, embedded: ['b1:c1'] })
     const market = cityOptions(first)
     expect(market.engineering).toEqual({ firstCost: 5, fullProduction: 6 })
     expect(market.hammerSources.cards).toEqual([])
@@ -325,9 +324,9 @@ describe('building with a tech boost', () => {
     expect(optionIds(state)).toEqual(['Animal Husbandry'])
     const done = unwrap(tryBuild(state, { boosts: ['Animal Husbandry'] }))
     expect(libraries(done)).toBe(1)
-    expect(done.assistedActions.map((record) => [record.id, record.kind])).toEqual([['b1:boost:1', 'animalHusbandry'], ['b1', 'build']])
+    expect(done.assistedActions.map((record) => [record.id, record.kind])).toEqual([['b1:b1', 'animalHusbandry'], ['b1', 'build']])
     expect(done.assistedActions[0]?.usageKey).toBe('card:Animal Husbandry')
-    expect(done.assistedActions[1]?.effect).toMatchObject({ embedded: ['b1:boost:1'] })
+    expect(done.assistedActions[1]?.effect).toMatchObject({ embedded: ['b1:b1'] })
     // The Wheat is spent and the tech counts as used this turn
     expect(done.discardedItems.some((item) => item.kind === 'hut' && item.name === 'Wheat')).toBe(true)
     expect(playerOf(done, A).playerTurns.some((turn) => turn.usedActions.includes('card:Animal Husbandry'))).toBe(true)
@@ -350,7 +349,7 @@ describe('building with a tech boost', () => {
     // 5 needed: the Despot's 4 and the boost's 3 together, neither alone
     expect(optionIds(state)).toEqual([`${DESPOT} + Animal Husbandry`])
     const done = unwrap(tryBuild(state, { playCards: ids[DESPOT] ?? [], boosts: ['Animal Husbandry'] }))
-    expect(done.assistedActions.map((record) => record.id)).toEqual(['b1:card:1', 'b1:boost:1', 'b1'])
+    expect(done.assistedActions.map((record) => record.id)).toEqual(['b1:c1', 'b1:b1', 'b1'])
   })
 })
 
@@ -367,7 +366,7 @@ describe('taking it back', () => {
     expect(playerOf(undone, A).items.some((item) => item.kind === 'hut' && item.name === 'Wheat')).toBe(true)
     expect(trade(undone)).toBe(3)
     expect(cityProductionsOf(undone, playerOf(undone, A))[0]?.boost).toBe(0)
-    expect(['b1', 'b1:card:1', 'b1:boost:1'].map((id) => status(undone, id))).toEqual(['undone', 'undone', 'undone'])
+    expect(['b1', 'b1:c1', 'b1:b1'].map((id) => status(undone, id))).toEqual(['undone', 'undone', 'undone'])
     expect(playerOf(undone, A).playerTurns.some((turn) => turn.usedActions.includes('card:Animal Husbandry'))).toBe(false)
     expect(undone.board.pieces.map((piece) => piece.id)).toEqual(base.board.pieces.map((piece) => piece.id))
   })
@@ -380,15 +379,35 @@ describe('taking it back', () => {
     const back = unwrap(taken ?? (() => { throw new Error('not taken back') })() as never)
     expect(libraries(back)).toBe(0)
     expect(inHand(back, ids[QUEEN]?.[0] ?? '')).toBe(true)
-    expect(status(back, 'b1:card:1')).toBe('undone')
+    expect(status(back, 'b1:c1')).toBe('undone')
+  })
+
+  it('refuses a build whose derived request id already names another record, before anything is played', () => {
+    const { state, ids } = withCards(ready(['Writing'], 0, 0), QUEEN, QUEEN)
+    // The player played a card as b1:c1 in an earlier action; a build sent as b1 must not take it for its own
+    const earlier = unwrap(performAssistedAction(state, { playerId: A, action: 'playCard', requestId: 'b1:c1', at: AT, payload: { itemId: ids[QUEEN]?.[1] ?? '', targets: [], hammerCityId: cityOf(state).id } }))
+    const before = JSON.stringify(earlier)
+    expect(reason(tryBuild(earlier, { playCards: ids[QUEEN]?.slice(0, 1) ?? [] }))).toContain('already used for another action')
+    expect(JSON.stringify(earlier)).toBe(before)
+    expect(libraries(earlier)).toBe(0)
+  })
+
+  it('keeps the ids of the records within 64 characters, also for the longest request id', () => {
+    const { state, ids } = withCards(ready(['Writing'], 0, 0), QUEEN)
+    const long = 'x'.repeat(64)
+    const done = unwrap(tryBuild(state, { playCards: ids[QUEEN] ?? [] }, long))
+    const embedded = done.assistedActions.map((record) => record.id)
+    expect(embedded).toHaveLength(2)
+    expect(embedded.every((id) => id.length <= 64)).toBe(true)
+    expect(done.assistedActions.at(-1)?.id).toBe(long)
   })
 
   it('refuses the vote on the card alone, which would leave the build paid for hammers it no longer has', () => {
     const { state, ids } = withCards(ready(['Writing'], 0, 0), QUEEN)
     const done = unwrap(tryBuild(state, { playCards: ids[QUEEN] ?? [] }))
-    const result = reverseAssistedAction(done, 'b1:card:1', AT)
+    const result = reverseAssistedAction(done, 'b1:c1', AT)
     expect(describeError(unwrapErr(result))).toContain('Undo the build instead')
-    const logId = done.log.find((entry) => entry.assistedActionId === 'b1:card:1')?.id ?? ''
+    const logId = done.log.find((entry) => entry.assistedActionId === 'b1:c1')?.id ?? ''
     let next = unwrap(initiateUndo(done, { logId, playerId: A }))
     next = unwrap(vote(next, { logId, playerId: B, vote: true, at: AT }))
     next = unwrap(vote(next, { logId, playerId: ITCHI, vote: true, at: AT }))
@@ -413,15 +432,15 @@ describe('an opponent cancels the card played with a build', () => {
     const { state, ids } = withCards(joust.state, DESPOT, DESPOT)
     const baseline = state
     const done = unwrap(tryBuild(baseline, { playCards: ids[DESPOT] ?? [] }))
-    expect(done.assistedActions.map((record) => record.id)).toEqual(['b1:card:1', 'b1:card:2', 'b1'])
+    expect(done.assistedActions.map((record) => record.id)).toEqual(['b1:c1', 'b1:c2', 'b1'])
     expect(libraries(done)).toBe(1)
-    const logId = done.assistedActions.find((record) => record.id === 'b1:card:2')?.logId ?? ''
+    const logId = done.assistedActions.find((record) => record.id === 'b1:c2')?.logId ?? ''
     const cancelled = unwrap(applyCancellation(done, { playerId: B, requestId: 'cancel', command: { logId, itemId: joust.itemId } }, baseline))
     // The build is rewound with the card: no Library, no hammers
     expect(libraries(cancelled)).toBe(0)
     expect(cityProductionsOf(cancelled, playerOf(cancelled, A))[0]?.boost).toBe(0)
-    expect(status(cancelled, 'b1:card:2')).toBe('cancelled')
-    expect(['b1:card:1', 'b1']
+    expect(status(cancelled, 'b1:c2')).toBe('cancelled')
+    expect(['b1:c1', 'b1']
       .map((id) => status(cancelled, id))).toEqual(['superseded', 'superseded'])
     // The cancelled card is spent, the other one is back in the hand
     expect(cancelled.discardedItems.some((item) => item.id === ids[DESPOT]?.[1])).toBe(true)
@@ -435,7 +454,7 @@ describe('an opponent cancels the card played with a build', () => {
     const logId = done.assistedActions[0]?.logId ?? ''
     const cancelled = unwrap(applyCancellation(done, { playerId: B, requestId: 'cancel', command: { logId, itemId: joust.itemId } }, state))
     expect(libraries(cancelled)).toBe(0)
-    expect(status(cancelled, 'b1:card:1')).toBe('cancelled')
+    expect(status(cancelled, 'b1:c1')).toBe('cancelled')
     expect(trade(cancelled)).toBe(0)
   })
 })

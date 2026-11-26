@@ -743,6 +743,13 @@ function embedSources(
   if (new Set(askedCards).size !== askedCards.length || new Set(askedBoosts).size !== askedBoosts.length) {
     return err(failed('Choose each card and each tech boost once.'))
   }
+  // The ids of the records are made from the build's (`:c1`, `:b1`), kept inside the 64 characters a request id may have. One that
+  // already names a record is not ours: it would be taken for a retry and an unrelated record embedded, so the build is refused
+  const base = context.requestId.slice(0, 60)
+  const derived = [...askedCards.map((_, index) => `${base}:c${index + 1}`), ...askedBoosts.map((_, index) => `${base}:b${index + 1}`)]
+  if (derived.some((id) => state.assistedActions.some((record) => record.id === id))) {
+    return err(failed('That request id is already used for another action. Send the build again with a new request id.'))
+  }
   const cards: HammerCard[] = []
   for (const id of askedCards) {
     const card = city.hammerSources.cards.find((candidate) => candidate.itemId === id)
@@ -760,22 +767,17 @@ function embedSources(
   if (!verdict.ok) return err(failed(`${choice.label}: ${verdict.reason}`))
 
   const stamp = context.at === undefined ? {} : { at: context.at }
+  const wanted = [
+    ...cards.map((card, index) => ({ id: `${base}:c${index + 1}`, action: 'playCard' as AssistedActionKind, payload: { itemId: card.itemId, targets: [], hammerCityId: city.cityPieceId } as AssistedPayload })),
+    ...boosts.map((boost, index) => ({ id: `${base}:b${index + 1}`, action: boost.kind, payload: { cityPieceId: city.cityPieceId } as AssistedPayload })),
+  ]
   let current = state
   const ids: string[] = []
-  const run = (action: AssistedActionKind, requestId: string, payload: AssistedPayload): Result<void, EngineError> => {
-    const done = performAssistedAction(current, { playerId: player.playerId, action, requestId, ...stamp, payload })
+  for (const entry of wanted) {
+    const done = performAssistedAction(current, { playerId: player.playerId, action: entry.action, requestId: entry.id, ...stamp, payload: entry.payload })
     if (!done.ok) return done
     current = done.value
-    ids.push(requestId)
-    return ok(undefined)
-  }
-  for (const [index, card] of cards.entries()) {
-    const played = run('playCard', `${context.requestId}:card:${index + 1}`, { itemId: card.itemId, targets: [], hammerCityId: city.cityPieceId })
-    if (!played.ok) return played
-  }
-  for (const [index, boost] of boosts.entries()) {
-    const used = run(boost.kind, `${context.requestId}:boost:${index + 1}`, { cityPieceId: city.cityPieceId })
-    if (!used.ok) return used
+    ids.push(entry.id)
   }
   return ok({ state: current, player: playerOf(current, player.playerId) ?? player, ids })
 }
@@ -2299,7 +2301,9 @@ export function reverseAssistedAction(
     (effect.kind === 'foundCity' && effect.huts !== undefined && effect.huts.length > 0) ||
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
-      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined || effect.disaster !== undefined)) ||
+      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined || effect.disaster !== undefined ||
+        // A coin marker the card took off an area came back by the vote, and the Sheet with it: the board Undo must not take it off again
+        effect.coinDiscard?.some((taken) => taken.piece !== undefined) === true)) ||
     effect.kind === 'gianniniBuild' ||
     (effect.kind === 'atomicTheory' && effect.mode === 'nuke') ||
     effect.kind === 'agriculture' ||

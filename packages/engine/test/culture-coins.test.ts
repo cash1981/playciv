@@ -302,6 +302,20 @@ describe('the coin marker in the target area goes with the Sheet coin', () => {
     expect(undone.board.pieces.map((piece) => piece.id)).toEqual(state.board.pieces.map((piece) => piece.id))
   })
 
+  it('after the vote put the marker back the board Undo cannot take it off again, so the Sheet cannot drift', () => {
+    const { state, itemId } = withCardInHand(scene(), 'Counterfeiters')
+    const played = unwrap(play(state, itemId, { targets: [B] }))
+    const undone = undoByVote(played)
+    expect(held(undone, B, 'sheet')).toBe(2)
+    expect(coinsOf(undone, B)).toHaveLength(1)
+    // The history ends with the put-back entry, which the floor seals: nothing of it can be undone by the board
+    expect(undone.board.undoFloor).toBe(undone.board.history.length)
+    expect(undoLastBoardChange(undone, B).ok).toBe(false)
+    expect(undoLastBoardChange(undone, A).ok).toBe(false)
+    expect(held(undone, B, 'sheet')).toBe(2)
+    expect(coinsOf(undone, B)).toHaveLength(1)
+  })
+
   it('leaves the marker when the coin is taken from another counter, and when the target has no marker', () => {
     const { state, itemId } = withCardInHand(scene({ pottery: 1 }), 'Counterfeiters')
     const played = unwrap(play(state, itemId, { targets: [B], coinPicks: [{ targetId: B, source: 'pottery' }] }))

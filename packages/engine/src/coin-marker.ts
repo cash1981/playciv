@@ -82,8 +82,20 @@ export function withSheetChanges(
   return { state: working, applied }
 }
 
-/** A board Undo (`direction` -1) or Redo (1) of an entry: gives back or takes again what it applied. */
-export function replaySheet(state: GameState, sheet: readonly SheetChange[] | undefined, direction: 1 | -1): GameState {
-  if (sheet === undefined || sheet.length === 0) return state
-  return withSheetChanges(state, sheet.map((change) => ({ playerId: change.playerId, delta: change.delta * direction }))).state
+/**
+ * A board Undo (`direction` -1) or Redo (1) of an entry: gives back or takes again what it applied. `applied` is what really
+ * changed, in the sign of the original entry (the counter never goes below 0, so it can be less than the entry says): the
+ * entry that goes on the Redo stack or back on the history carries that, so Undo then Redo returns the exact Sheet.
+ */
+export function replaySheetApplied(
+  state: GameState,
+  sheet: readonly SheetChange[] | undefined,
+  direction: 1 | -1,
+): { readonly state: GameState; readonly applied: readonly SheetChange[] } {
+  if (sheet === undefined || sheet.length === 0) return { state, applied: [] }
+  const done = withSheetChanges(state, sheet.map((change) => ({ playerId: change.playerId, delta: change.delta * direction })))
+  return { state: done.state, applied: done.applied.map((change) => ({ playerId: change.playerId, delta: change.delta * direction })) }
 }
+
+export const replaySheet = (state: GameState, sheet: readonly SheetChange[] | undefined, direction: 1 | -1): GameState =>
+  replaySheetApplied(state, sheet, direction).state

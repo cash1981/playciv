@@ -521,7 +521,7 @@ describe('the payload', () => {
     const done = await post(table.starter, `/api/games/${table.gameId}/actions`, { ...body, playCards: [card.id] })
     expect(done.status).toBe(200)
     const after = await stored(table)
-    expect(after.assistedActions.map((record) => [record.id, record.kind])).toEqual([['req-1:card:1', 'playCard'], ['req-1', 'build']])
+    expect(after.assistedActions.map((record) => [record.id, record.kind])).toEqual([['req-1:c1', 'playCard'], ['req-1', 'build']])
     // Nobody else saw the card before it was played, and the played card is a public line
     const publicLog = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
     expect(publicLog.body).toContain('played We Love the Despot Day!')

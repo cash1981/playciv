@@ -48,7 +48,8 @@ import {
   whiteFigureCivilization,
 } from '../board.js'
 import { cityFootprintsOf, mapCellOf } from '../blockade.js'
-import { replaySheet, sheetChangesOf, withSheetChanges } from '../coin-marker.js'
+import { replaySheet, replaySheetApplied, sheetChangesOf, withSheetChanges } from '../coin-marker.js'
+import type { SheetChange } from '../coin-marker.js'
 import type { Cell } from '../blockade.js'
 import { CARAVAN_ASSET_ID, FORTIFICATION_ASSET_ID, disbandOfferAt } from '../disband.js'
 import type { DisbandOffer } from '../disband.js'
@@ -1355,18 +1356,22 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
     )
   }
 
+  // What the Undo really gave back goes on the Redo stack with the entry, so a Redo takes again exactly that
+  const undone = replaySheetApplied(state, last.sheet, -1)
   return ok(
-    replaySheet(
-      withBoard(state, {
-        ...state.board,
-        pieces: revertChange(state.board.pieces, last.change),
-        history: state.board.history.slice(0, -1),
-        redo: [...state.board.redo, last],
-      }),
-      last.sheet,
-      -1,
-    ),
+    withBoard(undone.state, {
+      ...undone.state.board,
+      pieces: revertChange(state.board.pieces, last.change),
+      history: state.board.history.slice(0, -1),
+      redo: [...state.board.redo, withSheet(last, undone.applied)],
+    }),
   )
+}
+
+/** The entry with its Sheet change replaced by what was really applied (none left out). */
+function withSheet(entry: BoardHistoryEntry, applied: readonly SheetChange[]): BoardHistoryEntry {
+  const { sheet: _old, ...rest } = entry
+  return applied.length === 0 ? rest : { ...rest, sheet: applied }
 }
 
 /**
@@ -1384,18 +1389,19 @@ export function redoLastBoardChange(state: GameState, playerId: string): ActionR
   const last = state.board.redo.at(-1)
   if (last === undefined) return err({ kind: 'NOTHING_TO_REDO_ON_BOARD' })
 
+  const redone = replaySheetApplied(state, last.sheet, 1)
   return ok(
-    replaySheet(withBoard(state, {
-      ...state.board,
+    withBoard(redone.state, {
+      ...redone.state.board,
       pieces: applyChange(state.board.pieces, last.change),
       // Re-appended at the tail of history, so its logLength is refreshed to
       // now rather than kept from when it first happened — a non-board action
       // (a card draw, say) may have grown the log while it sat on the redo
       // stack, and a stale, smaller value here would break the invariant that
       // logLength never decreases along history, which replay relies on.
-      history: [...state.board.history, { ...last, logLength: state.log.length }],
+      history: [...state.board.history, { ...withSheet(last, redone.applied), logLength: state.log.length }],
       redo: state.board.redo.slice(0, -1),
-    }), last.sheet, 1),
+    }),
   )
 }
 
