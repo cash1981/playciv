@@ -784,7 +784,8 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   takes no city action (`earlierCityActions`, so also after a player's own change to Anarchy; Engineering's second build
   skips the check, its first build having come before the card). It lasts the whole turn: the target cannot change
   government in that turn's Start of Turn (`anarchyFromCardThisTurn`); in their next one any known government is direct.
-  A cancel rewinds the card like any culture event; an undo restores the government and the coin counters.
+  A cancel rewinds the card like any culture event; an undo restores the government and the coin counters (the Organized Religion coin only when that policy is as it was at the
+  attack, else it is worked out from the policy as it stands).
   Tests: `culture-anarchy.test.ts`.
   A Great Person whose figures are all blockaded cannot be played.
 - **Start of Turn gate:** needs Start of Turn as the open phase and a usage key

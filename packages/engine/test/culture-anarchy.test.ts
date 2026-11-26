@@ -72,6 +72,56 @@ describe.each(['The Citizens are Revolting!', 'The Citizens are Revolting II!'])
     expect(player(back, B).stats.coinSources.democracyGovernment).toBe(3)
   })
 
+  describe('the Organized Religion coin on an undo', () => {
+    const policy = {
+      id: 'policy-organized-religion',
+      itemNumber: 9001,
+      kind: 'socialpolicy' as const,
+      sheetName: 'SOCIAL_POLICY' as const,
+      name: 'Organized Religion',
+      type: null,
+      flipside: null,
+      description: null,
+      used: false,
+      hidden: false,
+      ownerId: B,
+    }
+    const withReligion = (state: GameState, coin: number): GameState => ({
+      ...state,
+      players: state.players.map((p) =>
+        p.playerId === B
+          ? {
+              ...p,
+              socialPolicies: [...p.socialPolicies, policy],
+              stats: { ...p.stats, coinSources: { ...p.stats.coinSources, organizedReligion: coin } },
+            }
+          : p,
+      ),
+    })
+
+    it('comes back as it was when the policy is unchanged', () => {
+      const { baseline, itemId } = scene()
+      const done = unwrap(play(withReligion(baseline, 1), A, itemId, 'r1', [B]))
+      expect(player(done, B).stats.coinSources.organizedReligion).toBe(0)
+      expect(player(unwrap(reverseAssistedAction(done, 'r1', AT)), B).stats.coinSources.organizedReligion).toBe(1)
+    })
+
+    it('is not given back when the policy was removed under Anarchy', () => {
+      const { baseline, itemId } = scene()
+      const done = unwrap(play(withReligion(baseline, 1), A, itemId, 'r1', [B]))
+      const removed: GameState = { ...done, players: done.players.map((p) => (p.playerId === B ? { ...p, socialPolicies: [] } : p)) }
+      expect(player(unwrap(reverseAssistedAction(removed, 'r1', AT)), B).stats.coinSources.organizedReligion).toBe(0)
+    })
+
+    it('is worked out from the policy when it was revealed under Anarchy', () => {
+      const { baseline, itemId } = scene()
+      const done = unwrap(play(baseline, A, itemId, 'r1', [B]))
+      const revealed = withReligion(done, 0)
+      const back = player(unwrap(reverseAssistedAction(revealed, 'r1', AT)), B)
+      expect(back.stats.coinSources.organizedReligion).toBeGreaterThan(0)
+    })
+  })
+
   it('cannot be undone once the target has left Anarchy', () => {
     const { baseline, itemId } = scene()
     const done = unwrap(play(baseline, A, itemId, 'r1', [B]))

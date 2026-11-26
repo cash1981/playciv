@@ -832,7 +832,7 @@ export type AssistedEffect =
       /** The extra hammers a culture card gave one city this turn (We Love the ... Day!). Derived into the city's production while the record stands. */
       readonly hammers?: { readonly cityPieceId: string; readonly cityLabel: string; readonly amount: number }
       /** The government a Citizens are Revolting card replaced with Anarchy, and the counters it changed, so an undo can put them back. */
-      readonly anarchy?: { readonly targetId: string; readonly from: Government; readonly democracyCoin: number; readonly religionCoin: number }
+      readonly anarchy?: { readonly targetId: string; readonly from: Government; readonly democracyCoin: number; readonly religionCoin: number; readonly religionPolicy: boolean }
       /** A coin the card moved to another player (Mother Teresa). */
       readonly coin?: { readonly source: string; readonly targetId: string }
       /** The free culture advance the card gave (Mother Teresa). */

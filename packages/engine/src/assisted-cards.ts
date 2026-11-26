@@ -30,7 +30,7 @@ import {
   lovelaceCreditWasUsed,
 } from './assisted-core.js'
 import { capitalOf, investableCoinsOf, isImmuneToAnarchy, statsAfterGovernmentChange } from './sot.js'
-import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
+import { coinSourcesOf, findCoinSource, socialPolicyCoinSource, totalCoins, withCoinSource } from './coins.js'
 import { createPlayerTurn } from './turn.js'
 import { unitedNationsHolders } from './united-nations.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
@@ -380,6 +380,10 @@ const WE_LOVE_HAMMERS: ReadonlyMap<string, number> = new Map([
 /** Supply Drop's Start of Turn half: 7 trade. */
 const SUPPLY_DROP_TRADE = 7
 
+/** Whether the player has Organized Religion revealed: the policy whose coin Anarchy switches off. */
+const hasRevealedReligion = (player: Playerhand): boolean =>
+  player.socialPolicies.some((policy) => !policy.hidden && socialPolicyCoinSource(policy.name) === 'organizedReligion')
+
 function ownCityChoicesOf(state: GameState, player: Playerhand): readonly { readonly cityPieceId: string; readonly cityLabel: string }[] {
   if (player.color === null) return []
   return cityFootprintsOf(state, player.color.toLowerCase()).map((footprint) => ({
@@ -583,6 +587,7 @@ function automate(
             from: target.government,
             democracyCoin: target.stats.coinSources.democracyGovernment,
             religionCoin: target.stats.coinSources.organizedReligion,
+            religionPolicy: hasRevealedReligion(target),
           },
         },
         said: `, so ${target.username}'s government changes from ${target.government} to Anarchy`,
@@ -1754,10 +1759,14 @@ export const playCard: AssistedActionDefinition = {
         government: effect.anarchy.from,
         stats: {
           ...restored,
+          // The Organized Religion coin comes back only when the policy is as it was at the attack: one revealed or
+          // removed under Anarchy has its own counter, worked out from the policy as it stands
           coinSources: withCoinSource(
-            withCoinSource(restored.coinSources, 'democracyGovernment', effect.anarchy.democracyCoin),
-            'organizedReligion',
-            effect.anarchy.religionCoin,
+            hasRevealedReligion(victim) === effect.anarchy.religionPolicy
+              ? withCoinSource(restored.coinSources, 'organizedReligion', effect.anarchy.religionCoin)
+              : restored.coinSources,
+            'democracyGovernment',
+            effect.anarchy.democracyCoin,
           ),
         },
       })
