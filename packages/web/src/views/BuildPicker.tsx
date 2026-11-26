@@ -19,10 +19,10 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
-import type { BuildChoice, BuildPayload, CityBuildOptions, PlayerView } from '../lib/api.js'
+import type { BuildChoice, BuildPayOption, BuildPayload, CityBuildOptions, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
-import { itemKeyOf } from './buildFlow.js'
+import { chosenPayOf, itemKeyOf, usesSources } from './buildFlow.js'
 import { resolveAgain } from './CityGather.js'
 import type { BuildFlow, BuildPlan } from './buildFlow.js'
 import type { Run } from './GameView.js'
@@ -44,8 +44,8 @@ const GROUPS = [
     id: 'wonder',
     noun: 'Wonders',
     heading: 'Wonders',
-    // The cost is checked like a building's; hammers from cards and Great Persons are not counted by the estimate
-    note: 'Hammers from cards or Great Persons count when you set the city’s production by hand.',
+    // The cost is checked like a building's; We Love cards and tech boosts are offered as ways to pay, Great Persons' hammers are not counted by the estimate
+    note: 'We Love cards and tech boosts are offered as ways to pay. Hammers from Great Persons count when you set the city’s production by hand.',
   },
   { id: 'figure', noun: 'Figures', heading: 'Figures (placed on the map)' },
   { id: 'unit', noun: 'Units', heading: 'Units' },
@@ -58,6 +58,16 @@ function groupOf(choice: BuildChoice): GroupId {
   if (choice.item.kind === 'building' || choice.item.kind === 'walls') return 'building'
   if (choice.item.kind === 'wonder') return 'wonder'
   return choice.item.kind === 'unit' ? 'unit' : 'figure'
+}
+
+/** How a way to pay reads: "City production only: pay 15 trade", "Play We Love the Despot Day! (+4): pay 9 trade". */
+export function payOptionText(option: BuildPayOption): string {
+  const parts = [
+    ...option.cards.map((card) => `play ${card.name} (+${card.hammers})`),
+    ...option.boosts.map((boost) => `use ${boost.tech} (+${boost.hammers}, costs a Wheat)`),
+  ]
+  const what = parts.length === 0 ? 'City production only' : `${parts.join(' and ').replace(/^./, (letter) => letter.toUpperCase())}`
+  return `${what}: ${option.tradeToPay > 0 ? `pay ${option.tradeToPay} trade` : 'no trade to pay'}`
 }
 
 /** "an infantry unit", "a mounted unit": the bar names the type of card, never a placed item. */
@@ -170,6 +180,17 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
             (city.caravan ? `${city.boost > 0 ? ' and' : ', including'} 2 from the caravan, which this build uses up.` : '.')}
       </p>
 
+      {ready && (city.hammerSources.cards.length > 0 || city.hammerSources.boosts.length > 0) && (
+        <p className="build-picker-production build-picker-sources">
+          More production you can use with a build:{' '}
+          {[
+            ...city.hammerSources.cards.map((card) => `${card.name} (+${card.hammers})`),
+            ...city.hammerSources.boosts.map((boost) => `${boost.tech} (+${boost.hammers}, costs a Wheat)`),
+          ].join(', ')}
+          . Only what a build needs is used, and it is played together with the build.
+        </p>
+      )}
+
       {/* Plain text: the bar above the board is the live region that announces these. */}
       {message !== null && <p className="build-picker-alert">{message}</p>}
       {note !== null && <p className="build-picker-note">{note}</p>}
@@ -226,7 +247,11 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
                     <span>
                       Cost {choice.cost}
                       {choice.costNote !== undefined && <> ({choice.costNote})</>}
-                      {choice.freeOnly !== true && choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
+                      {choice.freeOnly !== true && choice.payOptions.length <= 1 && choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
+                      {choice.freeOnly !== true && choice.payOptions.length > 1 && <>, {choice.payOptions.length} ways to pay</>}
+                      {choice.freeOnly !== true && choice.payOptions.length === 1 && choice.payOptions[0] !== undefined && usesSources(choice.payOptions[0]) && (
+                        <>, {payOptionText(choice.payOptions[0]).replace(/^./, (letter) => letter.toLowerCase())}</>
+                      )}
                       {choice.freeOnly === true && <>, free with the Egyptian ability</>}
                     </span>
                   </span>
@@ -394,6 +419,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   }, [])
 
   const target = plan.target
+  const pay = chosenPayOf(plan)
+  const sources = plan.free !== true && usesSources(pay)
   const rush = plan.tradeToPay > 0
   const placed = plan.placement === 'square'
   // A unit and City Walls have no square to wait for: Confirm is ready at once.
@@ -404,7 +431,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   // figure stands there, so the outcome is settled by hand, or the item replaces a building,
   // wonder or Great Person of the player's): its note is read first, and Confirm builds.
   // A unit and City Walls have no square, so they keep Confirm.
-  const immediate = placed && target?.note === undefined
+  // A way to pay that plays a card or uses a boost is never sent by the tap alone: what it plays is read in the bar first, and Confirm sends it
+  const immediate = placed && target?.note === undefined && !sources
 
   function confirm(): void {
     if (!ready || sending) return
@@ -412,6 +440,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     const rushPart = {
       ...(rush ? { rush: true as const } : {}),
       ...(plan.free === true ? { free: true as const } : {}),
+      ...(sources && pay.cards.length > 0 ? { playCards: pay.cards.map((card) => card.itemId) } : {}),
+      ...(sources && pay.boosts.length > 0 ? { boosts: pay.boosts.map((boost) => boost.tech) } : {}),
     }
     let payload: BuildPayload
     if (item.kind === 'unit' || item.kind === 'walls') {
@@ -424,7 +454,7 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     // The key says which press this is: the same item and square (a unit and City Walls have none)
     // while the outcome is unknown reuses the request id, another is a new press.
     const where = target === null ? 'card' : `${target.column},${target.row}`
-    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}${plan.free === true ? ':free' : ''}`
+    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}${plan.free === true ? ':free' : ''}${sources ? `:${pay.id}` : ''}`
     // The same press is already on its way (this bar was closed and opened again):
     // its outcome is not known yet, so this click says nothing and sends nothing.
     if (isPressInFlight(key)) return
@@ -492,6 +522,15 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
       <p className="build-bar-facts">
         Cost {plan.cost}
         {plan.costNote !== undefined && <> ({plan.costNote})</>}
+        {sources && (
+          <>
+            . Plays together with the build:{' '}
+            {[
+              ...pay.cards.map((card) => `${card.name} (+${card.hammers} hammers)`),
+              ...pay.boosts.map((boost) => `${boost.tech} (+${boost.hammers}, costs a Wheat)`),
+            ].join(', ')}
+          </>
+        )}
         {rush && <>. Pays {plan.tradeToPay} trade</>}
         {plan.free === true && <>. Free with the Egyptian ability, once a turn</>}.{' '}
         {!placed ? (
@@ -508,6 +547,23 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
           </>
         )}
       </p>
+      {plan.free !== true && plan.payOptions.length > 1 && (
+        <fieldset className="build-bar-pay">
+          <legend>How to pay</legend>
+          {plan.payOptions.map((option) => (
+            <label key={option.id} className="build-bar-pay-option">
+              <input
+                type="radio"
+                name="build-pay"
+                checked={option.id === pay.id}
+                disabled={busy || sending}
+                onChange={() => flow.choosePay(option.id)}
+              />{' '}
+              {payOptionText(option)}
+            </label>
+          ))}
+        </fieldset>
+      )}
       {/* What the engine says about the chosen square: an army put where an enemy figure stands is not automated, or what the item replaces. A live region, so it is read out when the square is picked. */}
       {target?.note !== undefined && (
         <p role="status" className="build-bar-square-note">

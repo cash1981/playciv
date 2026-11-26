@@ -1988,6 +1988,7 @@ describe('the Build flow in the game page', () => {
     label: 'Library',
     cost: 6,
     tradeToPay: 0,
+    payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
     squares: [
       { column: 3, row: 4, label: 'D5' },
       { column: 4, row: 4, label: 'E5' },
@@ -2016,6 +2017,7 @@ describe('the Build flow in the game page', () => {
       production: 4,
       productionSource: 'estimate',
       caravan: false,
+      hammerSources: { cards: [], boosts: [], wheat: 0 },
       choices: [library],
       unavailable: [],
     },
@@ -2050,6 +2052,7 @@ describe('the Build flow in the game page', () => {
       label: 'Infantry unit',
       cost: 4,
       tradeToPay: 0,
+      payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
       squares: [],
     }
     const withUnit = [{ ...buildOptions[0], choices: [library, infantry] }]

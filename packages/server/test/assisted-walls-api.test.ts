@@ -173,7 +173,7 @@ describe('City Walls over HTTP', () => {
 
     const table = await buildTable('Masonry', { techs: ['Masonry'], production: 7 })
     const walls = (await view(table.gameId, table.starter)).you?.buildOptions?.[0]?.choices.find((choice) => choice.item.kind === 'walls')
-    expect(walls).toEqual({ assetId: 'walls', item: { kind: 'walls' }, placement: 'none', label: 'City Walls', cost: 7, tradeToPay: 0, squares: [] })
+    expect(walls).toEqual({ assetId: 'walls', item: { kind: 'walls' }, placement: 'none', label: 'City Walls', cost: 7, tradeToPay: 0, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }], squares: [] })
   })
 
   it('are in nobody else\'s view: the other player and a spectator see no walls option and no replacement note', async () => {

@@ -1165,6 +1165,7 @@ const buildOptionsOf = (overrides: Partial<CityBuildOptions> = {}): CityBuildOpt
   productionSource: 'estimate',
   caravan: false,
   boost: 0,
+  hammerSources: { cards: [], boosts: [], wheat: 0 },
   choices: [
     {
       assetId: 'buildings/library',
@@ -1173,6 +1174,7 @@ const buildOptionsOf = (overrides: Partial<CityBuildOptions> = {}): CityBuildOpt
       label: 'Library',
       cost: 4,
       tradeToPay: 0,
+      payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
       squares: [{ column: 3, row: 4, label: 'D5' }],
     },
   ],

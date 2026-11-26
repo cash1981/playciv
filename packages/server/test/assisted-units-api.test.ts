@@ -221,6 +221,7 @@ describe('the options in the projection', () => {
       label: 'Infantry unit',
       cost: 5,
       tradeToPay: 0,
+      payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
       squares: [],
     })
     expect(city?.unavailable.find((entry) => entry.assetId === 'units/aircraft')?.reason).toBe('Needs Flight.')

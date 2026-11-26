@@ -229,6 +229,15 @@ describe('building with a card', () => {
     expect(new Set(done.assistedActions.map((record) => record.beforeRevision)).size).toBe(1)
   })
 
+  it('refuses the build without the card when only the card makes it affordable, and says what to play', () => {
+    const { state, ids } = withCards(ready(['Writing'], 0, 0), QUEEN)
+    const text = reason(tryBuild(state))
+    expect(text).toContain('your trade cannot cover the rest')
+    expect(text).toContain(`Play with the build: ${QUEEN}`)
+    expect(libraries(state)).toBe(0)
+    expect(inHand(state, ids[QUEEN]?.[0] ?? '')).toBe(true)
+  })
+
   it('pays only the trade the card leaves', () => {
     const { state, ids } = withCards(ready(['Writing'], 3, 6), DESPOT)
     expect(reason(tryBuild(state, { playCards: [] }))).toContain('Confirm paying 6 trade')

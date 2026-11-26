@@ -16,6 +16,8 @@ import type {
   BoardHistoryEntry,
   BoardPiece,
   BuildChoice,
+  BuildPayOption,
+  HammerSources,
   BuildItem,
   BuildPayload,
   BuildSquare,
@@ -65,6 +67,8 @@ export type {
   BoardHistoryEntry,
   BoardPiece,
   BuildChoice,
+  BuildPayOption,
+  HammerSources,
   BuildItem,
   BuildPayload,
   BuildSquare,
@@ -885,6 +889,8 @@ export const api = {
       ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
       ...(payload.free === undefined ? {} : { free: payload.free }),
+      ...(payload.playCards === undefined || payload.playCards.length === 0 ? {} : { playCards: payload.playCards }),
+      ...(payload.boosts === undefined || payload.boosts.length === 0 ? {} : { boosts: payload.boosts }),
     }),
   /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
   startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>

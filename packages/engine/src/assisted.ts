@@ -854,7 +854,17 @@ function applyBuild(
     )
   }
   // A free build pays nothing: no production is used and no trade is paid
-  const tradeToPay = free ? 0 : choice.tradeToPay
+  // The choice's own trade is that of its first way to pay, which may use cards or boosts the player did not send: what is owed is the plain way's
+  const plain = choice.payOptions.find((option) => option.id === 'none')
+  if (!free && plain === undefined) {
+    return err(
+      failed(
+        `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}, and your trade cannot cover the rest. ` +
+          `Play with the build: ${choice.payOptions.map((option) => option.id).join(', or ')}.`,
+      ),
+    )
+  }
+  const tradeToPay = free ? 0 : (plain?.tradeToPay ?? 0)
   if (tradeToPay > 0 && payload.rush !== true) {
     return err(
       failed(

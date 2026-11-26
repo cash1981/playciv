@@ -15,6 +15,10 @@ Observations, not an authorized backlog. Recheck the cited code before acting.
   revealed policy before the draw. Setup checks a capital square with the founding rules, which cannot refuse on a fresh start tile.
   A player passes the turn on only with End turn on the Setup tab (the Order tab's End turn stays held back while a step is
   missing), and the holder only follows a pass: before any pass the holder is the start player as before.
+- **Build with cards and boosts (#352):** the ways to pay offer up to 12 options per item, ordered by the number of cards, the trade and the hammers, so a
+  rarely useful set (a stronger card for the same trade) can be cut off. Cancelling one embedded card rewinds the other cards of the same
+  build too (they return to the hand). The Wheat of a boost is paid the automatic way (a token before a culture card); the picker does not
+  let the player pick the token. A Great Person's hammers and Leonardo's Workshop are still counted only through a hand-set production.
 - **Disaster cards (#352):** Drought, Deforestation and Flooding do not check ruling 240 (protection of a square in the
   outskirts of a city from disasters).
 - **Social policy cap (#378):** a lost city does not force a policy to be returned: the panel shows a prompt and blocks

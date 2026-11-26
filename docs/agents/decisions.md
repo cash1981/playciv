@@ -1896,6 +1896,25 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   p. 16–17), counted over its outskirts whoever built it. Supply is the shared
   pool in `board.ts`. A shared square of two own cities may allow a second; no
   ruling found, not handled.
+- **Ways to pay: We Love cards and tech boosts** (#352, human, 2026-11-27; `build-sources.ts`): a build in City Management
+  offers how to make up the production: the city alone (rush with trade as before), We Love the Despot, Queen and President
+  Day cards of the player's own hand (4, 6, 8 hammers) and the tech boosts (Animal Husbandry 3, Construction 5, Banking 7,
+  Plastics 10, each for a Wheat, once a turn). Each choice has `payOptions`: the plain way first when the trade covers it,
+  then the sets of cards and boosts that each lower the trade (every member needed, cheapest in cards first; two cards of one
+  name are one option); `tradeToPay` is the first option's. An item that only a card or boost makes affordable is a choice, not
+  "unavailable"; it stays unavailable when nothing in the hand is enough. The payload carries `playCards` (item ids) and
+  `boosts` (tech names): the build plays each as the same action as its own button (`playCard` with `hammerCityId`, the
+  boost's own action) before the build, in the same reducer call, as a record of its own (`<request id>:card:1`,
+  `<request id>:boost:1`) with its own public line before the build's, so an opponent can still cancel it. All records share the
+  revision before the step, so a cancel of any of them rewinds the build too (the cancellation baseline may hold fewer actions
+  than precede the record), the cancelled card is spent and the others return to the hand. `effect.embedded` lists them; the vote undo of the build
+  takes them back newest first (refused as a whole if one cannot come back; `takeBackOpenBuild` then removes the piece as any
+  other), and an undo of a card or boost alone is refused ("undo the build instead"). The hammers stay the city's for the turn
+  through `productionBoostsOf`, like cards played by hand, which keep working: the Play button on the cards and the boost buttons
+  are unchanged. Not with a free (Egyptian) build and not for Engineering's second build (its production is the first's
+  leftover: the cards go with the first build). The cards and boosts listed are the viewer's own; spectators and opponents see nothing, and
+  a card is public only once played. Another card played for a Wheat (a culture card as Wheat) is a payment of the boost, not a
+  hammer card.
 - A Building Program marker on the centre is used up by any build and restored by
   undo. Production used: hand-set, then doubled, then estimate.
 - **Caravan** (F&F p. 7, human 2026-10-30): a caravan marker on a centre adds 2

@@ -52,6 +52,7 @@ const LIBRARY: BuildChoice = {
   label: 'Library',
   cost: 6,
   tradeToPay: 0,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
   squares: [
     { column: 3, row: 4, label: 'D5' },
     { column: 4, row: 4, label: 'E5' },
@@ -65,6 +66,7 @@ const HARBOR: BuildChoice = {
   label: 'Harbor',
   cost: 5,
   tradeToPay: 3,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 3 }],
   squares: [{ column: 2, row: 3, label: 'C4' }],
 }
 
@@ -76,6 +78,7 @@ const COLOSSUS: BuildChoice = {
   cost: 10,
   costNote: '15 without Metalworking',
   tradeToPay: 0,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
   squares: [{ column: 3, row: 4, label: 'D5' }],
 }
 
@@ -88,6 +91,7 @@ const ARMY: BuildChoice = {
   label: 'Army figure',
   cost: 4,
   tradeToPay: 0,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
   squares: [
     { column: 3, row: 4, label: 'D5' },
     { column: 4, row: 4, label: 'E5', note: BATTLE_NOTE },
@@ -101,6 +105,7 @@ const SCOUT: BuildChoice = {
   label: 'Scout figure',
   cost: 6,
   tradeToPay: 0,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
   // D5 is also a square of the army, so one square can be told apart only by the item
   squares: [{ column: 3, row: 4, label: 'D5' }],
 }
@@ -112,6 +117,7 @@ const INFANTRY: BuildChoice = {
   label: 'Infantry unit',
   cost: 5,
   tradeToPay: 0,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
   squares: [],
 }
 
@@ -122,6 +128,7 @@ const MOUNTED: BuildChoice = {
   label: 'Mounted unit',
   cost: 7,
   tradeToPay: 3,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 3 }],
   squares: [],
 }
 
@@ -135,6 +142,7 @@ function options(overrides: Partial<CityBuildOptions> = {}): CityBuildOptions {
     productionSource: 'estimate',
     caravan: false,
     boost: 0,
+    hammerSources: { cards: [], boosts: [], wheat: 0 },
     choices: [LIBRARY, HARBOR],
     unavailable: [
       { assetId: 'buildings/market', item: { kind: 'building', assetId: 'buildings/market' }, label: 'Market', reason: 'Needs the Currency tech.' },
@@ -828,7 +836,7 @@ describe('a refresh while planning', () => {
     choose('Library')
     expect(bar().textContent).not.toContain('Pays')
 
-    act(() => handle.setView(viewOf([options({ choices: [{ ...LIBRARY, tradeToPay: 6 }, HARBOR] })], { rev: 9 })))
+    act(() => handle.setView(viewOf([options({ choices: [{ ...LIBRARY, tradeToPay: 6, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 6 }] }, HARBOR] })], { rev: 9 })))
     expect(bar().textContent).toContain('Pays 6 trade')
   })
 
@@ -1299,7 +1307,7 @@ describe('a refresh compares choices by item', () => {
     expect(screen.queryByRole('status')).toBeNull()
     expect(confirm().disabled).toBe(false)
 
-    act(() => handle.setView(viewOf([options({ choices: [{ ...INFANTRY, cost: 7, tradeToPay: 6 }] })], { rev: 10 })))
+    act(() => handle.setView(viewOf([options({ choices: [{ ...INFANTRY, cost: 7, tradeToPay: 6, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 6 }] }] })], { rev: 10 })))
     expect(bar().textContent).toContain('Cost 7')
     expect(bar().textContent).toContain('Pays 6 trade')
     expect(confirm().textContent).toBe('Confirm and pay 6 trade')
@@ -1336,7 +1344,7 @@ describe('building a wonder', () => {
     expect(colossus?.textContent).toContain('Cost 10 (15 without Metalworking)')
     expect(colossus?.textContent).not.toMatch(/square/i)
     // The group says how hammers from other effects are counted
-    expect(screen.getByText('Hammers from cards or Great Persons count when you set the city’s production by hand.')).toBeTruthy()
+    expect(screen.getByText('We Love cards and tech boosts are offered as ways to pay. Hammers from Great Persons count when you set the city’s production by hand.')).toBeTruthy()
   })
 
   it('enters square picking like a building, and is placed by the tap with no Confirm', async () => {
@@ -1380,6 +1388,7 @@ const WALLS: BuildChoice = {
   label: 'City Walls',
   cost: 7,
   tradeToPay: 0,
+  payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
   squares: [],
 }
 
@@ -1425,7 +1434,7 @@ describe('building City Walls', () => {
 
   it('agrees to the rush when the walls need trade', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
-    render(<Harness initial={viewOf([options({ choices: [{ ...WALLS, tradeToPay: 6 }] })])} />)
+    render(<Harness initial={viewOf([options({ choices: [{ ...WALLS, tradeToPay: 6, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 6 }] }] })])} />)
     startWalls()
     expect(confirm().textContent).toBe('Confirm and pay 6 trade')
     fireEvent.click(confirm())
@@ -1451,7 +1460,7 @@ describe("the Egyptians' free build", () => {
 
   it('sends free: true with no rush and says so on the bar', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
-    render(<Harness initial={viewOf([options({ choices: [{ ...FREE_ONLY_WALLS, tradeToPay: 0 }] })])} />)
+    render(<Harness initial={viewOf([options({ choices: [{ ...FREE_ONLY_WALLS, tradeToPay: 0, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }] }] })])} />)
     fireEvent.click(buildButton())
     fireEvent.click(screen.getByRole('button', { name: 'Build City Walls for free' }))
     expect(screen.getByRole('group', { name: 'Build' }).textContent).toContain('Free with the Egyptian ability')
@@ -1462,7 +1471,7 @@ describe("the Egyptians' free build", () => {
 
   it('does not charge the trade of a free build', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
-    render(<Harness initial={viewOf([options({ choices: [{ ...WALLS, tradeToPay: 6, freeBuild: true }] })])} />)
+    render(<Harness initial={viewOf([options({ choices: [{ ...WALLS, tradeToPay: 6, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 6 }], freeBuild: true }] })])} />)
     fireEvent.click(buildButton())
     fireEvent.click(screen.getByRole('button', { name: 'Build City Walls for free' }))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
@@ -1474,7 +1483,7 @@ describe("the Egyptians' free build", () => {
     const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
     const split = { firstCost: 5, fullProduction: 8 }
-    render(<Harness initial={viewOf([options({ engineering: split, choices: [{ ...WALLS, tradeToPay: 0, freeBuild: true, freeOnly: true }] })], { acted: ['Build'] })} />)
+    render(<Harness initial={viewOf([options({ engineering: split, choices: [{ ...WALLS, tradeToPay: 0, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }], freeBuild: true, freeOnly: true }] })], { acted: ['Build'] })} />)
     fireEvent.click(buildButton())
     fireEvent.click(screen.getByRole('button', { name: 'Build City Walls for free' }))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
@@ -1490,7 +1499,7 @@ describe("the Egyptians' free build", () => {
     fireEvent.click(buildButton())
     choose('City Walls')
     expect(confirm()).toBeTruthy()
-    act(() => handle.setView(viewOf([options({ choices: [{ ...WALLS, tradeToPay: 0, freeBuild: true, freeOnly: true }] })], { rev: 9 })))
+    act(() => handle.setView(viewOf([options({ choices: [{ ...WALLS, tradeToPay: 0, payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }], freeBuild: true, freeOnly: true }] })], { rev: 9 })))
     expect(screen.queryByRole('button', { name: /^Confirm/ })).toBeNull()
     expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
     expect(screen.getByRole('button', { name: 'Build City Walls for free' })).toBeTruthy()
@@ -1663,5 +1672,130 @@ describe('Engineering: the second build of a city', () => {
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(ask).not.toHaveBeenCalled()
     expect(send.mock.calls[0]).toHaveLength(4)
+  })
+})
+
+// --- ways to pay: We Love cards and tech boosts played with the build (#352) -------------------------------
+
+describe('paying with cards and boosts', () => {
+  const DESPOT = { itemId: 'card-despot', name: 'We Love the Despot Day!', hammers: 4 }
+  const QUEEN = { itemId: 'card-queen', name: 'We Love the Queen Day!', hammers: 6 }
+  const plain = (tradeToPay: number) => ({ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay })
+  const withDespot = { id: DESPOT.name, cards: [DESPOT], boosts: [], hammers: 4, tradeToPay: 0 }
+  const withQueen = { id: QUEEN.name, cards: [QUEEN], boosts: [], hammers: 6, tradeToPay: 0 }
+  const withBoost = { id: 'Animal Husbandry', cards: [], boosts: [{ tech: 'Animal Husbandry', hammers: 3 }], hammers: 3, tradeToPay: 3 }
+
+  /** A Library that costs 15 at 6 production: 9 trade alone, or a card. */
+  const library = (payOptions: BuildChoice['payOptions']): BuildChoice => ({ ...LIBRARY, cost: 15, tradeToPay: payOptions[0]?.tradeToPay ?? 0, payOptions })
+  const city = (choice: BuildChoice, cards = [DESPOT], boosts: CityBuildOptions['hammerSources']['boosts'] = []) =>
+    options({ choices: [choice], hammerSources: { cards, boosts, wheat: boosts.length } })
+
+  it('lists the cards and boosts that could be used, in the header of the picker', () => {
+    render(
+      <Harness
+        initial={viewOf([city(library([plain(9), withDespot]), [DESPOT, QUEEN], [{ tech: 'Animal Husbandry', kind: 'animalHusbandry', hammers: 3 }])])}
+      />,
+    )
+    fireEvent.click(buildButton())
+    const picker = screen.getByRole('region', { name: 'Build in Capital D5' })
+    expect(picker.textContent).toContain('We Love the Despot Day! (+4), We Love the Queen Day! (+6), Animal Husbandry (+3, costs a Wheat)')
+    // Nothing of it for a city with nothing to use
+    cleanup()
+    render(<Harness initial={viewOf([options()])} />)
+    fireEvent.click(buildButton())
+    expect(screen.getByRole('region', { name: 'Build in Capital D5' }).textContent).not.toContain('More production you can use')
+  })
+
+  it('shows a row with several ways to pay, and the bar offers them with the engine’s first chosen', () => {
+    render(<Harness initial={viewOf([city(library([plain(9), withDespot]))])} />)
+    fireEvent.click(buildButton())
+    expect(within(screen.getByRole('list', { name: 'Buildings Capital D5 can build' })).getByRole('listitem').textContent).toContain('2 ways to pay')
+    choose('Library')
+    const choices = within(bar()).getAllByRole('radio') as HTMLInputElement[]
+    expect(choices.map((radio) => radio.parentElement?.textContent?.trim())).toEqual([
+      'City production only: pay 9 trade',
+      'Play We Love the Despot Day! (+4): no trade to pay',
+    ])
+    expect(choices.map((radio) => radio.checked)).toEqual([true, false])
+    expect(bar().textContent).toContain('Pays 9 trade')
+    expect(bar().textContent).not.toContain('Plays together with the build')
+  })
+
+  it('sends the cards of the chosen way, needs Confirm for it, and does not send the tap alone', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([city(library([plain(9), withDespot]))])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.click(within(bar()).getByRole('radio', { name: /Play We Love the Despot Day!/ }))
+    expect(bar().textContent).toContain('Plays together with the build: We Love the Despot Day! (+4 hammers)')
+    expect(bar().textContent).not.toContain('Pays')
+    fireEvent.click(overlays()[0] as HTMLElement)
+    // The tap picked the square, and the card is only played by Confirm
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      target: { column: 3, row: 4 },
+      playCards: ['card-despot'],
+    })
+  })
+
+  it('sends the trade way as before, by the tap, with no card', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([city(library([plain(9), withDespot]))])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.click(overlays()[0] as HTMLElement)
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      target: { column: 3, row: 4 },
+      rush: true,
+    })
+  })
+
+  it('sends a tech boost by name', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    const boost = { tech: 'Animal Husbandry', kind: 'animalHusbandry' as const, hammers: 3 }
+    render(<Harness initial={viewOf([city(library([withBoost]), [], [boost])])} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    expect(bar().textContent).toContain('Animal Husbandry (+3, costs a Wheat)')
+    fireEvent.click(overlays()[0] as HTMLElement)
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      target: { column: 3, row: 4 },
+      rush: true,
+      boosts: ['Animal Husbandry'],
+    })
+  })
+
+  it('keeps the chosen way across a refresh while it is still offered, and asks again when it has gone', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([city(library([plain(9), withDespot, withQueen], ), [DESPOT, QUEEN])])} handle={handle} />)
+    fireEvent.click(buildButton())
+    choose('Library')
+    fireEvent.click(within(bar()).getByRole('radio', { name: /Queen/ }))
+    act(() => handle.setView(viewOf([city(library([plain(9), withDespot, withQueen]), [DESPOT, QUEEN])], { rev: 9 })))
+    expect((within(bar()).getByRole('radio', { name: /Queen/ }) as HTMLInputElement).checked).toBe(true)
+    // The Queen card was played elsewhere: the way the player chose is gone
+    act(() => handle.setView(viewOf([city(library([plain(9), withDespot]), [DESPOT])], { rev: 10 })))
+    expect(screen.queryByRole('group', { name: 'Build' })?.textContent ?? '').toContain(OPTIONS_CHANGED)
+    expect(screen.queryByRole('radio')).toBeNull()
+  })
+
+  it('shows no choice when there is only one way, and says which card it needs', () => {
+    render(<Harness initial={viewOf([city(library([withDespot]))])} />)
+    fireEvent.click(buildButton())
+    expect(within(screen.getByRole('list', { name: 'Buildings Capital D5 can build' })).getByRole('listitem').textContent).toContain('play We Love the Despot Day! (+4): no trade to pay')
+    choose('Library')
+    expect(within(bar()).queryAllByRole('radio')).toHaveLength(0)
+    expect(bar().textContent).toContain('Plays together with the build: We Love the Despot Day! (+4 hammers)')
   })
 })

@@ -52,6 +52,7 @@ interface BuildChoiceJson {
   readonly label: string
   readonly cost: number
   readonly tradeToPay: number
+  readonly payOptions: readonly { readonly id: string; readonly tradeToPay: number }[]
   readonly squares: readonly { readonly column: number; readonly row: number; readonly label: string }[]
 }
 
@@ -221,6 +222,7 @@ describe('the build options in the projection', () => {
         label: 'Library',
         cost: 5,
         tradeToPay: 0,
+        payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
         squares: [{ ...C2, label: 'C2' }],
       },
     ])
@@ -487,10 +489,50 @@ describe('the payload', () => {
     await refused('NumberRush', (body) => ({ ...body, rush: 1 }))
   })
 
+  it('takes the cards and the tech boosts of a build only as lists of ids and boost names', async () => {
+    await refused('StringCards', (body) => ({ ...body, playCards: 'card-1' }))
+    await refused('NumberCards', (body) => ({ ...body, playCards: [1] }))
+    await refused('OddCardId', (body) => ({ ...body, playCards: ['a card'] }))
+    await refused('TooManyCards', (body) => ({ ...body, playCards: ['1', '2', '3', '4', '5', '6', '7'] }))
+    await refused('StringBoosts', (body) => ({ ...body, boosts: 'Banking' }))
+    await refused('UnknownBoost', (body) => ({ ...body, boosts: ['Pottery'] }))
+    await refused('TooManyBoosts', (body) => ({ ...body, boosts: ['Animal Husbandry', 'Construction', 'Banking', 'Plastics', 'Banking'] }))
+  })
+
+  it('plays the We Love card of the hand with the build, as a record of its own', async () => {
+    const table = await buildTable('Cards', { techs: ['Printing Press'], trade: 0 })
+    const saved = await stored(table)
+    const card = saved.items.find((item) => 'name' in item && item.name === 'We Love the Despot Day!')
+    if (card === undefined) throw new Error('no We Love card in the deck')
+    await repo.saveGame({
+      ...saved,
+      items: saved.items.filter((item) => item.id !== card.id),
+      players: saved.players.map((player) =>
+        player.playerId === table.starterId ? { ...player, items: [...player.items, { ...card, hidden: true, ownerId: table.starterId }] } : player,
+      ),
+    })
+    const mine = await view(table.gameId, table.starter)
+    const choice = mine.you?.buildOptions?.[0]?.choices.find((candidate) => candidate.assetId === UNIVERSITY)
+    // 8 needed, the city makes 5: the card's 4 make it affordable with no trade
+    expect(choice?.payOptions.map((option) => option.id)).toEqual(['We Love the Despot Day!'])
+    const body = buildBody(table, 'req-1', mine.rev, UNIVERSITY)
+    const without = await post(table.starter, `/api/games/${table.gameId}/actions`, body)
+    expect(without.status).toBeGreaterThanOrEqual(400)
+    const done = await post(table.starter, `/api/games/${table.gameId}/actions`, { ...body, playCards: [card.id] })
+    expect(done.status).toBe(200)
+    const after = await stored(table)
+    expect(after.assistedActions.map((record) => [record.id, record.kind])).toEqual([['req-1:card:1', 'playCard'], ['req-1', 'build']])
+    // Nobody else saw the card before it was played, and the played card is a public line
+    const publicLog = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
+    expect(publicLog.body).toContain('played We Love the Despot Day!')
+    expect(publicLog.body).toContain('built a University')
+    expect(JSON.stringify((await view(table.gameId, table.other)).you)).not.toContain(card.id)
+  })
+
   it('the build fields belong to build only, and the reward fields to chooseReward only', async () => {
     const table = await buildTable('Stray', { techs: ['Writing'] })
     const rev = (await view(table.gameId, table.starter)).rev
-    for (const extra of [{ cityPieceId: table.cityId }, { item: { kind: 'building', assetId: LIBRARY } }, { target: C2 }, { rush: true }, { free: true }]) {
+    for (const extra of [{ cityPieceId: table.cityId }, { item: { kind: 'building', assetId: LIBRARY } }, { target: C2 }, { rush: true }, { free: true }, { playCards: ['c1'] }, { boosts: ['Banking'] }]) {
       const response = await post(table.starter, `/api/games/${table.gameId}/actions`, {
         action: 'cultureAdvance', requestId: 'req-1', rev, ...extra,
       })

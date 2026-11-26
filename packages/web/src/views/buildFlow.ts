@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { sameBuildItem } from '@civ/engine'
 
-import type { BuildChoice, BuildItem, BuildSquare, CityBuildOptions } from '../lib/api.js'
+import type { BuildChoice, BuildItem, BuildPayOption, BuildSquare, CityBuildOptions } from '../lib/api.js'
 
 export const OPTIONS_CHANGED = 'The options changed, pick again.'
 export const SQUARE_GONE = 'That square is no longer available, pick another.'
@@ -41,12 +41,25 @@ export interface BuildPlan {
   readonly cost: number
   /** A wonder with a discount: the other price, for the bar to read. */
   readonly costNote?: string | undefined
+  /** The trade the chosen way to pay leaves to pay. */
   readonly tradeToPay: number
+  /** The ways to pay the engine offers for this item: the first is its default. Never empty. */
+  readonly payOptions: readonly BuildPayOption[]
+  /** The way to pay the player chose (`BuildPayOption.id`), the engine's first until another is picked. */
+  readonly payId: string
   /** The Egyptians' free build: nothing is paid, and the build takes the free turn action. */
   readonly free?: true
   readonly squares: readonly BuildSquare[]
   readonly target: BuildSquare | null
 }
+
+/** The way to pay a plan has chosen: the one with its id, else the first (a plan always has one). */
+export function chosenPayOf(plan: Pick<BuildPlan, 'payOptions' | 'payId'>): BuildPayOption {
+  return plan.payOptions.find((option) => option.id === plan.payId) ?? plan.payOptions[0] ?? { id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }
+}
+
+/** Whether a way to pay plays a card or uses a tech boost with the build. */
+export const usesSources = (option: BuildPayOption): boolean => option.cards.length > 0 || option.boosts.length > 0
 
 export interface BuildFlow {
   /** The city whose picker is open in Your actions. */
@@ -62,6 +75,8 @@ export interface BuildFlow {
   closePicker(): void
   start(city: CityBuildOptions, choice: BuildChoice, free?: boolean): void
   pick(square: BuildSquare): void
+  /** Choose another way to pay for the item of the plan (`BuildPayOption.id`). */
+  choosePay(id: string): void
   /** Cancel, Escape and a successful build all end here: nothing is left open. */
   clear(): void
   refused(message: string): void
@@ -90,6 +105,8 @@ const samePlan = (a: BuildPlan, b: BuildPlan): boolean =>
   a.cost === b.cost &&
   a.costNote === b.costNote &&
   a.tradeToPay === b.tradeToPay &&
+  a.payId === b.payId &&
+  JSON.stringify(a.payOptions) === JSON.stringify(b.payOptions) &&
   a.free === b.free &&
   a.squares.length === b.squares.length &&
   a.squares.every((square, index) => {
@@ -117,10 +134,12 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
       : undefined
   // The free build was used up (or undone) since: the choice is no longer free
   const freeGone = plan.free === true && choice?.freeBuild !== true
+  // The way to pay the player chose is gone (a card was played or used up since): the engine's options are asked for again
+  const payGone = plan.free !== true && choice !== undefined && !choice.payOptions.some((option) => option.id === plan.payId)
   // The paid plan can no longer be paid for and only the Egyptian free build is left: the player
   // chooses that explicitly, since it takes the free turn action
   const nowFreeOnly = plan.free !== true && choice?.freeOnly === true
-  if (city === undefined || choice === undefined || freeGone || nowFreeOnly) {
+  if (city === undefined || choice === undefined || freeGone || nowFreeOnly || payGone) {
     // Back to the picker of the same city, if it is still there, with fresh choices.
     return {
       ...next,
@@ -143,7 +162,9 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
     label: choice.label,
     cost: choice.cost,
     costNote: choice.costNote,
-    tradeToPay: plan.free === true ? 0 : choice.tradeToPay,
+    tradeToPay: plan.free === true ? 0 : (choice.payOptions.find((option) => option.id === plan.payId)?.tradeToPay ?? choice.tradeToPay),
+    payOptions: choice.payOptions,
+    payId: plan.payId,
     ...(plan.free === true ? { free: true as const } : {}),
     squares: choice.squares,
     target,
@@ -184,6 +205,8 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
         cost: choice.cost,
         costNote: choice.costNote,
         tradeToPay: free ? 0 : choice.tradeToPay,
+        payOptions: choice.payOptions,
+        payId: choice.payOptions[0]?.id ?? 'none',
         ...(free ? { free: true as const } : {}),
         squares: choice.squares,
         target: null,
@@ -199,10 +222,17 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
         : { ...current, plan: { ...current.plan, target: square }, note: null, message: null },
     )
   }, [])
+  const choosePay = useCallback((id: string) => {
+    setState((current) => {
+      const option = current.plan?.payOptions.find((candidate) => candidate.id === id)
+      if (current.plan === null || option === undefined || current.plan.free === true) return current
+      return { ...current, plan: { ...current.plan, payId: id, tradeToPay: option.tradeToPay }, note: null, message: null }
+    })
+  }, [])
   const refused = useCallback((message: string) => setState((current) => ({ ...current, message })), [])
 
   return useMemo(
-    () => ({ ...state, openPicker, closePicker, start, pick, clear: closePicker, refused }),
-    [state, openPicker, closePicker, start, pick, refused],
+    () => ({ ...state, openPicker, closePicker, start, pick, choosePay, clear: closePicker, refused }),
+    [state, openPicker, closePicker, start, pick, choosePay, refused],
   )
 }
