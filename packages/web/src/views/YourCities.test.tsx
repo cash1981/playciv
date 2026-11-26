@@ -61,6 +61,7 @@ const buildOptions = (cityPieceId: string, label: string): CityBuildOptions => (
   productionSource: 'estimate',
   caravan: false,
   boost: 0,
+  hammerSources: { cards: [], boosts: [], wheat: 0 },
   choices: [],
   unavailable: [],
 })
@@ -93,6 +94,7 @@ const flow: BuildFlow = {
   closePicker: () => undefined,
   start: () => undefined,
   pick: () => undefined,
+  choosePay: () => undefined,
   clear: () => undefined,
   refused: () => undefined,
 }

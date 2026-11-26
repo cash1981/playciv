@@ -247,6 +247,12 @@ export interface PlayCardPayload {
   readonly tech?: string
   /** Marie Curie: the resource to spend instead of Uranium on the next resource ability. */
   readonly substitute?: string
+  /** We Love the Despot, Queen and President Day: the city piece that produces the extra hammers. Not `cityPieceId`: other payloads are told apart by that key. */
+  readonly hammerCityId?: string
+  /** Counterfeiters, Depression and Bank Scandal: for each target with coin tokens on more than one counter, the counter that loses a coin. */
+  readonly coinPicks?: readonly { readonly targetId: string; readonly source: string }[]
+  /** Drought, Deforestation and Flooding: the map square for the disaster token. */
+  readonly disasterSquare?: CardSquare
   /** The map square whose figures move (Galileo and the movement culture cards). */
   readonly from?: CardSquare
   /** The empty square they move to. */
@@ -886,6 +892,10 @@ export function earlierCityActions(
   confirmed: boolean,
   action: string,
 ): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
+  // Anarchy: the capital can take no action (the government card, also one a Citizens are Revolting card put there)
+  if (player.government === 'Anarchy' && capitalOf(state, player)?.id === city.cityPieceId) {
+    return { refusal: blocked('unavailable', `${city.label} is your capital and you are in Anarchy: it cannot take any action.`), note: '' }
+  }
   const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
   if (taken.length === 0) return { refusal: undefined, note: '' }
   const extra = extraCityActionFor(state, player, city.cityPieceId, action)

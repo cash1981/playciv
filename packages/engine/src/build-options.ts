@@ -21,7 +21,7 @@
  */
 
 import { CARAVAN_PRODUCTION, cityLabelOf } from './disband.js'
-import { PHASE_REASON, egyptFreeBuildOpen, engineeringSecondBuild, openCityManagementTurn } from './assisted-core.js'
+import { ENGINEERING_KEY, PHASE_REASON, egyptFreeBuildOpen, engineeringSecondBuild, openCityManagementTurn, techBlock } from './assisted-core.js'
 import type { EngineeringSecondBuild } from './assisted-core.js'
 import { UNIT_TYPES, unitLevelFromTechs } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
@@ -46,6 +46,9 @@ import {
   remainingBoardAssetCount,
 } from './board.js'
 import type { Board, BoardPiece } from './board.js'
+import type { ResourcePaymentChoice } from './assisted-resources.js'
+import { NO_SOURCES, hammerSourcesOf, payOptionsFor } from './build-sources.js'
+import type { BuildPayOption, HammerSources } from './build-sources.js'
 import { cityProductionsOf } from './city-production.js'
 import type { CityProduction } from './city-production.js'
 import { SHUFFLABLE_ITEMS } from './sheet-name.js'
@@ -73,6 +76,23 @@ interface BuildPayloadBase {
   readonly rush?: boolean
   /** The Egyptians build a building or City Walls for free (once per turn). Needed to use it: a choice with `freeBuild` is paid for as usual without it. */
   readonly free?: boolean
+  /**
+   * We Love the ... Day! cards of the player's own hand (item ids) played as part of this build to make up the production. Each is its own
+   * action record, so another player can still cancel it. Only what the build needs is accepted; not with `free` and not for Engineering's second build.
+   */
+  readonly playCards?: readonly string[]
+  /**
+   * Tech production boosts (Animal Husbandry, Construction, Banking, Plastics) used as part of this build, each for a Wheat; as `playCards`.
+   * `payments` is the optional choice of which Wheat pays (a hut, a token or a culture card), the shape the boost's own button takes; left out, the
+   * Wheat is picked the automatic way.
+   */
+  readonly boosts?: readonly BuildBoost[]
+}
+
+/** One tech boost a build uses, by tech name, and the one payment the player chose for its Wheat, if any. */
+export interface BuildBoost {
+  readonly tech: string
+  readonly payments?: readonly ResourcePaymentChoice[]
 }
 
 /**
@@ -118,6 +138,12 @@ export interface BuildChoice {
   readonly costNote?: string
   /** Trade the player pays to cover what the city's production lacks. 0 when the production is enough. */
   readonly tradeToPay: number
+  /**
+   * The ways to pay, `tradeToPay` being the first one's: no cards at all when the trade covers it, then the sets of We Love cards and
+   * tech boosts that lower the trade, each using only what is needed, cheapest in cards first. A choice that only a card or boost makes
+   * affordable has no option without them. Never empty.
+   */
+  readonly payOptions: readonly BuildPayOption[]
   /** The Egyptians may build this for free, as their once a turn ability (rulings 80 and 164). Only buildings and City Walls. */
   readonly freeBuild?: true
   /** The city cannot pay for this, not even with trade, so it can only be built for free. Set with `freeBuild`. */
@@ -157,6 +183,10 @@ export interface CityBuildOptions {
    * build (`firstCost` off the `fullProduction` it had), `caravan` and `boost` are 0 and false, as the first build used them.
    */
   readonly engineering?: { readonly firstCost: number; readonly fullProduction: number }
+  /** Engineering is revealed and unused this turn, so the player may split a city's production over two builds. The first build may use the cards and boosts it needs; for the second they are played first with their own buttons. */
+  readonly engineeringAvailable?: true
+  /** The We Love cards in the hand and the tech boosts that could make up production for a build in this city now; empty for Engineering's second build, which takes none. The viewer's own view only. */
+  readonly hammerSources: HammerSources
   /** Empty unless `status` is `ready`. */
   readonly choices: readonly BuildChoice[]
   /** Empty unless `status` is `ready`. */
@@ -1003,7 +1033,10 @@ export function unitCardAvailable(state: GameState, sheetName: SheetName): boole
 }
 
 /** The part of a production check every item shares: what the city has against what the item costs. */
-type Payment = { readonly tradeToPay: number } | { readonly short: string }
+type Payment = { readonly tradeToPay: number; readonly options: readonly BuildPayOption[] } | { readonly short: string }
+
+/** The one way to pay that uses no card and no boost, for a free build that pays nothing. */
+const PAY_WITH_NOTHING: readonly BuildPayOption[] = [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }]
 
 function paymentFor(
   cost: number,
@@ -1011,14 +1044,24 @@ function paymentFor(
   city: CityProduction,
   production: CityBuildProduction,
   player: Playerhand,
+  sources: HammerSources,
 ): Payment {
   const shortfall = Math.max(0, cost - production.value)
   const tradeToPay = rushTradeCost(shortfall, player.civilization?.name)
-  if (tradeToPay <= player.stats.trade) return { tradeToPay }
+  // The cards and boosts only matter when they can make a difference: with nothing to use, the trade decides
+  const options =
+    sources.cards.length === 0 && sources.boosts.length === 0
+      ? tradeToPay <= player.stats.trade
+        ? [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay }]
+        : []
+      : payOptionsFor(cost, production.value, sources, player.stats.trade, player.civilization?.name)
+  const first = options[0]
+  if (first !== undefined) return { tradeToPay: first.tradeToPay, options }
   return {
     short:
       `${costText} and ${city.label} has ${production.value} (${production.leftover === true ? 'what the first build left, splitting the production with Engineering' : SOURCE_TEXT[production.source]}${production.caravan ? ', plus 2 from the caravan' : ''}${production.boost > 0 ? `, including ${production.boost} from a tech ability this turn` : ''}). ` +
-      `Covering the missing ${shortfall} takes ${tradeToPay} trade and you have ${player.stats.trade}. ` +
+      `Covering the missing ${shortfall} takes ${tradeToPay} trade and you have ${player.stats.trade}` +
+      `${sources.cards.length > 0 || sources.boosts.length > 0 ? ', also with the cards and tech boosts you could use' : ''}. ` +
       'If the city makes more than that, set its production by hand on the city.',
   }
 }
@@ -1075,7 +1118,11 @@ function optionsForCity(
   open: boolean,
   shared: SharedSupply,
   split: EngineeringSecondBuild | undefined,
+  allSources: HammerSources,
+  engineeringAvailable: boolean,
 ): CityBuildOptions {
+  // Engineering's second build takes none: the first build's production is shared, and a card is played with the first build
+  const sources = split === undefined ? allSources : NO_SOURCES
   const whole = productionOf(city)
   // Engineering's second build: the first build used the marker and the caravan and its own hammers do not count
   const production: CityBuildProduction =
@@ -1088,6 +1135,8 @@ function optionsForCity(
     productionSource: production.source,
     caravan: production.caravan,
     boost: production.boost,
+    hammerSources: sources,
+    ...(engineeringAvailable ? { engineeringAvailable: true as const } : {}),
   }
   if (!open) {
     return { ...base, status: 'wrong-phase', reason: PHASE_REASON, choices: [], unavailable: [] }
@@ -1144,16 +1193,16 @@ function optionsForCity(
       continue
     }
 
-    const payment = paymentFor(data.cost, `Costs ${data.cost} production`, city, production, player)
+    const payment = paymentFor(data.cost, `Costs ${data.cost} production`, city, production, player, sources)
     if ('short' in payment) {
       if (!egyptFree) {
         skip(payment.short)
         continue
       }
-      choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: 0, freeBuild: true, freeOnly: true, squares })
+      choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: 0, payOptions: PAY_WITH_NOTHING, freeBuild: true, freeOnly: true, squares })
       continue
     }
-    choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: payment.tradeToPay, ...(egyptFree ? { freeBuild: true as const } : {}), squares })
+    choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: payment.tradeToPay, payOptions: payment.options, ...(egyptFree ? { freeBuild: true as const } : {}), squares })
   }
 
   // City Walls (base rules p. 17, Masonry): a building in the city centre. They turn the city marker over, so no square is picked
@@ -1171,12 +1220,12 @@ function optionsForCity(
     } else if (findBoardAsset(walled) === undefined) {
       skip('The walled city marker is not in the game data.')
     } else {
-      const payment = paymentFor(WALLS_COST, `Costs ${WALLS_COST} production`, city, production, player)
+      const payment = paymentFor(WALLS_COST, `Costs ${WALLS_COST} production`, city, production, player, sources)
       if ('short' in payment) {
-        if (egyptFree) choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: 0, freeBuild: true, freeOnly: true, squares: [] })
+        if (egyptFree) choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: 0, payOptions: PAY_WITH_NOTHING, freeBuild: true, freeOnly: true, squares: [] })
         else skip(payment.short)
       } else {
-        choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: payment.tradeToPay, ...(egyptFree ? { freeBuild: true as const } : {}), squares: [] })
+        choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: payment.tradeToPay, payOptions: payment.options, ...(egyptFree ? { freeBuild: true as const } : {}), squares: [] })
       }
     }
   }
@@ -1218,7 +1267,7 @@ function optionsForCity(
       ...(michelangeloOff > 0 ? [`${michelangeloOff} less with Michelangelo`] : []),
     ]
     const costNote = notes.length === 0 ? undefined : notes.join('; ')
-    const payment = paymentFor(cost, `Costs ${cost} production`, city, production, player)
+    const payment = paymentFor(cost, `Costs ${cost} production`, city, production, player, sources)
     if ('short' in payment) {
       skip(payment.short)
       continue
@@ -1230,7 +1279,7 @@ function optionsForCity(
       label,
       cost,
       ...(costNote === undefined ? {} : { costNote }),
-      tradeToPay: payment.tradeToPay,
+      tradeToPay: payment.tradeToPay, payOptions: payment.options,
       squares,
     })
   }
@@ -1277,12 +1326,12 @@ function optionsForCity(
     }
 
     const cost = FIGURE_COST[kind]
-    const payment = paymentFor(cost, `Costs ${cost} production`, city, production, player)
+    const payment = paymentFor(cost, `Costs ${cost} production`, city, production, player, sources)
     if ('short' in payment) {
       skip(payment.short)
       continue
     }
-    choices.push({ assetId, item, placement: 'square', label, cost, tradeToPay: payment.tradeToPay, squares })
+    choices.push({ assetId, item, placement: 'square', label, cost, tradeToPay: payment.tradeToPay, payOptions: payment.options, squares })
   }
 
   // Military units: a private card, no square
@@ -1310,12 +1359,12 @@ function optionsForCity(
       cost = unitCostOfLevel(level)
       costText = `Costs ${cost} production (${unitType} level ${level})`
     }
-    const payment = paymentFor(cost, costText, city, production, player)
+    const payment = paymentFor(cost, costText, city, production, player, sources)
     if ('short' in payment) {
       skip(payment.short)
       continue
     }
-    choices.push({ assetId, item, placement: 'none', label, cost, tradeToPay: payment.tradeToPay, squares: [] })
+    choices.push({ assetId, item, placement: 'none', label, cost, tradeToPay: payment.tradeToPay, payOptions: payment.options, squares: [] })
   }
 
   return { ...base, status: 'ready', reason: 'Ready to build.', choices, unavailable }
@@ -1336,9 +1385,11 @@ export function buildOptionsOf(state: GameState, player: Playerhand, engineering
   const open = openCityManagementTurn(state, player) !== undefined
   const scene = sceneOf(state)
   const shared = sharedSupplyOf(state, player.color.toLowerCase())
+  const sources = open ? hammerSourcesOf(state, player) : NO_SOURCES
+  const engineeringAvailable = open && techBlock(player, 'Engineering') === undefined && openCityManagementTurn(state, player)?.usedActions.includes(ENGINEERING_KEY) !== true
   return footprints.flatMap((footprint) => {
     const city = productions.find((candidate) => candidate.pieceId === footprint.piece.id)
-    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared, engineering ? engineeringSecondBuild(state, player, footprint.piece.id) : undefined)]
+    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared, engineering ? engineeringSecondBuild(state, player, footprint.piece.id) : undefined, sources, engineeringAvailable)]
   })
 }
 

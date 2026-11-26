@@ -22,14 +22,18 @@ import { TESLA_NAME, applyTesla, teslaBlock, teslaChoicesOf, teslaUndoBlock, und
 import { ZHENG_HE_NAME, lookUnderTokens, putBackTokens } from './zheng-he.js'
 import {
   EXTRA_ACTION_CARD_NAMES,
+  SUPPLY_DROP_NAME,
   waitingCardIds,
   cityActionsTakenThisTurn,
   earlierCityActions,
   extraCityActionFor,
   lovelaceCreditWasUsed,
 } from './assisted-core.js'
-import { capitalOf, investableCoinsOf, isImmuneToAnarchy } from './sot.js'
-import { coinSourcesOf, findCoinSource, totalCoins, withCoinSource } from './coins.js'
+import { capitalOf, investableCoinsOf, isImmuneToAnarchy, statsAfterGovernmentChange } from './sot.js'
+import { coinSourcesOf, findCoinSource, socialPolicyCoinSource, totalCoins, withCoinSource } from './coins.js'
+import { COIN_DISCARD_CARDS, applyCoinDiscard, coinTargetsOf, restoreCoinDiscard } from './culture-coins.js'
+import { DISASTER_CARDS, applyDisaster, disasterSquaresOf } from './culture-disasters.js'
+import { WE_LOVE_HAMMERS } from './hammer-data.js'
 import { createPlayerTurn } from './turn.js'
 import { unitedNationsHolders } from './united-nations.js'
 import { moveFigureWithMovementUnchecked, placeStartMarker, placeUnchecked, removePiece } from './actions/board.js'
@@ -187,8 +191,14 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
         passiveText === undefined
           ? kind === 'greatPerson'
             ? (AUTOMATIC_EFFECTS.get(name) ?? null)
-            : mapMove === null
-              ? null
+            : /^The Citizens are Revolting/.test(name)
+              ? "changes another player's government to Anarchy"
+              : WE_LOVE_HAMMERS.has(name)
+              ? `gives one of your cities ${WE_LOVE_HAMMERS.get(name) ?? 0} extra hammers this turn`
+              : name === SUPPLY_DROP_NAME && now === 'SOT'
+                ? `gains ${SUPPLY_DROP_TRADE} trade`
+                : mapMove === null
+                  ? (AUTOMATIC_EFFECTS.get(name) ?? null)
               : mapMove.kind === 'one'
                 ? `moves one of your figures up to ${mapMove.allowance} squares to an empty square`
                 : `moves all figures of another player in a square up to ${mapMove.allowance} squares to an empty square`
@@ -212,12 +222,18 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
             }
           : null,
       harbors: name === 'Jacques Cousteau' ? harborChoicesOf(state, player) : null,
+      cities: WE_LOVE_HAMMERS.has(name) ? ownCityChoicesOf(state, player) : null,
       gustavus: name === 'Gustavus Adolphus' ? gustavusChoiceOf(player) : null,
       tesla: name === TESLA_NAME ? teslaChoicesOf(state, player) : null,
       cultureHand:
         name === FRIDA
           ? cultureCardsOf(player).map((card) => ({ itemId: card.id, name: itemName(card) }))
           : null,
+      coinTargets:
+        kind === 'culture' && COIN_DISCARD_CARDS.has(name)
+          ? coinTargetsOf(state, state.players.filter((candidate) => candidate.playerId !== player.playerId))
+          : null,
+      squares: kind === 'culture' && DISASTER_CARDS.has(name) ? disasterSquaresOf(state, name) : null,
       substituteResources:
         name === 'Marie Curie'
           ? ['Iron', 'Wheat', 'Spy', 'Silk', 'Incense']
@@ -324,7 +340,15 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
           : { ...base, status: 'wrong-phase' as const, reason: block },
       ]
     }
-    return [{ ...base, ...playableIn(base.timings, now) }]
+    const timed = playableIn(base.timings, now)
+    // A card with nobody to hit or nowhere to go cannot be played: it would only discard itself
+    if (timed.status === 'ready' && base.coinTargets?.length === 0) {
+      return [{ ...base, status: 'unavailable', reason: `No other player holds a coin token, so ${name} has nobody to make discard one.` }]
+    }
+    if (timed.status === 'ready' && base.squares?.length === 0) {
+      return [{ ...base, status: 'unavailable', reason: `No square on the map can take the ${name} token now.` }]
+    }
+    return [{ ...base, ...timed }]
   })
 }
 
@@ -362,6 +386,21 @@ function harborChoicesOf(state: GameState, player: Playerhand): readonly HarborC
   return choices
 }
 
+/** Supply Drop's Start of Turn half: 7 trade. */
+const SUPPLY_DROP_TRADE = 7
+
+/** Whether the player has Organized Religion revealed: the policy whose coin Anarchy switches off. */
+const hasRevealedReligion = (player: Playerhand): boolean =>
+  player.socialPolicies.some((policy) => !policy.hidden && socialPolicyCoinSource(policy.name) === 'organizedReligion')
+
+function ownCityChoicesOf(state: GameState, player: Playerhand): readonly { readonly cityPieceId: string; readonly cityLabel: string }[] {
+  if (player.color === null) return []
+  return cityFootprintsOf(state, player.color.toLowerCase()).map((footprint) => ({
+    cityPieceId: footprint.piece.id,
+    cityLabel: cityLabelOf(state.board, footprint.piece),
+  }))
+}
+
 const joinNames = (names: readonly string[]): string =>
   names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
 
@@ -380,6 +419,8 @@ interface Automated {
     | 'advance'
     | 'freeAdvances'
     | 'harbors'
+    | 'hammers'
+    | 'anarchy'
     | 'frida'
     | 'curieSubstitute'
     | 'usedAction'
@@ -391,6 +432,8 @@ interface Automated {
     | 'battleCard'
     | 'gustavus'
     | 'tesla'
+    | 'coinDiscard'
+    | 'disaster'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -528,6 +571,43 @@ function automate(
       said,
     })
   switch (name) {
+    case 'We Love the Despot Day!':
+    case 'We Love the Queen Day!':
+    case 'We Love the President Day!': {
+      const amount = WE_LOVE_HAMMERS.get(name) ?? 0
+      const city = ownCityChoicesOf(state, player).find((choice) => choice.cityPieceId === payload?.hammerCityId)
+      if (city === undefined) return err('Choose one of your cities to produce the extra hammers.')
+      return ok({
+        state,
+        extra: { hammers: { cityPieceId: city.cityPieceId, cityLabel: city.cityLabel, amount } },
+        said: `, so ${city.cityLabel} produces ${amount} extra hammers this turn`,
+      })
+    }
+    case 'The Citizens are Revolting!':
+    case 'The Citizens are Revolting II!': {
+      const target = targets[0]
+      if (target === undefined) return err('Choose another player.')
+      if (target.government === 'Anarchy') return err(`${target.username} is already in Anarchy.`)
+      // The government card is replaced: its abilities and the social policies stop from the next phase, what the player already did this turn stands
+      const stats = statsAfterGovernmentChange(target, 'Anarchy')
+      return ok({
+        state: withPlayerHand(state, { ...target, government: 'Anarchy', stats }),
+        extra: {
+          anarchy: {
+            targetId: target.playerId,
+            from: target.government,
+            democracyCoin: target.stats.coinSources.democracyGovernment,
+            religionCoin: target.stats.coinSources.organizedReligion,
+            religionPolicy: hasRevealedReligion(target),
+          },
+        },
+        said: `, so ${target.username}'s government changes from ${target.government} to Anarchy`,
+      })
+    }
+    case 'Supply Drop': {
+      const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + SUPPLY_DROP_TRADE) - player.stats.trade)
+      return gained(trade, 0, `, gaining ${trade} (${player.stats.trade + trade}) trade`)
+    }
     case 'Marco Polo': {
       const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + 27) - player.stats.trade)
       return gained(trade, 0, `, gaining ${trade} (${player.stats.trade + trade}) trade`)
@@ -1167,6 +1247,26 @@ function automate(
           (unAgreed ? `, with the agreement of ${target.username} (United Nations)` : ''),
       })
     }
+    case 'Counterfeiters':
+    case 'Depression':
+    case 'Bank Scandal': {
+      const applied = applyCoinDiscard(
+        state,
+        name,
+        targets.map((target) => playerOf(state, target.playerId) ?? target),
+        payload?.coinPicks,
+        { playerId: player.playerId, ...(at === undefined ? {} : { at }) },
+      )
+      if (!applied.ok) return err(applied.error)
+      return ok({ state: applied.value.state, extra: { coinDiscard: applied.value.discarded }, said: applied.value.said })
+    }
+    case 'Drought':
+    case 'Deforestation':
+    case 'Flooding': {
+      const placed = applyDisaster(state, player.playerId, name, payload?.disasterSquare, at)
+      if (!placed.ok) return err(placed.error)
+      return ok({ state: placed.value.state, extra: { disaster: placed.value.effect }, said: placed.value.said })
+    }
     case 'Marie Curie': {
       const substitute = payload?.substitute
       if (substitute === undefined) return err('Choose the resource to spend instead of Uranium.')
@@ -1302,7 +1402,13 @@ export const playCard: AssistedActionDefinition = {
         })
 
     const automated =
-      card.kind === 'greatPerson' || card.mapMove != null
+      card.kind === 'greatPerson' ||
+      card.mapMove != null ||
+      WE_LOVE_HAMMERS.has(card.name) ||
+      COIN_DISCARD_CARDS.has(card.name) ||
+      DISASTER_CARDS.has(card.name) ||
+      /^The Citizens are Revolting/.test(card.name) ||
+      (card.name === SUPPLY_DROP_NAME && now === 'SOT')
         ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name, context.at, payload, targets, context.requestId)
         : ok<Automated | null>(null)
     if (!automated.ok) return err(rejected('playCard', blocked('unavailable', automated.error)))
@@ -1348,7 +1454,11 @@ export const playCard: AssistedActionDefinition = {
     // culture is not given twice. The amount is kept for the undo.
     const arab = resource === null ? { state: withPrivate, culture: 0 } : awardArabCulture(withPrivate, player.playerId, resource)
     return ok({
-      state: countLinesIn(arab.state, (automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId)),
+      state: countLinesIn(arab.state, [
+        ...(automated.value?.extra.harbors ?? []).map((harbor) => harbor.historyId),
+        automated.value?.extra.disaster?.historyId,
+        ...(automated.value?.extra.coinDiscard ?? []).map((taken) => taken.piece?.historyId),
+      ]),
       effect: {
         kind: 'playCard',
         item,
@@ -1490,6 +1600,19 @@ export const playCard: AssistedActionDefinition = {
     if (movedHarbor !== undefined) {
       return blockedBy(`The Harbor has left ${movedHarbor.square.label}. Move it back first.`)
     }
+    if (effect.disaster !== undefined) {
+      const token = state.board.pieces.find((piece) => piece.id === effect.disaster?.pieceId)
+      if (token === undefined) {
+        return blockedBy(`The disaster token on ${effect.disaster.square.label} is no longer on the board, so ${effect.name} cannot be undone.`)
+      }
+      const cell = mapCellOf(state.board, token)
+      if (cell === null || cell.column !== effect.disaster.square.column || cell.row !== effect.disaster.square.row) {
+        return blockedBy(`The disaster token has left ${effect.disaster.square.label}. Move it back first.`)
+      }
+    }
+    if (effect.coinDiscard?.some((entry) => playerOf(state, entry.targetId) === undefined) === true) {
+      return blockedBy('A player who discarded a coin is no longer in the game, so the coin cannot be given back.')
+    }
     if (effect.curieSubstitute !== undefined && player.curieSubstitute !== effect.curieSubstitute) {
       return blockedBy(`The Uranium substitution from ${effect.name} has already been used or replaced.`)
     }
@@ -1535,6 +1658,11 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${coinTarget?.username ?? 'The other player'} no longer has the coin ${effect.name} gave them.`)
     }
 
+    const anarchyTarget = effect.anarchy === undefined ? undefined : playerOf(state, effect.anarchy.targetId)
+    if (effect.anarchy !== undefined && anarchyTarget?.government !== 'Anarchy') {
+      return blockedBy(`${anarchyTarget?.username ?? 'The other player'} is no longer in Anarchy, so ${effect.name} cannot be undone. Set the government back by hand first.`)
+    }
+
     if (effect.garcia !== undefined && effect.gain !== undefined && player.stats.culture < effect.gain.culture) {
       return blockedBy(`Only ${player.stats.culture} culture is left, so the ${effect.gain.culture} culture from ${effect.name} cannot be taken back. It has been spent, or the counter was changed by hand.`)
     }
@@ -1567,6 +1695,20 @@ export const playCard: AssistedActionDefinition = {
       })
       if (!removed.ok) return blockedBy(`The Harbor on ${harbor.square.label} could not be taken off the board.`)
       current = removed.value
+    }
+    if (effect.disaster !== undefined) {
+      const removed = removePiece(current, {
+        playerId: player.playerId,
+        pieceId: effect.disaster.pieceId,
+        ...(at === null || at === undefined ? {} : { at }),
+      })
+      if (!removed.ok) return blockedBy(`The disaster token on ${effect.disaster.square.label} could not be taken off the board.`)
+      current = removed.value
+    }
+    if (effect.coinDiscard !== undefined) {
+      const given = restoreCoinDiscard(current, effect.coinDiscard, { playerId: player.playerId, ...(at === null || at === undefined ? {} : { at }) })
+      if (!given.ok) return blockedBy(given.error)
+      current = given.value
     }
     if (effect.advance !== undefined) {
       const reversed = reverseAdvanceEffect(current, player, record, effect.advance, at)
@@ -1673,6 +1815,27 @@ export const playCard: AssistedActionDefinition = {
       }
       hand = playerOf(current, player.playerId) ?? hand
     }
+    if (effect.anarchy !== undefined && anarchyTarget !== undefined) {
+      const victim = playerOf(current, effect.anarchy.targetId) ?? anarchyTarget
+      const restored = statsAfterGovernmentChange(victim, effect.anarchy.from)
+      current = withPlayer(current, {
+        ...victim,
+        government: effect.anarchy.from,
+        stats: {
+          ...restored,
+          // The Organized Religion coin comes back only when the policy is as it was at the attack: one revealed or
+          // removed under Anarchy has its own counter, worked out from the policy as it stands
+          coinSources: withCoinSource(
+            hasRevealedReligion(victim) === effect.anarchy.religionPolicy
+              ? withCoinSource(restored.coinSources, 'organizedReligion', effect.anarchy.religionCoin)
+              : restored.coinSources,
+            'democracyGovernment',
+            effect.anarchy.democracyCoin,
+          ),
+        },
+      })
+      hand = playerOf(current, player.playerId) ?? hand
+    }
     if (effect.coin !== undefined && coinTarget !== undefined) {
       const recipient = playerOf(current, effect.coin.targetId) ?? coinTarget
       current = withPlayer(current, {
@@ -1729,6 +1892,9 @@ export const playCard: AssistedActionDefinition = {
     const kurosawa = takeBackKurosawa(current, effect.kurosawa ?? [])
     current = kurosawa.state
 
+    const tableUndone =
+      (effect.coinDiscard === undefined ? '' : `, and the discarded coin${effect.coinDiscard.length === 1 ? ' was' : 's were'} given back`) +
+      (effect.disaster === undefined ? '' : `, and the disaster token was taken off ${effect.disaster.square.label}`)
     const freeTurnUse = (state: GameState): GameState => {
       let freed = state
       if (effect.coin !== undefined) {
@@ -1753,7 +1919,7 @@ export const playCard: AssistedActionDefinition = {
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       }))
-      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${gainUndoneText(statsBeforeGain, hand)}${kurosawa.said}` })
+      return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand${gainUndoneText(statsBeforeGain, hand)}${kurosawa.said}${tableUndone}` })
     }
     const back = withoutArabCulture(freeTurnUse(
       withPlayerHand(current, {
@@ -1763,6 +1929,6 @@ export const playCard: AssistedActionDefinition = {
         ),
       }),
     ))
-    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}${gainUndoneText(statsBeforeGain, hand)}` })
+    return ok({ state: back, text: `${player.username}'s use of ${effect.name} was undone: ${effect.item.hidden ? 'the card is facedown again' : 'the card stays faceup'}${gainUndoneText(statsBeforeGain, hand)}${tableUndone}` })
   },
 }

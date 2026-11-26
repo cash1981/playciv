@@ -48,6 +48,8 @@ import {
   whiteFigureCivilization,
 } from '../board.js'
 import { cityFootprintsOf, mapCellOf } from '../blockade.js'
+import { replaySheet, replaySheetApplied, sheetChangesOf, withSheetChanges } from '../coin-marker.js'
+import type { SheetChange } from '../coin-marker.js'
 import type { Cell } from '../blockade.js'
 import { CARAVAN_ASSET_ID, FORTIFICATION_ASSET_ID, disbandOfferAt } from '../disband.js'
 import type { DisbandOffer } from '../disband.js'
@@ -104,6 +106,8 @@ interface Recorded {
   readonly pieces: readonly BoardPiece[]
   readonly change: BoardChange
   readonly description: string
+  /** False when the caller keeps the Sheet counter itself (the culture cards that take a coin with its marker). */
+  readonly syncSheet?: boolean
 }
 
 /**
@@ -120,9 +124,11 @@ function record(
   const player = findPlayer(state, input.playerId)
   const actor = input.playerId === BOARD_SYSTEM_ACTOR ? 'System' : player?.username
   const [id, rng] = nextId(state.rng)
+  // A coin marker put into a player's area, or taken out of it, changes that player's Sheet counter
+  const sheet = withSheetChanges(state, recorded.syncSheet === false ? [] : sheetChangesOf(state, recorded.change))
 
   return {
-    ...state,
+    ...sheet.state,
     rng,
     board: {
       ...state.board,
@@ -136,6 +142,7 @@ function record(
           username: actor ?? 'unknown',
           description: `${actor ?? 'Someone'} ${recorded.description}`,
           change: recorded.change,
+          ...(sheet.applied.length === 0 ? {} : { sheet: sheet.applied }),
           logLength: state.log.length,
         },
       ],
@@ -230,6 +237,8 @@ export function placeUnchecked(
     readonly placedBy?: string | null
     /** The map tile a hut or village was put on (issue #364): `BoardPiece.tileId`. */
     readonly tileId?: string
+    /** Puts the piece at this place of the stack instead of on top, so it lies under the pieces from there on (a disaster token under a figure). */
+    readonly index?: number
   },
 ): GameState | undefined {
   const asset = findBoardAsset(input.assetId)
@@ -278,12 +287,18 @@ export function placeUnchecked(
 
   // Map tiles go under everything else, or they would cover the pieces on them
   const onTop = asset.category !== 'tile' && asset.category !== 'civtile'
-  const pieces = onTop ? [...state.board.pieces, piece] : [piece, ...state.board.pieces]
+  const slot = input.index
+  const pieces =
+    slot !== undefined
+      ? [...state.board.pieces.slice(0, slot), piece, ...state.board.pieces.slice(slot)]
+      : onTop
+        ? [...state.board.pieces, piece]
+        : [piece, ...state.board.pieces]
 
   return record(input, {
     state: withId,
     pieces,
-    change: { kind: 'place', piece, onTop },
+    change: { kind: 'place', piece, onTop, ...(slot === undefined ? {} : { index: slot }) },
     description: `placed ${piece.label} at ${locationOf(state.board, areas, piece)}`,
   })
 }
@@ -1022,6 +1037,45 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
 }
 
 /**
+ * Removes a piece for a card that keeps the Sheet counter itself (Counterfeiters, Depression, Bank Scandal take the coin
+ * and its marker together): a normal history entry, but a coin marker leaving a player's area does not take a second coin
+ * off the Sheet. `undefined` when the piece is gone.
+ */
+export function removePieceKeepingSheet(
+  state: GameState,
+  input: { readonly playerId: string; readonly pieceId: string; readonly at?: string },
+): { readonly state: GameState; readonly index: number; readonly historyId: string } | undefined {
+  const index = state.board.pieces.findIndex((piece) => piece.id === input.pieceId)
+  const piece = state.board.pieces[index]
+  if (piece === undefined) return undefined
+  const removed = record(input, {
+    state,
+    pieces: state.board.pieces.filter((other) => other.id !== piece.id),
+    change: { kind: 'remove', piece, index },
+    description: `removed ${piece.label} from ${locationOf(state.board, areasFor(state), piece)}`,
+    syncSheet: false,
+  })
+  const historyId = removed.board.history.at(-1)?.id
+  return historyId === undefined ? undefined : { state: removed, index, historyId }
+}
+
+/** Puts a piece that `removePieceKeepingSheet` took off back, the same piece at its old place in the stack and on its old square, again without touching the Sheet. */
+export function putPieceBackKeepingSheet(
+  state: GameState,
+  input: { readonly playerId: string; readonly piece: BoardPiece; readonly index: number; readonly at?: string },
+): GameState {
+  if (state.board.pieces.some((other) => other.id === input.piece.id)) return state
+  const slot = Math.min(Math.max(input.index, 0), state.board.pieces.length)
+  return record(input, {
+    state,
+    pieces: [...state.board.pieces.slice(0, slot), input.piece, ...state.board.pieces.slice(slot)],
+    change: { kind: 'place', piece: input.piece, onTop: true, index: slot },
+    description: `put back ${input.piece.label} at ${locationOf(state.board, areasFor(state), input.piece)}`,
+    syncSheet: false,
+  })
+}
+
+/**
  * Removes a piece on the engine's own account, as an ordinary history entry
  * credited to {@link BOARD_SYSTEM_ACTOR}. `undefined` when the piece is gone.
  */
@@ -1166,6 +1220,10 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'playCard' && effect.cardMove?.moves.some((move) => move.historyId === entry.id) === true) {
       return true
     }
+    // A coin marker taken with the coin by Counterfeiters, Depression or Bank Scandal: only the vote gives both back
+    if (effect.kind === 'playCard' && effect.coinDiscard?.some((taken) => taken.piece?.historyId === entry.id) === true) return true
+    // A disaster token was placed as part of playing the card: only the vote takes it off, with the card
+    if (effect.kind === 'playCard' && effect.disaster?.historyId === entry.id) return true
     // Cousteau's Harbors were built as part of playing the card: the board Undo must not take one alone
     if (effect.kind === 'playCard' && effect.harbors?.some((harbor) => harbor.historyId === entry.id) === true) {
       return true
@@ -1262,12 +1320,16 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
     const returned = returnCollectedCard(state, collection)
     if (returned === undefined) return err({ kind: 'BOARD_UNDO_TOKEN_CARD_GONE' })
     return ok(
-      withBoard(returned, {
-        ...returned.board,
-        pieces: revertChange(returned.board.pieces, last.change),
-        history: returned.board.history.slice(0, -1),
-        redo: [],
-      }),
+      replaySheet(
+        withBoard(returned, {
+          ...returned.board,
+          pieces: revertChange(returned.board.pieces, last.change),
+          history: returned.board.history.slice(0, -1),
+          redo: [],
+        }),
+        last.sheet,
+        -1,
+      ),
     )
   }
 
@@ -1276,12 +1338,12 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   const grant = spanishGrantAt(state, last.id)
   if (grant !== undefined) {
     if (spanishCreditsOf(state, grant.playerId) <= 0) return err({ kind: 'BOARD_UNDO_SPANISH_BUILDING_USED' })
-    const taken = withBoard(withoutSpanishGrant(state, last.id), {
+    const taken = replaySheet(withBoard(withoutSpanishGrant(state, last.id), {
       ...state.board,
       pieces: revertChange(state.board.pieces, last.change),
       history: state.board.history.slice(0, -1),
       redo: [],
-    })
+    }), last.sheet, -1)
     const holder = findPlayer(taken, grant.playerId)
     if (holder === undefined) return ok(taken)
     // Only the owner sees the total, as the line that gave the credit
@@ -1294,14 +1356,22 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
     )
   }
 
+  // What the Undo really gave back goes on the Redo stack with the entry, so a Redo takes again exactly that
+  const undone = replaySheetApplied(state, last.sheet, -1)
   return ok(
-    withBoard(state, {
-      ...state.board,
+    withBoard(undone.state, {
+      ...undone.state.board,
       pieces: revertChange(state.board.pieces, last.change),
       history: state.board.history.slice(0, -1),
-      redo: [...state.board.redo, last],
+      redo: [...state.board.redo, withSheet(last, undone.applied)],
     }),
   )
+}
+
+/** The entry with its Sheet change replaced by what was really applied (none left out). */
+function withSheet(entry: BoardHistoryEntry, applied: readonly SheetChange[]): BoardHistoryEntry {
+  const { sheet: _old, ...rest } = entry
+  return applied.length === 0 ? rest : { ...rest, sheet: applied }
 }
 
 /**
@@ -1319,16 +1389,17 @@ export function redoLastBoardChange(state: GameState, playerId: string): ActionR
   const last = state.board.redo.at(-1)
   if (last === undefined) return err({ kind: 'NOTHING_TO_REDO_ON_BOARD' })
 
+  const redone = replaySheetApplied(state, last.sheet, 1)
   return ok(
-    withBoard(state, {
-      ...state.board,
+    withBoard(redone.state, {
+      ...redone.state.board,
       pieces: applyChange(state.board.pieces, last.change),
       // Re-appended at the tail of history, so its logLength is refreshed to
       // now rather than kept from when it first happened — a non-board action
       // (a card draw, say) may have grown the log while it sat on the redo
       // stack, and a stale, smaller value here would break the invariant that
       // logLength never decreases along history, which replay relies on.
-      history: [...state.board.history, { ...last, logLength: state.log.length }],
+      history: [...state.board.history, { ...withSheet(last, redone.applied), logLength: state.log.length }],
       redo: state.board.redo.slice(0, -1),
     }),
   )

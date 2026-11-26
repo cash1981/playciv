@@ -184,6 +184,7 @@ describe('what a city may build: City Walls', () => {
       label: 'City Walls',
       cost: 7,
       tradeToPay: 0,
+      payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
       squares: [],
     })
   })

@@ -38,7 +38,7 @@ import type { RepositionableFigure } from './build-reposition.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
 import type { CityActionOptions, UpgradeFamilyOption } from './city-actions.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
-import type { CoinSources } from './coins.js'
+import type { CoinSourceKey, CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES, coinSourcesOf } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 import type { WaitingFor } from './turn.js'
@@ -829,6 +829,10 @@ export type AssistedEffect =
       readonly grantId?: string
       /** The production discount the card armed (Michelangelo), so an undo can take it back. */
       readonly wonderDiscount?: number
+      /** The extra hammers a culture card gave one city this turn (We Love the ... Day!). Derived into the city's production while the record stands. */
+      readonly hammers?: { readonly cityPieceId: string; readonly cityLabel: string; readonly amount: number }
+      /** The government a Citizens are Revolting card replaced with Anarchy, and the counters it changed, so an undo can put them back. */
+      readonly anarchy?: { readonly targetId: string; readonly from: Government; readonly democracyCoin: number; readonly religionCoin: number; readonly religionPolicy: boolean }
       /** A coin the card moved to another player (Mother Teresa). */
       readonly coin?: { readonly source: string; readonly targetId: string }
       /** The free culture advance the card gave (Mother Teresa). */
@@ -898,6 +902,19 @@ export type AssistedEffect =
           readonly movement: PieceMovement | null
           readonly historyId: string
         }[]
+      }
+      /** Counterfeiters, Depression, Bank Scandal: the coin each target discarded and from which counter, so an undo gives it back. */
+      readonly coinDiscard?: readonly {
+        readonly targetId: string
+        readonly source: CoinSourceKey
+        /** The coin marker taken off the target's area with the Sheet coin: the piece, its place in the stack and the board entry. */
+        readonly piece?: { readonly piece: BoardPiece; readonly index: number; readonly historyId: string }
+      }[]
+      /** Drought, Deforestation, Flooding: the token put on the map, so an undo takes off exactly this one. */
+      readonly disaster?: {
+        readonly pieceId: string
+        readonly historyId: string
+        readonly square: { readonly column: number; readonly row: number; readonly label: string }
       }
       /** Galileo Galilei: the edge source and destination, and each figure's before/after position. */
       readonly galileo?: {
@@ -1063,6 +1080,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** The request ids of the We Love cards and tech boosts played as part of this build, oldest first: each is an action record of its own, which an undo of the build takes back newest first. */
+      readonly embedded?: readonly string[]
       /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
       readonly free?: true
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
@@ -1104,6 +1123,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** The request ids of the We Love cards and tech boosts played as part of this build, oldest first: each is an action record of its own, which an undo of the build takes back newest first. */
+      readonly embedded?: readonly string[]
     }
   | {
       readonly kind: 'build'
@@ -1129,6 +1150,8 @@ export type AssistedEffect =
       readonly production?: number
       /** Engineering's second build in this city: the record of the first build it shares the production with. */
       readonly engineering?: { readonly firstRecordId: string }
+      /** The request ids of the We Love cards and tech boosts played as part of this build, oldest first: each is an action record of its own, which an undo of the build takes back newest first. */
+      readonly embedded?: readonly string[]
       /** Built for free with the Egyptians' ability: no production or trade was spent, and the ability's key is used this turn. */
       readonly free?: true
     }

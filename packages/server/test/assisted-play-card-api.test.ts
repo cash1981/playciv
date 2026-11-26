@@ -79,7 +79,8 @@ async function table(cardName: string) {
     players: state.players.map((player) =>
       player.playerId === starterId
         ? { ...player, items: [...player.items, { ...card, hidden: true, ownerId: starterId }] }
-        : player,
+        // One coin on the Sheet of the others: Counterfeiters has nothing to take without it
+        : { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, sheet: 1 } } },
     ),
   })
   return { gameId, starter, other, starterId, otherId, itemId: card.id }
@@ -113,7 +114,7 @@ describe('playing a card through the actions route', () => {
     const after = await response.json<View>()
     expect(after.you?.playableCards).toEqual([])
     expect(after.assistedActions[0]).toMatchObject({ id: 'req-1', kind: 'playCard', label: 'Counterfeiters', status: 'applied' })
-    expect(after.assistedActions[0]?.text).toMatch(/^card-[ab]-\d+ played Counterfeiters item number #\d+ \(start of turn\), targeting card-[ab]-\d+$/)
+    expect(after.assistedActions[0]?.text).toMatch(/^card-[ab]-\d+ played Counterfeiters item number #\d+ \(start of turn\), targeting card-[ab]-\d+, so card-[ab]-\d+ discards a coin from Sheet \(0 left\)$/)
 
     // The other player sees the public line and the discarded card, never an effect
     const theirs = await view(t.gameId, t.other)
@@ -206,6 +207,12 @@ describe('playing a card through the actions route', () => {
     }
     for (const units of ['INFANTRY', [1], [''], [null], Array.from({ length: 13 }, () => 'INFANTRY'), { 0: 'INFANTRY' }]) {
       expect((await send({ itemId: t.itemId, targets: [], units })).status).toBe(400)
+    }
+    for (const coinPicks of ['sheet', [null], [{ targetId: 'x' }], [{ targetId: 'bad id!', source: 'sheet' }], [{ targetId: 'x', source: '' }], [{ targetId: 'x', source: 'sheet', extra: 1 }], [1, 2, 3, 4, 5].map(() => ({ targetId: 'x', source: 'sheet' }))]) {
+      expect((await send({ itemId: t.itemId, targets: [], coinPicks })).status).toBe(400)
+    }
+    for (const disasterSquare of ['C1', { column: 0 }, { column: -1, row: 0 }, { column: 0, row: 0.5 }, { column: 0, row: 0, extra: 1 }]) {
+      expect((await send({ itemId: t.itemId, targets: [], disasterSquare })).status).toBe(400)
     }
     expect((await send({ itemId: t.itemId, targets: [], extra: 1 })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [] }, { family: 'x' })).status).toBe(400)
@@ -393,6 +400,38 @@ describe('playing a card through the actions route', () => {
     })
     expect(fractional.status).toBe(400)
     expect(await fractional.json()).toMatchObject({ message: 'from needs whole column and row numbers' })
+  })
+
+  it('carries the coin picks of Counterfeiters through the route, and takes the coin from the counter picked', async () => {
+    const t = await table('Counterfeiters')
+    const saved = await repo.findGame(t.gameId)
+    if (saved === undefined) throw new Error('missing game')
+    await repo.saveGame({
+      ...saved,
+      players: saved.players.map((player) =>
+        player.playerId === t.otherId
+          ? { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, sheet: 2, pottery: 1 } } }
+          : player,
+      ),
+    })
+    const rev = (await view(t.gameId, t.starter)).rev
+    const listed = (await view(t.gameId, t.starter)).you?.playableCards.find((card) => card.itemId === t.itemId) as unknown as {
+      coinTargets: { playerId: string; counters: { key: string; coins: number }[] }[]
+    }
+    expect(listed.coinTargets).toMatchObject([{ playerId: t.otherId, counters: [{ key: 'sheet', coins: 2 }, { key: 'pottery', coins: 1 }] }])
+    // The counters are the status board's, which every player sees; nothing of the hand goes with them to the other player
+    expect(JSON.stringify(await view(t.gameId, t.other))).not.toContain('"coinTargets"')
+
+    const unchosen = await post(t.starter, actions(t.gameId), {
+      action: 'playCard', requestId: 'req-1', rev, args: { itemId: t.itemId, targets: [t.otherId] },
+    })
+    expect(unchosen.status).toBeGreaterThanOrEqual(400)
+    const response = await post(t.starter, actions(t.gameId), {
+      action: 'playCard', requestId: 'req-2', rev, args: { itemId: t.itemId, targets: [t.otherId], coinPicks: [{ targetId: t.otherId, source: 'pottery' }] },
+    })
+    expect(response.status).toBe(200)
+    const stored = await repo.findGame(t.gameId)
+    expect(stored?.players.find((player) => player.playerId === t.otherId)?.stats.coinSources).toMatchObject({ sheet: 2, pottery: 0 })
   })
 
   it('refuses args for an action that takes none', async () => {

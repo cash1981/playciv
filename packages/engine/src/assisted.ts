@@ -78,6 +78,7 @@ import {
 import type {
   AssistedActionDefinition,
   AssistedAvailability,
+  ApplyContext,
   AssistedPayload,
   DevoteToTheArtsPayload,
   HarvestPayload,
@@ -109,6 +110,8 @@ import {
   walledAssetIdOf,
 } from './build-options.js'
 import type { BuildPayload, BuildSquare } from './build-options.js'
+import { judgeSelection } from './build-sources.js'
+import type { HammerBoost, HammerCard } from './build-sources.js'
 import {
   buildingProgramMarkerOf,
   cityActionsOf,
@@ -712,6 +715,436 @@ const engineeringSecondOf = (state: GameState, record: AssistedActionRecord): As
 const ENGINEERING_BUILD_NOTE = ' (splitting the production with Engineering)'
 
 /**
+ * Plays the We Love cards and uses the tech boosts a build asked for, before the build itself (#352). Each is the same
+ * action as its own button (`playCard`, `animalHusbandry`, ...) with a request id of its own made from the build's, so each
+ * has its own record and public line and can be canceled or undone on its own terms; the records share the revision before
+ * the build, so a cancel rewinds the build with them. All or nothing: any refusal leaves the game as it was.
+ */
+function embedSources(
+  state: GameState,
+  player: Playerhand,
+  payload: BuildPayload,
+  context: ApplyContext,
+): Result<{ readonly state: GameState; readonly player: Playerhand; readonly ids: readonly string[] }, EngineError> {
+  const failed = (reason: string): EngineError => rejected('build', blocked('unavailable', reason))
+  if (payload.free === true) return err(failed('A free build uses no cards and no tech boosts.'))
+  const city = buildOptionsOf(state, player, context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+  if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
+  if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
+  if (city.engineering !== undefined) {
+    return err(failed('This is the second build of Engineering, which shares the production of the first: play the cards and boosts with the first build.'))
+  }
+  const choice = city.choices.find((candidate) => sameBuildItem(candidate.item, payload.item))
+  // Not offered at all: the build itself says why
+  if (choice === undefined) return ok({ state, player, ids: [] })
+
+  const askedCards = payload.playCards ?? []
+  const askedBoosts = payload.boosts ?? []
+  if (new Set(askedCards).size !== askedCards.length || new Set(askedBoosts.map((asked) => asked.tech)).size !== askedBoosts.length) {
+    return err(failed('Choose each card and each tech boost once.'))
+  }
+  // The ids of the records are made from the build's (`:c1`, `:b1`), kept inside the 64 characters a request id may have. One that
+  // already names a record is not ours: it would be taken for a retry and an unrelated record embedded, so the build is refused
+  const base = context.requestId.slice(0, 60)
+  const derived = [...askedCards.map((_, index) => `${base}:c${index + 1}`), ...askedBoosts.map((_, index) => `${base}:b${index + 1}`)]
+  if (derived.some((id) => id === context.requestId || state.assistedActions.some((record) => record.id === id))) {
+    return err(failed('That request id is already used for another action. Send the build again with a new request id.'))
+  }
+  const cards: HammerCard[] = []
+  for (const id of askedCards) {
+    const card = city.hammerSources.cards.find((candidate) => candidate.itemId === id)
+    if (card === undefined) return err(failed('Choose only We Love cards from your own hand, which you can play now.'))
+    cards.push(card)
+  }
+  const boosts: HammerBoost[] = []
+  for (const { tech } of askedBoosts) {
+    const boost = city.hammerSources.boosts.find((candidate) => candidate.tech === tech)
+    if (boost === undefined) return err(failed(`${tech} cannot give production now: it needs to be revealed, unused this turn and a Wheat to pay.`))
+    boosts.push(boost)
+  }
+  // Which Wheat pays a boost is the player's choice, in the shape the boost's own button takes; one that does not parse is refused here, with nothing played
+  for (const asked of askedBoosts) {
+    if (asked.payments === undefined) continue
+    const checked = parseResourcePayments(asked.payments, ['Wheat'])
+    if (!checked.ok) return err(failed(`${asked.tech}: ${checked.error}`))
+  }
+  const usedWheat = askedBoosts.flatMap((asked) => asked.payments ?? []).map((choice) => choice.id)
+  if (new Set(usedWheat).size !== usedWheat.length) return err(failed('The same token or card cannot pay two boosts.'))
+  if (boosts.length > city.hammerSources.wheat) return err(failed(`You have the Wheat for ${city.hammerSources.wheat} tech ${city.hammerSources.wheat === 1 ? 'boost' : 'boosts'}, not ${boosts.length}.`))
+  const verdict = judgeSelection(choice.cost, city.production, cards, boosts, player.stats.trade, player.civilization?.name)
+  if (!verdict.ok) return err(failed(`${choice.label}: ${verdict.reason}`))
+
+  const stamp = context.at === undefined ? {} : { at: context.at }
+  const wanted = [
+    ...cards.map((card, index) => ({ id: `${base}:c${index + 1}`, action: 'playCard' as AssistedActionKind, payload: { itemId: card.itemId, targets: [], hammerCityId: city.cityPieceId } as AssistedPayload })),
+    ...boosts.map((boost, index) => ({ id: `${base}:b${index + 1}`, action: boost.kind, payload: { cityPieceId: city.cityPieceId, ...(askedBoosts[index]?.payments === undefined ? {} : { payments: askedBoosts[index]?.payments }) } as AssistedPayload })),
+  ]
+  let current = state
+  const ids: string[] = []
+  for (const entry of wanted) {
+    const done = performAssistedAction(current, { playerId: player.playerId, action: entry.action, requestId: entry.id, ...stamp, payload: entry.payload })
+    if (!done.ok) return done
+    current = done.value
+    ids.push(entry.id)
+  }
+  return ok({ state: current, player: playerOf(current, player.playerId) ?? player, ids })
+}
+
+function applyBuild(
+  state: GameState,
+  player: Playerhand,
+  context: ApplyContext,
+  embedded: readonly string[],
+): ReturnType<AssistedActionDefinition['apply']> {
+  const failed = (reason: string): EngineError => rejected('build', blocked('unavailable', reason))
+  const payload = buildPayloadOf(context.payload)
+  if (payload === undefined) return err(failed('Say which city, what to build and which square.'))
+  const { item } = payload
+  // The server checks the shape; the engine is also called with whatever a caller sent
+  if (!['building', 'wonder', 'army', 'scout', 'unit', 'walls'].includes(item.kind)) {
+    return err(failed('That is not something that can be built.'))
+  }
+
+  // The Egyptians' free build is a whole action of its own and is never combined with Engineering (rulings 80 and 164)
+  const free = payload.free === true
+  if (free) {
+    const refusal = egyptFreeRefusal(state, player, item.kind)
+    if (refusal !== undefined) return err(failed(refusal))
+  }
+  // A confirmed repeat is another allowance that covers the build: it takes the city's full production, so Engineering does not split
+  const city = buildOptionsOf(state, player, !free && context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+  if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
+  if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
+
+  const label = buildItemName(item)
+  const choice = city.choices.find((candidate) => sameBuildItem(candidate.item, item))
+  if (choice === undefined) {
+    const why = city.unavailable.find((candidate) => sameBuildItem(candidate.item, item))
+    return err(
+      failed(
+        why === undefined
+          ? item.kind === 'building'
+            ? `${item.assetId} is not a building that can be built.`
+            : item.kind === 'wonder'
+              ? `${label} is not a wonder that can be built: it is not in the market.`
+              : item.kind === 'walls'
+                ? 'City Walls cannot be built.'
+                : `A ${label} cannot be built.`
+          : `${why.label} cannot be built in ${city.label} now. ${why.reason}`,
+      ),
+    )
+  }
+
+  // A square is chosen for a building or a figure and for nothing else
+  let square: BuildSquare | undefined
+  const itemKind = payload.item.kind
+  if (itemKind === 'unit' || itemKind === 'walls') {
+    if (payload.target !== undefined) {
+      return err(
+        failed(
+          itemKind === 'unit'
+            ? `${choice.label} is a card and has no square. Send no square.`
+            : `${choice.label} turn the city marker over and have no square. Send no square.`,
+        ),
+      )
+    }
+  } else {
+    const target = payload.target
+    if (target === undefined) return err(failed('Pick one of the highlighted squares.'))
+    square = choice.squares.find((candidate) => candidate.column === target.column && candidate.row === target.row)
+    if (square === undefined) {
+      const why = buildSquareRefusal(state, player, city.cityPieceId, payload.item, target)
+      return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
+    }
+  }
+  if (free && choice.freeBuild !== true) return err(failed(`${choice.label} cannot be built for free.`))
+  if (!free && choice.freeOnly === true) {
+    return err(
+      failed(`${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}, and trade cannot cover the rest. The Egyptians can build it for free instead.`),
+    )
+  }
+  // A free build pays nothing: no production is used and no trade is paid
+  // The choice's own trade is that of its first way to pay, which may use cards or boosts the player did not send: what is owed is the plain way's
+  const plain = choice.payOptions.find((option) => option.id === 'none')
+  if (!free && plain === undefined) {
+    return err(
+      failed(
+        `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}, and your trade cannot cover the rest. ` +
+          `Play with the build: ${choice.payOptions.map((option) => option.id).join(', or ')}.`,
+      ),
+    )
+  }
+  const tradeToPay = free ? 0 : (plain?.tradeToPay ?? 0)
+  if (tradeToPay > 0 && payload.rush !== true) {
+    return err(
+      failed(
+        `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${tradeToPay} trade to build it.`,
+      ),
+    )
+  }
+  // After everything that makes the build impossible, so that a refusal says what is wrong and the question only comes for a build that would go through
+  // Engineering: the second build of a city is the same action split, so it asks nothing; the options already hold what the first left
+  const split = city.engineering === undefined ? undefined : engineeringSecondBuild(state, player, city.cityPieceId)
+  const again =
+    split !== undefined
+      ? { refusal: undefined, note: ENGINEERING_BUILD_NOTE }
+      : earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.build ?? 'build')
+  if (again.refusal !== undefined) {
+    const spentEngineering = engineeringSpentFor(state, player, city.cityPieceId)
+    return err(
+      rejected(
+        'build',
+        spentEngineering ? { ...again.refusal, reason: `${again.refusal.reason} Engineering has already split the production this turn.` } : again.refusal,
+      ),
+    )
+  }
+  // The Romans advance one space for free with every wonder (civilization sheet), so a wonder is refused
+  // while that advance is stopped (a card choice waiting, a hand over its size); the end of the track stops nothing
+  const romanWonder = payload.item.kind === 'wonder' && player.civilization?.name === ROMANS
+  if (romanWonder) {
+    const status = freeAdvanceStatus(state, player)
+    if (status.kind === 'blocked') {
+      return err(failed(`The Romans advance one space for free with every wonder, and that is stopped now: ${status.reason}`))
+    }
+  }
+  const sharing = {
+    cost: free ? 0 : choice.cost,
+    production: city.production,
+    ...(split === undefined ? {} : { engineering: { firstRecordId: split.firstRecordId } }),
+  }
+  const at = context.at === undefined ? {} : { at: context.at }
+
+  // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
+  const footprint = ownCityFootprint(state, player, city.cityPieceId)
+  const marker = footprint === undefined ? undefined : buildingProgramMarkerOf(state, footprint)
+
+  // The one step that differs: a piece on a square, or a card in the hand
+  let made: Made
+  let replaced: { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean } | undefined
+  if (payload.item.kind === 'unit') {
+    const drawn = drawBuiltUnit(state, player, payload.item.unitType)
+    if (!drawn.ok) return err(failed(drawn.error))
+    made = drawn.value
+  } else if (payload.item.kind === 'walls') {
+    const flipped = flipToWalls(state, player, city.cityPieceId, at)
+    if (!flipped.ok) return err(failed(flipped.error))
+    made = flipped.value
+  } else {
+    if (square === undefined) return err(failed('Pick one of the highlighted squares.'))
+    // A building or wonder of the player's own on the square is taken off first, then the new piece goes on the empty square
+    let base = state
+    if (square.replaces !== undefined) {
+      const cleared = removeReplaced(state, player, square, at)
+      if (!cleared.ok) return err(failed(cleared.error))
+      base = cleared.value.state
+      replaced = { piece: cleared.value.piece, historyId: cleared.value.historyId, reserved: cleared.value.reserved }
+    }
+    const placed = placeBuilt(base, player, payload.item, square, at)
+    if (!placed.ok) return err(failed(placed.error))
+    made = placed.value
+  }
+
+  let board = made.state
+  let removal: { readonly piece: BoardPiece; readonly historyId: string } | null = null
+  if (marker !== undefined) {
+    const removed = removePiece(made.state, { playerId: player.playerId, pieceId: marker.id, ...at })
+    const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
+    if (!removed.ok || removedEntry === undefined) {
+      return err(failed('The Building Program marker could not be taken off the board.'))
+    }
+    board = removed.value
+    removal = { piece: marker, historyId: removedEntry.id }
+  }
+  // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
+  let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
+  const caravanPiece =
+    city.caravan && !free && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
+  if (caravanPiece !== undefined) {
+    const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
+    const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
+    if (!removed.ok || removedEntry === undefined) {
+      return err(failed('The caravan could not be taken off the board.'))
+    }
+    board = removed.value
+    caravan = { piece: caravanPiece, historyId: removedEntry.id }
+  }
+
+  const paying = playerOf(board, player.playerId) ?? player
+  // Michelangelo's discount is one-shot and is used up by this wonder build.
+  const wonderDiscount =
+    payload.item.kind === 'wonder' ? paying.wonderDiscount : 0
+  // Jim Henson, while faceup, takes a wound marker for every wonder built
+  const hensonWound = payload.item.kind === 'wonder' && activeGreatPerson(board, paying, 'Jim Henson')
+  const paidFor = withPlayerHand(board, {
+    ...paying,
+    wonderDiscount: paying.wonderDiscount - wonderDiscount,
+    ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
+    stats: { ...paying.stats, trade: paying.stats.trade - tradeToPay },
+  })
+  // Education: once per turn, a wonder adds a coin to the tech (max 4)
+  const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
+  // Engineering's use of the turn is written by its second build
+  const keyHolder = playerOf(educated.state, paying.playerId) ?? paying
+  // Read from the state with Education's coin already in it, so the coin's own key on the turn is not written over
+  const keyTurn = split === undefined ? undefined : openCityManagementTurn(educated.state, keyHolder)
+  const engineered =
+    keyTurn === undefined ? educated.state : useTurnAction(educated.state, keyHolder, keyTurn, ENGINEERING_KEY, keyHolder.stats)
+  // The Egyptians' free build is once per turn: its key is written by the build that used it
+  const egyptHolder = playerOf(engineered, paying.playerId) ?? paying
+  const egyptTurn = free ? openCityManagementTurn(engineered, egyptHolder) : undefined
+  const paid =
+    egyptTurn === undefined ? engineered : useTurnAction(engineered, egyptHolder, egyptTurn, EGYPT_FREE_BUILD_KEY, egyptHolder.stats)
+  const educationCoin = educated.granted ?? undefined
+  const where =
+    made.kind === 'placed'
+      ? ` on square ${made.square.label}` +
+        (replaced === undefined ? '' : replacingText(square?.replaces)) +
+        (payload.item.kind === 'army' && square?.note !== undefined
+          ? ' (an enemy figure is there, so the outcome is to be settled by hand)'
+          : '')
+      : made.kind === 'walls'
+        ? ', turning the city marker over to its walled side'
+        : ''
+  const logged = appendLog(paid, {
+    username: player.username,
+    playerId: player.playerId,
+    publicLog:
+      `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
+      (free
+        ? ', for free with the Egyptian ability'
+        : tradeToPay > 0
+          ? `, paying ${tradeToPay} (${paying.stats.trade - tradeToPay}) trade for the missing production`
+          : '') +
+      (removal === null ? '' : ', using up the Building Program marker') +
+      (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
+      (hensonWound ? ', and Jim Henson took a wound marker' : '') +
+      (educationCoin === undefined ? '' : `, and Education gained a coin (${(playerOf(paid, paying.playerId) ?? paying).stats.coinSources.education}/${educationCoin.capacity})`) +
+      again.note,
+    privateLog: '',
+    createdAt: context.at ?? null,
+    assistedActionId: context.requestId,
+  })
+  const logId = lastLogId(logged)
+  // The card is named in a private line only, as the Great Person draw does; the public line has the type
+  const withPrivate =
+    made.kind === 'card'
+      ? appendLog(logged, {
+          username: player.username,
+          playerId: player.playerId,
+          privateLog: `${player.username} drew ${itemName(made.card)} (${SHEET_LABEL[made.sheetName]}) for ${withArticle(label)} built in ${city.label}`,
+          createdAt: context.at ?? null,
+        })
+      : logged
+  // The board changes were recorded before the line existed: count it in, as the culture advance does
+  const counted = countLinesIn(withPrivate, [
+    made.kind === 'placed' ? made.historyId : undefined,
+    made.kind === 'placed' ? made.wonder?.ownerHistoryId : undefined,
+    made.kind === 'walls' ? made.historyId : undefined,
+    replaced?.historyId,
+    removal?.historyId,
+    caravan?.historyId,
+  ])
+
+  if (made.kind === 'card') {
+    if (payload.item.kind !== 'unit') return err(failed('That is not a unit.'))
+    return ok({
+      state: counted,
+      effect: {
+        kind: 'build',
+        cityPieceId: city.cityPieceId,
+        item: payload.item,
+        card: {
+          itemId: made.card.id,
+          sheetName: made.sheetName,
+        },
+        trade: tradeToPay,
+        ...sharing,
+        ...(embedded.length === 0 ? {} : { embedded }),
+        marker: removal,
+        ...(caravan === undefined ? {} : { caravan }),
+      },
+      logId,
+    })
+  }
+  if (made.kind === 'walls') {
+    if (payload.item.kind !== 'walls') return err(failed('That is not City Walls.'))
+    return ok({
+      state: counted,
+      effect: {
+        kind: 'build',
+        cityPieceId: city.cityPieceId,
+        item: payload.item,
+        walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
+        trade: tradeToPay,
+        ...sharing,
+        ...(embedded.length === 0 ? {} : { embedded }),
+        ...(free ? { free: true as const } : {}),
+        marker: removal,
+        ...(caravan === undefined ? {} : { caravan }),
+      },
+      logId,
+    })
+  }
+  if (payload.item.kind === 'unit' || payload.item.kind === 'walls') return err(failed('That is not put on a square.'))
+
+  // A wonder leaves the market, so the next one is drawn into it (base rules p. 17), from the
+  // era the deck is at; the draw's own line follows the build's, and its entry is counted in
+  let refilled = counted
+  let drawn: DrawnWonder | undefined
+  if (payload.item.kind === 'wonder') {
+    const sheet = nextWonderSheet(counted)
+    const card = sheet === undefined ? undefined : counted.items.find((item) => item.sheetName === sheet)
+    const refill = sheet === undefined || card === undefined ? undefined : drawWonderToBoard(counted, player.playerId, sheet, 'system')
+    const entry = refill?.ok ? refill.value.board.history.at(-1) : undefined
+    if (refill?.ok && card !== undefined && entry !== undefined && entry.change.kind === 'place') {
+      refilled = countLinesIn(refill.value, [entry.id])
+      drawn = { item: card, pieceId: entry.change.piece.id, historyId: entry.id }
+    }
+  }
+  // The Romans' free advance for the wonder; its own line carries no action id, so only the build's line takes the undo vote
+  let advance: CultureAdvanceEffect | undefined
+  if (romanWonder) {
+    const holder = playerOf(refilled, player.playerId) ?? player
+    if (freeAdvanceStatus(refilled, holder).kind === 'ok') {
+      const taken = performAdvance(refilled, holder, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
+      if (!taken.ok) return taken
+      refilled = taken.value.state
+      advance = taken.value.effect
+    }
+  }
+  return ok({
+    state: refilled,
+    effect: {
+      kind: 'build',
+      cityPieceId: city.cityPieceId,
+      item: payload.item,
+      square: made.square,
+      pieceId: made.piece.id,
+      position: { x: made.piece.x, y: made.piece.y },
+      historyId: made.historyId,
+      ...(made.wonder === undefined ? {} : { wonder: made.wonder }),
+      ...(drawn === undefined ? {} : { drawn }),
+      ...(replaced === undefined
+        ? {}
+        : replaced.reserved
+          ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
+          : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
+      trade: tradeToPay,
+      ...sharing,
+      ...(embedded.length === 0 ? {} : { embedded }),
+      ...(free ? { free: true as const } : {}),
+      marker: removal,
+      ...(caravan === undefined ? {} : { caravan }),
+      ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
+      ...(hensonWound ? { hensonWound: true as const } : {}),
+      ...(educationCoin === undefined ? {} : { educationCoin }),
+      ...(advance === undefined ? {} : { advance }),
+    },
+    logId,
+  })
+}
+
+/**
  * A city builds a building, an army or scout figure, or a military unit.
  * Everything is decided from the fresh state: the options are recomputed for the
  * city and the request must be one of them, so a square taken, a supply used up,
@@ -741,342 +1174,34 @@ const build: AssistedActionDefinition = {
   },
 
   apply(state, player, context) {
-    const failed = (reason: string): EngineError => rejected('build', blocked('unavailable', reason))
     const payload = buildPayloadOf(context.payload)
-    if (payload === undefined) return err(failed('Say which city, what to build and which square.'))
-    const { item } = payload
-    // The server checks the shape; the engine is also called with whatever a caller sent
-    if (!['building', 'wonder', 'army', 'scout', 'unit', 'walls'].includes(item.kind)) {
-      return err(failed('That is not something that can be built.'))
+    if (payload === undefined || ((payload.playCards?.length ?? 0) === 0 && (payload.boosts?.length ?? 0) === 0)) {
+      return applyBuild(state, player, context, [])
     }
-
-    // The Egyptians' free build is a whole action of its own and is never combined with Engineering (rulings 80 and 164)
-    const free = payload.free === true
-    if (free) {
-      const refusal = egyptFreeRefusal(state, player, item.kind)
-      if (refusal !== undefined) return err(failed(refusal))
-    }
-    // A confirmed repeat is another allowance that covers the build: it takes the city's full production, so Engineering does not split
-    const city = buildOptionsOf(state, player, !free && context.confirmedAnotherCityAction !== true).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
-    if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
-    if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
-
-    const label = buildItemName(item)
-    const choice = city.choices.find((candidate) => sameBuildItem(candidate.item, item))
-    if (choice === undefined) {
-      const why = city.unavailable.find((candidate) => sameBuildItem(candidate.item, item))
-      return err(
-        failed(
-          why === undefined
-            ? item.kind === 'building'
-              ? `${item.assetId} is not a building that can be built.`
-              : item.kind === 'wonder'
-                ? `${label} is not a wonder that can be built: it is not in the market.`
-                : item.kind === 'walls'
-                  ? 'City Walls cannot be built.'
-                  : `A ${label} cannot be built.`
-            : `${why.label} cannot be built in ${city.label} now. ${why.reason}`,
-        ),
-      )
-    }
-
-    // A square is chosen for a building or a figure and for nothing else
-    let square: BuildSquare | undefined
-    const itemKind = payload.item.kind
-    if (itemKind === 'unit' || itemKind === 'walls') {
-      if (payload.target !== undefined) {
-        return err(
-          failed(
-            itemKind === 'unit'
-              ? `${choice.label} is a card and has no square. Send no square.`
-              : `${choice.label} turn the city marker over and have no square. Send no square.`,
-          ),
-        )
-      }
-    } else {
-      const target = payload.target
-      if (target === undefined) return err(failed('Pick one of the highlighted squares.'))
-      square = choice.squares.find((candidate) => candidate.column === target.column && candidate.row === target.row)
-      if (square === undefined) {
-        const why = buildSquareRefusal(state, player, city.cityPieceId, payload.item, target)
-        return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
-      }
-    }
-    if (free && choice.freeBuild !== true) return err(failed(`${choice.label} cannot be built for free.`))
-    if (!free && choice.freeOnly === true) {
-      return err(
-        failed(`${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}, and trade cannot cover the rest. The Egyptians can build it for free instead.`),
-      )
-    }
-    // A free build pays nothing: no production is used and no trade is paid
-    const tradeToPay = free ? 0 : choice.tradeToPay
-    if (tradeToPay > 0 && payload.rush !== true) {
-      return err(
-        failed(
-          `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${tradeToPay} trade to build it.`,
-        ),
-      )
-    }
-    // After everything that makes the build impossible, so that a refusal says what is wrong and the question only comes for a build that would go through
-    // Engineering: the second build of a city is the same action split, so it asks nothing; the options already hold what the first left
-    const split = city.engineering === undefined ? undefined : engineeringSecondBuild(state, player, city.cityPieceId)
-    const again =
-      split !== undefined
-        ? { refusal: undefined, note: ENGINEERING_BUILD_NOTE }
-        : earlierCityActions(state, player, city, context.confirmedAnotherCityAction, CITY_ACTION_LABELS.build ?? 'build')
-    if (again.refusal !== undefined) {
-      const spentEngineering = engineeringSpentFor(state, player, city.cityPieceId)
-      return err(
-        rejected(
-          'build',
-          spentEngineering ? { ...again.refusal, reason: `${again.refusal.reason} Engineering has already split the production this turn.` } : again.refusal,
-        ),
-      )
-    }
-    // The Romans advance one space for free with every wonder (civilization sheet), so a wonder is refused
-    // while that advance is stopped (a card choice waiting, a hand over its size); the end of the track stops nothing
-    const romanWonder = payload.item.kind === 'wonder' && player.civilization?.name === ROMANS
-    if (romanWonder) {
-      const status = freeAdvanceStatus(state, player)
-      if (status.kind === 'blocked') {
-        return err(failed(`The Romans advance one space for free with every wonder, and that is stopped now: ${status.reason}`))
-      }
-    }
-    const sharing = {
-      cost: free ? 0 : choice.cost,
-      production: city.production,
-      ...(split === undefined ? {} : { engineering: { firstRecordId: split.firstRecordId } }),
-    }
-    const at = context.at === undefined ? {} : { at: context.at }
-
-    // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
-    const footprint = ownCityFootprint(state, player, city.cityPieceId)
-    const marker = footprint === undefined ? undefined : buildingProgramMarkerOf(state, footprint)
-
-    // The one step that differs: a piece on a square, or a card in the hand
-    let made: Made
-    let replaced: { readonly piece: BoardPiece; readonly historyId: string; readonly reserved: boolean } | undefined
-    if (payload.item.kind === 'unit') {
-      const drawn = drawBuiltUnit(state, player, payload.item.unitType)
-      if (!drawn.ok) return err(failed(drawn.error))
-      made = drawn.value
-    } else if (payload.item.kind === 'walls') {
-      const flipped = flipToWalls(state, player, city.cityPieceId, at)
-      if (!flipped.ok) return err(failed(flipped.error))
-      made = flipped.value
-    } else {
-      if (square === undefined) return err(failed('Pick one of the highlighted squares.'))
-      // A building or wonder of the player's own on the square is taken off first, then the new piece goes on the empty square
-      let base = state
-      if (square.replaces !== undefined) {
-        const cleared = removeReplaced(state, player, square, at)
-        if (!cleared.ok) return err(failed(cleared.error))
-        base = cleared.value.state
-        replaced = { piece: cleared.value.piece, historyId: cleared.value.historyId, reserved: cleared.value.reserved }
-      }
-      const placed = placeBuilt(base, player, payload.item, square, at)
-      if (!placed.ok) return err(failed(placed.error))
-      made = placed.value
-    }
-
-    let board = made.state
-    let removal: { readonly piece: BoardPiece; readonly historyId: string } | null = null
-    if (marker !== undefined) {
-      const removed = removePiece(made.state, { playerId: player.playerId, pieceId: marker.id, ...at })
-      const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
-      if (!removed.ok || removedEntry === undefined) {
-        return err(failed('The Building Program marker could not be taken off the board.'))
-      }
-      board = removed.value
-      removal = { piece: marker, historyId: removedEntry.id }
-    }
-    // A caravan adds its 2 to this build and is discarded (Fame and Fortune p. 7); the options counted it
-    let caravan: { readonly piece: BoardPiece; readonly historyId: string } | undefined
-    const caravanPiece =
-      city.caravan && !free && footprint !== undefined ? cityMarkerOf(board.board, footprint.piece, CARAVAN_ASSET_ID) : undefined
-    if (caravanPiece !== undefined) {
-      const removed = removePiece(board, { playerId: player.playerId, pieceId: caravanPiece.id, ...at })
-      const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
-      if (!removed.ok || removedEntry === undefined) {
-        return err(failed('The caravan could not be taken off the board.'))
-      }
-      board = removed.value
-      caravan = { piece: caravanPiece, historyId: removedEntry.id }
-    }
-
-    const paying = playerOf(board, player.playerId) ?? player
-    // Michelangelo's discount is one-shot and is used up by this wonder build.
-    const wonderDiscount =
-      payload.item.kind === 'wonder' ? paying.wonderDiscount : 0
-    // Jim Henson, while faceup, takes a wound marker for every wonder built
-    const hensonWound = payload.item.kind === 'wonder' && activeGreatPerson(board, paying, 'Jim Henson')
-    const paidFor = withPlayerHand(board, {
-      ...paying,
-      wonderDiscount: paying.wonderDiscount - wonderDiscount,
-      ...(hensonWound ? { hensonWounds: paying.hensonWounds + 1 } : {}),
-      stats: { ...paying.stats, trade: paying.stats.trade - tradeToPay },
-    })
-    // Education: once per turn, a wonder adds a coin to the tech (max 4)
-    const educated = payload.item.kind === 'wonder' ? earnTechCoin(paidFor, paying.playerId, 'Education') : { state: paidFor, granted: null }
-    // Engineering's use of the turn is written by its second build
-    const keyHolder = playerOf(educated.state, paying.playerId) ?? paying
-    // Read from the state with Education's coin already in it, so the coin's own key on the turn is not written over
-    const keyTurn = split === undefined ? undefined : openCityManagementTurn(educated.state, keyHolder)
-    const engineered =
-      keyTurn === undefined ? educated.state : useTurnAction(educated.state, keyHolder, keyTurn, ENGINEERING_KEY, keyHolder.stats)
-    // The Egyptians' free build is once per turn: its key is written by the build that used it
-    const egyptHolder = playerOf(engineered, paying.playerId) ?? paying
-    const egyptTurn = free ? openCityManagementTurn(engineered, egyptHolder) : undefined
-    const paid =
-      egyptTurn === undefined ? engineered : useTurnAction(engineered, egyptHolder, egyptTurn, EGYPT_FREE_BUILD_KEY, egyptHolder.stats)
-    const educationCoin = educated.granted ?? undefined
-    const where =
-      made.kind === 'placed'
-        ? ` on square ${made.square.label}` +
-          (replaced === undefined ? '' : replacingText(square?.replaces)) +
-          (payload.item.kind === 'army' && square?.note !== undefined
-            ? ' (an enemy figure is there, so the outcome is to be settled by hand)'
-            : '')
-        : made.kind === 'walls'
-          ? ', turning the city marker over to its walled side'
-          : ''
-    const logged = appendLog(paid, {
-      username: player.username,
-      playerId: player.playerId,
-      publicLog:
-        `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : payload.item.kind === 'walls' ? label : withArticle(label)} in ${city.label}${where}` +
-        (free
-          ? ', for free with the Egyptian ability'
-          : tradeToPay > 0
-            ? `, paying ${tradeToPay} (${paying.stats.trade - tradeToPay}) trade for the missing production`
-            : '') +
-        (removal === null ? '' : ', using up the Building Program marker') +
-        (caravan === undefined ? '' : ', using up the caravan (+2 production)') +
-        (hensonWound ? ', and Jim Henson took a wound marker' : '') +
-        (educationCoin === undefined ? '' : `, and Education gained a coin (${(playerOf(paid, paying.playerId) ?? paying).stats.coinSources.education}/${educationCoin.capacity})`) +
-        again.note,
-      privateLog: '',
-      createdAt: context.at ?? null,
-      assistedActionId: context.requestId,
-    })
-    const logId = lastLogId(logged)
-    // The card is named in a private line only, as the Great Person draw does; the public line has the type
-    const withPrivate =
-      made.kind === 'card'
-        ? appendLog(logged, {
-            username: player.username,
-            playerId: player.playerId,
-            privateLog: `${player.username} drew ${itemName(made.card)} (${SHEET_LABEL[made.sheetName]}) for ${withArticle(label)} built in ${city.label}`,
-            createdAt: context.at ?? null,
-          })
-        : logged
-    // The board changes were recorded before the line existed: count it in, as the culture advance does
-    const counted = countLinesIn(withPrivate, [
-      made.kind === 'placed' ? made.historyId : undefined,
-      made.kind === 'placed' ? made.wonder?.ownerHistoryId : undefined,
-      made.kind === 'walls' ? made.historyId : undefined,
-      replaced?.historyId,
-      removal?.historyId,
-      caravan?.historyId,
-    ])
-
-    if (made.kind === 'card') {
-      if (payload.item.kind !== 'unit') return err(failed('That is not a unit.'))
-      return ok({
-        state: counted,
-        effect: {
-          kind: 'build',
-          cityPieceId: city.cityPieceId,
-          item: payload.item,
-          card: {
-            itemId: made.card.id,
-            sheetName: made.sheetName,
-          },
-          trade: tradeToPay,
-          ...sharing,
-          marker: removal,
-          ...(caravan === undefined ? {} : { caravan }),
-        },
-        logId,
-      })
-    }
-    if (made.kind === 'walls') {
-      if (payload.item.kind !== 'walls') return err(failed('That is not City Walls.'))
-      return ok({
-        state: counted,
-        effect: {
-          kind: 'build',
-          cityPieceId: city.cityPieceId,
-          item: payload.item,
-          walls: { pieceId: made.pieceId, from: made.from, to: made.to, historyId: made.historyId },
-          trade: tradeToPay,
-          ...sharing,
-          ...(free ? { free: true as const } : {}),
-          marker: removal,
-          ...(caravan === undefined ? {} : { caravan }),
-        },
-        logId,
-      })
-    }
-    if (payload.item.kind === 'unit' || payload.item.kind === 'walls') return err(failed('That is not put on a square.'))
-
-    // A wonder leaves the market, so the next one is drawn into it (base rules p. 17), from the
-    // era the deck is at; the draw's own line follows the build's, and its entry is counted in
-    let refilled = counted
-    let drawn: DrawnWonder | undefined
-    if (payload.item.kind === 'wonder') {
-      const sheet = nextWonderSheet(counted)
-      const card = sheet === undefined ? undefined : counted.items.find((item) => item.sheetName === sheet)
-      const refill = sheet === undefined || card === undefined ? undefined : drawWonderToBoard(counted, player.playerId, sheet, 'system')
-      const entry = refill?.ok ? refill.value.board.history.at(-1) : undefined
-      if (refill?.ok && card !== undefined && entry !== undefined && entry.change.kind === 'place') {
-        refilled = countLinesIn(refill.value, [entry.id])
-        drawn = { item: card, pieceId: entry.change.piece.id, historyId: entry.id }
-      }
-    }
-    // The Romans' free advance for the wonder; its own line carries no action id, so only the build's line takes the undo vote
-    let advance: CultureAdvanceEffect | undefined
-    if (romanWonder) {
-      const holder = playerOf(refilled, player.playerId) ?? player
-      if (freeAdvanceStatus(refilled, holder).kind === 'ok') {
-        const taken = performAdvance(refilled, holder, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
-        if (!taken.ok) return taken
-        refilled = taken.value.state
-        advance = taken.value.effect
-      }
-    }
-    return ok({
-      state: refilled,
-      effect: {
-        kind: 'build',
-        cityPieceId: city.cityPieceId,
-        item: payload.item,
-        square: made.square,
-        pieceId: made.piece.id,
-        position: { x: made.piece.x, y: made.piece.y },
-        historyId: made.historyId,
-        ...(made.wonder === undefined ? {} : { wonder: made.wonder }),
-        ...(drawn === undefined ? {} : { drawn }),
-        ...(replaced === undefined
-          ? {}
-          : replaced.reserved
-            ? { reserved: { piece: replaced.piece, historyId: replaced.historyId } }
-            : { replaced: { piece: replaced.piece, historyId: replaced.historyId } }),
-        trade: tradeToPay,
-        ...sharing,
-        ...(free ? { free: true as const } : {}),
-        marker: removal,
-        ...(caravan === undefined ? {} : { caravan }),
-        ...(wonderDiscount === 0 ? {} : { wonderDiscount }),
-        ...(hensonWound ? { hensonWound: true as const } : {}),
-        ...(educationCoin === undefined ? {} : { educationCoin }),
-        ...(advance === undefined ? {} : { advance }),
-      },
-      logId,
-    })
+    // The cards and boosts the player chose are played first, each as an action of its own, and the build goes on from the game they left
+    const embedded = embedSources(state, player, payload, context)
+    if (!embedded.ok) return embedded
+    return applyBuild(embedded.value.state, embedded.value.player, context, embedded.value.ids)
   },
 
   reverse(state, player, record, at, pieceMayHaveMoved = false) {
+    const built = reverseBuildAndAdvance(state, player, record, at, pieceMayHaveMoved)
+    const effect = record.effect
+    if (!built.ok || effect.kind !== 'build' || effect.embedded === undefined || effect.embedded.length === 0) return built
+    // The We Love cards and tech boosts played with the build come back after it, newest first; a refusal here leaves the game as it was
+    let current = built.value.state
+    for (const id of [...effect.embedded].reverse()) {
+      const undone = reverseAssistedAction(current, id, at ?? undefined, false, true)
+      if (!undone.ok) return undone
+      current = undone.value
+    }
+    const count = effect.embedded.length
+    return ok({ state: current, text: `${built.value.text}, and the ${count === 1 ? 'card or boost' : `${count} cards and boosts`} played with it ${count === 1 ? 'was' : 'were'} taken back` })
+  },
+}
+
+const reverseBuildAndAdvance: AssistedActionDefinition['reverse'] = (state, player, record, at, pieceMayHaveMoved = false) => {
+  {
     const effect = record.effect
     // The Romans' free advance goes first: it can refuse (the marker has moved on), and a refusal leaves the game as it was
     if (effect.kind === 'build' && 'advance' in effect && effect.advance !== undefined && effect.advance !== null) {
@@ -1087,9 +1212,8 @@ const build: AssistedActionDefinition = {
       return ok({ state: back.value.state, text: `${back.value.text}, and the free advance was taken back` })
     }
     return reverseBuild(state, player, record, at, pieceMayHaveMoved)
-  },
+  }
 }
-
 const reverseBuild: AssistedActionDefinition['reverse'] = (state, player, record, at, pieceMayHaveMoved = false) => {
     const effect = record.effect
     if (effect.kind !== 'build') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
@@ -2095,6 +2219,8 @@ export function reverseAssistedAction(
   recordId: string,
   at?: string,
   removedByHand = false,
+  /** The undo of the build that played this card or boost with it, which takes it back as the last step of its own. */
+  withItsBuild = false,
 ): Result<GameState, EngineError> {
   const record = state.assistedActions.find((candidate) => candidate.id === recordId)
   if (record === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: recordId })
@@ -2109,6 +2235,15 @@ export function reverseAssistedAction(
   const player = playerOf(state, record.playerId)
   if (definition === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
   if (player === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: record.playerId })
+  // A card or boost played with a build is part of that build: taken back alone it would leave the build paid for hammers it no longer has
+  if (!withItsBuild) {
+    const holder = state.assistedActions.find(
+      (other) => other.status === 'applied' && other.effect.kind === 'build' && other.effect.embedded?.includes(record.id) === true,
+    )
+    if (holder !== undefined) {
+      return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: 'This was played as part of a build. Undo the build instead, which takes it back too.' })
+    }
+  }
 
   const reversed = definition.reverse(state, player, record, at ?? null, removedByHand)
   if (!reversed.ok) return reversed
@@ -2174,7 +2309,9 @@ export function reverseAssistedAction(
     (effect.kind === 'foundCity' && effect.huts !== undefined && effect.huts.length > 0) ||
     effect.kind === 'steamPower' ||
     (effect.kind === 'playCard' &&
-      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined)) ||
+      (effect.galileo !== undefined || effect.cardMove !== undefined || effect.harbors !== undefined || effect.disaster !== undefined ||
+        // A coin marker the card took off an area came back by the vote, and the Sheet with it: the board Undo must not take it off again
+        effect.coinDiscard?.some((taken) => taken.piece !== undefined) === true)) ||
     effect.kind === 'gianniniBuild' ||
     (effect.kind === 'atomicTheory' && effect.mode === 'nuke') ||
     effect.kind === 'agriculture' ||
@@ -2259,6 +2396,8 @@ export function takeBackOpenBuild(
   // Engineering's second build stands on this one: it cannot go back alone, so the piece is removed as any other
   if (engineeringSecondOf(state, record) !== undefined) return undefined
   const reversed = reverseAssistedAction(state, record.id, input.at, true)
+  // A We Love card or tech boost played with the build cannot come back (the card has left the discard pile, say): the piece is removed as any other
+  if (!reversed.ok && record.effect.kind === 'build' && record.effect.embedded !== undefined && record.effect.embedded.length > 0) return undefined
   if (!reversed.ok) return reversed
 
   // A vote that was asked on the build's line is answered by this: close it, or it would

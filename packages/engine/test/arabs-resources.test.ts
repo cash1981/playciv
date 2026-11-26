@@ -305,7 +305,7 @@ describe('a card played as a resource from the hand', () => {
   })
 
   it('gives an Arab nothing for a card that is not played as a resource', () => {
-    const { state, itemId } = withCardInHand(withStats(withCivilization(firstCivGame(), 'Arabs'), { culture: 10 }), 'Drought')
+    const { state, itemId } = withCardInHand(withStats(withCivilization(firstCivGame(), 'Arabs'), { culture: 10 }), 'Sabotage')
     const played = play(state, itemId)
     expect(culture(played)).toBe(10)
     expect(effectOf(played).arabCulture).toBeUndefined()

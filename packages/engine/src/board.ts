@@ -393,8 +393,11 @@ export const faceOf = (piece: BoardPiece): PieceFace => ({
  * every time a piece is brought to the front.
  */
 export type BoardChange =
-  /** `onTop` is false for map tiles, which slide underneath everything else. */
-  | { readonly kind: 'place'; readonly piece: BoardPiece; readonly onTop: boolean }
+  /**
+   * `onTop` is false for map tiles, which slide underneath everything else. `index` is set when the piece
+   * was put at a place in the stack of its own, under a piece already there (a disaster token under a figure).
+   */
+  | { readonly kind: 'place'; readonly piece: BoardPiece; readonly onTop: boolean; readonly index?: number }
   | { readonly kind: 'remove'; readonly piece: BoardPiece; readonly index: number }
   | {
       readonly kind: 'move'
@@ -476,6 +479,8 @@ export interface BoardHistoryEntry {
   /** Ready to show in a list: "cash1981 moved Red army from E4 to H8". */
   readonly description: string
   readonly change: BoardChange
+  /** The Sheet coins this change added or took (a coin marker in a player's area, `coin-marker.ts`), for the board Undo and Redo. */
+  readonly sheet?: readonly { readonly playerId: string; readonly delta: number }[]
   /**
    * How many game-log entries existed once this change was made. Stepping back
    * through history uses it to trim the log to what was known at the time.
@@ -1326,6 +1331,7 @@ export function applyChange(
 ): readonly BoardPiece[] {
   switch (change.kind) {
     case 'place':
+      if (change.index !== undefined) return insertAt(pieces, change.index, change.piece)
       return change.onTop ? [...pieces, change.piece] : [change.piece, ...pieces]
     case 'remove':
       return withoutPiece(pieces, change.piece.id)

@@ -6,6 +6,7 @@
 import type {
   AssistedPayload,
   BuildItem,
+  BuildBoost,
   BuildPayload,
   DevoteToTheArtsPayload,
   GameState,
@@ -21,6 +22,8 @@ import type {
 import {
   ALL_WONDERS,
   BUILDABLE_BUILDING_IDS,
+  PRODUCTION_BOOSTS,
+  parseResourcePayments,
   BUILDING_UPGRADES,
   CULTURE_CARD,
   MAX_DEVOTE_CULTURE,
@@ -101,7 +104,10 @@ import { parseActionArgs, takesArgs } from './assisted-args.js'
 /** What a client may use as a `requestId`: 1 to 64 characters of a small safe set. */
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/
 
-const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush', 'free'] as const
+const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush', 'free', 'playCards', 'boosts'] as const
+
+/** The most We Love cards and the most tech boosts one build may carry (there are four boosts; a hand holds few We Love cards). */
+const MAX_BUILD_CARDS = 6
 
 /** The highest map column or row a request may name; the largest board has 16 squares a side, so this is generous. */
 const MAX_BUILD_COORDINATE = 63
@@ -161,7 +167,40 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
   const free = body['free']
   if (free !== undefined && typeof free !== 'boolean') return 'free must be a boolean'
-  const optionalRush = { ...(rush === undefined ? {} : { rush }), ...(free === undefined ? {} : { free }) }
+  // The We Love cards of the hand (item ids) and the tech boosts (by name) that make up the production, played with the build
+  const playCards = body['playCards']
+  if (playCards !== undefined && (!Array.isArray(playCards) || playCards.length > MAX_BUILD_CARDS || !playCards.every((id) => typeof id === 'string' && REQUEST_ID.test(id)))) {
+    return `playCards must be a list of at most ${MAX_BUILD_CARDS} card ids`
+  }
+  // Each boost is { tech, payments? }: payments is the optional choice of which Wheat pays, the shape the boost's own button takes
+  const boosts = body['boosts']
+  const boostNames: readonly string[] = PRODUCTION_BOOSTS.map((boost) => boost.techName)
+  const badBoosts = `boosts must be a list of { tech, payments? } with tech one of ${boostNames.join(', ')}`
+  let parsedBoosts: readonly BuildBoost[] | undefined
+  if (boosts !== undefined) {
+    if (!Array.isArray(boosts) || boosts.length > boostNames.length) return badBoosts
+    const list: BuildBoost[] = []
+    for (const entry of boosts) {
+      const record = typeof entry === 'object' && entry !== null && !Array.isArray(entry) ? asRecord(entry) : undefined
+      if (record === undefined || Object.keys(record).some((key) => key !== 'tech' && key !== 'payments')) return badBoosts
+      const tech = record['tech']
+      if (typeof tech !== 'string' || !boostNames.includes(tech)) return badBoosts
+      if (record['payments'] === undefined) {
+        list.push({ tech })
+        continue
+      }
+      const checked = parseResourcePayments(record['payments'], ['Wheat'])
+      if (!checked.ok) return `boosts: ${checked.error}`
+      list.push({ tech, payments: checked.value })
+    }
+    parsedBoosts = list
+  }
+  const optionalRush = {
+    ...(rush === undefined ? {} : { rush }),
+    ...(free === undefined ? {} : { free }),
+    ...(playCards === undefined || playCards.length === 0 ? {} : { playCards: playCards as readonly string[] }),
+    ...(parsedBoosts === undefined || parsedBoosts.length === 0 ? {} : { boosts: parsedBoosts }),
+  }
 
   if (parsed.kind === 'unit') {
     // A unit is a card in the hand: there is no square to name
@@ -1125,7 +1164,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         c,
         400,
         'BAD_REQUEST',
-        'cityPieceId, item, target, rush and free only belong to build, and cityPieceId also to startBuildingProgram, devoteToTheArts and harvest',
+        'cityPieceId, item, target, rush, free, playCards and boosts only belong to build, and cityPieceId also to startBuildingProgram, devoteToTheArts and harvest',
       )
     } else if (body['family'] !== undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'family only belongs to upgradeBuildings')

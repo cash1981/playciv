@@ -297,6 +297,7 @@ describe('the unlock', () => {
       label: 'Library',
       cost: 5,
       tradeToPay: 0,
+      payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
       squares: [{ ...C2, label: 'C2' }],
     })
     expect(options.unavailable.some((entry) => entry.assetId === LIBRARY)).toBe(false)

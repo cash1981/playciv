@@ -301,6 +301,7 @@ describe('what is offered', () => {
       label: 'Army figure',
       cost: 4,
       tradeToPay: 0,
+      payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
     })
     expect(army?.squares.length).toBeGreaterThan(0)
     expect(choiceOf(options, SCOUT)).toMatchObject({
@@ -318,6 +319,7 @@ describe('what is offered', () => {
       label: 'Infantry unit',
       cost: 5,
       tradeToPay: 0,
+      payOptions: [{ id: 'none', cards: [], boosts: [], hammers: 0, tradeToPay: 0 }],
       squares: [],
     })
   })

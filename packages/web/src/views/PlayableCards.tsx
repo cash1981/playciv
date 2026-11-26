@@ -38,6 +38,7 @@ import { CancellationCardControl } from './CancellationCardControl.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { ChoiceDialog } from './ChoiceDialog.js'
 import { ActionCardThumb } from './ActionCardThumb.js'
 import { HelpHint } from './HelpHint.js'
 import { useMapPicker } from './mapPick.js'
@@ -89,6 +90,7 @@ export function PlayCardControl({
   const [coinSource, setCoinSource] = useState('')
   const [substitute, setSubstitute] = useState('')
   const [teslaTech, setTeslaTech] = useState('')
+  const [cityId, setCityId] = useState('')
   const [convertFrom, setConvertFrom] = useState<'trade' | 'culture'>('trade')
   const [convertAmount, setConvertAmount] = useState('')
   const [harborKeys, setHarborKeys] = useState<readonly string[]>([])
@@ -99,6 +101,13 @@ export function PlayCardControl({
   const [moveHint, setMoveHint] = useState<string | null>(null)
   const [moveFigureId, setMoveFigureId] = useState<string | null>(null)
   const [hannibalSelected, setHannibalSelected] = useState<readonly string[]>([])
+  // Counterfeiters, Depression, Bank Scandal: the counter each target loses a coin from, by player
+  const [coinPickBy, setCoinPickBy] = useState<Readonly<Record<string, string>>>({})
+  // Drought, Deforestation, Flooding: the square chosen for the disaster token
+  const [disasterCell, setDisasterCell] = useState<{ readonly column: number; readonly row: number } | null>(null)
+  const [disasterHint, setDisasterHint] = useState<string | null>(null)
+  // The square just clicked on the map, waiting for the player to confirm it in a popup
+  const [disasterAsk, setDisasterAsk] = useState<{ readonly column: number; readonly row: number; readonly label: string } | null>(null)
   const mapPicker = useMapPicker()
   const formId = useId()
   if (view.you === null) return null
@@ -128,6 +137,8 @@ export function PlayCardControl({
   const tesla = card.tesla ?? null
   const chosenTesla =
     tesla === null ? '' : (tesla.find((choice) => choice.name === teslaTech)?.name ?? (tesla.length === 1 ? (tesla[0]?.name ?? '') : ''))
+  const cityChoices = card.cities ?? null
+  const chosenCity = cityChoices === null ? '' : (cityChoices.find((choice) => choice.cityPieceId === cityId) ?? (cityChoices.length === 1 ? cityChoices[0] : undefined))?.cityPieceId ?? ''
   const harborChoices = card.harbors ?? null
   // A live refresh can take a square away: only the ticked squares still on offer count
   const chosenHarborKeys =
@@ -155,6 +166,25 @@ export function PlayCardControl({
     card.targets.kind === 'players' && min >= 1 && others.length === 1 && chosen.length === 0
       ? others.map((opponent) => opponent.playerId)
       : chosen
+  // The coin cards: every named player who holds a coin token is hit, and the player of the card picks the counter
+  const coinTargets = card.coinTargets ?? null
+  const coinAffected =
+    coinTargets === null
+      ? []
+      : coinTargets.filter((target) => card.targets.kind === 'allOthers' || effective.includes(target.playerId))
+  const coinPickOf = (target: { readonly playerId: string; readonly counters: readonly { readonly key: string }[] }): string => {
+    const picked = coinPickBy[target.playerId]
+    if (picked !== undefined && target.counters.some((counter) => counter.key === picked)) return picked
+    return target.counters.length === 1 ? (target.counters[0]?.key ?? '') : ''
+  }
+  const coinValid = coinTargets === null || (coinAffected.length >= 1 && coinAffected.every((target) => coinPickOf(target) !== ''))
+  // The disaster cards: the engine lists the legal squares, and a refresh can take the chosen one away
+  const disasterSquares = card.squares ?? null
+  const chosenDisaster =
+    disasterSquares === null || disasterCell === null
+      ? null
+      : (disasterSquares.find((square) => square.column === disasterCell.column && square.row === disasterCell.row) ?? null)
+  const disasterValid = disasterSquares === null || chosenDisaster !== null
   const viewerForbidden = brandenburgForbiddenCells(view.brandenburgZones, viewer.playerId)
   const isLockedSquare = (cell: { readonly column: number; readonly row: number }): boolean =>
     view.communismLocks.some((locked) => locked.column === cell.column && locked.row === cell.row)
@@ -243,11 +273,36 @@ export function PlayCardControl({
     (!needsSubstitute || substitute !== '') &&
     convertValid &&
     (tesla === null || chosenTesla !== '') &&
-    harborsValid
+    (cityChoices === null || chosenCity !== '') &&
+    harborsValid &&
+    coinValid &&
+    disasterValid
   const valid = baseValid && unitedNations.every((id) => agreed.includes(id))
   const disabled = busy || readOnly
 
+  const pickDisasterSquare = async (): Promise<void> => {
+    if (mapPicker === null || disasterSquares === null) return
+    if (disasterSquares.length === 0) {
+      setDisasterHint(`No square on the map can take the ${card.name} token now.`)
+      return
+    }
+    setDisasterHint(null)
+    const picked = await mapPicker.begin({
+      title: `the ${card.name} token square`,
+      cells: disasterSquares,
+      describeCell: (cell) => `Place the ${card.name} token on ${cell.label}`,
+    })
+    if (picked !== null) {
+      setDisasterCell({ column: picked.column, row: picked.row })
+      setDisasterAsk({ column: picked.column, row: picked.row, label: picked.label })
+    }
+  }
+
   const resetMove = (): void => {
+    setCoinPickBy({})
+    setDisasterCell(null)
+    setDisasterAsk(null)
+    setDisasterHint(null)
     setMoveFrom(null)
     setMoveTo(null)
     setMoveFigureId(null)
@@ -283,7 +338,7 @@ export function PlayCardControl({
       return
     }
     const playerId = viewer.playerId
-    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${[...consents].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${chosenTesla}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
+    const key = `${gameId}:${playerId}:playCard:${card.itemId}:${[...effective].sort().join(',')}:${[...consents].sort().join(',')}:${resource}:${coinSource}:${substitute}:${conversion === null ? '' : `${convertFrom}${convertWhole}`}:${[...chosenHarborKeys].sort().join('|')}:${[...chosenDiscards].sort().join(',')}:${chosenUnits.join(',')}:${chosenTesla}:${chosenCity}:${coinAffected.map((target) => `${target.playerId}=${coinPickOf(target)}`).join('|')}:${chosenDisaster === null ? '' : `${chosenDisaster.column},${chosenDisaster.row}`}:${from?.column ?? ''},${from?.row ?? ''}:${to?.column ?? ''},${to?.row ?? ''}:${figureId ?? ''}:${[...figureIds].sort().join(',')}`
     void pressOnce(
       key,
       run,
@@ -306,6 +361,9 @@ export function PlayCardControl({
           ...(cultureHand === null ? {} : { discard: cultureHand.filter((held) => chosenDiscards.includes(held.itemId)).map((held) => held.itemId) }),
           ...(gustavus === null ? {} : { units: chosenUnits }),
           ...(tesla === null ? {} : { tech: chosenTesla }),
+          ...(cityChoices === null ? {} : { hammerCityId: chosenCity }),
+          ...(coinTargets === null ? {} : { coinPicks: coinAffected.map((target) => ({ targetId: target.playerId, source: coinPickOf(target) })) }),
+          ...(chosenDisaster === null ? {} : { disasterSquare: { column: chosenDisaster.column, row: chosenDisaster.row } }),
           ...(isMapMove && from !== null && to !== null ? { from, to } : {}),
           ...(cardMove?.kind === 'one' && figureId !== null ? { figureId } : {}),
           ...(cardMove?.kind === 'hannibal' ? { figureIds } : {}),
@@ -504,7 +562,11 @@ export function PlayCardControl({
           title={ready ? undefined : card.reason}
           onClick={() => {
             if (open) closeForm()
-            else setOpen(true)
+            else {
+              setOpen(true)
+              // A disaster card goes straight to the map: the legal squares are highlighted for the click
+              if (disasterSquares !== null) void pickDisasterSquare()
+            }
           }}
         >
           {card.kind === 'greatPerson' && !card.discards ? 'Use' : 'Play'}
@@ -512,6 +574,25 @@ export function PlayCardControl({
         {!ready && <HelpHint label={card.name}>{card.reason}</HelpHint>}
       </div>
 
+      {disasterAsk !== null && (
+        <ChoiceDialog
+          title={`Place the ${card.name} token on ${disasterAsk.label}?`}
+          okLabel="Confirm"
+          okDisabled={disabled || !valid}
+          onOk={() => {
+            setDisasterAsk(null)
+            sendPlay()
+          }}
+          onCancel={() => {
+            setDisasterAsk(null)
+            setDisasterCell(null)
+          }}
+        >
+          <p>
+            {card.name} puts a disaster token on {disasterAsk.label}. The card is played and discarded.
+          </p>
+        </ChoiceDialog>
+      )}
       {ready && open && (
         <form
           id={formId}
@@ -676,6 +757,57 @@ export function PlayCardControl({
               </div>
             </fieldset>
           )}
+          {coinTargets !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Which coin token does each player discard?</legend>
+              {coinAffected.length === 0 && (
+                <p className="muted">
+                  {card.targets.kind === 'allOthers' ? 'No other player holds a coin token.' : 'Choose a player who holds a coin token.'}
+                </p>
+              )}
+              {coinAffected.map((target) =>
+                target.counters.length === 1 ? (
+                  <p key={target.playerId} className="play-card-target">
+                    {target.username} discards a coin from {target.counters[0]?.label} ({target.counters[0]?.coins})
+                  </p>
+                ) : (
+                  <fieldset key={target.playerId} className="play-card-targets">
+                    <legend>{target.username} discards a coin from</legend>
+                    {target.counters.map((counter) => (
+                      <label key={counter.key} className="play-card-target">
+                        <input
+                          type="radio"
+                          name={`${formId}-coin-${target.playerId}`}
+                          checked={coinPickOf(target) === counter.key}
+                          disabled={disabled}
+                          onChange={() => setCoinPickBy({ ...coinPickBy, [target.playerId]: counter.key })}
+                        />{' '}
+                        {counter.label} ({counter.coins})
+                      </label>
+                    ))}
+                  </fieldset>
+                ),
+              )}
+            </fieldset>
+          )}
+          {disasterSquares !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Where does the {card.name} token go?</legend>
+              <div className="play-card-buttons">
+                <button
+                  type="button"
+                  className="small"
+                  disabled={disabled || mapPicker === null || disasterSquares.length === 0}
+                  onClick={() => void pickDisasterSquare()}
+                >
+                  Choose square on the map
+                </button>
+                <span>{chosenDisaster === null ? 'No square chosen' : chosenDisaster.label}</span>
+              </div>
+              {disasterSquares.length === 0 && <p className="muted">No square on the map can take this token now.</p>}
+              {disasterHint !== null && <p role="status" className="muted">{disasterHint}</p>}
+            </fieldset>
+          )}
           {needsResource && (
             <label className="play-card-resource">
               Play it as{' '}
@@ -726,6 +858,24 @@ export function PlayCardControl({
                 ))}
               </select>
             </label>
+          )}
+          {cityChoices !== null && (
+            <fieldset className="play-card-targets">
+              <legend>Which city produces the extra hammers?</legend>
+              {cityChoices.length === 0 && <p className="muted">You have no city on the map.</p>}
+              {cityChoices.map((choice) => (
+                <label key={choice.cityPieceId} className="play-card-target">
+                  <input
+                    type="radio"
+                    name={`${formId}-city`}
+                    checked={chosenCity === choice.cityPieceId}
+                    disabled={disabled}
+                    onChange={() => setCityId(choice.cityPieceId)}
+                  />{' '}
+                  {choice.cityLabel}
+                </label>
+              ))}
+            </fieldset>
           )}
           {tesla !== null && (
             <fieldset className="play-card-targets">

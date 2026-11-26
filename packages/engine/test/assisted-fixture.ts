@@ -136,3 +136,15 @@ export const startOfTurn = (): GameState => firstCivGame()
 /** Start of Turn done, Trade open. */
 export const tradeTurn = (): GameState =>
   unwrap(markPhasesDone(firstCivGame(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+
+/** One coin on the Sheet counter of every player (or of the named ones): the coin token a coin discard card takes. */
+export function withSheetCoins(state: GameState, coins = 1, playerIds?: readonly string[]): GameState {
+  return {
+    ...state,
+    players: state.players.map((candidate) =>
+      playerIds === undefined || playerIds.includes(candidate.playerId)
+        ? { ...candidate, stats: { ...candidate.stats, coinSources: { ...candidate.stats.coinSources, sheet: coins } } }
+        : candidate,
+    ),
+  }
+}

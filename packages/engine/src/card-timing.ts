@@ -230,6 +230,12 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Georgy Zhukov', 'is revealed and stays faceup: each time one of your units is killed after this, you deal 1 wound to an enemy unit of your choice'],
   ['Gustavus Adolphus', 'discards the units you have drawn for a battle and not placed, and draws the same number of new units of the types you choose'],
   ['Nikola Tesla', 'places a tech you have just added to your pyramid one level lower, as you choose; it still costs the trade of its own level'],
+  ['Counterfeiters', 'makes the player you choose discard a coin token, from the counter you choose'],
+  ['Depression', 'makes each player you choose who holds a coin token discard one, from the counter you choose'],
+  ['Bank Scandal', 'makes every other player who holds a coin token discard one, from the counter you choose'],
+  ['Drought', 'places a desert disaster token on the map square you choose'],
+  ['Deforestation', 'places a grassland disaster token on the forest square you choose'],
+  ['Flooding', 'places a water disaster token on the map square you choose'],
   ['Hannibal', 'moves any or all of your figures from one square to another square with your figures without exceeding your stacking limit'],
 ])
 
@@ -318,8 +324,21 @@ export interface PlayableCard {
   readonly tesla?: readonly TeslaChoice[] | null
   /** The squares Jacques Cousteau can put a free Harbor on, null for every other card. */
   readonly harbors?: readonly HarborChoice[] | null
+  /** The cities that can produce the extra hammers of We Love the ... Day!, null for every other card. */
+  readonly cities?: readonly { readonly cityPieceId: string; readonly cityLabel: string }[] | null
   /** The culture cards in the viewer's own hand that Frida Kahlo may discard, null for every other card. Own view only. */
   readonly cultureHand?: readonly { readonly itemId: string; readonly name: string }[] | null
+  /**
+   * Counterfeiters, Depression and Bank Scandal: every other player who holds a coin token, with the counters that
+   * hold them (public status board data), null for every other card. The player of the card picks one counter for each.
+   */
+  readonly coinTargets?: readonly {
+    readonly playerId: string
+    readonly username: string
+    readonly counters: readonly { readonly key: string; readonly label: string; readonly coins: number }[]
+  }[] | null
+  /** Drought, Deforestation and Flooding: the map squares the token may go on now, null for every other card. */
+  readonly squares?: readonly { readonly column: number; readonly row: number; readonly label: string }[] | null
   /** Resources the card can substitute for Uranium (Marie Curie), empty for every other card. */
   readonly substituteResources: readonly string[]
   readonly status: PlayableCardStatus

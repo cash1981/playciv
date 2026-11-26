@@ -773,8 +773,56 @@ p. 9–10, F&F p. 8–13, FAQ 2.0 and the card sheets.
   cancel it, except the automated cards below and in "Great Person automation":
   Khalid ibn al-Walid moves the start player marker to the player (board undo
   refuses that move alone), Marco Polo gains trade up to the ceiling, St. Francis
-  3 culture per unbuilt army, Orville Wright draws an aircraft card. A Great
-  Person whose figures are all blockaded cannot be played.
+  3 culture per unbuilt army, Orville Wright draws an aircraft card.
+  Culture events that are applied (#352, slice 1; cancel = the log's Cancel, which rewinds): We Love the Despot, Queen and
+  President Day give a chosen own city 4, 6 or 8 extra hammers this turn (derived from the card record into the city's boost,
+  like the tech boosts, so an undo removes them; payload `hammerCityId`), and Supply Drop played in Start of Turn gains 7
+  trade up to the ceiling (in City Management it stays the extra city action). Tests: `culture-hammers-trade.test.ts`.
+  The Citizens are Revolting! and II! (human, 2026-11-25) replace the named player's government with Anarchy at once: the
+  old card's abilities and the social policies stop (every Anarchy check already reads `government`; a target that has
+  not done its Start of Turn loses Feudalism, Pacifism and the like), what it already did this turn stands, and the capital
+  takes no city action (`earlierCityActions`, so also after a player's own change to Anarchy; Engineering's second build
+  skips the check, its first build having come before the card). It lasts the whole turn: the target cannot change
+  government in that turn's Start of Turn (`anarchyFromCardThisTurn`); in their next one any known government is direct.
+  A cancel rewinds the card like any culture event; an undo restores the government and the coin counters (the Organized Religion coin only when that policy is as it was at the
+  attack, else it is worked out from the policy as it stands).
+  Tests: `culture-anarchy.test.ts`.
+  A Great Person whose figures are all blockaded cannot be played.
+- **Coin discard events** (#352; `culture-coins.ts`): Counterfeiters (one player),
+  Depression (1 to 2) and Bank Scandal (every other player) take one coin from each
+  target that holds a coin token, from the counter the player of the card picks
+  (`coinPicks`; automatic when only one counter holds tokens), as Mysticism does.
+  Only the `INVESTABLE_COIN_SOURCES` counters count: printed coins, Great People,
+  Panama Canal and the investment markers are never touched. A target with no coin
+  token is skipped; a card with no target holding one is not offered and is refused.
+  The coins are stored on the `playCard` record (`coinDiscard`), so the undo vote and a
+  cancel card give each back to its counter. When the coin comes off the Sheet and the
+  target has a coin marker (`markers/coin1`) in their player area, the topmost one is
+  removed too (a board entry the board Undo cannot take alone, the Sheet lowered once);
+  undo puts the same piece back at its old place in the stack. The United Nations consent is asked as
+  for every culture event, of all named players, also one that holds no token.
+- **Coin marker and Sheet** (`coin-marker.ts`): a coin marker put in a player's area adds 1
+  to that player's Sheet counter, removing it or moving it out takes 1 off (never below 0),
+  moving it to another player's area moves the coin, and moving it inside an area changes
+  nothing. The applied change is stored on the history entry (`BoardHistoryEntry.sheet`), so
+  the board Undo and Redo give back or retake exactly that. The manual Sheet editing on the
+  Coins tab is unchanged. Markers already in an area in saved games are not migrated.
+- **Disaster events** (#352; `culture-disasters.ts`): Drought (desert token),
+  Deforestation (grassland token, forest squares only) and Flooding (water token)
+  put one token on a map square the player picks on the board, then confirms in a popup (`disasterSquare`; the
+  legal squares are `PlayableCard.squares`, rechecked on submit). Rulings 258-271 of the
+  human's unofficial rulings: a non-mountain square; Drought and Deforestation are
+  refused only by a building, a wonder or a relic token still on the map (a Great
+  Person marker, hut, village, city, City-state, figure and disaster tokens do not
+  block them); Flooding is refused by a figure, hut, village, relic token, Great
+  Person marker or any disaster token (ruling 271*; the variant 271** that allows a
+  disaster token is not implemented), and buildings, wonders, cities and City-states are
+  not in the ruling's list so they do not block it. Resource tokens never block. The
+  token goes below the lowest piece already on the square in `board.pieces` (the
+  `place` change carries an `index`), so it survives that piece being killed or
+  removed (ruling 259), and above older disaster tokens. Undo removes exactly that
+  token; a cancel card rewinds it. Protection of outskirts squares (ruling 240) is not
+  checked, see limitations.
 - **Start of Turn gate:** needs Start of Turn as the open phase and a usage key
   once per turn.
 - **Social policies** (none under Anarchy): Expansionism 1 trade per city plus 1
@@ -1848,6 +1896,31 @@ It covers buildings, wonders, figures (placed) and military units (private card)
   p. 16–17), counted over its outskirts whoever built it. Supply is the shared
   pool in `board.ts`. A shared square of two own cities may allow a second; no
   ruling found, not handled.
+- **Ways to pay: We Love cards and tech boosts** (#352, human, 2026-11-27; `build-sources.ts`): a build in City Management
+  offers how to make up the production: the city alone (rush with trade as before), We Love the Despot, Queen and President
+  Day cards of the player's own hand (4, 6, 8 hammers) and the tech boosts (Animal Husbandry 3, Construction 5, Banking 7,
+  Plastics 10, each for a Wheat, once a turn). Each choice has `payOptions`: the plain way first when the trade covers it,
+  then the sets of cards and boosts that each lower the trade (every member needed, cheapest in cards first; two cards of one
+  name are one option); `tradeToPay` is the first option's. An item that only a card or boost makes affordable is a choice, not
+  "unavailable"; it stays unavailable when nothing in the hand is enough. The payload carries `playCards` (item ids) and
+  `boosts` (tech names): the build plays each as the same action as its own button (`playCard` with `hammerCityId`, the
+  boost's own action) before the build, in the same reducer call, as a record of its own (`<request id>:c1`,
+  `<request id>:b1`) with its own public line before the build's, so an opponent can still cancel it. All records share the
+  revision before the step, so a cancel of any of them rewinds the build too (the cancellation baseline may hold fewer actions
+  than precede the record), the cancelled card is spent and the others return to the hand. `effect.embedded` lists them; the vote undo of the build
+  takes them back newest first (refused as a whole if one cannot come back; `takeBackOpenBuild` then removes the piece as any
+  other), and an undo of a card or boost alone is refused ("undo the build instead"). The hammers stay the city's for the turn
+  through `productionBoostsOf`, like cards played by hand, which keep working: the Play button on the cards and the boost buttons
+  are unchanged. Not with a free (Egyptian) build and not for Engineering's second build, whose production is the first's
+  leftover: the picker offers no ways to pay there, and a card is only counted as needed for the build it is sent with, so the second
+  build cannot be funded through the picker (see limitations: the Play button still adds hammers for it).
+  The picker says so for a city when Engineering is revealed and unused (`engineeringAvailable`): the first build uses only the
+  cards and boosts it needs, and for the second the cards and boosts are played first with their own buttons, then the build. Which Wheat pays an embedded boost is the player's choice: each `boosts` entry may carry
+  `payments` (the boost button's shape, exactly one Wheat: a hut or village in the hand, a token in the player area or a culture card
+  played as Wheat), the picker lists the same options as the button (`HammerBoost.payment`) when more than one can pay, and without a
+  choice the automatic Wheat is spent. The boost's own record keeps what was spent, so the undo returns that one. The cards and boosts listed are the viewer's own; spectators and opponents see nothing, and
+  a card is public only once played. Another card played for a Wheat (a culture card as Wheat) is a payment of the boost, not a
+  hammer card.
 - A Building Program marker on the centre is used up by any build and restored by
   undo. Production used: hand-set, then doubled, then estimate.
 - **Caravan** (F&F p. 7, human 2026-10-30): a caravan marker on a centre adds 2

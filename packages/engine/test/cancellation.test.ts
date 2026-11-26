@@ -13,7 +13,7 @@ import { unwrap } from '../src/result.js'
 import { toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 import { publicTurn, publicTurnKey, turnStatus } from '../src/turn.js'
-import { player, withCardInHand } from './assisted-fixture.js'
+import { player, withCardInHand, withSheetCoins } from './assisted-fixture.js'
 import { CASH1981 as A, KARANDRAS1 as B, ITCHI as C, CHUL as D, firstCivGame } from './fixture.js'
 
 const command = (state: GameState, baseline: GameState | undefined, playerId: string, requestId: string, cmd: CancellationCommand) =>
@@ -49,7 +49,8 @@ const devote = (state: GameState, cityId: string, id = 'target', repeat = false)
   unwrap(performAssistedAction(state, { playerId: A, action: 'devoteToTheArts', requestId: id, confirmedRepeat: repeat, payload: { cityPieceId: cityId } }))
 
 function cultureScene(targets: readonly string[] = [], twainOwner = B) {
-  let state = firstCivGame()
+  // Counterfeiters needs a coin token to take from its target
+  let state = withSheetCoins(firstCivGame())
   const ids: Record<string, string> = {}
   for (const [key, name, owner] of [
     ['event', targets.length ? 'Counterfeiters' : 'Supply Drop', A],
