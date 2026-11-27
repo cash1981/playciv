@@ -519,7 +519,6 @@ export function BoardView({
   }, [moveModeId, selectedId])
 
   const pieces = board.pieces
-  const replaySteps = useMoveReplay(board, gameId)
 
   /**
    * Asks before a building, wonder or Great Person goes onto terrain its rule
@@ -644,6 +643,8 @@ export function BoardView({
     panel.style.removeProperty('scroll-margin-top')
   }, [picking])
 
+  const replaySteps = useMoveReplay(board, gameId)
+
   useEffect(() => {
     if (selectedId === null) return
 
@@ -681,6 +682,8 @@ export function BoardView({
       if (piece === undefined) return
 
       event.preventDefault()
+      // A figure played back along its route is drawn away from its real square: a nudge would start from the real one
+      if (replaySteps.has(piece.id)) return
       const step = NUDGE_STEP_PX / zoom
       // A map figure moves to another square by the Movement rules (issue #302); a nudge only arranges
       // it inside its own square, which spends no movement.
@@ -704,7 +707,7 @@ export function BoardView({
 
     document.addEventListener('keydown', nudgeSelectedPiece)
     return () => document.removeEventListener('keydown', nudgeSelectedPiece)
-  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board, terrainAllows, movementOptionsFor])
+  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board, terrainAllows, movementOptionsFor, replaySteps])
 
   useEffect(() => {
     const scroll = scrollRef.current

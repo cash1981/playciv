@@ -163,6 +163,40 @@ describe('useMoveReplay', () => {
     expect(result.current.size).toBe(0)
   })
 
+  it('keeps the figures of one group apart on every step of a shared route', () => {
+    const from = centre(1, 5)
+    const slotA = { x: centre(1, 7).x - 10, y: centre(1, 7).y }
+    const slotB = { x: centre(1, 7).x + 10, y: centre(1, 7).y }
+    const route = [{ column: 1, row: 6 }, { column: 1, row: 7 }]
+    const before: Board = { ...base, pieces: [figure(from.x - 10, from.y), { ...figure(from.x + 10, from.y), id: 'army2' }], history: [] }
+    const move = (id: string, pieceId: string, to: { x: number; y: number }, start: { x: number; y: number }) =>
+      ({ ...entry(id, { kind: 'move', pieceId, from: start, to, fromIndex: 0, route }), group: 'g1' })
+    const after: Board = {
+      ...before,
+      pieces: [figure(slotA.x, slotA.y), { ...figure(slotB.x, slotB.y), id: 'army2' }],
+      history: [move('m1', 'army', slotA, { x: from.x - 10, y: from.y }), move('m2', 'army2', slotB, { x: from.x + 10, y: from.y })],
+    }
+    const [first, second] = moveReplaysBetween(before, after)
+    // The middle frame (the first square entered) differs between the two, by the same 20 px as at the destination
+    expect(first?.[1]?.x).toBeDefined()
+    expect((second?.[1]?.x ?? 0) - (first?.[1]?.x ?? 0)).toBe(20)
+  })
+
+  it('never cuts a group in half when more moves arrive than are played', () => {
+    const from = centre(1, 0)
+    const to = centre(1, 1)
+    const route = [{ column: 1, row: 1 }]
+    const mv = (id: string, group?: string) =>
+      ({ ...entry(id, { kind: 'move', pieceId: 'army', from, to, fromIndex: 0, route }), ...(group === undefined ? {} : { group }) })
+    const before: Board = { ...base, pieces: [figure(from.x, from.y)], history: [] }
+    const after: Board = { ...before, pieces: [figure(to.x, to.y)], history: [mv('a', 'g'), mv('b', 'g'), mv('c'), mv('d'), mv('e')] }
+    // maxMoves 4 would drop only 'a' and keep half of the group; the whole group is played instead
+    expect(moveReplaysBetween(before, after, 4)).toHaveLength(5)
+    // Without a group the cutoff stays where it is
+    const plain: Board = { ...before, pieces: after.pieces, history: after.history.map(({ group: _group, ...item }) => item) as Board['history'] }
+    expect(moveReplaysBetween(before, plain, 4)).toHaveLength(4)
+  })
+
   it('lets a move after a group wait for the longest walk of the group', () => {
     const { before, after } = withSecondArmy()
     const again = entry('h3', { kind: 'move', pieceId: 'army2', from: centre(1, 1), to: centre(1, 2), fromIndex: 1, route: [{ column: 1, row: 2 }] })

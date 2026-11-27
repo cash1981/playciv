@@ -956,7 +956,8 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   one by one; a spot is taken when a figure's centre is within 12 px of it. Figures already standing, and a stack arranged by hand,
   do not move. **Group travel** (`actions/travel-group.ts`: `travelGroup`, `exploreGroup`; `POST /board/travel-group`, `/board/explore-group`;
   `groupMovementOptions`, `planGroupRoute`): the viewer's figures on one square with movement left go along one route, each checked
-  and charged by `travelFigureCollecting` as if alone (its own speed, so the slowest sets the range). All or nothing. The group stops
+  and charged by `travelFigureCollecting` as if alone (its own speed, so the slowest sets the range; a square one figure reaches only by a detour longer than the least movement
+  any figure has left is not offered). All or nothing. The group stops
   where any one of its figures would end its move, and then everything works as for one figure: a hut or village is drawn once, a
   relic taken (only the army that takes it ends its move: a relic is not a square the others must stop on), the fight for a village started and a battle on another player's figures settled by hand, all by the group's army
   (its first figure when it has none, and that figure moves last); a scout that may not end somewhere keeps a mixed group off that
@@ -973,8 +974,8 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   one and then back to all. Tests: `movement.test.ts` (stacks, group), `explore.test.ts`, `board-api.test.ts`, `BoardView.test.tsx`.
 - **Route playback** (#362, `web/src/lib/moveReplay.ts`): when a newer board arrives (auto refresh, Forward, or Live after a
   replay) the figure steps through the squares of each recorded route, one square per 320 ms (the moves of one group, which share a history `group`, walk at the same time; every other move waits for the one before), before it rests on its real
-  position. Display only: the board is never changed. Plays the newest 4 route moves of what arrived, also for the
-  viewer's own move and for redo; figures waiting their turn are held on their start square; a reload that leaves the
+  position. Display only: the board is never changed. Plays the newest 4 route moves of what arrived (a group the cutoff falls in plays whole), also for the
+  viewer's own move and for redo; the figures of a group keep their slot in every square they pass, so they stay apart; arrow-key nudges are ignored for a figure while it is played back; figures waiting their turn are held on their start square; a reload that leaves the
   history unchanged does not cut playback short; a figure that is still walking offers no move targets and cannot be grabbed until it arrives; moves without a recorded route, undo and jumps back never animate; off for `prefers-reduced-motion`.
   Tests: `moveReplay.test.tsx`.
 - **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;

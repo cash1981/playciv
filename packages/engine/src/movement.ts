@@ -641,6 +641,7 @@ export function groupMovementOptions(
   const options = all as readonly FigureMovementOptions[]
   // The figures arrive one after another, so the whole group must fit under the stacking limit
   const room = groupRoom(board, player, pieces.length)
+  const remaining = Math.min(...options.map((entry) => entry.remaining))
   const destinations = (options[0] as FigureMovementOptions).destinations.flatMap((destination) => {
     if (!room(destination)) return []
     const matches = options.map((other) =>
@@ -648,6 +649,9 @@ export function groupMovementOptions(
     )
     if (matches.some((match) => match === undefined)) return []
     const distance = Math.max(...matches.map((match) => match?.distance ?? 0))
+    // One route serves everyone: a figure that must detour (an unaccompanied relic blocks a scout) can make it longer than
+    // the figure with the least movement left may walk
+    if (distance > remaining) return []
     // The group ends its move wherever any one of its figures would (a hut, a village, another player's figures)
     const ends = matches.some((match) => match?.ends === true)
     const contact = matches.some((match) => match?.contact === true)
@@ -659,7 +663,7 @@ export function groupMovementOptions(
   return {
     speed: Math.min(...options.map((entry) => entry.speed)),
     used: Math.max(...options.map((entry) => entry.used)),
-    remaining: Math.min(...options.map((entry) => entry.remaining)),
+    remaining,
     locked: options.some((entry) => entry.locked),
     ...(options.some((entry) => entry.squareLocked === true) ? { squareLocked: true } : {}),
     destinations: options.some((entry) => entry.locked || entry.squareLocked === true) ? [] : destinations,

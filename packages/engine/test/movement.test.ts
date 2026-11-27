@@ -1043,6 +1043,24 @@ describe('figures arriving on a stack and moving as a group', () => {
     expect(new Set(moved.board.history.slice(hut.board.history.length).map((entry) => entry.group)).size).toBe(1)
   })
 
+  it('does not offer a group a square one figure only reaches by a detour longer than another may walk', () => {
+    // An unaccompanied relic on C2 bars the scout but not the army: the army walks B2 → C2 → D2 (2), the scout needs a detour (4)
+    const base = withSpeed(place(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), 'relics/atlantis', 2, 1), '4')
+    const [army, scout] = figures(base).filter((piece) => piece.assetId.startsWith('figures/red')) as [BoardPiece, BoardPiece]
+    const armyUsed: GameState = {
+      ...base,
+      board: {
+        ...base.board,
+        pieces: base.board.pieces.map((piece) => (piece.id === army.id ? { ...piece, movement: { turn: 1, used: 2, locked: false, reason: 'travel' as const } } : piece)),
+      },
+    }
+    const members = [armyUsed.board.pieces.find((piece) => piece.id === army.id) as BoardPiece, scout]
+    const options = groupMovementOptions(armyUsed.board, stacker(armyUsed), members, 1)
+    expect(options?.remaining).toBe(2)
+    expect(options?.destinations.every((destination) => destination.distance <= (options?.remaining ?? 0))).toBe(true)
+    expect(options?.destinations.some((destination) => destination.column === 3 && destination.row === 1)).toBe(false)
+  })
+
   it('offers a group the least movement any of its figures has left', () => {
     const base = withSpeed(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), '4')
     const [a, b] = figures(base) as [BoardPiece, BoardPiece]

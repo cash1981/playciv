@@ -1052,10 +1052,16 @@ describe('BoardView mobile placement', () => {
       const drawnTop = piece().style.top
       press() // ignored: no drag starts from the real square
       expect(piece().style.top).toBe(drawnTop)
+      // Arrow keys do not nudge from the real square either while the figure is drawn on an earlier one
+      const nudge = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+      act(() => void fireEvent.keyDown(document, { key: 'ArrowRight' }))
+      expect(nudge).not.toHaveBeenCalled()
 
-      // Playback ends: the real position and the targets are back
+      // Playback ends: the real position and the targets are back, and the arrow keys work again
       act(() => void vi.advanceTimersByTime(10_000))
       expect(screen.queryAllByRole('button', { name: /Route Red army to/ }).length).toBeGreaterThan(0)
+      act(() => void fireEvent.keyDown(document, { key: 'ArrowRight' }))
+      expect(nudge).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
       cleanup()

@@ -36,10 +36,18 @@ export function framesOfMove(board: Board, change: MoveChange, group?: string): 
   const piece = board.pieces.find((candidate) => candidate.id === change.pieceId)
   if (piece === undefined || change.route === undefined || change.route.length === 0) return []
   const top = mapTop(board)
-  const squares = change.route.slice(0, -1).map((cell) => ({
+  // The figure keeps its slot inside each square it passes (its offset at the destination), so the figures of one group,
+  // which follow the same route, stay apart on every step instead of piling up on the square's centre
+  const centred = (cell: { readonly column: number; readonly row: number }) => ({
     x: cell.column * board.squareSize + (board.squareSize - piece.width) / 2,
     y: top + cell.row * board.squareSize + (board.squareSize - piece.height) / 2,
-  }))
+  })
+  const last = centred(change.route[change.route.length - 1] as { readonly column: number; readonly row: number })
+  const offset = { x: change.to.x - last.x, y: change.to.y - last.y }
+  const squares = change.route.slice(0, -1).map((cell) => {
+    const centre = centred(cell)
+    return { x: centre.x + offset.x, y: centre.y + offset.y }
+  })
   return [change.from, ...squares, change.to].map(({ x, y }) => ({ pieceId: piece.id, x, y, ...(group === undefined ? {} : { group }) }))
 }
 
@@ -56,10 +64,14 @@ export function moveReplaysBetween(
   const known = last === undefined ? -1 : next.history.findIndex((entry) => entry.id === last.id)
   // A board that had no history yet gets every entry; a last entry that is gone (an undo) plays nothing.
   if (last !== undefined && known < 0) return []
-  return next.history
+  const moves = next.history
     .slice(known + 1)
     .flatMap((entry) => (entry.change.kind === 'move' && entry.change.route !== undefined ? [{ change: entry.change, group: entry.group }] : []))
-    .slice(-maxMoves)
+  // Only the newest moves are played, but a group is never cut in half: when the cutoff falls inside one, all its figures play
+  let from = Math.max(0, moves.length - maxMoves)
+  while (from > 0 && moves[from]?.group !== undefined && moves[from - 1]?.group === moves[from]?.group) from -= 1
+  return moves
+    .slice(from)
     .map(({ change, group }) => framesOfMove(next, change, group))
     .filter((frames) => frames.length > 1)
 }
