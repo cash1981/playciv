@@ -8,8 +8,9 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { placePiece, redoLastBoardChange, undoLastBoardChange } from '../src/actions/board.js'
 import { exploreSquare } from '../src/actions/explore.js'
+import { exploreGroup } from '../src/actions/travel-group.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
@@ -104,6 +105,22 @@ describe('the credit for a tile', () => {
     expect(line?.publicLog).not.toMatch(/\d+ free/)
     expect(line?.playerId).toBe(CASH1981)
     expect(line?.privateLog).toBe('cash1981 gains 1 (1) free building as the Spanish')
+  })
+
+  it('is one for a Spanish group that explores, and one Undo takes the tile, the credit and every figure\'s movement back with no Redo left', () => {
+    const base = put(scene(), 'figures/redscout', 3, 1)
+    const ids = base.board.pieces.filter((piece) => piece.category === 'figure' && piece.assetId.startsWith('figures/red') && piece.y < mapTop(base.board) + 2 * SQUARE_SIZE).map((piece) => piece.id)
+    expect(ids).toHaveLength(2)
+    const grouped = unwrap(exploreGroup(base, { playerId: CASH1981, pieceIds: ids, column: 4, row: 1, at: AT }))
+    expect(credits(grouped)).toBe(1)
+
+    const undone = unwrap(undoLastBoardChange(grouped, CASH1981))
+    expect(credits(undone)).toBe(0)
+    expect(undone.board.pieces.some((piece) => piece.category === 'tile' && piece.x >= 4 * SQUARE_SIZE)).toBe(false)
+    for (const id of ids) expect(undone.board.pieces.find((piece) => piece.id === id)?.movement).toBeUndefined()
+    // The Spanish credit offers no Redo, so the group has none either: a Redo may not bring back only some of its figures
+    expect(undone.board.redo).toHaveLength(0)
+    expect(redoLastBoardChange(undone, CASH1981).ok).toBe(false)
   })
 
   it('is one for a Spanish scout that explores', () => {

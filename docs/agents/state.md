@@ -61,6 +61,9 @@ deployment reports do not establish present health.
   a battle for a city counts its defence bonus. Battle resolution, loot and
   removal stay manual by the human's choice. Hut and village tokens (#364): a tile laid on the map gets a token on each hut or
   village icon, turning with the tile; a figure that ends its move on one is asked whether to draw it, and Undo returns the card.
+  Movement is previewed as a tapped route with waypoints and recorded in board history and the public log (#362; Defection automation open).
+  Fog out of reach can be explored by walking next to it ("Move and explore"); figures arriving on a square take separate spots; figures on one
+  square travel, explore and undo as a group (Movement phase; stack selection by tapping the selected figure again).
 
 The matching topics in [decisions.md](decisions.md) give the rules and
 reasons; [limitations.md](limitations.md) lists known gaps.

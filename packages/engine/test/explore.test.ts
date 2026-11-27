@@ -5,8 +5,9 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
+import { placePiece, redoLastBoardChange, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
 import { exploreSquare } from '../src/actions/explore.js'
+import { exploreGroup } from '../src/actions/travel-group.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { tileTokenSquares } from '../src/tile-icons.js'
@@ -293,5 +294,43 @@ describe('Navigation and fog', () => {
     }
     // D1 is 2 away and the speed is 2: nothing left to explore E1 with
     expect(optionsOf(slow).destinations.some((cell) => cell.column === 3 && cell.row === 0)).toBe(false)
+  })
+})
+describe('exploring as a group', () => {
+  it('draws one tile, charges every figure 1 movement and is taken back by one Undo', () => {
+    const state = place(place(withStartTile(game()), 'figures/redarmy', 3, 1), 'figures/redscout', 3, 1)
+    const ids = state.board.pieces.filter((piece) => piece.category === 'figure').map((piece) => piece.id)
+    const explored = unwrap(exploreGroup(state, { playerId: CASH1981, pieceIds: ids, column: 4, row: 1 }))
+
+    expect(tilesOn(explored)).toBe(tilesOn(state) + 1)
+    for (const id of ids) {
+      expect(movementOf(explored.board.pieces.find((piece) => piece.id === id) as BoardPiece, 1)).toMatchObject({ used: 1, locked: false })
+    }
+    // The group's line comes first, before the tile's own line, and the last entry counts both
+    const lines = explored.log.map((line) => line.publicLog)
+    expect(lines).toContain('cash1981 explored E2 with Red army and Red scout on D2 (1 movement each)')
+    expect(lines.indexOf('cash1981 explored E2 with Red army and Red scout on D2 (1 movement each)')).toBeLessThan(lines.findIndex((line) => line.includes('drew')))
+    expect(explored.board.history.at(-1)?.logLength).toBe(explored.log.length)
+
+    const undone = unwrap(undoLastBoardChange(explored, CASH1981))
+    expect(tilesOn(undone)).toBe(tilesOn(state))
+    // One Redo brings the whole group exploration back, or none of it
+    const redone = unwrap(redoLastBoardChange(undone, CASH1981))
+    expect(tilesOn(redone)).toBe(tilesOn(state) + 1)
+    for (const id of ids) {
+      expect(movementOf(redone.board.pieces.find((piece) => piece.id === id) as BoardPiece, 1)).toMatchObject({ used: 1 })
+    }
+    expect(redone.board.redo).toHaveLength(0)
+    for (const id of ids) {
+      expect(movementOf(undone.board.pieces.find((piece) => piece.id === id) as BoardPiece, 1)).toBeNull()
+    }
+  })
+
+  it('refuses when one figure of the group cannot explore, changing nothing', () => {
+    const state = place(place(withStartTile(game()), 'figures/redarmy', 3, 1), 'figures/redscout', 3, 1)
+    const ids = state.board.pieces.filter((piece) => piece.category === 'figure').map((piece) => piece.id)
+    // One figure alone is not a group; fog that is not next to the square is refused
+    expect(unwrapErr(exploreGroup(state, { playerId: CASH1981, pieceIds: [ids[0] as string], column: 4, row: 1 })).kind).toBe('FIGURE_MOVE_ILLEGAL')
+    expect(unwrapErr(exploreGroup(state, { playerId: CASH1981, pieceIds: ids, column: 6, row: 6 })).kind).toBe('FIGURE_MOVE_ILLEGAL')
   })
 })

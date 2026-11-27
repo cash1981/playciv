@@ -308,6 +308,123 @@ describe('history over HTTP', () => {
     expect((await again.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
   })
 
+  it('travels a stack together along one route and refuses a single figure (issue #362)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Group')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const colour = player.color.toLowerCase()
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const ids: string[] = []
+    for (const kind of ['army', 'scout']) {
+      const placed = await place(gameId, starter, `figures/${colour}${kind}`, square + 20, top + square + 20)
+      const found = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+        (candidate) => candidate.assetId === `figures/${colour}${kind}`,
+      )
+      if (found === undefined) throw new Error('no piece')
+      ids.push(found.id)
+    }
+    const group = (payload: unknown) =>
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/board/travel-group`,
+        headers: bearer(starter),
+        payload: payload as Record<string, unknown>,
+      })
+    expect((await group({ pieceIds: [ids[0]], column: 2, row: 1, route: [{ column: 2, row: 1 }] })).status).toBe(400)
+    expect((await group({ pieceIds: ids, column: 2, row: 1, route: 'east' })).status).toBe(400)
+    const moved = await group({ pieceIds: ids, column: 2, row: 1, route: [{ column: 2, row: 1 }] })
+    expect(moved.status).toBe(200)
+    const view = await moved.json() as { board: { history: { description: string }[] } }
+    const grouped = view.board.history.length
+    expect(grouped).toBeGreaterThanOrEqual(2)
+
+    // One Undo takes the whole group back
+    const undone = await inject(app, { method: 'POST', url: `/api/games/${gameId}/board/undo`, headers: bearer(starter) })
+    expect(undone.status).toBe(200)
+    const after = await undone.json() as { board: { history: unknown[]; pieces: { id: string; x: number }[] } }
+    expect(after.board.history.length).toBe(grouped - 2)
+    for (const id of ids) expect((after.board.pieces.find((piece) => piece.id === id)?.x ?? 0) < 2 * square).toBe(true)
+  })
+
+  it('explores the fog next to a stack together and refuses unknown or foreign figures (issue #362)', async () => {
+    const { gameId, starter, starterName } = await startedGame('GroupExplore')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const colour = player.color.toLowerCase()
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const ids: string[] = []
+    for (const kind of ['army', 'scout']) {
+      const placed = await place(gameId, starter, `figures/${colour}${kind}`, 3 * square + 20, top + square + 20)
+      const found = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+        (candidate) => candidate.assetId === `figures/${colour}${kind}`,
+      )
+      if (found === undefined) throw new Error('no piece')
+      ids.push(found.id)
+    }
+    const explore = (payload: unknown) =>
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/board/explore-group`,
+        headers: bearer(starter),
+        payload: payload as Record<string, unknown>,
+      })
+    expect((await explore({ pieceIds: [ids[0]], column: 4, row: 1 })).status).toBe(400)
+    expect((await explore({ pieceIds: ['nope', 'nada'], column: 4, row: 1 })).status).toBeGreaterThanOrEqual(400)
+    // A square that is not next to the stack
+    expect((await explore({ pieceIds: ids, column: 6, row: 6 })).status).toBe(400)
+    const before = state.board.pieces.filter((piece) => piece.category === 'tile').length
+    const explored = await explore({ pieceIds: ids, column: 4, row: 1 })
+    expect(explored.status).toBe(200)
+    const view = await explored.json() as { board: { pieces: { category: string }[] } }
+    expect(view.board.pieces.filter((piece) => piece.category === 'tile').length).toBeGreaterThan(before + 1)
+  })
+
+  it('travels along an explicit route, records it and refuses a broken one (issue #362)', async () => {
+    const { gameId, starter, starterName } = await startedGame('Route')
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('missing game')
+    const player = state.players.find((candidate) => candidate.username === starterName)
+    if (player?.color == null) throw new Error('starter has no colour')
+    const assetId = `figures/${player.color.toLowerCase()}army`
+    const top = mapTop(state.board)
+    const square = state.board.squareSize
+    await place(gameId, starter, 'tiles/tileback', 0, top)
+    const placed = await place(gameId, starter, assetId, square + 20, top + square + 20)
+    const piece = (await placed.json() as { board: { pieces: { id: string; assetId: string }[] } }).board.pieces.find(
+      (candidate) => candidate.assetId === assetId,
+    )
+    if (piece === undefined) throw new Error('no piece')
+    const travel = (payload: unknown) =>
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/board/pieces/${piece.id}/travel`,
+        headers: bearer(starter),
+        payload: payload as Record<string, unknown>,
+      })
+
+    expect((await travel({ column: 2, row: 2, route: 'north' })).status).toBe(400)
+    const jump = await travel({ column: 2, row: 2, route: [{ column: 2, row: 2 }] })
+    expect(jump.status).toBe(400)
+    expect((await jump.json() as { error: string }).error).toBe('FIGURE_MOVE_ILLEGAL')
+
+    const route = [{ column: 1, row: 2 }, { column: 2, row: 2 }]
+    const moved = await travel({ column: 2, row: 2, route })
+    expect(moved.status).toBe(200)
+    const view = await moved.json() as {
+      board: { history: { description: string; change: { route?: unknown } }[] }
+    }
+    expect(view.board.history.at(-1)?.change.route).toEqual(route)
+    expect(view.board.history.at(-1)?.description).toContain('→ B3 →')
+  })
+
   it('draws the hut a figure ends its move on only when asked, and board Undo takes it back (issue #364)', async () => {
     const { gameId, starter, starterName } = await startedGame('Collect')
     const state = await repo.findGame(gameId)

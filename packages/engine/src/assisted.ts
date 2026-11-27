@@ -116,6 +116,7 @@ import {
   ownCityFootprint,
   upgradePlanOf,
 } from './city-actions.js'
+import { figureSpotIn } from './movement.js'
 import { BUILDING_UPGRADES, buildingNameOf } from './building-data.js'
 import { WONDERS_IN_ERA, WONDERS_PER_ERA, WONDER_ERAS } from './wonder-data.js'
 import type { WonderEra } from './wonder-data.js'
@@ -584,11 +585,16 @@ function placeBuilt(
   if (assetId === undefined || asset === undefined) return err(`The ${name} has no artwork to put on the board.`)
 
   const centre = squareCentre(state.board, square)
+  // A figure takes the first free spot on its square, so it does not hide one that already stands there
+  const [spotX, spotY] =
+    asset.category === 'figure'
+      ? figureSpotIn(state.board, square, { id: '', width: asset.width, height: asset.height })
+      : [centre.x - asset.width / 2, centre.y - asset.height / 2]
   const placed = placeUnchecked(state, {
     playerId: player.playerId,
     assetId,
-    x: centre.x - asset.width / 2,
-    y: centre.y - asset.height / 2,
+    x: spotX,
+    y: spotY,
     ...at,
   })
   const entry = placed?.board.history.at(-1)

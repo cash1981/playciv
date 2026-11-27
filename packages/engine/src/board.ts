@@ -408,6 +408,11 @@ export type BoardChange =
         readonly from: PieceMovement | null
         readonly to: PieceMovement | null
       }
+      /**
+       * The map squares an enforced move entered, in order and excluding the start (issue #362). Absent on a
+       * move recorded with only its endpoints: such a route is never reconstructed, because several were possible.
+       */
+      readonly route?: readonly { readonly column: number; readonly row: number }[]
       /** Hut and village pieces that went with a map tile (issue #364), so an undo puts them back too. */
       readonly tokens?: readonly { readonly pieceId: string; readonly from: { readonly x: number; readonly y: number }; readonly to: { readonly x: number; readonly y: number } }[]
     }
@@ -481,6 +486,11 @@ export interface BoardHistoryEntry {
    * through history uses it to trim the log to what was known at the time.
    */
   readonly logLength: number
+  /**
+   * Set on every entry a group move or group exploration made (the id of the group's first entry): one Undo takes
+   * them all back, one Redo brings them all back.
+   */
+  readonly group?: string
 }
 
 /**

@@ -13,13 +13,13 @@
 
 import { mapCellOf } from './blockade.js'
 import { moveFigureWithMovementUnchecked } from './actions/board.js'
-import { figureSquaresFor, squareCentre, squareLabel } from './build-options.js'
+import { figureSquaresFor, squareLabel } from './build-options.js'
 import type { BuildSquare } from './build-options.js'
 import { openCityManagementTurn } from './assisted-core.js'
 import { countLinesIn } from './assisted-culture.js'
 import { appendLog } from './log.js'
 import type { EngineError } from './errors.js'
-import { movementOf } from './movement.js'
+import { figureSpotIn, movementOf } from './movement.js'
 import { err, ok } from './result.js'
 import type { Result } from './result.js'
 import { findPlayer, hasUserAccess } from './state.js'
@@ -162,12 +162,12 @@ export function repositionBuiltFigure(state: GameState, input: RepositionBuiltFi
     )
   }
 
-  const centre = squareCentre(state.board, target)
+  const [spotX, spotY] = figureSpotIn(state.board, target, piece)
   const moved = moveFigureWithMovementUnchecked(state, {
     playerId: input.playerId,
     pieceId: piece.id,
-    x: centre.x - piece.width / 2,
-    y: centre.y - piece.height / 2,
+    x: spotX,
+    y: spotY,
     movementFrom: null,
     movementTo: null,
     description:
