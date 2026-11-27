@@ -22,6 +22,8 @@ export interface MoveReplayFrame {
   readonly pieceId: string
   readonly x: number
   readonly y: number
+  /** Set when the move was one of a group's: the figures of one group walk together. */
+  readonly group?: string
 }
 
 type MoveChange = Extract<BoardChange, { readonly kind: 'move' }>
@@ -30,7 +32,7 @@ type MoveChange = Extract<BoardChange, { readonly kind: 'move' }>
  * The display positions of one recorded move: where it started, the centre of each square entered and the
  * recorded end. Fewer than two frames when the move has no route or the piece is gone.
  */
-export function framesOfMove(board: Board, change: MoveChange): readonly MoveReplayFrame[] {
+export function framesOfMove(board: Board, change: MoveChange, group?: string): readonly MoveReplayFrame[] {
   const piece = board.pieces.find((candidate) => candidate.id === change.pieceId)
   if (piece === undefined || change.route === undefined || change.route.length === 0) return []
   const top = mapTop(board)
@@ -38,7 +40,7 @@ export function framesOfMove(board: Board, change: MoveChange): readonly MoveRep
     x: cell.column * board.squareSize + (board.squareSize - piece.width) / 2,
     y: top + cell.row * board.squareSize + (board.squareSize - piece.height) / 2,
   }))
-  return [change.from, ...squares, change.to].map(({ x, y }) => ({ pieceId: piece.id, x, y }))
+  return [change.from, ...squares, change.to].map(({ x, y }) => ({ pieceId: piece.id, x, y, ...(group === undefined ? {} : { group }) }))
 }
 
 /**
@@ -56,9 +58,9 @@ export function moveReplaysBetween(
   if (last !== undefined && known < 0) return []
   return next.history
     .slice(known + 1)
-    .flatMap((entry) => (entry.change.kind === 'move' && entry.change.route !== undefined ? [entry.change] : []))
+    .flatMap((entry) => (entry.change.kind === 'move' && entry.change.route !== undefined ? [{ change: entry.change, group: entry.group }] : []))
     .slice(-maxMoves)
-    .map((change) => framesOfMove(next, change))
+    .map(({ change, group }) => framesOfMove(next, change, group))
     .filter((frames) => frames.length > 1)
 }
 
@@ -125,34 +127,48 @@ export function useMoveReplay(
     const initial = new Map<string, MoveReplayPosition>()
     for (const move of moves) if (!initial.has(move[0]!.pieceId)) initial.set(move[0]!.pieceId, at(move, 0, false))
     setPositions(initial)
+    // The moves of one group walk at the same time, side by side; every other move waits for the one before it.
+    const waves: (readonly MoveReplayFrame[])[][] = []
+    for (const move of moves) {
+      const group = move[0]!.group
+      const wave = waves.at(-1)
+      if (group !== undefined && wave !== undefined && wave[0]![0]!.group === group) wave.push(move)
+      else waves.push([move])
+    }
     // A figure is released to its real position only after its last move; until then it rests on the end of the previous one.
-    const lastMoveOf = new Map(moves.map((move, index) => [move[0]!.pieceId, index]))
+    const lastWaveOf = new Map<string, number>()
+    for (const [waveIndex, wave] of waves.entries()) for (const move of wave) lastWaveOf.set(move[0]!.pieceId, waveIndex)
     let offset = 0
-    for (const [moveIndex, move] of moves.entries()) {
-      const pieceId = move[0]!.pieceId
+    for (const [waveIndex, wave] of waves.entries()) {
       const start = offset
-      move.forEach((_, index) => {
-        if (index === 0 && start === 0) return
+      for (const move of wave) {
+        const pieceId = move[0]!.pieceId
+        move.forEach((_, index) => {
+          if (index === 0 && start === 0) return
+          timers.current.push(
+            window.setTimeout(
+              () => setPositions((current) => new Map(current).set(pieceId, at(move, index, index > 0))),
+              start + index * stepMs,
+            ),
+          )
+        })
+      }
+      offset += Math.max(...wave.map((move) => move.length)) * stepMs
+      for (const move of wave) {
+        const pieceId = move[0]!.pieceId
+        if (lastWaveOf.get(pieceId) !== waveIndex) continue
         timers.current.push(
           window.setTimeout(
-            () => setPositions((current) => new Map(current).set(pieceId, at(move, index, index > 0))),
-            start + index * stepMs,
+            () =>
+              setPositions((current) => {
+                const next = new Map(current)
+                next.delete(pieceId)
+                return next
+              }),
+            start + move.length * stepMs,
           ),
         )
-      })
-      offset += move.length * stepMs
-      if (lastMoveOf.get(pieceId) !== moveIndex) continue
-      timers.current.push(
-        window.setTimeout(
-          () =>
-            setPositions((current) => {
-              const next = new Map(current)
-              next.delete(pieceId)
-              return next
-            }),
-          offset,
-        ),
-      )
+      }
     }
   }, [board, gameId, stepMs])
 

@@ -295,7 +295,7 @@ const hutAndVillageSquares = (board: Board): ReadonlySet<string> =>
  * Pacifism ("Your scouts can explore huts, but not villages") lets scouts onto huts; it does not help on relics,
  * which the Wisdom and Warfare rules name expressly.
  */
-function scoutForbiddenSquares(board: Board, player: MovementPlayer): ReadonlySet<string> {
+export function scoutForbiddenSquares(board: Board, player: MovementPlayer): ReadonlySet<string> {
   const accompanied = pieceSquares(board, (piece) => figureBelongsTo(player, piece) && isArmy(piece))
   const relics = pieceSquares(board, (piece) => piece.category === 'relic')
   const huts = hasPolicy(player, 'Pacifism') && !inAnarchy(player) ? new Set<string>() : pieceSquares(board, (piece) => piece.assetId === 'resources/hut')

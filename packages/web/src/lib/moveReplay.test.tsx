@@ -143,6 +143,45 @@ describe('useMoveReplay', () => {
     expect(result.current.size).toBe(0)
   })
 
+  it('walks the figures of one group move side by side instead of one after the other', () => {
+    const { before, after } = withSecondArmy()
+    const grouped: Board = {
+      ...after,
+      history: after.history.map((item) => (item.change.kind === 'move' ? { ...item, group: 'h1' } : item)),
+    }
+    const { result, rerender } = renderHook(({ board }) => useMoveReplay(board, 'g1'), { initialProps: { board: before } })
+    rerender({ board: grouped })
+    // First step: both leave their origin together (the first has 3 frames, the second 2)
+    act(() => void vi.advanceTimersByTime(MOVE_REPLAY_STEP_MS))
+    expect(result.current.get('army')).toMatchObject({ ...centre(1, 6), glide: true })
+    expect(result.current.get('army2')).toMatchObject({ ...centre(1, 1), glide: true })
+    // The shorter walk is done while the longer one goes on
+    act(() => void vi.advanceTimersByTime(MOVE_REPLAY_STEP_MS))
+    expect(result.current.has('army2')).toBe(false)
+    expect(result.current.get('army')).toMatchObject({ ...centre(1, 7), glide: true })
+    act(() => void vi.advanceTimersByTime(MOVE_REPLAY_STEP_MS))
+    expect(result.current.size).toBe(0)
+  })
+
+  it('lets a move after a group wait for the longest walk of the group', () => {
+    const { before, after } = withSecondArmy()
+    const again = entry('h3', { kind: 'move', pieceId: 'army2', from: centre(1, 1), to: centre(1, 2), fromIndex: 1, route: [{ column: 1, row: 2 }] })
+    const grouped: Board = {
+      ...after,
+      pieces: after.pieces.map((p) => (p.id === 'army2' ? { ...p, ...centre(1, 2) } : p)),
+      history: [...after.history.map((item) => (item.change.kind === 'move' ? { ...item, group: 'h1' } : item)), again],
+    }
+    const { result, rerender } = renderHook(({ board }) => useMoveReplay(board, 'g1'), { initialProps: { board: before } })
+    rerender({ board: grouped })
+    // The group's longest walk has 3 frames: army2's second move starts only after them
+    act(() => void vi.advanceTimersByTime(2 * MOVE_REPLAY_STEP_MS))
+    expect(result.current.get('army2')).toMatchObject({ ...centre(1, 1) })
+    act(() => void vi.advanceTimersByTime(MOVE_REPLAY_STEP_MS))
+    expect(result.current.get('army2')).toMatchObject({ ...centre(1, 1), glide: false })
+    act(() => void vi.advanceTimersByTime(MOVE_REPLAY_STEP_MS))
+    expect(result.current.get('army2')).toMatchObject({ ...centre(1, 2), glide: true })
+  })
+
   it('keeps a figure that moves twice in one batch off its final square between the moves', () => {
     const { before, after } = withSecondArmy()
     // army moves B6 -> B8 (already in `after`), then army2 B1 -> B2, then army again B8 -> B9

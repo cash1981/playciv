@@ -49,6 +49,7 @@ import {
   figuresAt,
   groupMovementOptions,
   mapTokensOf,
+  scoutForbiddenSquares,
   figureMovementOptions,
   findBoardAsset,
   isMapCell,
@@ -773,15 +774,53 @@ export function BoardView({
     setGroupCount(groupSize > 1 ? groupSize - 1 : stackMates.length)
   }
   // The range is drawn in the Movement phase only: before that players are just arranging
-  const selectedMovement = useMemo(
-    () =>
-      movementOverlay
-        ? ((grouped && movementPlayer !== null && movementTurn !== null
-            ? groupMovementOptions(board, movementPlayer, groupMembers, movementTurn, movementLocks, movementForbidden)
-            : null) ?? movementFigure)
-        : null,
-    [board, grouped, groupMembers, movementFigure, movementForbidden, movementLocks, movementOverlay, movementPlayer, movementTurn],
+  // A scout never enters a hut or village, so a group with one cannot end its move there. The armies can: they go on
+  // alone and the scouts stay where they are, still free to move on their own. Only huts and villages count, so a
+  // slower army never leaves a scout behind.
+  const armiesOfGroup = useMemo(
+    () => (grouped ? groupMembers.filter((member) => member.assetId.endsWith('army')) : []),
+    [grouped, groupMembers],
   )
+  const scoutsStay = armiesOfGroup.length >= 1 && armiesOfGroup.length < groupMembers.length
+  const groupOptions = useMemo(
+    () =>
+      grouped && movementPlayer !== null && movementTurn !== null
+        ? groupMovementOptions(board, movementPlayer, groupMembers, movementTurn, movementLocks, movementForbidden)
+        : null,
+    [board, grouped, groupMembers, movementForbidden, movementLocks, movementPlayer, movementTurn],
+  )
+  const armiesOptions = useMemo(() => {
+    if (!scoutsStay || groupOptions === null || movementPlayer === null || movementTurn === null) return null
+    const armies =
+      armiesOfGroup.length >= 2
+        ? groupMovementOptions(board, movementPlayer, armiesOfGroup, movementTurn, movementLocks, movementForbidden)
+        : movementOptionsFor(armiesOfGroup[0] as BoardPiece)
+    return armies === null || armies.locked || armies.squareLocked === true ? null : armies
+  }, [armiesOfGroup, board, groupOptions, movementForbidden, movementLocks, movementOptionsFor, movementPlayer, movementTurn, scoutsStay])
+  // Only the squares the engine bars scouts from (a hut, a village; a hut is open to scouts under Pacifism) with a token
+  // on them, so a scout that is merely short of movement never makes the armies leave it behind.
+  const armiesOnlyDestinations = useMemo(() => {
+    if (armiesOptions === null || movementPlayer === null) return []
+    const barred = scoutForbiddenSquares(board, movementPlayer)
+    const tokens = mapTokensOf(board)
+    return armiesOptions.destinations.filter(
+      (cell) =>
+        barred.has(`${cell.column},${cell.row}`) &&
+        tokens.some((token) => token.cell.column === cell.column && token.cell.row === cell.row) &&
+        !(groupOptions?.destinations ?? []).some((other) => other.column === cell.column && other.row === cell.row),
+    )
+  }, [armiesOptions, board, groupOptions, movementPlayer])
+  const scoutsStayAt = useCallback(
+    (cell: Cell): boolean => armiesOnlyDestinations.some((other) => other.column === cell.column && other.row === cell.row),
+    [armiesOnlyDestinations],
+  )
+  const selectedMovement = useMemo(() => {
+    if (!movementOverlay) return null
+    const base = groupOptions ?? movementFigure
+    return base === null || armiesOnlyDestinations.length === 0
+      ? base
+      : { ...base, destinations: [...base.destinations, ...armiesOnlyDestinations] }
+  }, [armiesOnlyDestinations, groupOptions, movementFigure, movementOverlay])
   /** What the board's labels call the figure(s) that would move. */
   const moverName = grouped ? `${groupMembers.length} figures` : (selected?.label ?? 'figure')
   const moveSquares = selectedPlaying ? [] : (selectedMovement?.destinations ?? [])
@@ -789,15 +828,22 @@ export function BoardView({
     routeDraft !== null && selected !== null && routeDraft.pieceId === selected.id && selectedMovement !== null
       ? routeDraft
       : null
+  /** What the figures that walk the previewed route have left: the armies alone when the scouts stay behind. */
+  const routeMovement = draft !== null && armiesOptions !== null && scoutsStayAt(draft.to) ? armiesOptions : selectedMovement
+  /** What the board's labels call the figure(s) that would walk to `cell`. */
+  const moverNameAt = (cell: Cell): string =>
+    scoutsStayAt(cell) ? (armiesOfGroup.length >= 2 ? `${armiesOfGroup.length} armies` : (armiesOfGroup[0]?.label ?? moverName)) : moverName
   /** The route for the selected figure, or one every figure of the group can follow. */
   const planDraft = useCallback(
-    (via: readonly Cell[], to: Cell) =>
-      selected === null || movementPlayer === null || movementTurn === null
-        ? null
-        : groupMembers.length >= 2
-          ? planGroupRoute(board, movementPlayer, groupMembers, movementTurn, via, to, movementLocks, movementForbidden)
-          : planRoute(board, movementPlayer, selected, movementTurn, via, to, movementLocks, movementForbidden),
-    [board, groupMembers, movementForbidden, movementLocks, movementPlayer, movementTurn, selected],
+    (via: readonly Cell[], to: Cell) => {
+      if (selected === null || movementPlayer === null || movementTurn === null) return null
+      // A hut or village the scouts cannot enter: the armies of the group go there alone
+      const carriers = scoutsStayAt(to) ? armiesOfGroup : groupMembers
+      return carriers.length >= 2
+        ? planGroupRoute(board, movementPlayer, carriers, movementTurn, via, to, movementLocks, movementForbidden)
+        : planRoute(board, movementPlayer, carriers[0] ?? selected, movementTurn, via, to, movementLocks, movementForbidden)
+    },
+    [armiesOfGroup, board, groupMembers, movementForbidden, movementLocks, movementPlayer, movementTurn, scoutsStayAt, selected],
   )
   const routePlan = useMemo(
     () => (draft === null ? null : planDraft(draft.via, draft.to)),
@@ -805,24 +851,51 @@ export function BoardView({
   )
   // While adding a waypoint, every square the route could still pass through is a target, not only the
   // squares the figure could end on: a crossing-only square (England on water) is a fine waypoint.
-  const waypointSquares = useMemo(() => {
-    if (draft === null || selectedPlaying || !draft.addingWaypoint || selected === null || selectedMovement === null) return []
-    if (movementPlayer === null || movementTurn === null) return []
-    const start = mapCellOf(board, selected)
-    if (start === null) return []
-    const range = selectedMovement.remaining - 1
-    const cells: Cell[] = []
-    for (let row = start.row - range; row <= start.row + range; row += 1) {
-      for (let column = start.column - range; column <= start.column + range; column += 1) {
-        if (Math.abs(column - start.column) + Math.abs(row - start.row) > range) continue
-        if (!isMapCell(board, column, row)) continue
-        const cell = { column, row }
-        const planned = planDraft([...draft.via, cell], draft.to)
-        if (planned?.ok === true) cells.push(cell)
+  const scanWaypoints = useCallback(
+    (firstOnly: boolean): readonly Cell[] => {
+      if (draft === null || selectedPlaying || selected === null || routeMovement === null) return []
+      if (movementPlayer === null || movementTurn === null) return []
+      const start = mapCellOf(board, selected)
+      if (start === null) return []
+      const range = routeMovement.remaining - 1
+      const cells: Cell[] = []
+      for (let row = start.row - range; row <= start.row + range; row += 1) {
+        for (let column = start.column - range; column <= start.column + range; column += 1) {
+          if (Math.abs(column - start.column) + Math.abs(row - start.row) > range) continue
+          if (!isMapCell(board, column, row)) continue
+          const cell = { column, row }
+          if (planDraft([...draft.via, cell], draft.to)?.ok !== true) continue
+          cells.push(cell)
+          if (firstOnly) return cells
+        }
       }
-    }
-    return cells
-  }, [board, draft, movementPlayer, movementTurn, planDraft, selected, selectedMovement, selectedPlaying])
+      return cells
+    },
+    [board, draft, movementPlayer, movementTurn, planDraft, routeMovement, selected, selectedPlaying],
+  )
+  const waypointSquares = useMemo(() => (draft?.addingWaypoint === true ? scanWaypoints(false) : []), [draft, scanWaypoints])
+  const canAddWaypoint = useMemo(() => draft?.addingWaypoint === true || scanWaypoints(true).length > 0, [draft, scanWaypoints])
+  /** The waypoints of the route after tapping `cell` as the next destination, or `null` when the tap starts a new route. */
+  const continuationVia = useCallback(
+    (cell: Cell): readonly Cell[] | null => {
+      if (draft === null || draft.exploreAfter !== undefined || routePlan?.ok !== true) return null
+      const onRoute = [...routePlan.route, draft.to].some((step) => step.column === cell.column && step.row === cell.row)
+      if (onRoute) return null
+      const via = [...draft.via, draft.to]
+      return planDraft(via, cell)?.ok === true ? via : null
+    },
+    [draft, planDraft, routePlan],
+  )
+  const continuingKeys = useMemo(
+    () => new Set(draft === null || draft.addingWaypoint ? [] : moveSquares.filter((cell) => continuationVia(cell) !== null).map((cell) => `${cell.column},${cell.row}`)),
+    [continuationVia, draft, moveSquares],
+  )
+  /** Whether Remove last stop leaves a route that can end where it now ends (a crossing-only waypoint cannot). */
+  const canStepBack = useMemo(() => {
+    if (draft === null || draft.via.length === 0) return false
+    if (draft.exploreAfter !== undefined) return true
+    return planDraft(draft.via.slice(0, -1), draft.via[draft.via.length - 1] as Cell)?.ok === true
+  }, [draft, planDraft])
   // Fog the figure cannot explore from where it stands but can reach: it walks to the nearest square next to it, then
   // explores. Never through a square that ends the move (hut, village, enemy), and only with 1 movement to spare.
   const exploreAhead = useMemo(() => {
@@ -868,6 +941,17 @@ export function BoardView({
       typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center', inline: 'center' })
   }, [draftTargetKey])
+  /**
+   * The draft after tapping destination `cell`. A route already previewed is continued: its old destination becomes
+   * the last waypoint, so the way the player drew stays. A square the route already passes, a walk-and-explore
+   * preview or a continuation with no legal route start over with the shortest way to `cell`.
+   */
+  const extendedDraft = (pieceId: string, cell: Cell): NonNullable<typeof routeDraft> => {
+    const via = continuationVia(cell)
+    return draft !== null && via !== null
+      ? { pieceId, via: [...via], to: cell, addingWaypoint: false }
+      : { pieceId, via: [], to: cell, addingWaypoint: false }
+  }
   /** Sends the previewed route: the Move button, or a second tap on the chosen destination. */
   const confirmRoute = (): void => {
     if (routePlan?.ok !== true || selected === null) return
@@ -877,28 +961,30 @@ export function BoardView({
     if (outOfTurnQuestion !== null && !window.confirm(outOfTurnQuestion)) return
     // Figures that stand together go along one route and answer the questions once; the group's army (or its first
     // figure) is the one the token, the relic and the fight for a village are about.
-    const mover = grouped ? (groupMembers.find((member) => member.assetId.endsWith('army')) ?? groupMembers[0] ?? selected) : selected
-    const who = grouped ? 'The group' : selected.label
-    const ids = groupMembers.map((member) => member.id)
+    const carriers = scoutsStayAt(cell) ? armiesOfGroup : groupMembers
+    const moving = carriers.length >= 2
+    const mover = moving ? (carriers.find((member) => member.assetId.endsWith('army')) ?? carriers[0] ?? selected) : (carriers[0] ?? selected)
+    const who = moving ? 'The group' : mover.label
+    const ids = carriers.map((member) => member.id)
     const fog = draft?.exploreAfter
     if (fog !== undefined) {
       // Walk to the square next to the fog, then uncover it. The walk is sent first and reloaded, so a refused
       // exploration leaves the figure where it stands with its Undo, never half way.
       const route = routePlan.route
-      const figureId = selected.id
+      const figureId = mover.id
       setMoveModeId(null)
       setRouteDraft(null)
       void (async () => {
         let travelled = false
         await run(async () => {
-          const result = grouped
+          const result = moving
             ? await api.travelGroup(gameId, ids, cell.column, cell.row, route)
             : await api.travelFigure(gameId, figureId, cell.column, cell.row, false, false, false, route)
           travelled = true
           return result
         })
         if (travelled) {
-          await run(() => (grouped ? api.exploreGroup(gameId, ids, fog.column, fog.row) : api.exploreSquare(gameId, figureId, fog.column, fog.row)))
+          await run(() => (moving ? api.exploreGroup(gameId, ids, fog.column, fog.row) : api.exploreSquare(gameId, figureId, fog.column, fog.row)))
         }
       })()
       return
@@ -917,13 +1003,13 @@ export function BoardView({
       offer !== undefined &&
       window.confirm(
         offer.existing === undefined
-          ? `Disband ${grouped ? 'the group' : who} in ${offer.cityLabel} for a ${offer.marker} marker${grouped ? ' (a city holds one marker, so the others add none)' : ''}? ` +
+          ? `Disband ${moving ? 'the group' : who} in ${offer.cityLabel} for a ${offer.marker} marker${moving ? ' (a city holds one marker, so the others add none)' : ''}? ` +
               (offer.marker === 'caravan'
                 ? 'The caravan adds 2 production to the next Build there. '
                 : 'The fortification adds 2 to the combat bonus when the city is defended. ') +
-              `OK disbands ${grouped ? 'them' : 'it'}; Cancel just moves there.`
-          : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${grouped ? 'the group' : who} there gains nothing. ` +
-              `Disband ${grouped ? 'them' : 'it'} anyway? OK disbands ${grouped ? 'them' : 'it'}; Cancel just moves there.`,
+              `OK disbands ${moving ? 'them' : 'it'}; Cancel just moves there.`
+          : `${offer.cityLabel} already has a ${offer.existing.assetId === CARAVAN_ASSET_ID ? 'caravan' : 'fortification'}, so disbanding ${moving ? 'the group' : who} there gains nothing. ` +
+              `Disband ${moving ? 'them' : 'it'} anyway? OK disbands ${moving ? 'them' : 'it'}; Cancel just moves there.`,
       )
     // A hut or village on the square: the figure's move ends there, and the token can be drawn at once
     const token =
@@ -968,9 +1054,9 @@ export function BoardView({
     setMoveModeId(null)
     setRouteDraft(null)
     const travel = (fight: boolean, collect: boolean) =>
-      grouped
+      moving
         ? api.travelGroup(gameId, ids, cell.column, cell.row, routePlan.route, { disband, collectToken: collect, fightVillage: fight })
-        : api.travelFigure(gameId, selected.id, cell.column, cell.row, disband, collect, fight, routePlan.route)
+        : api.travelFigure(gameId, mover.id, cell.column, cell.row, disband, collect, fight, routePlan.route)
     if (fightsForVillage) {
       // The battle exists once the move is done: bring the Battle panel (the arena) into view. The engine
       // ignores the fight on a contested square or while a battle is active, so only a started battle scrolls.
@@ -1586,6 +1672,7 @@ export function BoardView({
                   : moveSquares.map((cell) => {
                       // While a walk-and-explore is previewed, its walk-to square is not the chosen move: tapping it asks for the plain move
                       const chosen = draft?.to.column === cell.column && draft.to.row === cell.row && draft.exploreAfter === undefined
+                      const continuing = !chosen && continuingKeys.has(`${cell.column},${cell.row}`)
                       return (
                         <button
                           key={`move-${cell.column}-${cell.row}`}
@@ -1593,13 +1680,17 @@ export function BoardView({
                           className={`board-move-cell${cell.contact === true ? ' board-contact-cell' : ''}${chosen ? ' chosen' : ''}`}
                           data-move-column={cell.column}
                           data-move-row={cell.row}
-                          aria-label={`Route ${moverName} to ${cell.label}, ${cell.distance} ${
-                            cell.distance === 1 ? 'square' : 'squares'
-                          }${cell.contact === true ? ', onto another player’s figures' : ''}`}
+                          aria-label={
+                            continuing
+                              ? `Continue the route with ${moverNameAt(cell)} to ${cell.label}${cell.contact === true ? ', onto another player’s figures' : ''}`
+                              : `Route ${moverNameAt(cell)} to ${cell.label}, ${cell.distance} ${
+                                  cell.distance === 1 ? 'square' : 'squares'
+                                }${cell.contact === true ? ', onto another player’s figures' : ''}`
+                          }
                           aria-pressed={chosen}
-                          title={`${cell.label} · ${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}${
-                            cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''
-                          }`}
+                          title={`${cell.label} · ${
+                            continuing ? 'continues the route' : `${cell.distance} ${cell.distance === 1 ? 'square' : 'squares'}`
+                          }${cell.contact === true ? ' · enemy: the move ends and a battle starts' : ''}`}
                           disabled={busy || readOnly}
                           style={{
                             left: cell.column * board.squareSize * zoom,
@@ -1615,7 +1706,7 @@ export function BoardView({
                               confirmRoute()
                               return
                             }
-                            setRouteDraft({ pieceId: selected.id, via: [], to: cell, addingWaypoint: false })
+                            setRouteDraft(extendedDraft(selected.id, cell))
                           }}
                           onPointerDown={(event) => event.stopPropagation()}
                         >
@@ -1784,14 +1875,22 @@ export function BoardView({
               {routePlan?.ok === true ? (
                 <>
                   <strong>
-                    {grouped ? `${groupMembers.length} figures` : selected.label} to {routePlan.destination.label}
+                    {scoutsStayAt(routePlan.destination)
+                      ? armiesOfGroup.length >= 2
+                        ? `${armiesOfGroup.length} armies`
+                        : (armiesOfGroup[0]?.label ?? selected.label)
+                      : grouped
+                        ? `${groupMembers.length} figures`
+                        : selected.label}{' '}
+                    to {routePlan.destination.label}
                   </strong>
                   {': '}
                   {[locationOf(board, areas, selected), ...routePlan.route.map((cell) => `${columnLabel(cell.column)}${cell.row + 1}`)].join(' → ')}
+                  {scoutsStayAt(routePlan.destination) && ' (the scouts stay: they cannot enter a hut or village)'}
                   {draft.exploreAfter !== undefined && ` → explore ${columnLabel(draft.exploreAfter.column)}${draft.exploreAfter.row + 1}`}
                   {' · '}
                   {routePlan.route.length + (draft.exploreAfter === undefined ? 0 : 1)} movement,{' '}
-                  {selectedMovement.remaining - routePlan.route.length - (draft.exploreAfter === undefined ? 0 : 1)} left
+                  {(routeMovement ?? selectedMovement).remaining - routePlan.route.length - (draft.exploreAfter === undefined ? 0 : 1)} left
                   {routePlan.destination.contact === true && ' · onto another player’s figures: a battle starts'}
                 </>
               ) : (
@@ -1832,18 +1931,30 @@ export function BoardView({
               <button
                 type="button"
                 aria-pressed={draft.addingWaypoint}
-                disabled={busy || readOnly}
+                // Nothing to pick when the route already uses all the movement: say so instead of a button that does nothing
+                disabled={busy || readOnly || !canAddWaypoint}
+                title={canAddWaypoint ? undefined : 'No square left to route through within the movement'}
                 onClick={() => setRouteDraft({ ...draft, addingWaypoint: !draft.addingWaypoint })}
               >
                 Add waypoint
               </button>
               <button
                 type="button"
-                aria-label="Remove last waypoint"
-                disabled={busy || readOnly || draft.via.length === 0}
-                onClick={() => setRouteDraft({ ...draft, via: draft.via.slice(0, -1), addingWaypoint: false })}
+                aria-label="Remove last stop"
+                disabled={busy || readOnly || !canStepBack}
+                title={draft.via.length > 0 && !canStepBack ? 'The stop before cannot be a destination' : undefined}
+                // The last stop is the destination: dropping it ends the route at the stop before it
+                onClick={() => {
+                  const previous = draft.via[draft.via.length - 1]
+                  if (previous === undefined) return
+                  setRouteDraft(
+                    draft.exploreAfter === undefined
+                      ? { ...draft, via: draft.via.slice(0, -1), to: previous, addingWaypoint: false }
+                      : { ...draft, via: draft.via.slice(0, -1), addingWaypoint: false },
+                  )
+                }}
               >
-                Remove last
+                Remove last stop
               </button>
               <button
                 type="button"

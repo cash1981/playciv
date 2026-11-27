@@ -931,6 +931,12 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   explicit squares to enter. `checkRoute` validates them with the same per-square rules as the search (`figureRulesOf`:
   crossing versus ending, huts, foreign figures, stacking, fog, Communism lock, Brandenburg), allows no repeated square and
   charges the route's own length, so a detour costs more than the shortest way; the route must end on the requested square.
+  Tapping another destination while a route is previewed continues it: the old destination becomes the last waypoint (a square
+  the route already passes, a walk-and-explore preview or an illegal continuation start over with the shortest way), and the
+  square's label says "Continue the route". Remove last stop drops the destination (the route ends at the stop before it; disabled
+  when that stop is only a crossing square). Add waypoint is disabled when no square is left within the movement. A group with a
+  scout can still end on a hut or village the scouts may not enter (a hut is open to scouts under Pacifism, a village never): the
+  armies go on alone with their own movement left and the scouts stay, still free to move on their own, said in the route summary.
   `planRoute` plans the preview: a shortest leg per waypoint, later targets reserved. It is greedy, so a first leg can
   take squares a later leg needs. The server re-validates against the current board, which is what rejects a stale
   preview. The route is stored on the `move` board change (`route`) and spelled out in the board history and the **public log** as
@@ -966,7 +972,7 @@ refreshes the allowance next turn. Battle and loot stay manual (human).
   at once; tapping the selected figure again, or the "Moving n of m" button, takes one off (the figure tapped always stays), down to
   one and then back to all. Tests: `movement.test.ts` (stacks, group), `explore.test.ts`, `board-api.test.ts`, `BoardView.test.tsx`.
 - **Route playback** (#362, `web/src/lib/moveReplay.ts`): when a newer board arrives (auto refresh, Forward, or Live after a
-  replay) the figure steps through the squares of each recorded route, one square per 320 ms, before it rests on its real
+  replay) the figure steps through the squares of each recorded route, one square per 320 ms (the moves of one group, which share a history `group`, walk at the same time; every other move waits for the one before), before it rests on its real
   position. Display only: the board is never changed. Plays the newest 4 route moves of what arrived, also for the
   viewer's own move and for redo; figures waiting their turn are held on their start square; a reload that leaves the
   history unchanged does not cut playback short; a figure that is still walking offers no move targets and cannot be grabbed until it arrives; moves without a recorded route, undo and jumps back never animate; off for `prefers-reduced-motion`.
