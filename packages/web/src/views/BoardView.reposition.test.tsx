@@ -89,14 +89,14 @@ describe('the movement range', () => {
   it('is drawn for a selected figure while the Movement phase is on (the default)', async () => {
     const { container } = renderBoard({})
     selectArmy(container)
-    expect((await screen.findAllByRole('button', { name: /Move Red army to/ })).length).toBeGreaterThan(0)
+    expect((await screen.findAllByRole('button', { name: /Route Red army to/ })).length).toBeGreaterThan(0)
   })
 
   it('is not drawn in any other phase, and the figure still cannot be moved freely', async () => {
     const { container } = renderBoard({ movementOverlay: false })
     selectArmy(container)
     await screen.findByText(/moves by the Movement rules in the Movement phase/)
-    expect(screen.queryAllByRole('button', { name: /Move Red army to/ })).toEqual([])
+    expect(screen.queryAllByRole('button', { name: /Route Red army to/ })).toEqual([])
     expect(container.querySelector('.board-move-cell')).toBeNull()
     // The free Move button would bypass the Movement rules, so a movement figure has none
     expect(screen.queryByRole('button', { name: 'Move' })).toBeNull()

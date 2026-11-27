@@ -5,7 +5,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { movePiece, placePiece, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
+import { movePiece, placePiece, redoLastBoardChange, travelFigure, undoLastBoardChange } from '../src/actions/board.js'
+import { travelGroup } from '../src/actions/travel-group.js'
 import {
   SQUARE_SIZE,
   findBoardAsset,
@@ -14,9 +15,13 @@ import {
 } from '../src/board.js'
 import {
   arrangeWithinSquare,
+  checkRoute,
   figureMovementOptions,
+  groupMovementOptions,
   movementOf,
   movementTotal,
+  planGroupRoute,
+  planRoute,
   splitMovement,
   travelSpeedOf,
 } from '../src/movement.js'
@@ -495,8 +500,11 @@ describe('huts and villages', () => {
       expect(flown.destinations).toContainEqual(
         expect.objectContaining({ column: 3, row: 1, distance: 2 }),
       )
-      // Flight crosses the marker but cannot end on it (unofficial rule 283).
-      expect(flown.destinations.some((cell) => cell.column === 2 && cell.row === 1)).toBe(false)
+      // Flight crosses the marker or lands on it; landing ends the move. Ruling 283 (cross, never end) is
+      // about the Migrants, Colonists and Immigrants cards only.
+      expect(flown.destinations).toContainEqual(
+        expect.objectContaining({ column: 2, row: 1, distance: 1, ends: true }),
+      )
     },
   )
 
@@ -715,4 +723,354 @@ describe('arranging a figure in its own square', () => {
     const again = unwrap(travelFigure(shifted, { playerId: CASH1981, pieceId: piece.id, column: 1, row: 3 }))
     expect(movementOf(figure(again), 1)).toMatchObject({ used: 2, locked: true })
   })
+})
+
+describe('routes (issue #362)', () => {
+  const cell = (column: number, row: number) => ({ column, row })
+  const withSpeed = (state: GameState, mvmt: string): GameState =>
+    withPlayer(state, { ...playerOf(state), stats: { ...playerOf(state).stats, mvmt } })
+  const travel = (state: GameState, route: ReturnType<typeof cell>[]) => {
+    const last = route.at(-1) ?? cell(0, 0)
+    return travelFigure(state, {
+      playerId: CASH1981,
+      pieceId: figure(state).id,
+      column: last.column,
+      row: last.row,
+      route,
+    })
+  }
+  const check = (state: GameState, route: ReturnType<typeof cell>[]) =>
+    checkRoute(state.board, playerOf(state), figure(state), 1, route)
+
+  it('records the chosen route, charges its length and undoes it in one step', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    for (const [route, via] of [
+      [[cell(2, 1), cell(2, 2)], 'C2'],
+      [[cell(1, 2), cell(2, 2)], 'B3'],
+    ] as const) {
+      const moved = unwrap(travel(state, [...route]))
+      expect(movementOf(figure(moved), 1)).toMatchObject({ used: 2, locked: true })
+      expect(moved.board.history.at(-1)?.change).toMatchObject({ kind: 'move', route })
+      expect(moved.board.history.at(-1)?.description).toContain(`→ ${via} →`)
+      // The route survives a save and a reload
+      const reloaded = JSON.parse(JSON.stringify(moved)) as GameState
+      expect(reloaded.board.history.at(-1)?.change).toMatchObject({ route })
+
+      const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+      expect(figure(undone).x).toBe(figure(state).x)
+      expect(figure(undone).movement).toBeUndefined()
+    }
+  })
+
+  it('charges a longer detour and uses the pool for what is left', () => {
+    const state = withSpeed(place(game(), 'figures/redarmy', 1, 1), '4')
+    // Two squares away as the crow flies, three squares as walked
+    const moved = unwrap(travel(state, [cell(1, 2), cell(2, 2), cell(2, 1)]))
+    expect(movementOf(figure(moved), 1)).toMatchObject({ used: 3, locked: false })
+    expect(unwrapErr(travel(moved, [cell(2, 2), cell(2, 3)])).kind).toBe('FIGURE_MOVE_ILLEGAL')
+    const rest = unwrap(travel(moved, [cell(3, 1)]))
+    expect(movementOf(figure(rest), 1)).toMatchObject({ used: 4, locked: true })
+  })
+
+  it('says in the public log which squares the figure went through, and takes the line back with an Undo', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const moved = unwrap(travel(state, [cell(2, 1), cell(2, 2)]))
+    const line = moved.log.at(-1)
+    expect(line?.publicLog).toBe('cash1981 moved Red army B2 → C2 → C3 (2 squares)')
+    expect(line?.privateLog).toBe('')
+    // The history entry counts its own line, so replay keeps them together
+    expect(moved.board.history.at(-1)?.logLength).toBe(moved.log.length)
+
+    const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(undone.log.at(-1)?.publicLog).toBe('cash1981 took back the move of Red army: it is on B2 again')
+    const redone = unwrap(redoLastBoardChange(undone, CASH1981))
+    expect(redone.log.at(-1)?.publicLog).toBe('cash1981 moved Red army to C3 again, after the Undo')
+    expect(redone.board.history.at(-1)?.logLength).toBe(redone.log.length)
+  })
+
+  it('does not put a shift inside a square into the public log', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const piece = figure(state)
+    const shifted = unwrap(movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: piece.x + 4, y: piece.y + 4, snap: false }))
+    expect(shifted.log.length).toBe(state.log.length)
+  })
+
+  it('charges the shortest distance and records no route when none is sent', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const moved = unwrap(
+      travelFigure(state, { playerId: CASH1981, pieceId: figure(state).id, column: 3, row: 1 }),
+    )
+    const change = moved.board.history.at(-1)?.change
+    expect(change).toMatchObject({ kind: 'move', movement: { to: { used: 2 } } })
+    expect(change).not.toHaveProperty('route')
+    expect(moved.board.history.at(-1)?.description).not.toContain('→')
+    expect(moved.log.at(-1)?.publicLog).toBe('cash1981 moved Red army from B2 to D2 (2 squares)')
+  })
+
+  it('refuses a route that is too long, broken, repeating, or ends elsewhere than asked', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    expect(check(state, [cell(1, 2), cell(2, 2), cell(2, 1)])).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining('takes 3 movement'),
+    })
+    expect(check(state, [cell(2, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('not next to') })
+    expect(check(state, [])).toMatchObject({ ok: false })
+    const roomy = withSpeed(state, '5')
+    expect(check(roomy, [cell(2, 1), cell(1, 1)])).toMatchObject({ ok: false, reason: expect.stringContaining('twice') })
+    expect(
+      unwrapErr(
+        travelFigure(state, { playerId: CASH1981, pieceId: figure(state).id, column: 1, row: 2, route: [cell(2, 1)] }),
+      ).kind,
+    ).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+
+  it('tells crossing a square from ending on it', () => {
+    // England may cross the water on A3 but not end there
+    const base = place(waterGame(), 'figures/bluearmy', 1, 3, KARANDRAS1)
+    const england = withPlayer(base, {
+      ...playerOf(base),
+      civilization: { name: 'England' } as Playerhand['civilization'],
+    })
+    expect(check(england, [cell(0, 2), cell(1, 2)])).toMatchObject({ ok: true })
+    expect(check(england, [cell(0, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('cannot end') })
+    expect(check(base, [cell(0, 2), cell(1, 2)])).toMatchObject({ ok: false, reason: expect.stringContaining('cannot enter') })
+
+    // A hut ends the move unless Flight flies over it; with Flight a move may also end on it
+    let hut = withSpeed(place(game(), 'figures/redarmy', 1, 1), '3')
+    hut = place(hut, 'resources/hut', 2, 1)
+    expect(check(hut, [cell(2, 1)])).toMatchObject({ ok: true })
+    expect(check(hut, [cell(2, 1), cell(3, 1)])).toMatchObject({ ok: false, reason: expect.stringContaining('carry on') })
+    const flying = withTech(hut, 'Flight')
+    expect(check(flying, [cell(2, 1), cell(3, 1)])).toMatchObject({ ok: true })
+    expect(check(flying, [cell(2, 1)])).toMatchObject({ ok: true })
+  })
+
+  it('rejects a stale route once the board has changed under it', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const route = [cell(2, 1), cell(2, 2)]
+    expect(check(state, route)).toMatchObject({ ok: true })
+    const changed = place(state, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    expect(check(changed, route)).toMatchObject({ ok: false })
+    expect(unwrapErr(travel(changed, route)).kind).toBe('FIGURE_MOVE_ILLEGAL')
+  })
+
+  it('plans the shortest route, through waypoints when asked, and says when there is none', () => {
+    const state = withSpeed(place(game(), 'figures/redarmy', 1, 1), '5')
+    const plan = (via: ReturnType<typeof cell>[], to: ReturnType<typeof cell>) =>
+      planRoute(state.board, playerOf(state), figure(state), 1, via, to)
+
+    expect(plan([], cell(3, 1))).toMatchObject({ ok: true, route: [cell(2, 1), cell(3, 1)] })
+    const bent = plan([cell(2, 2)], cell(3, 1))
+    expect(bent).toMatchObject({ ok: true, destination: { distance: 4 } })
+    expect(bent.ok && bent.route.map((step) => `${step.column},${step.row}`)).toContain('2,2')
+    // A later square is not taken on the way to an earlier one
+    const loop = plan([cell(2, 2)], cell(2, 1))
+    expect(loop.ok && loop.route).toEqual([cell(1, 2), cell(2, 2), cell(2, 1)])
+    expect(plan([cell(1, 1)], cell(3, 1))).toMatchObject({ ok: false })
+    expect(plan([cell(9, 9)], cell(3, 1))).toMatchObject({ ok: false })
+    // A waypoint beyond what is left is not planned
+    expect(plan([cell(6, 1)], cell(1, 1))).toMatchObject({ ok: false })
+  })
+
+  it('plans every square the search reaches, with the distance the search gave', () => {
+    let state = withSpeed(place(game(), 'figures/redarmy', 2, 2), '4')
+    state = place(state, 'figures/bluearmy', 3, 2, KARANDRAS1)
+    const options = figureMovementOptions(state.board, playerOf(state), figure(state), 1)
+    if (options === null) throw new Error('expected movement options')
+    expect(options.destinations.length).toBeGreaterThan(8)
+    for (const destination of options.destinations) {
+      const planned = planRoute(state.board, playerOf(state), figure(state), 1, [], destination)
+      expect(planned, destination.label).toMatchObject({ ok: true, destination: { distance: destination.distance } })
+    }
+  })
+
+  it('honours a locked square and a forbidden square on a route', () => {
+    const state = place(game(), 'figures/redarmy', 1, 1)
+    const locked = checkRoute(state.board, playerOf(state), figure(state), 1, [cell(2, 1)], [cell(1, 1)])
+    expect(locked).toMatchObject({ ok: false })
+    const forbidden = checkRoute(state.board, playerOf(state), figure(state), 1, [cell(2, 1)], [], [cell(2, 1)])
+    expect(forbidden).toMatchObject({ ok: false })
+    expect(checkRoute(state.board, playerOf(state), figure(state), 1, [cell(2, 1)], [], [cell(3, 3)])).toMatchObject({
+      ok: true,
+    })
+  })
+
+  it('refuses a step off the map or onto a fractional square', () => {
+    const state = place(game(), 'figures/redarmy', 0, 0)
+    expect(check(state, [cell(-1, 0)])).toMatchObject({ ok: false })
+    expect(check(state, [cell(0.5, 0)])).toMatchObject({ ok: false })
+    expect(check(state, [cell(0.5, 0.5)])).toMatchObject({ ok: false })
+  })
+})
+
+describe('figures arriving on a stack and moving as a group', () => {
+  const cell = (column: number, row: number) => ({ column, row })
+  const figures = (state: GameState): BoardPiece[] => state.board.pieces.filter((piece) => piece.category === 'figure')
+  const withSpeed = (state: GameState, mvmt: string): GameState =>
+    withPlayer(state, { ...playerOf(state), stats: { ...playerOf(state).stats, mvmt } })
+  /** The player as the web gives it to the movement rules: with the stacking limit the status shows. */
+  const stacker = (state: GameState) => ({ ...playerOf(state), stackingLimit: 2 })
+  const centreOf = (piece: BoardPiece) => [piece.x + piece.width / 2, piece.y + piece.height / 2] as const
+
+  it('puts a figure that arrives on an occupied square beside the one standing there', () => {
+    const state = place(place(withSpeed(game(), '4'), 'figures/redarmy', 1, 1), 'figures/redscout', 3, 3)
+    const army = figures(state).find((piece) => piece.assetId.endsWith('army')) as BoardPiece
+    const scout = figures(state).find((piece) => piece.assetId.endsWith('scout')) as BoardPiece
+    const moved = unwrap(
+      travelFigure(state, { playerId: CASH1981, pieceId: scout.id, column: 1, row: 1, route: [cell(3, 2), cell(2, 2), cell(1, 2), cell(1, 1)] }),
+    )
+    const after = figures(moved)
+    const standing = after.find((piece) => piece.id === army.id) as BoardPiece
+    const arrived = after.find((piece) => piece.id === scout.id) as BoardPiece
+    // The army keeps its place and the scout stands to its right, in the same square, without covering it
+    expect(centreOf(standing)).toEqual(centreOf(army))
+    expect(centreOf(arrived)[0] - centreOf(standing)[0]).toBeGreaterThanOrEqual(30)
+    expect(Math.abs(centreOf(arrived)[1] - centreOf(standing)[1])).toBeLessThan(1)
+    expect(Math.floor(centreOf(arrived)[0] / SQUARE_SIZE)).toBe(1)
+  })
+
+  it('moves a stack together along one route, charges each figure and writes one public line', () => {
+    const base = withSpeed(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), '4')
+    const [a, b] = figures(base) as [BoardPiece, BoardPiece]
+    const moved = unwrap(
+      travelGroup(base, { playerId: CASH1981, pieceIds: [a.id, b.id], column: 2, row: 2, route: [cell(2, 1), cell(2, 2)] }),
+    )
+    for (const piece of figures(moved)) {
+      expect(movementOf(piece, 1)).toMatchObject({ used: 2, locked: false })
+      expect(Math.floor(centreOf(piece)[0] / SQUARE_SIZE)).toBe(2)
+    }
+    // Two figures on the arrival square do not cover each other
+    const [first, second] = figures(moved) as [BoardPiece, BoardPiece]
+    expect(centreOf(first)).not.toEqual(centreOf(second))
+    expect(moved.log.length).toBe(base.log.length + 1)
+    expect(moved.log.at(-1)?.publicLog).toBe('cash1981 moved Red army and Red scout together B2 → C2 → C3 (2 squares)')
+    expect(moved.board.history.at(-1)?.logLength).toBe(moved.log.length)
+  })
+
+  it('refuses the whole group when one figure may not go or the figures are apart', () => {
+    const base = withSpeed(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), '2')
+    const [a, b] = figures(base) as [BoardPiece, BoardPiece]
+    const tooFar = unwrapErr(
+      travelGroup(base, { playerId: CASH1981, pieceIds: [a.id, b.id], column: 1, row: 4, route: [cell(1, 2), cell(1, 3), cell(1, 4)] }),
+    )
+    expect(tooFar.kind).toBe('FIGURE_MOVE_ILLEGAL')
+
+    const apart = place(base, 'figures/redscout', 3, 3)
+    const third = figures(apart).find((piece) => centreOf(piece)[0] > 3 * SQUARE_SIZE) as BoardPiece
+    expect(unwrapErr(travelGroup(apart, { playerId: CASH1981, pieceIds: [a.id, third.id], column: 2, row: 1, route: [cell(2, 1)] })).kind).toBe('FIGURE_MOVE_ILLEGAL')
+    expect(unwrapErr(travelGroup(base, { playerId: CASH1981, pieceIds: [a.id], column: 2, row: 1, route: [cell(2, 1)] })).kind).toBe('FIGURE_MOVE_ILLEGAL')
+    // Nothing was changed by any of the refusals
+    expect(figures(base).every((piece) => movementOf(piece, 1) === null)).toBe(true)
+  })
+
+  it('may end on a hut or another player\'s figures like one figure, and ends the move for everyone', () => {
+    const base = withSpeed(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), '4')
+    const [a, b] = figures(base) as [BoardPiece, BoardPiece]
+    const hut = place(base, 'resources/hut', 2, 1)
+    const onHut = groupMovementOptions(hut.board, stacker(hut), [a, b], 1)
+    // An army may end on a hut and a scout may not: the group goes only where both may
+    expect(onHut?.destinations.find((destination) => destination.column === 2 && destination.row === 1)).toBeUndefined()
+
+    // Two armies may end on another player's army; a scout may not, so the mixed group is not offered that square
+    const armies = place(place(withSpeed(game(), '4'), 'figures/redarmy', 1, 1), 'figures/redarmy', 1, 1)
+    const [x, y] = figures(armies) as [BoardPiece, BoardPiece]
+    const enemy = place(armies, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    const options = groupMovementOptions(enemy.board, stacker(enemy), [x, y], 1)
+    expect(options?.destinations.find((destination) => destination.column === 2 && destination.row === 1)).toMatchObject({ contact: true, ends: true })
+    expect(groupMovementOptions(place(base, 'figures/bluearmy', 2, 1, KARANDRAS1).board, stacker(base), [a, b], 1)?.destinations.some((destination) => destination.column === 2 && destination.row === 1)).toBe(false)
+    const moved = unwrap(travelGroup(enemy, { playerId: CASH1981, pieceIds: [x.id, y.id], column: 2, row: 1, route: [cell(2, 1)] }))
+    for (const piece of figures(moved).filter((candidate) => candidate.assetId.startsWith('figures/red'))) {
+      expect(movementOf(piece, 1)).toMatchObject({ locked: true })
+    }
+  })
+
+  it('takes the whole group back with one Undo and brings it again with one Redo', () => {
+    const base = withSpeed(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), '4')
+    const [a, b] = figures(base) as [BoardPiece, BoardPiece]
+    const moved = unwrap(travelGroup(base, { playerId: CASH1981, pieceIds: [a.id, b.id], column: 2, row: 1, route: [cell(2, 1)] }))
+    expect(new Set(moved.board.history.slice(-2).map((entry) => entry.group)).size).toBe(1)
+
+    const undone = unwrap(undoLastBoardChange(moved, CASH1981))
+    for (const piece of figures(undone)) {
+      expect(movementOf(piece, 1)).toBeNull()
+      expect(Math.floor(centreOf(piece)[0] / SQUARE_SIZE)).toBe(1)
+    }
+    expect(undone.board.history.length).toBe(base.board.history.length)
+
+    const redone = unwrap(redoLastBoardChange(undone, CASH1981))
+    for (const piece of figures(redone)) expect(Math.floor(centreOf(piece)[0] / SQUARE_SIZE)).toBe(2)
+    expect(redone.board.redo).toHaveLength(0)
+  })
+
+  it('offers a group only the squares all of them reach, with the least movement left', () => {
+    const base = place(place(withSpeed(game(), '4'), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1)
+    const [a, b] = figures(base) as [BoardPiece, BoardPiece]
+    const moved = unwrap(travelFigure(base, { playerId: CASH1981, pieceId: b.id, column: 2, row: 1, route: [cell(2, 1)] }))
+    const army = moved.board.pieces.find((piece) => piece.id === a.id) as BoardPiece
+    const scout = moved.board.pieces.find((piece) => piece.id === b.id) as BoardPiece
+    // The scout has gone: only one figure is left on B2, so there is no group
+    expect(groupMovementOptions(moved.board, stacker(moved), [army, scout], 1)).toBeNull()
+
+    const both = groupMovementOptions(base.board, stacker(base), [a, b], 1)
+    expect(both?.remaining).toBe(4)
+    expect(both?.destinations.some((destination) => destination.column === 2 && destination.row === 1)).toBe(true)
+    const route = planGroupRoute(base.board, stacker(base), [a, b], 1, [], cell(3, 1))
+    expect(route.ok && route.route).toEqual([cell(2, 1), cell(3, 1)])
+  })
+
+  it('offers a group only squares with room for all of it under the stacking limit', () => {
+    const base = withSpeed(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), '4')
+    const [a, b] = figures(base) as [BoardPiece, BoardPiece]
+    const crowded = place(base, 'figures/redscout', 2, 1)
+    const options = groupMovementOptions(crowded.board, stacker(crowded), [a, b], 1)
+    // One of ours already stands on C2 and the limit is 2: two more do not fit, one would
+    expect(options?.destinations.some((destination) => destination.column === 2 && destination.row === 1)).toBe(false)
+    const planned = planGroupRoute(crowded.board, stacker(crowded), [a, b], 1, [], cell(2, 1))
+    expect(planned.ok).toBe(false)
+    expect(options?.destinations.some((destination) => destination.column === 1 && destination.row === 2)).toBe(true)
+  })
+
+  it('writes the group line before the lines of the hut it draws, once for the whole group', () => {
+    const armies = place(place(withSpeed(game(), '4'), 'figures/redarmy', 1, 1), 'figures/redarmy', 1, 1)
+    const [x, y] = figures(armies) as [BoardPiece, BoardPiece]
+    const hut = place(armies, 'resources/hut', 2, 1)
+    const moved = unwrap(travelGroup(hut, { playerId: CASH1981, pieceIds: [x.id, y.id], column: 2, row: 1, route: [cell(2, 1)], collectToken: true }))
+    const lines = moved.log.slice(hut.log.length).map((line) => line.publicLog)
+    expect(lines[0]).toBe('cash1981 moved Red army and Red army together B2 → C2 (1 square)')
+    // Both armies stand on the hut's square and neither can move on; the hut is drawn once, after the group line
+    expect(figures(moved).every((piece) => movementOf(piece, 1)?.locked === true)).toBe(true)
+    expect(moved.board.history.at(-1)?.logLength).toBe(moved.log.length)
+    expect(new Set(moved.board.history.slice(hut.board.history.length).map((entry) => entry.group)).size).toBe(1)
+  })
+
+  it('offers a group the least movement any of its figures has left', () => {
+    const base = withSpeed(place(place(game(), 'figures/redarmy', 1, 1), 'figures/redscout', 1, 1), '4')
+    const [a, b] = figures(base) as [BoardPiece, BoardPiece]
+    const tired: GameState = {
+      ...base,
+      board: {
+        ...base.board,
+        pieces: base.board.pieces.map((piece) => (piece.id === b.id ? { ...piece, movement: { turn: 1, used: 2, locked: false, reason: 'travel' as const } } : piece)),
+      },
+    }
+    const options = groupMovementOptions(tired.board, stacker(tired), [a, tired.board.pieces.find((piece) => piece.id === b.id) as BoardPiece], 1)
+    expect(options?.remaining).toBe(2)
+    expect(options?.destinations.every((destination) => destination.distance <= 2)).toBe(true)
+    // The one that is tired refuses a longer route for the whole group, and nothing is moved
+    const refused = travelGroup(tired, { playerId: CASH1981, pieceIds: [a.id, b.id], column: 1, row: 4, route: [cell(1, 2), cell(1, 3), cell(1, 4)] })
+    expect(refused.ok).toBe(false)
+    expect(figures(tired).find((piece) => piece.id === a.id)?.movement).toBeUndefined()
+  })
+
+  it('writes the group line before what the move itself logs, and adds the battle note', () => {
+    const armies = place(place(withSpeed(game(), '4'), 'figures/redarmy', 1, 1), 'figures/redarmy', 1, 1)
+    const [x, y] = figures(armies) as [BoardPiece, BoardPiece]
+    const enemy = place(armies, 'figures/bluearmy', 2, 1, KARANDRAS1)
+    const moved = unwrap(travelGroup(enemy, { playerId: CASH1981, pieceIds: [x.id, y.id], column: 2, row: 1, route: [cell(2, 1)] }))
+    expect(moved.log.at(-1)?.publicLog).toBe(
+      "cash1981 moved Red army and Red army together B2 → C2 (1 square), onto another player's figures: settle the battle and loot by hand",
+    )
+    expect(moved.board.history.at(-1)?.logLength).toBe(moved.log.length)
+  })
+
 })

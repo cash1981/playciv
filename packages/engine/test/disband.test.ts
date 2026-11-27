@@ -14,6 +14,7 @@ import type { BoardPiece, Rotation } from '../src/board.js'
 import { cityCenterCells } from '../src/blockade.js'
 import { cityDefenceOf } from '../src/city-defence.js'
 import { CARAVAN_ASSET_ID, FORTIFICATION_ASSET_ID, disbandOfferAt } from '../src/disband.js'
+import { travelGroup } from '../src/actions/travel-group.js'
 import { describeError } from '../src/errors.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { battleSummaries } from '../src/state.js'
@@ -91,6 +92,30 @@ describe('disbanding by travel', () => {
     expect(piecesOf(after, 'figures/redarmy')).toEqual([])
     expect(piecesOf(after, FORTIFICATION_ASSET_ID)).toHaveLength(1)
     expect(piecesOf(after, CARAVAN_ASSET_ID)).toEqual([])
+  })
+
+  it('a group that disbands together leaves one fortification (the army goes first), and one Undo and Redo move it all', () => {
+    const before = place(place(place(game(), 'cities/redcity2', 3, 3), 'figures/redscout', 3, 5), 'figures/redarmy', 3, 5)
+    const ids = [only(before, 'figures/redscout').id, only(before, 'figures/redarmy').id]
+    const route = [{ column: 3, row: 4 }, { column: 3, row: 3 }]
+    const grouped = unwrap(travelGroup(before, { playerId: CASH1981, pieceIds: ids, column: 3, row: 3, route, disband: true }))
+
+    expect(piecesOf(grouped, 'figures/redscout')).toEqual([])
+    expect(piecesOf(grouped, 'figures/redarmy')).toEqual([])
+    expect(piecesOf(grouped, FORTIFICATION_ASSET_ID)).toHaveLength(1)
+    expect(piecesOf(grouped, CARAVAN_ASSET_ID)).toEqual([])
+    expect(grouped.log.map((line) => line.publicLog)).toContain(
+      'cash1981 moved Red scout and Red army together D6 → D5 → D4 (2 squares), and disbanded them there',
+    )
+
+    const undone = unwrap(undoLastBoardChange(grouped, CASH1981))
+    expect(piecesOf(undone, 'figures/redscout')).toHaveLength(1)
+    expect(piecesOf(undone, 'figures/redarmy')).toHaveLength(1)
+    expect(piecesOf(undone, FORTIFICATION_ASSET_ID)).toEqual([])
+    expect(undone.board.history.length).toBe(before.board.history.length)
+    const redone = unwrap(redoLastBoardChange(undone, CASH1981))
+    expect(piecesOf(redone, 'figures/redarmy')).toEqual([])
+    expect(piecesOf(redone, FORTIFICATION_ASSET_ID)).toHaveLength(1)
   })
 
   it('a city holds one marker: a later figure is only removed, whatever its kind', () => {

@@ -27,7 +27,7 @@ import { appendLog } from '../log.js'
 import { ok } from '../result.js'
 import { spanishCreditsOf, withSpanishGrant } from '../spanish-credit.js'
 import { SPANISH } from './player.js'
-import { areasFor, moveFigureWithMovementUnchecked } from './board.js'
+import { announceBoardChange, areasFor, moveFigureWithMovementUnchecked } from './board.js'
 import { drawTileAt } from './draw.js'
 
 export interface ExploreSquareInput {
@@ -37,6 +37,8 @@ export interface ExploreSquareInput {
   readonly column: number
   readonly row: number
   readonly at?: string
+  /** False when the caller writes the public line itself (a group exploration names all its figures in one). */
+  readonly announce?: boolean
 }
 
 export function exploreSquare(state: GameState, input: ExploreSquareInput): Result<GameState, EngineError> {
@@ -104,7 +106,17 @@ export function exploreSquare(state: GameState, input: ExploreSquareInput): Resu
     ...(input.at === undefined ? {} : { at: input.at }),
   })
   if (spent === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
-  const drawn = drawTileAt(spent, input.playerId, slotOrigin(spent.board, slot), arrowTowards(from, target))
+  // The public log says who uncovered which square, from where
+  const announced =
+    input.announce === false
+      ? spent
+      : announceBoardChange(
+          spent,
+          input.playerId,
+          `explored ${square} with ${piece.label} on ${locationOf(state.board, areasFor(state), piece)} (1 movement)`,
+          input.at,
+        )
+  const drawn = drawTileAt(announced, input.playerId, slotOrigin(announced.board, slot), arrowTowards(from, target))
   if (!drawn.ok) return drawn
   // A card with no tile artwork places nothing: do not spend the movement on fog that stays fog
   if (!explorationCovered(drawn.value, target)) {
